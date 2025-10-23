@@ -1,0 +1,587 @@
+import { useGetContentFilter } from '@/api/resources/content-filters';
+import { useGetKnowledgeSourceConfig, useGetUrlSourceConfig } from '@/api/resources/knowledge-sources';
+import { useGetModelProvider } from '@/api/resources/model-providers';
+import { Page } from '@/components/page';
+import { PageHeader } from '@/components/page-header';
+import { paths } from '@/routes/paths';
+import {
+  ActionIcon,
+  Alert,
+  Anchor,
+  Badge,
+  Button,
+  Card,
+  Center,
+  Code,
+  CopyButton,
+  Divider,
+  Group,
+  List,
+  Loader,
+  Modal,
+  ScrollArea,
+  SimpleGrid,
+  Stack,
+  Text,
+  TextInput,
+  Tooltip
+} from '@mantine/core';
+import {
+  IconCheck,
+  IconCode,
+  IconCopy,
+  IconDatabase,
+  IconEdit,
+  IconExternalLink,
+  IconFilter,
+  IconForms,
+  IconLink,
+  IconRobot,
+  IconSearch,
+  IconSettings,
+  IconX
+} from '@tabler/icons-react';
+import { useMemo, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+
+const breadcrumbs = [
+  { label: 'Dashboard', href: paths.dashboard.root },
+  { label: 'Management', href: paths.dashboard.management.root },
+  { label: 'Knowledge Sources', href: paths.dashboard.management.knowledgeSources.root },
+  { label: 'Configurations', href: paths.dashboard.management.knowledgeSources.configs },
+  { label: 'Configuration Details' }
+];
+
+export default function ConfigDetailsPage() {
+  const { configId } = useParams<{ configId: string }>();
+  const [urlsModalOpen, setUrlsModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Fetch configuration data
+  const { data: config, isLoading: configLoading, error: configError } = useGetKnowledgeSourceConfig(configId || '');
+
+  // Fetch content filter data if linked
+  const { data: contentFilter, isLoading: contentFilterLoading } = useGetContentFilter(
+    config?.llm_content_filter_id || ''
+  );
+
+  // Fetch provider data if content filter exists
+  const { data: provider, isLoading: providerLoading } = useGetModelProvider(
+    contentFilter?.llm_provider_id || ''
+  );
+
+  // Fetch URL source data
+  const { data: urlSourceData, isLoading: urlSourceLoading } = useGetUrlSourceConfig(
+    configId || '',
+    config?.url_source_id || '',
+    { enabled: !!config?.url_source_id }
+  );
+
+  // Filter URLs based on search query
+  const filteredUrls = useMemo(() => {
+    if (!urlSourceData?.urls || !searchQuery.trim()) {
+      return urlSourceData?.urls || [];
+    }
+    return urlSourceData.urls.filter((url: string) =>
+      url.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [urlSourceData?.urls, searchQuery]);
+
+  if (configLoading) {
+    return (
+      <Page title="Configuration Details">
+        <Center py="xl">
+          <Loader size="lg" />
+        </Center>
+      </Page>
+    );
+  }
+
+  if (configError || !config) {
+    return (
+      <Page title="Configuration Details">
+        <Alert color="red" title="Error">
+          Failed to load configuration details.
+        </Alert>
+      </Page>
+    );
+  }
+
+  return (
+    <Page title="Configuration Details">
+      <PageHeader
+        title="Configuration Details"
+        breadcrumbs={breadcrumbs}
+      >
+        <Button
+          component={Link}
+          to={paths.dashboard.management.knowledgeSources.configEdit(configId || '')}
+          leftSection={<IconEdit size={16} />}
+          variant="light"
+        >
+          Edit Configuration
+        </Button>
+      </PageHeader>
+
+      <Stack gap="lg">
+        {/* Configuration Information and Metadata */}
+        <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+          {/* Configuration Information */}
+          <Card withBorder>
+            <Stack gap="md">
+              <Group justify="space-between">
+                <Group gap="sm">
+                  <IconSettings size={24} color="#2ecc71" style={{ display: 'block', visibility: 'visible', fontSize: '24px', width: '24px', height: '24px' }} />
+                  <Text fw={600} size="xl">Configuration Information</Text>
+                </Group>
+                <Badge
+                  color="green"
+                  variant="light"
+                  size="lg"
+                >
+                  Active
+                </Badge>
+              </Group>
+
+              <Divider />
+
+              <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+                <Stack gap="xs">
+                  <Text size="sm" fw={500}>Name:</Text>
+                  <Text size="sm">{config.name}</Text>
+                </Stack>
+
+                <Stack gap="xs">
+                  <Text size="sm" fw={500}>Description:</Text>
+                  <Text size="sm">{config.description || "No description"}</Text>
+                </Stack>
+
+                {config.url && (
+                  <Stack gap="xs" style={{ gridColumn: '1 / -1' }}>
+                    <Text size="sm" fw={500}>Base URL:</Text>
+                    <Group gap="sm">
+                      <Anchor
+                        href={config.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        size="sm"
+                        style={{ flex: 1 }}
+                      >
+                        {config.url}
+                      </Anchor>
+                      <CopyButton value={config.url}>
+                        {({ copied, copy }) => (
+                          <Tooltip label={copied ? 'Copied!' : 'Copy URL'}>
+                            <ActionIcon
+                              variant="subtle"
+                              onClick={copy}
+                              size="sm"
+                            >
+                              {copied ? <IconCheck size={16} /> : <IconCopy size={16} />}
+                            </ActionIcon>
+                          </Tooltip>
+                        )}
+                      </CopyButton>
+                      <Tooltip label="Open in new tab">
+                        <ActionIcon
+                          component="a"
+                          href={config.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          variant="subtle"
+                          color="gray"
+                          size="sm"
+                        >
+                          <IconExternalLink size={16} />
+                        </ActionIcon>
+                      </Tooltip>
+                    </Group>
+                  </Stack>
+                )}
+              </SimpleGrid>
+            </Stack>
+          </Card>
+
+          {/* Metadata */}
+          <Card withBorder>
+            <Stack gap="md">
+              <Group gap="sm">
+                <IconDatabase size={24} color="#3498db" style={{ display: 'block', visibility: 'visible', fontSize: '24px', width: '24px', height: '24px' }} />
+                <Text fw={600} size="lg">Metadata</Text>
+              </Group>
+              <Divider />
+              <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md">
+                <Stack gap="xs">
+                  <Text size="sm" fw={500}>Configuration ID:</Text>
+                  <Code>{config.id}</Code>
+                </Stack>
+
+                <Stack gap="xs">
+                  <Text size="sm" fw={500}>Created:</Text>
+                  <Text size="sm">{(() => {
+                    const date = new Date(config.created_at);
+                    return isNaN(date.getTime()) ? 'Invalid Date' : date.toLocaleString();
+                  })()}</Text>
+                </Stack>
+
+                <Stack gap="xs">
+                  <Text size="sm" fw={500}>Last Updated:</Text>
+                  <Text size="sm">{(() => {
+                    const date = new Date(config.updated_at);
+                    return isNaN(date.getTime()) ? 'Invalid Date' : date.toLocaleString();
+                  })()}</Text>
+                </Stack>
+              </SimpleGrid>
+            </Stack>
+          </Card>
+        </SimpleGrid>
+
+        {/* First Row: Scraping Configuration, Domain Filtering, URL Patterns, Content Extraction */}
+        <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="md">
+          {/* Scraping Configuration */}
+          <Card withBorder>
+            <Stack gap="md">
+              <Group gap="sm">
+                <IconExternalLink size={24} color="#e74c3c" style={{
+                  display: 'block',
+                  visibility: 'visible',
+                  fontSize: '24px',
+                  width: '24px',
+                  height: '24px',
+                  filter: 'drop-shadow(0 0 8px rgba(231, 76, 60, 0.3))',
+                  transform: 'rotate(45deg)'
+                }} />
+                <Text fw={600} size="lg">Scraping Configuration</Text>
+              </Group>
+
+              <Divider />
+
+              <Stack gap="md">
+                <Stack gap="xs">
+                  <Text size="sm" fw={500}>Mode:</Text>
+                  <Badge color="blue" variant="light" style={{ width: 'fit-content' }}>
+                    {config.scraping_mode}
+                  </Badge>
+                </Stack>
+
+                <Stack gap="xs">
+                  <Text size="sm" fw={500}>Crawl Depth:</Text>
+                  <Text size="sm">{config.crawl_depth}</Text>
+                </Stack>
+
+                <Stack gap="xs">
+                  <Text size="sm" fw={500}>Content Filter Threshold:</Text>
+                  <Text size="sm">{config.content_filter_threshold}</Text>
+                </Stack>
+              </Stack>
+            </Stack>
+          </Card>
+
+          {/* Domain Filtering */}
+          <Card withBorder>
+            <Stack gap="md">
+              <Group gap="sm">
+                <IconFilter size={20} color="var(--mantine-color-orange-6)" style={{ display: 'block', visibility: 'visible' }} />
+                <Text fw={600} size="lg">Domain Filtering</Text>
+              </Group>
+
+              <Divider />
+
+              <Stack gap="xs">
+                <Text size="sm" fw={500}>Allowed Subdomains:</Text>
+                {config.allowed_subdomains.length > 0 ? (
+                  <Group gap="xs">
+                    {config.allowed_subdomains.map((subdomain, index) => (
+                      <Badge key={index} size="sm" color="green" variant="light">
+                        {subdomain}
+                      </Badge>
+                    ))}
+                  </Group>
+                ) : (
+                  <Text size="sm" c="dimmed">None</Text>
+                )}
+              </Stack>
+
+              <Stack gap="xs">
+                <Text size="sm" fw={500}>Blocked Subdomains:</Text>
+                {config.blocked_subdomains.length > 0 ? (
+                  <Group gap="xs">
+                    {config.blocked_subdomains.map((subdomain, index) => (
+                      <Badge key={index} size="sm" color="red" variant="light">
+                        {subdomain}
+                      </Badge>
+                    ))}
+                  </Group>
+                ) : (
+                  <Text size="sm" c="dimmed">None</Text>
+                )}
+              </Stack>
+            </Stack>
+          </Card>
+
+          {/* URL Patterns */}
+          <Card withBorder>
+            <Stack gap="md">
+              <Group gap="sm">
+                <IconForms size={24} color="#ff6b6b" style={{ display: 'block', visibility: 'visible', fontSize: '24px', width: '24px', height: '24px' }} />
+                <Text fw={600} size="lg">URL Patterns</Text>
+              </Group>
+
+              <Divider />
+
+              {config.url_patterns.length > 0 ? (
+                <Stack gap="sm">
+                  {config.url_patterns.map((pattern, index) => (
+                    <Group key={index} justify="space-between" p="sm" bg="var(--mantine-color-gray-0)" style={{ borderRadius: 'var(--mantine-radius-sm)' }}>
+                      <Code>{pattern.pattern}</Code>
+                      <Badge
+                        color={pattern.reverse ? "red" : "green"}
+                        variant="light"
+                        size="sm"
+                      >
+                        {pattern.reverse ? "Exclude" : "Include"}
+                      </Badge>
+                    </Group>
+                  ))}
+                </Stack>
+              ) : (
+                <Text size="sm" c="dimmed">No URL patterns configured</Text>
+              )}
+            </Stack>
+          </Card>
+
+          {/* Content Extraction */}
+          <Card withBorder>
+            <Stack gap="md">
+              <Group gap="sm">
+                <IconCode size={20} color="var(--mantine-color-green-6)" style={{ display: 'block', visibility: 'visible' }} />
+                <Text fw={600} size="lg">Content Extraction</Text>
+              </Group>
+
+              <Divider />
+
+              <Stack gap="xs">
+                <Text size="sm" fw={500}>Target Elements:</Text>
+                {config.target_elements.length > 0 ? (
+                  <Group gap="xs">
+                    {config.target_elements.map((element, index) => (
+                      <Badge key={index} color="blue" variant="light">
+                        {element}
+                      </Badge>
+                    ))}
+                  </Group>
+                ) : (
+                  <Text size="sm" c="dimmed">No target elements configured</Text>
+                )}
+              </Stack>
+            </Stack>
+          </Card>
+        </SimpleGrid>
+
+        {/* Third Row: LLM Content Filter */}
+        <SimpleGrid cols={{ base: 1, md: 1 }} spacing="md">
+
+          {/* LLM Content Filter & Generation */}
+          <Card withBorder>
+            <Stack gap="md">
+              <Group gap="sm">
+                <IconRobot size={24} color="#4ecdc4" style={{ display: 'block', visibility: 'visible', fontSize: '24px', width: '24px', height: '24px' }} />
+                <Text fw={600} size="lg">LLM Content Filter & Generation</Text>
+              </Group>
+
+              <Divider />
+
+              {/* Generation Settings */}
+              <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+                <Stack gap="xs">
+                  <Text size="sm" fw={500}>Output Format:</Text>
+                  <Badge color="purple" variant="light">
+                    {config.output_format === 'html' ? 'Raw HTML' :
+                      config.output_format === 'llm_markdown' ? 'LLM Markdown' : 'Markdown'}
+                  </Badge>
+                </Stack>
+
+                {(config.output_format === 'markdown' || config.output_format === 'llm_markdown') && (
+                  <Stack gap="xs">
+                    <Text size="sm" fw={500}>Generation Method:</Text>
+                    <Badge color={config.output_format === 'llm_markdown' ? 'orange' : 'blue'} variant="light">
+                      {config.output_format === 'llm_markdown' ? 'LLM-Powered' : 'Standard'}
+                    </Badge>
+                  </Stack>
+                )}
+              </SimpleGrid>
+
+              <Divider />
+
+              {/* LLM Content Filter Details */}
+              {!config.llm_content_filter_id ? (
+                <Text size="sm" c="dimmed">No LLM filtering configured</Text>
+              ) : contentFilterLoading ? (
+                <Center py="md">
+                  <Loader size="sm" />
+                </Center>
+              ) : contentFilter ? (
+                <Stack gap="md">
+
+                  {contentFilter.description && (
+                    <Group justify="space-between">
+                      <Text size="sm" fw={500}>Description:</Text>
+                      <Text size="sm">{contentFilter.description}</Text>
+                    </Group>
+                  )}
+
+
+                  <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md">
+                    <Stack gap="xs">
+                      <Text size="sm" fw={500}>Filter Name:</Text>
+                      <Text size="sm">{contentFilter.name}</Text>
+                    </Stack>
+
+                    <Stack gap="xs">
+                      <Text size="sm" fw={500}>Model:</Text>
+                      <Text size="sm">{contentFilter.llm_model_name}</Text>
+                    </Stack>
+
+                    <Stack gap="xs">
+                      <Text size="sm" fw={500}>Provider:</Text>
+                      <Text size="sm">
+                        {providerLoading ? (
+                          <Loader size="xs" />
+                        ) : provider ? (
+                          provider.name
+                        ) : (
+                          `Provider ID: ${contentFilter.llm_provider_id}`
+                        )}
+                      </Text>
+                    </Stack>
+                  </SimpleGrid>
+
+                  <Stack gap="xs">
+                    <Text size="sm" fw={500}>Instructions:</Text>
+                    <Text size="sm" c="dimmed" style={{
+                      maxHeight: '100px',
+                      overflow: 'auto',
+                      whiteSpace: 'pre-wrap',
+                      fontFamily: 'monospace',
+                      fontSize: '12px',
+                      backgroundColor: 'var(--mantine-color-gray-0)',
+                      padding: '8px',
+                      borderRadius: '4px',
+                      border: '1px solid var(--mantine-color-gray-2)'
+                    }}>
+                      {contentFilter.instruction}
+                    </Text>
+                  </Stack>
+                </Stack>
+              ) : (
+                <Text size="sm" c="dimmed">Failed to load filter details</Text>
+              )}
+            </Stack>
+          </Card>
+        </SimpleGrid>
+
+
+        {/* URL List */}
+        {config.url_source_id && (
+          <Card withBorder>
+            <Stack gap="md">
+              <Group justify="space-between">
+                <Text fw={600} size="lg">URL List</Text>
+                <Button
+                  variant="light"
+                  leftSection={<IconLink size={16} />}
+                  onClick={() => setUrlsModalOpen(true)}
+                >
+                  View URLs ({urlSourceData?.urls?.length || 0})
+                </Button>
+              </Group>
+
+              <Divider />
+
+              {urlSourceLoading ? (
+                <Center py="md">
+                  <Loader size="sm" />
+                </Center>
+              ) : urlSourceData ? (
+                <Stack gap="sm">
+                  <Text size="sm" fw={500}>Source:</Text>
+                  <Text size="sm">{urlSourceData.file_name || 'N/A'}</Text>
+                  <Text size="sm" c="dimmed">
+                    {urlSourceData.urls?.length || 0} URLs configured
+                  </Text>
+                </Stack>
+              ) : (
+                <Text size="sm" c="dimmed">No URL source configured</Text>
+              )}
+            </Stack>
+          </Card>
+        )}
+      </Stack>
+
+      {/* URL List Modal */}
+      <Modal
+        opened={urlsModalOpen}
+        onClose={() => setUrlsModalOpen(false)}
+        title="URL List"
+        size="lg"
+        centered
+      >
+        <Stack gap="md">
+          <TextInput
+            placeholder="Search URLs..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            leftSection={<IconSearch size={16} />}
+            rightSection={
+              searchQuery && (
+                <ActionIcon
+                  variant="subtle"
+                  onClick={() => setSearchQuery('')}
+                >
+                  <IconX size={16} />
+                </ActionIcon>
+              )
+            }
+          />
+
+          <ScrollArea h={400}>
+            <List spacing="xs">
+              {filteredUrls.map((url, index) => (
+                <List.Item key={index}>
+                  <Group justify="space-between">
+                    <Anchor
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      size="sm"
+                      style={{ flex: 1 }}
+                    >
+                      {url}
+                    </Anchor>
+                    <CopyButton value={url}>
+                      {({ copied, copy }) => (
+                        <Tooltip label={copied ? 'Copied!' : 'Copy URL'}>
+                          <ActionIcon
+                            variant="subtle"
+                            onClick={copy}
+                            size="sm"
+                          >
+                            {copied ? <IconCheck size={16} /> : <IconCopy size={16} />}
+                          </ActionIcon>
+                        </Tooltip>
+                      )}
+                    </CopyButton>
+                  </Group>
+                </List.Item>
+              ))}
+            </List>
+          </ScrollArea>
+
+          <Text size="sm" c="dimmed" ta="center">
+            Showing {filteredUrls.length} of {urlSourceData?.urls?.length || 0} URLs
+          </Text>
+        </Stack>
+      </Modal>
+    </Page>
+  );
+}

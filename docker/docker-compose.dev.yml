@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  # Development override for API server with live reload
+  datapilotflow-api:
+    volumes:
+      - ../backend/src:/app/src
+      - ../backend/run_api_server.py:/app/run_api_server.py
+      - ../backend/run_file_listener.py:/app/run_file_listener.py
+      - ../backend/run_notification_listener.py:/app/run_notification_listener.py
+      - ../backend/run_notification_websocket_service.py:/app/run_notification_websocket_service.py
+    environment:
+      - PYTHONPATH=/app
+    command: ["uv", "run", "python", "run_api_server.py"]

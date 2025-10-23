@@ -1,0 +1,159 @@
+/* Step Card Animations */
+.stepCard {
+  position: relative;
+  padding: 12px 0;
+}
+
+.stepCard:hover {
+  transform: translateX(6px) !important;
+}
+
+/* Pulse Animation for Active Step */
+.pulseAnimation {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+/* Active Indicator Animation */
+.activeIndicator {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+  to {
+    height: 100%;
+    opacity: 1;
+  }
+}
+
+/* Connecting Line Animation */
+.connectingLine {
+  animation: growLine 0.6s ease-out;
+}
+
+@keyframes growLine {
+  from {
+    height: 0;
+  }
+  to {
+    height: 60px;
+  }
+}
+
+/* Content Card Animation */
+.contentCard {
+  animation: fadeInUp 0.4s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Completed Step Checkmark Animation */
+.stepCard.completed .mantine-ThemeIcon-root {
+  animation: checkmarkBounce 0.6s ease-out;
+}
+
+@keyframes checkmarkBounce {
+  0% {
+    transform: scale(0);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Hover Effects */
+.stepCard.active {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.stepCard.completed {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Glassmorphism effect on hover for clickable steps */
+.stepCard:not(.active):hover {
+  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Rotating Rings for Active Step */
+.rotatingRing {
+  animation: rotate 3s linear infinite;
+}
+
+.reverseRotatingRing {
+  animation: rotateReverse 4s linear infinite;
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes rotateReverse {
+  from {
+    transform: rotate(360deg);
+  }
+  to {
+    transform: rotate(0deg);
+  }
+}
+
+/* Shimmer effect for completed steps */
+@keyframes shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+.stepCard.completed .circularIcon {
+  background-size: 200% auto;
+  animation: shimmer 3s linear infinite;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .stepCard {
+    transform: none !important;
+  }
+
+  .stepCard.active {
+    transform: scale(1.02) !important;
+  }
+
+  .rotatingRing,
+  .reverseRotatingRing {
+    display: none; /* Hide rotating rings on mobile for performance */
+  }
+}
