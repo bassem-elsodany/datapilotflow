@@ -1,0 +1,352 @@
+# Migrating MEL to DataWeave
+
+In Mule 4, the DataWeave expression language replaces Mule Expression Language
+(MEL). This section provides guidance on migrating MEL expressions in your
+Mule apps to DataWeave (2.0 and later).
+
+## DataWeave at a Glance
+
+DataWeave is a Mule-specific language that can be used lightly as an
+expression language to simply reference values and evaluate conditions, or as
+a scripting language to construct complex data transformations that include
+functions and recursion.
+
+Unlike MEL, it supports different data types out of the box, like JSON, XML,
+or CSV, which means data no longer needs to be transformed before expressions
+can be evaluated. It also supports advanced use cases like mapping functions
+or filtering data.
+
+It’s important to notice that the main data selector in DataWeave is the `.`
+operator. Since it shares most keywords with MEL, the syntax for most
+scenarios is identical. For example, `#[message.payload.name]` is the same in
+both languages.
+
+The main difference between MEL and DataWeave is that DataWeave expressions
+have no side effects. You can use DataWeave to extract or generate data but
+not to modify it. The [Java Integration](intro-java-integration) examples
+explain how to deal with those use cases.
+
+## MEL Usages
+
+The next sections show how to adapt some uses of MEL to Mule 4.
+
+### Accessing Context Variables
+
+Except for the following changes, context variables (also called Mule Runtime
+variables) remain the same in DataWeave:
+
+MEL | DataWeave  
+---|---  
+**Flow variables** `flowVars`
+
+  * Example: `#[flowVars.myVar]`
+
+|  **Mule Event Variables** `vars`
+
+  * Example: `#[vars.myVar]`
+
+  
+**Exception** `exception` |  [Mule Error](error-handling): `error`  
+**Inbound Attachments** `message.inboundAttachments` |  **Multipart Data Formats** See:
+
+  * [Inbound Attachments (on GitHub)](https://github.com/mulesoft/mule-migration-assistant/blob/master/docs/user-docs/migration-tool-post-mig.adoc#inbound_attachments)
+  * [Attachments](intro-mule-message#attachments)
+
+  
+**Inbound Properties** `message.inboundProperties`
+
+  * Examples:
+
+    
+    
+    #[inboundProperties.'http.query.params']
+    #[inboundProperties]
+
+|  **Mule Message Attributes** (metadata) `attributes`
+
+  * Examples:
+
+    
+    
+    #[attributes.queryParams]
+    #[attributes.headers]
+
+[Inbound Properties Are Now Attributes](intro-mule-message#inbound-properties-
+are-now-attributes)  
+**Outbound Attachments** `message.outboundAttachments` |  **Multipart data formats** See:
+
+  * [Outbound Attachments](https://github.com/mulesoft/mule-migration-assistant/blob/master/docs/user-docs/migration-tool-post-mig.adoc#outbound_attachments)
+  * [Attachments](intro-mule-message#attachments).
+
+  
+**Outbound Properties** `message.outboundProperties` |  **Removed:** See:
+
+  * [Outbound Properties](intro-mule-message#outbound-properties).
+
+  
+`message.dataType` |  `dataType`  
+`message.id`, `message.rootId`, `message.replyTo` |  **Removed**  
+**Record Variables** `recordVars`
+
+  * Example: `#[recordVars.myVar]`
+
+|  **Mule Event Variables** `vars`
+
+  * Example: `#[vars.myVar]`
+
+  
+**Session Variables** `sessionVars`
+
+  * Example: `#[sessionVars.myVar]`
+
+|  **Removed:** Transport barriers do not exist in Mule 4. See:
+
+  * [Session Properties](intro-mule-message#session-properties)
+
+  
+`server.dateTime` |  **Removed:** Use the DataWeave [`now`](../../dataweave/latest/dw-core-functions-now) function.  
+  
+### Extracting Data
+
+You can use [DataWeave Selectors](../../dataweave/latest/dataweave-selectors)
+to query data as you did with MEL. Only now, you won’t need extra
+transformations when dealing with types like JSON.
+
+The next examples log the ID from this JSON payload:
+
+JSON Payload
+
+    
+    
+    {
+      "name" : "Rachel Duncan",
+      "id": "779H41"
+    }
+
+Mule 3 Example
+
+    
+    
+    <json:json-to-object-transformer returnClass="java.util.Map" />
+    <logger message="Updating health check record for subject '#[payload.id]'" level="INFO" />
+
+Mule 4 Example
+
+    
+    
+    <logger message="Updating health check record for subject '#[payload.id]'" />
+
+### Assigning Values
+
+As mentioned earlier, DataWeave does not support modifying data in the way the
+`expression-component` allowed with MEL. To achieve those use cases, you must
+use the Scripting module.
+
+Consider payload described above as a Java Map. The examples modify the `name`
+attribute.
+
+Mule 3 Example
+
+    
+    
+    <expression-component>
+      <![CDATA[
+        payload.name = 'R. Duncan'
+      ]]>
+    </expression-component>
+
+Mule 4 Example
+
+    
+    
+    <script:execute engine="groovy">
+      <script:code>
+        payload.put('name', 'R. Duncan')
+        return payload
+      </script:code>
+    </script:execute>
+
+To use the Scripting module, simply add it to your app using the Studio
+palette, or add the following dependency in your `pom.xml` file:
+
+    
+    
+    <dependency>
+      <groupId>org.mule.modules</groupId>
+      <artifactId>mule-scripting-module</artifactId>
+      <version>1.1.0</version> <!-- or newer -->
+      <classifier>mule-plugin</classifier>
+    </dependency>
+
+### Invoking Java Methods
+
+DataWeave can be used to invoke static methods. For regular methods, you can
+use the Java module, which exposes both an operation and a function to invoke
+Java methods.
+
+#### Static Methods
+
+The following examples use Java’s Locale `getDefault` static method in Mule 3
+and 4.
+
+Mule 3 example
+
+    
+    
+    <validation:is-time time="#[payload]" pattern="h:mm a" locale="#[java.util.Locale.getDefault().getLanguage()]"/>
+
+Mule 4 example
+
+    
+    
+    <validation:is-time time="#[payload]" pattern="h:mm a" locale="#[java!java::util::Locale::getDefault().getLanguage()]"/>
+
+Note that DataWeave requires the `java!` prefix to indicate that a Java static
+method is to be searched, and it requires the fully qualified Class name
+(separated by `::` instead of `.`).
+
+#### Instance Methods
+
+The following examples show the usage of Java’s String `equalsIgnoreCase`
+method in Mule 3 and 4.
+
+Mule 3 example
+
+    
+    
+    <choice>
+      <when expression="#[payload.equalsIgnoreCase('error')]">
+        <logger message="An error message has been received." level="ERROR"/>
+      </when>
+      <otherwise>
+        <logger message="Message received: #[payload]" level="INFO"/>
+      </otherwise>
+    </choice>
+
+Mule 4 example
+
+    
+    
+    <choice doc:name="Choice">
+      <when expression="#[Java::invoke('java.lang.String', 'equalsIgnoreCase(String)', payload, {arg0: 'error'})]">
+    		<logger message="An error message has been received." level="ERROR"/>
+    	</when>
+    	<otherwise >
+    		<logger message="Message received: #[payload]" level="INFO"/>
+    	</otherwise>
+    </choice>
+
+To use the Java module, simply add it to your app using the Studio palette, or
+add the following dependency to your `pom.xml` file:
+
+    
+    
+    <dependency>
+      <groupId>org.mule.modules</groupId>
+      <artifactId>mule-java-module</artifactId>
+      <version>1.0.0</version> <!-- or newer -->
+      <classifier>mule-plugin</classifier>
+    </dependency>
+
+### Target Definitions
+
+The `enricher` has been removed and replaced by target variables, which are
+now supported by every operation. The example below shows how to send the
+result of an operation to a variable in Mule 3 and 4.
+
+Mule 3 example
+
+    
+    
+    <enricher target="#[flowVars.response]">
+        <http:request config-ref="HTTP_Request_Configuration" path="/get" method="GET"/>
+    </enricher>
+
+Mule 4 example
+
+    
+    
+    <http:request config-ref="HTTP_Request_Configuration" path="/get" method="GET" target="response"/>
+
+  * See:[Enriching Data with Target Variables](target-variables) for more details.
+
+### XPath Function
+
+DataWeave can be used to query XML content using its
+[selectors](../../dataweave/latest/dataweave-selectors), but you can also use
+the XML module, which exposes both an operation and a function to execute
+XPath queries.
+
+The following examples show how to take lines containing a specific word taken
+from a variable in Mule 3 and 4.
+
+Mule 3 example
+
+    
+    
+    <set‐variable variableName="word" value="handkerchief"/>
+    <expression‐transformer>
+       xpath3('//LINE[contains(.,$word)]',payload,'NODESET')
+    </expression‐transformer>
+
+Mule 4 example
+
+    
+    
+    <set‐variable variableName="word" value="handkerchief"/>
+    <set-payload value="#[XmlModule::xpath('//LINE[contains(., \$word)]', payload, {'word': vars.word})]" />
+
+To use the XML module, simply add it to your app using the Studio palette, or
+add the following dependency to your `pom.xml` file:
+
+    
+    
+    <dependency>
+      <groupId>org.mule.modules</groupId>
+      <artifactId>mule-xml-module</artifactId>
+      <version>1.1.0</version> <!-- or newer -->
+      <classifier>mule-plugin</classifier>
+    </dependency>
+
+### Wildcard and Regex functions
+
+DataWeave matching functions `match` and `matches` (see Core DataWeave
+Functions) can be used instead. The next example shows how a regex is used in
+DataWeave to replace the use of the `wildcard` MEL function.
+
+Mule 3 example
+
+    
+    
+    <choice>
+      <when expression="#[wildcard('Hello *')]">
+        <set-payload value="Hello, how can I help?"/>
+      </when>
+      <otherwise>
+        <set-payload value="Courtesy requires a greeting."/>
+      </otherwise>
+    </choice>
+
+Mule 4 example
+
+    
+    
+    <choice doc:name="Choice">
+      <when expression="#[payload matches /Hello\s[A-z]+/]">
+        <set-payload value="Hello, how can I help?"/>
+      </when>
+      <otherwise >
+        <set-payload value="Courtesy requires a greeting."/>
+      </otherwise>
+    </choice>
+
+## See Also
+
+[DataWeave Language](dataweave)
+
+[Why DataWeave is the Main Expression Language in Mule 4
+Beta](https://blogs.mulesoft.com/dev/mule-dev/why-dataweave-main-expression-
+language-mule-4/)
+
+Mule Expression Language (MEL) (3.9)
+

@@ -1,0 +1,43 @@
+# Single Resource Transactions
+
+Single Resource Transactions (also known as a simple transaction or local
+transaction) only use a single resource to send or receive messages: JMS
+broker, VM queues, or JDBC connections.
+
+The example below illustrates a flow which includes a single resource
+transaction performed using the source and publish operations of the JMS
+connector.
+
+    
+    
+    <flow name="asdFlow" doc:id="2a67b1ee-0394-44a8-b6d9-9ce4f94f1ae2" >
+    	<jms:listener config-ref="JMS_Config" destination="test.in" transactionalAction="ALWAYS_BEGIN"/>
+    	<!-- Other operations -->
+    	<jms:publish config-ref="JMS_Config" destination="test.out" transactionalAction="ALWAYS_JOIN"/>
+    </flow>
+
+__ |  Both the `jms:listener` source and the `jms:publish` operation must use the same connection configuration since this mechanism is intended to manage one resource.   
+---|---  
+  
+The example shown above defines a JMS event source that receives messages from
+a `test.in` queue and another JMS operation that sends messages to a
+`test.out` queue. The `transactionalAction` attribute dictates how Mule
+initiates a transaction. Within this flow, Mule starts a new transaction for
+every message it receives (`jms:listener` source), and always joins the
+transaction in progress for every message it sends (`jms:publish` operation).
+
+Mule only commits messages that successfully pass through the complete flow.
+If at any point in the flow a message throws an error which is propagated
+(i.e. it is not handled by an `on-error-continue`), Mule rolls back the
+transaction. Refer to [On Error Scope](on-error-scope-concept) for details on
+how to handle errors.
+
+## Nested Transactions
+
+Nested transactions are not available for Single Resource transactions. Refer
+to [XA Transactions](xa-transactions#nested-transactions) for more details.
+
+## See Also
+
+  * [Transaction Management](transaction-management)
+

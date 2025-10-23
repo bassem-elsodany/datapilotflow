@@ -1,0 +1,339 @@
+# Migrating API Policies
+
+In Mule 4, policies underwent major changes.
+
+## Defining Policy Behavior
+
+In 3.x, the logic inside a particular policy is split in two blocks, one that
+is executed before the next policy or flow, the other executed after it.
+
+Mule 3 Example
+
+    
+    
+    <?xml version="1.0" encoding="UTF-8"?>
+    <policy online="false"
+            xmlns="http://www.mulesoft.org/schema/mule/policy"
+            xmlns:mule="http://www.mulesoft.org/schema/mule/core"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xmlns:api-platform-gw="http://www.mulesoft.org/schema/mule/api-platform-gw"
+            xsi:schemaLocation="http://www.mulesoft.org/schema/mule/policy http://www.mulesoft.org/schema/mule/policy/current/mule-policy.xsd
+                  http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+                  http://www.mulesoft.org/schema/mule/api-platform-gw http://www.mulesoft.org/schema/mule/api-platform-gw/current/mule-api-platform-gw.xsd">
+    
+        <before>
+            <mule:set-payload value="(pre)"/>
+        </before>
+    
+        <after>
+            <mule:set-payload value="(post)"/>
+        </after>
+    
+        <pointcut>
+            <api-platform-gw:api-pointcut apiName="sampleApi" apiVersion="1.0.0"/>
+        </pointcut>
+    
+    </policy>
+
+In Mule 4, policies are no longer separated in a `before` and `after` block.
+They now work as a flow with an explicit jump to the next policy or flow that
+has to be defined in it.
+
+Same behavior can be achieved in Mule 4 with the following config:
+
+Mule 4 Example
+
+    
+    
+    <?xml version="1.0" encoding="UTF-8"?>
+    <mule xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xmlns:http-policy="http://www.mulesoft.org/schema/mule/http-policy"
+          xmlns="http://www.mulesoft.org/schema/mule/core"
+          xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+                   http://www.mulesoft.org/schema/mule/http-policy http://www.mulesoft.org/schema/mule/http-policy/current/mule-http-policy.xsd">
+    
+        <http-policy:proxy name="policy-deployment">
+            <http-policy:source propagateMessageTransformations="true">
+    
+                <set-payload value="(pre)"/>
+    
+                <http-policy:execute-next/>
+    
+                <set-payload value="(post)"/>
+    
+            </http-policy:source>
+        </http-policy:proxy>
+    </mule>
+
+A few things to notice:
+
+  * Logic is placed in the same block. Injecting behavior before the flow can be achieved just by putting logic before the `execute-next` element. To injecting behavior after the flow, you put logic after that element.
+
+  * `propagateMessageTransformations` attribute in the `http-policy:source` element: Starting in Mule 4, changes to the Mule message (payload or attributes) before executing the flow are not propagated to it by default. To enable this, `propagateMessageTransformations` has to be set to `true`.
+
+  * `pointcut` elements are no longer defined in the policy config file. Now, they are resolved by the API Gateway when policies are fetched from API Manager.
+
+Endpoint and App `pointcut` elements are no longer available, and there is no
+replacement to them.
+
+## Uploading Policy Template to Exchange
+
+In 3.x, once the policy is defined, the result is an XML file that has to be
+uploaded to API Manager.
+
+In Mule 4, once the policy behavior is defined, the policy has to be packaged
+into a policy template JAR and uploaded to Exchange to make it available in
+API Manager.
+
+  1. How to create a Maven project to generate the policy template JAR is explained in the [Packaging a Custom Policy](../../mule-gateway/policies-custom-package) article.
+
+  2. How to upload the JAR to Exchange is explained in the [Uploading a Custom Policy to Exchange](../../mule-gateway/policies-custom-upload-to-exchange) article.
+
+Just like before, once the policy template JAR is in Exchange, it will appear
+in API Manager for APIs that belong to the same organization where the JAR was
+uploaded.
+
+## Perform a Policy Migration
+
+To perform a policy migration, this example uses the Mule Migration Assistant
+(MMA), an open source project on GitHub. The procedure requires that you meet
+the [Prerequisites](https://github.com/mulesoft/mule-migration-
+assistant/blob/master/docs/user-docs/migration-tutorial.adoc#prerequisites)
+for the tool. For complete user documentation on MMA, see [Migration to Mule 4
+(on GitHub)](https://github.com/mulesoft/mule-migration-
+assistant/blob/master/docs/migration-intro.adoc).
+
+The MMA command for migrating policies differs from the typical [command-line
+options (on GitHub)](https://github.com/mulesoft/mule-migration-
+assistant/blob/master/docs/user-docs/migration-tool-procedure.adoc#options)
+for migrating a Mule app in one important way:
+
+  * MMA expects the `-projectBasePath` to have both the policy XML and YAML files in the same directory. The following example assumes that policy files are under `src/main/policy`.
+
+Command-line Invocation:
+
+    
+    
+    $ java -jar mule-migration-assistant-runner-0.5.1.jar \
+     -projectBasePath /Users/me/AnypointStudio/workspace-studio/my-mule3-policy/src/main/policy \
+     -muleVersion 4.1.5 \
+     -destinationProjectBasePath /Users/me/my-dir/my-migrated-policy
+
+Note that the MMA creates the directory for the migrated project through the
+`-destinationProjectBasePath` option. The `my-migrated-policy` must _not_
+exist before you invoke the command. If you point to a folder that exists
+already, the migration fails with an error like this: `Exception: Destination
+folder already exists.`
+
+When the migrator runs successfully, you see a message like this:
+
+Successful Migration
+
+    
+    
+    Executing migration...
+    ...
+    ========================================================
+    MIGRATION SUCCESS
+    ========================================================
+    Total time: 11.335 s
+    Migration report:
+    /Users/me/my-dir/my-migrated-policy/report/summary.html
+
+After migration completes successfully, the destination folder contains:
+
+  * A policy POM file.
+
+  * The policy YAML file, renamed to the `artifactId` value found in the POM file.
+
+  * The `report` directory containing the [Mule Migration Report (on GitHub)](https://github.com/mulesoft/mule-migration-assistant/blob/master/docs/user-docs/migration-report.adoc) (`summary.html`). Note that the same information provided in the report can be found as comments in the policy XML file.
+
+  * The `mule-artifact.json` file, with a `minMuleVersion` value that matches the `-muleVersion` value set in the MMA command.
+
+  * The `src` directory, which contains the migrated content.
+
+The `src` directory contains directories `main` and `test`. Inside `main`, the
+`mule` directory contains the policy XML file, renamed to `template.xml`. At
+the same level as the `mule` directory, MMA might create a `resources`
+directory that contains DataWeave files or other files that the migrated
+policy needs. The `test` directory contains test configuration files.
+
+After a successful migration, you need to modify the POM file as explained in
+POM Migration. Once the POM file has the correct organization ID, you can
+compile with `mvn clean install`. If the compilation is successful, you can
+upload the migrated policy to Exchange using `maven clean deploy`. You can
+find a more detailed explanation of uploading a custom policy in [Uploading a
+Custom Policy to Exchange](../../mule-gateway/policies-custom-upload-to-
+exchange).
+
+### POM Migration
+
+The POM file migration modifies the file to include the elements necessary for
+uploading the custom policy to Exchange.
+
+After the migration:
+
+Replace the `{orgId}` value in the `<groupId/>` and `<exchange.url/>` elements
+with the organization ID found in Anypoint Platform.
+
+For more information on how to obtain the organization ID, see [Uploading a
+Custom Policy to Exchange](../../mule-gateway/policies-custom-upload-to-
+exchange).
+
+By default, the Exchange URL is set to the production environment.
+
+    
+    
+    <groupId>{orgId}</groupId>
+    
+    <properties>
+     <exchange.url>https://maven.anypoint.mulesoft.com/api/v1/organizations/{orgId}/maven</exchange.url>
+    </properties>
+
+Note that for the EU version of the URL, you need to set the URL manually
+after the migration:
+
+  * URL template for EU: `https://maven.eu1.anypoint.mulesoft.com/api/v1/organizations/{orgId}/maven`
+
+If the MMA does not find a POM file for the policy, MMA will create a new POM
+file. In this file, the `artifactId` for the policy will be the name of the
+parent directory for the policy XML file. For example, for a policy in
+`src/main/mytestpolicy/policy.xml`, the `artifactId` is `mytestpolicy`.
+
+### Dependency and Plugin Versions
+
+Dependency and plugin versions are set by default by the MMA, and you can
+change manually, as needed.
+
+### Un-Migrated Elements
+
+Several elements are not migrated from Mule 3 to Mule 4:
+
+Element | Reason  
+---|---  
+`policy:before-exception` | Unable to recreate the behavior in Mule 4.  
+`policy:pointcut` | Resource and API pointcuts are resolved by the Mule runtime engine automatically. App and Endpoint pointcuts do not have an equivalent in Mule 4.  
+`policy:data` | The behavior is resolved by the Mule runtime engine automatically.  
+  
+For each of these elements, the child elements are removed, as well.
+
+### Elements Migrated to Other Structures
+
+The throttling element `fixed-time-frame-algorithm` is migrated to the Rate
+Limit format if multiple `rate-limit` elements are found as child elements of
+the `delay-response` element.
+
+In addition, because Throttling SLA policy is no longer supported, if a
+`delay-response` element is found as a child of a `sla-based-algorithm`
+element, the policy is migrated to Rate Limit SLA format.
+
+### Common Migration Issues
+
+If policy files are not found during the migration, the MMA prints a message
+like this one:
+
+Unsuccessful Migration
+
+    
+    
+    Executing migration...
+    ...
+    ===============================================================================
+    MIGRATION FAILED
+    ===============================================================================
+    Total time: 3.008 s
+    Exception: Cannot read mule project. Is it a Mule Studio project?
+    com.mulesoft.tools.migration.engine.exception.MigrationJobException: Cannot read mule project. Is it a Mule Studio project?
+    	at com.mulesoft.tools.migration.engine.project.MuleProjectFactory.getMuleProject(MuleProjectFactory.java:50)
+    	at com.mulesoft.tools.migration.engine.MigrationJob.generateSourceApplicationModel(MigrationJob.java:116)
+    	at com.mulesoft.tools.migration.engine.MigrationJob.execute(MigrationJob.java:80)
+    	at com.mulesoft.tools.migration.MigrationRunner.main(MigrationRunner.java:83)
+    
+    ===============================================================================
+
+### POM Migration Issues
+
+If the MMA does not find the POM model for the policy, the MMA will either
+generate the model from an existing POM in Mule 3, or if there is no Mule 3
+POM, the MMA will create the model. If MMA uses an existing POM, any incorrect
+POM definition that the MMA encounters will cause POM model creation process
+to fail. For information about a POM model failure, you need to check for any
+preceding error messages regarding MMA steps on modifying the POM model.
+
+### YAML Migration Issues
+
+The following issues can occur:
+
+Case | Reason  
+---|---  
+Error editing YAML | Use stack trace in the MMA for more information.  
+Multiple YAMLs found | MMA expects only one YAML file in the project base path, which is interpreted as the policy YAML. If you need more than one YAML in the project, the extra YAML files must be stored in another directory.  
+No YAML found | MMA expects a YAML file in the project base path when migration starts. If none is found, it is possible that a separate error occurred earlier in the migration process.  
+  
+### Threat Protection Migration Issues
+
+The following issues can occur:
+
+Case | Reason  
+---|---  
+Could not determine if policy is XML or JSON threat protection type | In threat protection policies, the elements `xml-policy` and `json-policy` determine which type of threat protection to migrate. Only one of them must be present. If none are present, the error message will appear in the migration report.  
+Element `structure` could not be found | In threat protection policies, the `xml-policy` element needs to have child element, `structure`.  
+Element `values` could not be found | In threat protection policies, the `xml-policy` element needs to have child element, `values`.  
+  
+### Client Id Enforcement Migration Issue
+
+The following issue is possible:
+
+Case | Reason  
+---|---  
+Client Id Enforcement invalid migration element | If the `basicAuthEnabled` attribute in the `validate-client` element is absent or equal to `false`, MMA expects `clientSecret` or `clientId` attributes to be present in the `validate-client` element.  
+  
+### Spring Limitations
+
+You must perform a manual migration of your Spring Beans even though MMA
+migrates `spring:bean` elements in Mule 3 policies to a `template-beans.xml`
+file in the `resources` directory and even though it adds to the custom policy
+a `spring-module:config` element that references `template-beans.xml`.
+Declaring the beans in a policy is unsupported in Mule 4 and causes the policy
+to fail to deploy.
+
+### Known Issues
+
+Known issues for MMA are:
+
+  * Policies that have policy YAML files with the `.yml` extension are not detected.
+
+  * Policy YAML files are not autocompleted with mandatory fields.
+
+  * `mule:processor` element is not migrated.
+
+  * `byte-array-to-string-transformer` element is not migrated.
+
+  * `expression-component` element is not migrated.
+
+  * `mulexml:object-to-xml-transformer` element is not migrated.
+
+  * The migrated element `ee:transform` does not add a schema location URI.
+
+  * DataWeave expressions that start with an underscore are not quoted, which causes the policy to fail.
+
+## See Also
+
+[Migrating API Gateways](migration-api-gateways)
+
+[Migrating API Gateways: Autodiscovery](migration-api-gateways-autodiscovery)
+
+[Migrating API Gateways: Mule Runtime Configuration](migration-api-gateways-
+runtime-config)
+
+[Core Components Migration](migration-core)
+
+[Rate Limit and Throttling Policy](https://docs.mulesoft.com/api-
+manager/2.x/rate-limiting-and-throttling)
+
+[Rate Limit SLA Based Policies](https://docs.mulesoft.com/api-
+manager/2.x/rate-limiting-and-throttling-sla-based-policies)
+
+[Uploading a Custom Policy to Exchange](https://docs.mulesoft.com/api-
+manager/2.x/custom-policy-uploading-to-exchange)
+

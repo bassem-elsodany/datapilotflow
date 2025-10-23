@@ -1,0 +1,18 @@
+graph TD
+    Start(["Start: Question Selector"]) -->|entry| question_selector["Select Question"]
+    question_selector -->|Q selected| capture_answer["Capture Answer"]
+    capture_answer -->|Answer captured| answer_scorer["Score Answer (LLM)"]
+
+    answer_scorer -->|valid| semantic_search["Semantic Search (RAG)"]
+    answer_scorer -->|invalid| capture_answer
+
+    semantic_search -->|has follow-up| follow_up_suggester["Suggest Follow-Ups"]
+    semantic_search -->|no follow-up| state_tracker["Update Interview State"]
+
+    follow_up_suggester -->|follow-ups applied| state_tracker
+
+    state_tracker -->|more domains| question_selector
+    state_tracker -->|all domains or max| summary_explainer["Generate Summary"]
+
+    summary_explainer -->|summary done| mcp_writer["Persist to MongoDB"]
+    mcp_writer -->|end| End(["End: Interview Complete"])

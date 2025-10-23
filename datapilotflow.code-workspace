@@ -1,0 +1,255 @@
+{
+    "folders": [
+        {
+            "name": "backend",
+            "path": "./backend"
+        },
+        {
+            "name": "dashboard",
+            "path": "./dashboard"
+        },
+        {
+            "name": "docker",
+            "path": "./docker"
+        },
+        {
+            "name": "datapilotflow",
+            "path": "."
+        }
+    ],
+    "settings": {
+        // Python Configuration
+        "python.defaultInterpreterPath": "/Users/bassem.elsodany/workspaces/datapilotflow/backend/.venv/bin/python",
+        "python.terminal.activateEnvironment": true,
+        "python.terminal.activateEnvInCurrentTerminal": true,
+        "python.venvPath": "/Users/bassem.elsodany/workspaces/datapilotflow/backend/.venv",
+        "python.venvFolders": [
+            "/Users/bassem.elsodany/workspaces/datapilotflow/backend/.venv"
+        ],
+        "python.analysis.extraPaths": [
+            "./backend/src"
+        ],
+        "python.analysis.autoImportCompletions": true,
+        "python.analysis.autoSearchPaths": true,
+        "python.analysis.diagnosticMode": "workspace",
+        "python.analysis.stubPath": "/Users/bassem.elsodany/workspaces/datapilotflow/backend/.venv/lib/python3.13/site-packages",
+        "python.linting.enabled": true,
+        "python.linting.pylintEnabled": false,
+        "python.linting.flake8Enabled": true,
+        "python.formatting.provider": "black",
+        "python.sortImports.args": [
+            "--profile",
+            "black"
+        ],
+        // TypeScript/JavaScript Configuration
+        "typescript.preferences.importModuleSpecifier": "relative",
+        "typescript.suggest.autoImports": true,
+        "typescript.updateImportsOnFileMove.enabled": "always",
+        "javascript.suggest.autoImports": true,
+        "javascript.updateImportsOnFileMove.enabled": "always",
+        "typescript.preferences.includePackageJsonAutoImports": "auto",
+        "javascript.preferences.includePackageJsonAutoImports": "auto",
+        // Editor Configuration
+        "editor.formatOnSave": true,
+        "editor.formatOnPaste": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit",
+            "source.fixAll": "explicit"
+        },
+        "editor.rulers": [
+            80,
+            120
+        ],
+        "editor.tabSize": 4,
+        "editor.insertSpaces": true,
+        "editor.detectIndentation": false,
+        "editor.trimAutoWhitespace": true,
+        "editor.wordWrap": "on",
+        "editor.minimap.enabled": false,
+        "editor.bracketPairColorization.enabled": true,
+        "editor.guides.bracketPairs": true,
+        // File Association Rules
+        "files.associations": {
+            "*.py": "python",
+            "*.pyi": "python",
+            "*.tsx": "typescriptreact",
+            "*.ts": "typescript",
+            "*.jsx": "javascriptreact",
+            "*.js": "javascript",
+            "*.json": "json",
+            "*.md": "markdown",
+            "*.yml": "yaml",
+            "*.yaml": "yaml",
+            "Dockerfile*": "dockerfile",
+            "*.dockerfile": "dockerfile",
+            "docker-compose*.yml": "dockercompose",
+            "docker-compose*.yaml": "dockercompose"
+        },
+        // Language-specific Rules
+        "[python]": {
+            "editor.defaultFormatter": "ms-python.black-formatter",
+            "editor.tabSize": 4,
+            "editor.insertSpaces": true,
+            "editor.rulers": [
+                88
+            ]
+        },
+        "[typescript]": {
+            "editor.tabSize": 2,
+            "editor.insertSpaces": true,
+            "editor.rulers": [
+                100
+            ]
+        },
+        "[typescriptreact]": {
+            "editor.tabSize": 2,
+            "editor.insertSpaces": true,
+            "editor.rulers": [
+                100
+            ]
+        },
+        "[javascript]": {
+            "editor.tabSize": 2,
+            "editor.insertSpaces": true,
+            "editor.rulers": [
+                100
+            ]
+        },
+        "[javascriptreact]": {
+            "editor.tabSize": 2,
+            "editor.insertSpaces": true,
+            "editor.rulers": [
+                100
+            ]
+        },
+        "[json]": {
+            "editor.tabSize": 2,
+            "editor.insertSpaces": true
+        },
+        "[yaml]": {
+            "editor.tabSize": 2,
+            "editor.insertSpaces": true
+        },
+        "[markdown]": {
+            "editor.tabSize": 2,
+            "editor.insertSpaces": true,
+            "editor.wordWrap": "on"
+        },
+        "[dockerfile]": {
+            "editor.tabSize": 4,
+            "editor.insertSpaces": true
+        },
+        // Search and Explorer Rules
+        "search.exclude": {
+            "**/node_modules": true,
+            "**/bower_components": true,
+            "**/.venv": true,
+            "**/__pycache__": true,
+            "**/.pytest_cache": true,
+            "**/dist": true,
+            "**/build": true,
+            "**/.git": true,
+            "**/logs": true,
+            "**/data": true,
+            "**/crawl_output": true,
+            "**/test_output": true,
+            "**/upload": true,
+            "**/ingestion_jobs_output_data": true
+        },
+        "files.watcherExclude": {
+            "**/node_modules/**": true,
+            "**/.venv/**": true,
+            "**/__pycache__/**": true,
+            "**/dist/**": true,
+            "**/build/**": true,
+            "**/logs/**": true,
+            "**/data/**": true,
+            "**/crawl_output/**": true,
+            "**/test_output/**": true,
+            "**/upload/**": true,
+            "**/ingestion_jobs_output_data/**": true
+        },
+        // Terminal Rules
+        "terminal.integrated.defaultProfile.osx": "zsh",
+        "terminal.integrated.cwd": "${workspaceFolder}",
+        "terminal.integrated.env.osx": {
+            "PYTHONPATH": "${workspaceFolder}/backend/src"
+        },
+        // Git Rules
+        "git.enableSmartCommit": true,
+        "git.confirmSync": false,
+        "git.autofetch": true,
+        "git.ignoreLimitWarning": true,
+        // File Exclusions
+        "files.exclude": {
+            "**/.git": true,
+            "**/.svn": true,
+            "**/.hg": true,
+            "**/CVS": true,
+            "**/.DS_Store": true,
+            "**/Thumbs.db": true,
+            "**/.classpath": true,
+            "**/.project": true,
+            "**/.settings": true,
+            "**/.factorypath": true,
+            ".mule": true,
+            "**/__pycache__": true,
+            "**/*.pyc": true,
+            "**/.pytest_cache": true,
+            "**/node_modules": true,
+            "**/dist": true,
+            "**/build": true,
+            "**/.coverage": true,
+            "**/htmlcov": true,
+            "**/.tox": true,
+            "**/.mypy_cache": true,
+            "**/.ruff_cache": true
+        }
+    },
+    "extensions": {
+        "recommendations": [
+            // Python Development
+            "ms-python.python",
+            "ms-python.vscode-pylance",
+            "ms-python.black-formatter",
+            "ms-python.flake8",
+            "ms-python.isort",
+            "ms-python.debugpy",
+            // TypeScript/JavaScript Development
+            "ms-vscode.vscode-typescript-next",
+            "esbenp.prettier-vscode",
+            "dbaeumer.vscode-eslint",
+            "bradlc.vscode-tailwindcss",
+            "ms-vscode.vscode-json",
+            // React Development
+            "formulahendry.auto-rename-tag",
+            "christian-kohler.path-intellisense",
+            "ms-vscode.vscode-react-native",
+            // Docker & DevOps
+            "ms-azuretools.vscode-docker",
+            "ms-vscode-remote.remote-containers",
+            "redhat.vscode-yaml",
+            // Git & Version Control
+            "eamodio.gitlens",
+            "github.vscode-pull-request-github",
+            // General Development
+            "ms-vscode.vscode-json",
+            "yzhang.markdown-all-in-one",
+            "ms-vscode.hexeditor",
+            "ms-vscode.vscode-json",
+            "redhat.vscode-xml",
+            "ms-vscode.powershell",
+            // Productivity
+            "ms-vscode.vscode-json",
+            "gruntfuggly.todo-tree",
+            "alefragnani.bookmarks",
+            "ms-vscode.vscode-json",
+            "streetsidesoftware.code-spell-checker",
+            // Database & API
+            "ms-vscode.vscode-json",
+            "mongodb.mongodb-vscode",
+            "humao.rest-client",
+            "ms-vscode.vscode-json"
+        ]
+    }
+}

@@ -1,0 +1,13 @@
+.toggleButton {
+    color: var(--mantine-color-text);
+    transition: color 0.2s ease;
+
+    &:hover {
+        color: var(--mantine-color-blue-6);
+        background-color: var(--mantine-color-blue-0);
+    }
+
+    @media (max-width: $mantine-breakpoint-xl) {
+        display: none;
+    }
+}

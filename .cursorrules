@@ -1,0 +1,196 @@
+# Cursor AI Assistant Rules
+
+## Project Information
+- **Version**: 1.0.0
+- **Last Updated**: October 14, 2025 at 09:06 AM
+- **Name**: DataPilotFlow
+- **Language**: Python (Backend), TypeScript (Frontend)
+- **Framework**: FastAPI (Backend), React (Frontend)
+- **Type**: Full-stack RAG application
+
+## Project Description
+This project is an advanced, event-driven platform for building and querying sophisticated Retrieval-Augmented Generation (RAG) knowledge bases. Its modular, microservice-style architecture uses a FastAPI server and asynchronous background services to process data from web pages and files, managing the full ingestion pipeline from extraction to vector storage. The system culminates in a complex conversational workflow, enabling users to interact with an intelligent agent through a robust API.
+
+## Core Principles
+
+### 1. Error Checking Before Response
+- ALWAYS run `read_lints` on any file I modify before claiming it's working
+- ALWAYS verify imports exist and are correctly named
+- ALWAYS check that API endpoints, hooks, and functions actually exist
+- ALWAYS test that code compiles and runs without errors
+- NEVER claim "everything is working" without verification
+
+### 2. Data Validation Before Fabrication
+- ALWAYS read actual files and code before making assumptions
+- ALWAYS verify user-provided data against actual implementation
+- NEVER fabricate or assume API responses, data structures, or functionality
+- ALWAYS use `codebase_search`, `grep`, or `read_file` to verify facts
+- If unsure about data structure, ALWAYS check the actual code first
+
+### 3. Understanding Before Answering
+- ALWAYS understand the full context of user questions
+- ALWAYS check the actual implementation before providing solutions
+- ALWAYS verify that proposed solutions match the existing codebase patterns
+- NEVER provide generic answers without checking the specific implementation
+- ALWAYS think through the implications of changes before implementing
+
+## Required Actions Before Every Response
+
+### For Code Changes:
+1. Read the target file(s) to understand current state
+2. Check for existing imports and dependencies
+3. Verify API endpoints and data structures exist
+4. Make the changes
+5. Run `read_lints` to check for errors
+6. Fix any linting errors found
+7. Only then claim the implementation is complete
+
+### For Questions:
+1. Use `codebase_search` or `grep` to find relevant code
+2. Read actual implementation files
+3. Verify data structures and API contracts
+4. Provide answers based on actual code, not assumptions
+
+### For Data Validation:
+1. Always read the actual file/data the user references
+2. Compare user-provided information against actual implementation
+3. Point out discrepancies if found
+4. Never assume user data is correct without verification
+
+## Service Management Rules
+
+### NEVER Start Services Without Permission
+- NEVER run `python run_api_server.py` or any server startup commands
+- NEVER start background services, event listeners, or processes
+- NEVER run `npm run dev` or start development servers
+- NEVER execute Docker containers or docker-compose commands
+- ALWAYS ask for explicit permission before starting any service
+- If testing requires a service, explain what's needed and ask first
+
+### Python Virtual Environment Rules
+- ALWAYS activate the virtual environment before running Python commands
+- Use `source .venv/bin/activate` or `python -m venv .venv` as needed
+- NEVER run Python scripts without ensuring the venv is active
+- If running Python commands, always verify the venv is activated first
+- Example: `cd backend && source .venv/bin/activate && python script.py`
+
+## Backend Code Generation Style
+
+### Preferred Patterns
+- Use `async def` and `await` for all I/O-bound operations, following the project's extensive use of `asyncio`
+- Use the `loguru` library for all logging. Import it via `from loguru import logger`
+- Define data structures and domain models using Pydantic classes, inheriting from `BaseModel` or `Settings` from `pydantic_settings`
+- Use type hints for all function arguments, return values, and variables (`str`, `int`, `List`, `Dict`, `Optional`, custom Pydantic models)
+- Adhere to PEP 8, with `snake_case` for variables and functions, and `PascalCase` for classes
+- Write comprehensive module-level docstrings explaining the purpose of the file, and function/class docstrings in a Google-like format with `Args:`, `Returns:`, `Yields:`, and example usage sections where applicable
+- Structure imports by grouping them into three blocks: standard library, third-party libraries, and project-specific (`src/...`) modules, separated by a blank line
+
+### Patterns to Avoid
+- Using the built-in `print()` function for debugging or output; use `logger.debug()`, `logger.info()`, etc. instead
+- Writing synchronous I/O code (e.g., using the `requests` library); use async alternatives
+- Defining functions or classes without type hints
+- Hardcoding configuration values; always source them from the `src.config.settings` object
+
+## Backend Error Handling
+
+### Preferred Patterns
+- Wrap all major processing logic, I/O operations, and external calls in `try...except Exception as e:` blocks
+- On catching an exception, log it verbosely using `logger.error(f"Error message: {e}")` and include the full stack trace with `logger.error(f"Traceback: {traceback.format_exc()}")`
+- In long-running services or jobs, update the status of the relevant domain entity (e.g., `KnowledgeJob`, `RagFileUpload`) in the database to a 'FAILED' state upon error
+- In root-level runner scripts (`run_*.py`), call `sys.exit(1)` within the final `except` block to signal a failure to the operating system
+- Handle `KeyboardInterrupt` gracefully in main loops to log a clean shutdown message like 'Service stopped by user'
+
+### Patterns to Avoid
+- Using a bare `except:` clause. Always specify the exception type, usually `Exception` for general cases
+- Allowing exceptions to propagate unhandled from service or processor layers
+- Ignoring exceptions or logging them without sufficient context or a traceback
+
+## Backend Module Organization
+
+### Structure
+- **Root Directory**: Contains `run_*.py` scripts, which serve as the main entry points for starting individual services (API, event listeners, etc.)
+- **`src/`**: The primary source code directory
+- **`src/api/`**: Contains the FastAPI application (`api_server.py`) and routers (`src/api/routers/`)
+- **`src/config.py`**: A single file for centralized application configuration using `pydantic-settings`
+- **`src/domain/`**: Defines the core business entities and data models using Pydantic. This layer has minimal dependencies
+- **`src/processors/`**: Holds the core business logic for processing events and jobs, organized into subpackages by domain (e.g., `knowledge_job`, `file_upload`)
+- **`src/services/`**: Acts as an intermediary layer that orchestrates data access and business logic, providing a clean API for the `api` and `processors` layers
+- **`src/infrastructure/`**: Contains modules for interacting with external systems like databases (e.g., `mongo`)
+- **`tools/`**: A separate directory for standalone CLI scripts used for development, data management, and testing. These scripts are built using the `click` library
+
+### Dependencies
+- Entry points (`run_*.py`) depend on `src/services` and `src/config`
+- The `api` layer depends on the `services` layer
+- The `services` layer depends on `processors`, `infrastructure`, and `domain` models
+- The `processors` layer depends on `services` (for data access) and `domain` models. It uses local, in-function imports to prevent circular dependencies with `services`
+- The `infrastructure` layer depends on `domain` models and `config`
+- The `domain` layer is the core and should have the fewest dependencies, primarily on `pydantic`
+- The `tools` directory depends on the `src` package
+
+### Rules
+- Business logic must be encapsulated within classes in the `src/processors/` directory
+- All database interactions should be managed through a `Service` or `DAO` class in the `src/services/` layer
+- Configuration must be centralized in `src/config.py` and accessed via the `settings` object
+- Standalone, executable services must have a corresponding `run_*.py` script in the project root
+- CLI tools for developers must be placed in the `tools/` directory and use the `click` library
+- To avoid circular imports between the `services` and `processors` layers, use local imports inside the methods that need them
+
+### Naming Conventions
+- **modules**: Use `snake_case.py` (e.g., `knowledge_job_processor.py`)
+- **classes**: Use `PascalCase` (e.g., `KnowledgeJobProcessor`, `EventListenerManager`)
+- **functions**: Use `snake_case` (e.g., `start_file_upload_event_listener`)
+- **variables**: Use `snake_case` (e.g., `event_payload`, `retry_count`)
+- **constants**: Use `UPPER_SNAKE_CASE` (e.g., `API_PREFIX`, `MONGO_HOST`)
+- **runner_scripts**: Prefix with `run_` (e.g., `run_api_server.py`)
+- **test_scripts**: Prefix with `test_` (e.g., `test_sync_llm.py`)
+
+## Error Prevention Checklist
+
+Before claiming any task is complete:
+- [ ] All imports are correct and exist
+- [ ] No linting errors remain
+- [ ] API endpoints and hooks are properly named
+- [ ] Data structures match expected schemas
+- [ ] Code follows existing patterns in the codebase
+- [ ] All referenced files and functions actually exist
+- [ ] No services were started without explicit permission
+- [ ] Virtual environment was activated for any Python commands
+- [ ] Backend code uses async/await patterns where appropriate
+- [ ] Backend code uses loguru for logging instead of print statements
+- [ ] Backend code includes proper type hints
+- [ ] Backend code follows the established module organization
+
+## Communication Standards
+
+- Be specific about what I've verified vs. what I'm assuming
+- If I can't verify something, explicitly state that
+- Always mention when I've run linting or other verification steps
+- Admit when I need to check something rather than fabricating an answer
+
+## Examples of What NOT to Do
+
+❌ "The API returns X" without checking the actual API code
+❌ "Everything is working" without running linting
+❌ Assuming data structures without reading the actual models
+❌ Providing generic solutions without checking the specific implementation
+❌ Claiming imports are correct without verifying they exist
+❌ Starting servers or services without explicit permission
+❌ Running Python commands without activating the virtual environment
+❌ Executing `python run_api_server.py` or `npm run dev` without asking
+❌ Using `print()` instead of `logger.info()` in backend code
+❌ Writing synchronous I/O code in backend services
+❌ Creating functions without type hints
+
+## Examples of What TO Do
+
+✅ "I checked the API code and it returns X structure"
+✅ "I ran linting and found Y errors, which I fixed"
+✅ "Let me verify the actual data structure first"
+✅ "I need to check the implementation before answering"
+✅ "I found the issue by reading the actual code"
+✅ "I need to activate the venv first: `source .venv/bin/activate`"
+✅ "Should I start the server to test this? Please confirm."
+✅ "I'll check the code first before making changes"
+✅ "I used `logger.info()` for logging in the backend service"
+✅ "I implemented async/await for the database operation"
+✅ "I added proper type hints to all function parameters"

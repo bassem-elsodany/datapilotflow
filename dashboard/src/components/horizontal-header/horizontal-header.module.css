@@ -1,0 +1,26 @@
+.horizontalHeader {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 200;
+    background: var(--mantine-color-body);
+    border-bottom: 1px solid var(--mantine-color-gray-2);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+.content {
+    padding: 0.75rem 1.5rem;
+    max-width: 100%;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+}
+
+.logo {
+    width: auto;
+    height: 2.5rem;
+    max-width: 200px;
+    flex-shrink: 0;
+}

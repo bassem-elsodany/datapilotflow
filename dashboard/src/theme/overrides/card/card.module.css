@@ -1,0 +1,15 @@
+.root {
+    background-color: var(--mantine-color-body);
+}
+
+/* Make the first heading in a Card more compact */
+.root :where(.mantine-Title-root:first-child) {
+    font-size: var(--mantine-font-size-sm);
+    margin-bottom: var(--mantine-spacing-xs);
+}
+
+/* Also handle Text used as a header at the top of Card */
+.root :where(.mantine-Text-root:first-child) {
+    font-size: var(--mantine-font-size-sm);
+    margin-bottom: var(--mantine-spacing-xs);
+}

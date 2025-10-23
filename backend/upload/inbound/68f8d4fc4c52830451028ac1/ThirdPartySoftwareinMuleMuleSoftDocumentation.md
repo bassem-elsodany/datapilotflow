@@ -1,0 +1,280 @@
+# Third-Party Software in Mule
+
+Mule runtime engine is internally dependent on a subset of libraries from
+included third-party software. Mule applications might also include additional
+third-party dependencies (managed through Apache Maven) that are not included
+in the third-party software list.
+
+## Third-Party Software List
+
+The following table lists third-party software in Mule sorted by software
+component:
+
+License | Component  
+---|---  
+Apache-2.0 | com.beust : jcommander : 1.82  
+Apache-2.0 | com.conversantmedia : disruptor : 1.2.21  
+Apache-2.0 | com.damnhandy : handy-uri-templates : 2.1.8  
+Apache-2.0 | com.fasterxml : aalto-xml : 1.3.2  
+Apache-2.0 | com.fasterxml.jackson.core : jackson-annotations : 2.16.1  
+Apache-2.0 | com.fasterxml.jackson.core : jackson-annotations : 2.18.2  
+Apache-2.0 | com.fasterxml.jackson.core : jackson-core : 2.16.1  
+Apache-2.0 | com.fasterxml.jackson.core : jackson-core : 2.18.2  
+Apache-2.0 | com.fasterxml.jackson.core : jackson-databind : 2.16.1  
+Apache-2.0 | com.fasterxml.jackson.core : jackson-databind : 2.18.2  
+Apache-2.0 | com.fasterxml.jackson.dataformat : jackson-dataformat-yaml : 2.18.2  
+Apache-2.0 | com.fasterxml.jackson.module : jackson-module-jsonschema : 2.18.2  
+Apache-2.0 | com.fasterxml.woodstox : woodstox-core : 6.6.1  
+Apache-2.0 | com.github.ben-manes.caffeine : caffeine : 2.9.3  
+Apache-2.0 | com.github.ben-manes.caffeine : caffeine : 3.1.8  
+Apache-2.0 | com.github.erosb : everit-json-schema : 1.14.3  
+Apache-2.0 | com.github.fge : btf : 1.2  
+Apache-2.0 | com.github.fge : msg-simple : 1.1  
+Apache-2.0 | com.github.fge : uri-template : 0.9  
+Apache-2.0 | com.github.java-json-tools : jackson-coreutils : 1.9  
+Apache-2.0 | com.github.java-json-tools : json-schema-core : 1.2.10  
+Apache-2.0 | com.github.java-json-tools : json-schema-validator : 2.2.10  
+Apache-2.0 | com.google.code.gson : gson : 2.11.0  
+Apache-2.0 | com.google.errorprone : error_prone_annotations : 2.10.0  
+Apache-2.0 | com.google.errorprone : error_prone_annotations : 2.36.0  
+Apache-2.0 | com.google.guava : failureaccess : 1.0.2  
+Apache-2.0 | com.google.guava : guava : 33.3.1-jre  
+Apache-2.0 | com.google.guava : listenablefuture : 9999.0-empty-to-avoid-conflict-with-guava  
+Apache-2.0 | com.google.j2objc : j2objc-annotations : 3.0.0  
+Apache-2.0 | com.googlecode.libphonenumber : libphonenumber : 8.0.0  
+Apache-2.0 | com.lmax : disruptor : 4.0.0  
+Apache-2.0 | com.squareup.okhttp3 : okhttp : 4.12.0  
+Apache-2.0 | com.squareup.okio : okio-jvm : 3.9.1  
+Apache-2.0 | com.typesafe : config : 1.4.3  
+Apache-2.0 | com.zaxxer : hikaricp-java7 : 2.4.13  
+Apache-2.0 | commons-beanutils : commons-beanutils : 1.9.4  
+Apache-2.0 | commons-cli : commons-cli : 1.9.0  
+Apache-2.0 | commons-codec : commons-codec : 1.17.0  
+Apache-2.0 | commons-codec : commons-codec : 1.17.1  
+Apache-2.0 | commons-collections : commons-collections : 3.2.2  
+Apache-2.0 | commons-digester : commons-digester : 2.1  
+Apache-2.0 | commons-io : commons-io : 2.16.1  
+Apache-2.0 | commons-io : commons-io : 2.18.0  
+Apache-2.0 | commons-lang : commons-lang : 2.6  
+Apache-2.0 | commons-net : commons-net : 3.11.1  
+Apache-2.0 | commons-validator : commons-validator : 1.7  
+Apache-2.0 | io.grpc : grpc-api : 1.68.2  
+Apache-2.0 | io.grpc : grpc-context : 1.68.2  
+Apache-2.0 | io.grpc : grpc-core : 1.68.2  
+Apache-2.0 | io.micrometer : micrometer-commons : 1.14.1  
+Apache-2.0 | io.micrometer : micrometer-observation : 1.14.1  
+Apache-2.0 | io.netty : netty-buffer : 4.1.115.final  
+Apache-2.0 | io.netty : netty-codec : 4.1.115.final  
+Apache-2.0 | io.netty : netty-codec-dns : 4.1.115.final  
+Apache-2.0 | io.netty : netty-codec-http : 4.1.115.final  
+Apache-2.0 | io.netty : netty-codec-http2 : 4.1.115.final  
+Apache-2.0 | io.netty : netty-codec-socks : 4.1.115.final  
+Apache-2.0 | io.netty : netty-common : 4.1.115.final  
+Apache-2.0 | io.netty : netty-handler : 4.1.115.final  
+Apache-2.0 | io.netty : netty-handler-proxy : 4.1.115.final  
+Apache-2.0 | io.netty : netty-resolver : 4.1.115.final  
+Apache-2.0 | io.netty : netty-resolver-dns : 4.1.115.final  
+Apache-2.0 | io.netty : netty-transport : 4.1.115.final  
+Apache-2.0 | io.netty : netty-transport-classes-epoll : 4.1.115.final  
+Apache-2.0 | io.netty : netty-transport-native-epoll : jar : linux-x86_64 : 4.1.115.final  
+Apache-2.0 | io.netty : netty-transport-native-unix-common : 4.1.115.final  
+Apache-2.0 | io.opentelemetry : opentelemetry-api : 1.44.1  
+Apache-2.0 | io.opentelemetry : opentelemetry-api-incubator : 1.44.1-alpha  
+Apache-2.0 | io.opentelemetry : opentelemetry-context : 1.44.1  
+Apache-2.0 | io.opentelemetry : opentelemetry-exporter-common : 1.44.1  
+Apache-2.0 | io.opentelemetry : opentelemetry-exporter-logging : 1.44.1  
+Apache-2.0 | io.opentelemetry : opentelemetry-exporter-otlp : 1.44.1  
+Apache-2.0 | io.opentelemetry : opentelemetry-exporter-otlp-common : 1.44.1  
+Apache-2.0 | io.opentelemetry : opentelemetry-exporter-sender-okhttp : 1.44.1  
+Apache-2.0 | io.opentelemetry : opentelemetry-sdk : 1.44.1  
+Apache-2.0 | io.opentelemetry : opentelemetry-sdk-common : 1.44.1  
+Apache-2.0 | io.opentelemetry : opentelemetry-sdk-extension-autoconfigure-spi : 1.44.1  
+Apache-2.0 | io.opentelemetry : opentelemetry-sdk-logs : 1.44.1  
+Apache-2.0 | io.opentelemetry : opentelemetry-sdk-metrics : 1.44.1  
+Apache-2.0 | io.opentelemetry : opentelemetry-sdk-testing : 1.44.1  
+Apache-2.0 | io.opentelemetry : opentelemetry-sdk-trace : 1.44.1  
+Apache-2.0 | io.perfmark : perfmark-api : 0.27.0  
+Apache-2.0 | io.projectreactor : reactor-core : 3.7.0  
+Apache-2.0 | io.projectreactor.addons : reactor-extra : 3.5.2  
+Apache-2.0 | io.projectreactor.netty : reactor-netty-core : 1.2.0  
+Apache-2.0 | io.projectreactor.netty : reactor-netty-http : 1.2.0  
+Apache-2.0 | io.qameta.allure : allure-java-commons : 2.29.1  
+Apache-2.0 | io.qameta.allure : allure-junit4 : 2.29.1  
+Apache-2.0 | io.qameta.allure : allure-model : 2.29.1  
+Apache-2.0 | io.qameta.allure : allure-test-filter : 2.29.1  
+Apache-2.0 | it.unimi.dsi : fastutil : 8.5.15  
+Apache-2.0 | jakarta.inject : jakarta.inject-api : 1.0.5  
+Apache-2.0 | javax.validation : validation-api : 1.1.0.final  
+Apache-2.0 | joda-time : joda-time : 2.10.2  
+Apache-2.0 | joda-time : joda-time : 2.13.0  
+Apache-2.0 | net.bytebuddy : byte-buddy : 1.15.10  
+Apache-2.0 | net.bytebuddy : byte-buddy-agent : 1.15.10  
+Apache-2.0 | net.jodah : failsafe : 2.4.4  
+Apache-2.0 | net.lingala.zip4j : zip4j : 2.11.3  
+Apache-2.0 | org.apache.avro : avro : 1.11.4  
+Apache-2.0 | org.apache.commons : commons-collections4 : 4.4  
+Apache-2.0 | org.apache.commons : commons-compress : 1.26.2  
+Apache-2.0 | org.apache.commons : commons-exec : 1.4.0  
+Apache-2.0 | org.apache.commons : commons-lang3 : 3.14.0  
+Apache-2.0 | org.apache.commons : commons-lang3 : 3.17.0  
+Apache-2.0 | org.apache.commons : commons-pool2 : 2.12.0  
+Apache-2.0 | org.apache.commons : commons-text : 1.12.0  
+Apache-2.0 | org.apache.derby : derby : 10.16.1.1  
+Apache-2.0 | org.apache.ftpserver : ftplet-api : 1.2.0  
+Apache-2.0 | org.apache.ftpserver : ftpserver-core : 1.2.0  
+Apache-2.0 | org.apache.groovy : groovy : 4.0.24  
+Apache-2.0 | org.apache.httpcomponents : httpclient : 4.5.14  
+Apache-2.0 | org.apache.httpcomponents : httpcore : 4.4.16  
+Apache-2.0 | org.apache.logging.log4j : log4j-1.2-api : 2.24.2  
+Apache-2.0 | org.apache.logging.log4j : log4j-api : 2.24.2  
+Apache-2.0 | org.apache.logging.log4j : log4j-core : 2.24.2  
+Apache-2.0 | org.apache.logging.log4j : log4j-slf4j2-impl : 2.24.2  
+Apache-2.0 | org.apache.maven : maven-builder-support : 3.9.9  
+Apache-2.0 | org.apache.maven : maven-model-builder : 3.9.9  
+Apache-2.0 | org.apache.maven : maven-resolver-provider : 3.9.9  
+Apache-2.0 | org.apache.maven : maven-settings : 3.9.9  
+Apache-2.0 | org.apache.maven : maven-settings-builder : 3.9.9  
+Apache-2.0 | org.apache.maven.resolver : maven-resolver-api : 1.9.18  
+Apache-2.0 | org.apache.maven.resolver : maven-resolver-connector-basic : 1.9.18  
+Apache-2.0 | org.apache.maven.resolver : maven-resolver-impl : 1.9.18  
+Apache-2.0 | org.apache.maven.resolver : maven-resolver-named-locks : 1.9.18  
+Apache-2.0 | org.apache.maven.resolver : maven-resolver-spi : 1.9.18  
+Apache-2.0 | org.apache.maven.resolver : maven-resolver-supplier : 1.9.18  
+Apache-2.0 | org.apache.maven.resolver : maven-resolver-transport-file : 1.9.18  
+Apache-2.0 | org.apache.maven.resolver : maven-resolver-transport-http : 1.9.18  
+Apache-2.0 | org.apache.maven.resolver : maven-resolver-transport-wagon : 1.9.18  
+Apache-2.0 | org.apache.maven.resolver : maven-resolver-util : 1.9.18  
+Apache-2.0 | org.apache.maven.shared : maven-invoker : 3.3.0  
+Apache-2.0 | org.apache.maven.shared : maven-shared-utils : 3.4.2  
+Apache-2.0 | org.apache.maven.wagon : wagon-http : 3.5.3  
+Apache-2.0 | org.apache.maven.wagon : wagon-http-shared : 3.5.3  
+Apache-2.0 | org.apache.maven.wagon : wagon-provider-api : 3.5.3  
+Apache-2.0 | org.apache.mina : mina-core : 2.1.6  
+Apache-2.0 | org.apache.sshd : sshd-osgi : 2.14.0  
+Apache-2.0 | org.apache.sshd : sshd-scp : 2.14.0  
+Apache-2.0 | org.apache.sshd : sshd-sftp : 2.14.0  
+Apache-2.0 | org.apache.ws.xmlschema : xmlschema-core : 2.2.1  
+Apache-2.0 | org.apache.xmlbeans : xmlbeans : 3.1.0  
+Apache-2.0 | org.apache.xmlbeans : xmlbeans : 5.2.2  
+Apache-2.0 | org.awaitility : awaitility : 4.2.2  
+Apache-2.0 | org.codehaus.plexus : plexus-cipher : 2.0  
+Apache-2.0 | org.codehaus.plexus : plexus-component-annotations : 2.2.0  
+Apache-2.0 | org.codehaus.plexus : plexus-interpolation : 1.27  
+Apache-2.0 | org.codehaus.plexus : plexus-sec-dispatcher : 2.0  
+Apache-2.0 | org.codehaus.plexus : plexus-utils : 4.0.2  
+Apache-2.0 | org.codehaus.plexus : plexus-xml : 3.0.1  
+Apache-2.0 | org.jetbrains : annotations : 26.0.1  
+Apache-2.0 | org.jetbrains.kotlin : kotlin-stdlib : 2.1.0  
+Apache-2.0 | org.jetbrains.kotlin : kotlin-stdlib-jdk7 : 2.1.0  
+Apache-2.0 | org.jetbrains.kotlin : kotlin-stdlib-jdk8 : 2.1.0  
+Apache-2.0 | org.jheaps : jheaps : 0.14  
+Apache-2.0 | org.objenesis : objenesis : 3.3  
+Apache-2.0 | org.parboiled : parboiled_2.12 : 2.5.1  
+Apache-2.0 | org.quartz-scheduler : quartz : 2.3.2  
+Apache-2.0 | org.raml : raml-parser-2 : 1.0.44-15  
+Apache-2.0 | org.raml : yagi : 1.0.44-15  
+Apache-2.0 | org.reflections : reflections : 0.10.2  
+Apache-2.0 | org.scala-lang : scala-library : 2.12.18  
+Apache-2.0 | org.slf4j : jcl-over-slf4j : 2.0.16  
+Apache-2.0 | org.springframework : spring-aop : 6.2.0  
+Apache-2.0 | org.springframework : spring-beans : 6.2.0  
+Apache-2.0 | org.springframework : spring-context : 6.2.0  
+Apache-2.0 | org.springframework : spring-core : 6.2.0  
+Apache-2.0 | org.springframework : spring-expression : 6.2.0  
+Apache-2.0 | org.togglz : togglz-core : 4.4.0  
+Apache-2.0 | org.vibur : vibur-object-pool : 25.0  
+Apache-2.0 | org.yaml : snakeyaml : 2.3  
+BSD-2-Clause | org.codehaus.woodstox : stax2-api : 4.2.2  
+BSD-3-Clause | com.google.re2j : re2j : 1.6  
+BSD-3-Clause | com.google.re2j : re2j : 1.7  
+BSD-3-Clause | org.antlr : antlr-runtime : 3.5.3  
+BSD-3-Clause | org.hamcrest : hamcrest : 3.0  
+CDDL-1.1 | org.glassfish.grizzly : grizzly-http : 2.3.34  
+CDDL-1.1 | org.glassfish.grizzly : grizzly-http-server : 2.3.34  
+CDDL-1.1 | org.glassfish.grizzly : grizzly-http-servlet : 2.3.34  
+CDDL-1.1 | org.glassfish.grizzly : grizzly-websockets : 2.4.0-beta4  
+DOM4j-License | org.dom4j : dom4j : 2.1.4  
+EDL-1.0 | com.sun.activation : jakarta.activation : 1.2.1  
+EDL-1.0 | com.sun.activation : jakarta.activation : 1.2.2  
+EDL-1.0 | com.sun.mail : jakarta.mail : 1.6.3  
+EDL-1.0 | com.sun.mail : jakarta.mail : 1.6.7  
+EDL-1.0 | com.sun.xml.bind : jaxb-impl : 2.3.9  
+EDL-1.0 | jakarta.xml.bind : jakarta.xml.bind-api : 2.3.3  
+EPL-1.0 | com.mchange : c3p0 : 0.10.1  
+EPL-1.0 | com.mchange : mchange-commons-java : 0.3.1  
+EPL-1.0 | junit : junit : 4.13.2  
+EPL-1.0 | org.eclipse.sisu : org.eclipse.sisu.inject : 0.3.5  
+EPL-1.0 | org.eclipse.sisu : org.eclipse.sisu.plexus : 0.3.5  
+EPL-2.0 | jakarta.annotation : jakarta.annotation-api : 1.3.5  
+EPL-2.0 | jakarta.jms : jakarta.jms-api : 2.0.3  
+EPL-2.0 | jakarta.transaction : jakarta.transaction-api : 1.3.3  
+EPL-2.0 | org.aspectj : aspectjweaver : 1.9.22.1  
+EPL-2.0 | org.glassfish : jakarta.json : 1.1.6  
+EPL-2.0 | org.jgrapht : jgrapht-core : 1.5.2  
+ICU or Unicode | org.graalvm.shadowed : icu4j : 24.1.1  
+LGPL-2.1 | com.github.spotbugs : spotbugs-annotations : 4.7.3  
+MIT | com.vdurmont : semver4j : 3.1.0  
+MIT | net.sf.jopt-simple : jopt-simple : 5.0.3  
+MIT | org.apfloat : apfloat : 1.14.0  
+MIT | org.apfloat : apfloat : 1.14.0  
+MIT | org.checkerframework : checker-qual : 3.19.0  
+MIT | org.checkerframework : checker-qual : 3.48.3  
+MIT | org.graalvm.js : js : 23.0.6  
+MIT | org.graalvm.js js 1.0.0-rc15  
+MIT | org.jsoup : jsoup : 1.18.3  
+MIT | org.mockito : mockito-core : 4.11.0  
+MIT | org.slf4j : jul-to-slf4j : 2.0.16  
+MIT | org.slf4j : slf4j-api : 2.0.16  
+MIT | superstartup-closure-compiler 0.1.1  
+MIT | tanukisoft : wrapper : 3.2.3  
+MIT-0 | org.reactivestreams : reactive-streams : 1.0.4  
+MPL-1.1 | com.googlecode.juniversalchardet : juniversalchardet : 1.0.3  
+MPL-2.0 | org.mozilla : rhino : 1.7.15  
+Public Domain | org.json : json : 20231013  
+Public Domain | org.json : json : 20240303  
+Unicode-3.0 | com.ibm.icu : icu4j : 76.1  
+UPL-1.0 | org.graalvm.js : js-scriptengine : 24.1.1  
+UPL-1.0 | org.graalvm.polyglot : polyglot : 24.1.1  
+UPL-1.0 | org.graalvm.regex : regex : 24.1.1  
+UPL-1.0 | org.graalvm.sdk : collections : 24.1.1  
+UPL-1.0 | org.graalvm.sdk : graal-sdk : 24.1.1  
+UPL-1.0 | org.graalvm.sdk : graal-sdk : 24.1.1  
+UPL-1.0 | org.graalvm.sdk : graal-sdk : 24.1.1  
+UPL-1.0 | org.graalvm.sdk : nativeimage : 24.1.1  
+UPL-1.0 | org.graalvm.sdk : word : 24.1.1  
+UPL-1.0 | org.graalvm.truffle : truffle-api : 24.1.1  
+  
+## License Information
+
+Information about each license type is available at:
+
+  * `http://aopalliance.sourceforge.net/` for AOP
+
+  * `https://opensource.org/licenses/APACHE-2.0` for Apache-2.0
+
+  * `https://en.wikipedia.org/wiki/BSD_licenses` for BSD
+
+  * `https://opensource.org/licenses/BSD-2-Clause` for BSD-2-Clause
+
+  * `https://opensource.org/licenses/BSD-3-Clause` for BSD-3-Clause
+
+  * `https://spdx.org/licenses/CDDL-1.1.html` for CDDL-1.1
+
+  * `https://opensource.org/licenses/CPAL-1.0` for CPAL-1.0
+
+  * `https://opensource.org/licenses/CPL-1.0` for CPL-1.0
+
+  * `https://opensource.org/licenses/EPL-2.0` for EPL-2.0
+
+  * `http://source.icu-project.org/repos/icu/icu/trunk/LICENSE` for ICU
+
+  * `https://github.com/stleary/JSON-java/blob/master/LICENSE` for JSON
+
+  * `https://opensource.org/licenses/LGPL-2.1` for LGPL-2.1
+
+  * `https://opensource.org/licenses/MIT` for MIT
+
+  * `https://opensource.org/licenses/MPL-1.1` for MPL-1.1
+
+  * `https://opensource.org/licenses/MPL-2.0` for MPL-2.0
+

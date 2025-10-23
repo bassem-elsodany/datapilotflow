@@ -1,0 +1,357 @@
+import { API_CONFIG } from './constants';
+
+// Environment detection
+const isDevelopment = import.meta.env.DEV;
+const isProduction = import.meta.env.PROD;
+
+// Get current environment
+const getCurrentEnvironment = () => {
+  if (import.meta.env.VITE_ENVIRONMENT === 'production') return 'production';
+  if (import.meta.env.VITE_ENVIRONMENT === 'staging') return 'staging';
+  return 'development';
+};
+
+const currentEnv = getCurrentEnvironment();
+
+// Build API base URL
+const buildApiBaseUrl = () => {
+  const baseUrl = API_CONFIG.baseUrl.replace(/\/$/, ''); // Remove trailing slash
+  return `${baseUrl}${API_CONFIG.prefix}`;
+};
+
+// Centralized API Endpoints Configuration
+export const apiEndpoints = {
+  // Authentication
+  auth: {
+    login: '/auth/login',
+    register: '/auth/register',
+    logout: '/auth/logout',
+    passwordReset: '/auth/password/reset',
+    passwordResetConfirm: '/auth/password/reset/confirm',
+    refresh: '/auth/refresh',
+  },
+
+  // User Management
+  users: {
+    me: '/users/me',
+    profile: '/users/me',
+    changePassword: '/users/me/change-password',
+    deleteAccount: '/users/me',
+    list: '/users',
+    create: '/users',
+    user: (userId: string) => `/users/${userId}`,
+  },
+
+  // User Roles Management
+  roles: {
+    list: '/roles',
+    create: '/roles',
+    role: (roleId: string) => `/roles/${roleId}`,
+    permissions: '/roles/permissions',
+    assign: '/roles/assign',
+    remove: '/roles/remove',
+    userRoles: (userId: string) => `/roles/user/${userId}`,
+  },
+
+  // Interview Management
+  interview: {
+    // Resume and Job management moved to /management/interview
+    resumes: '/management/interview/resumes',
+    resume: (candidateId: string) => `/management/interview/resumes/${candidateId}`,
+    jobs: '/management/interview/jobs',
+    job: (jobId: string) => `/management/interview/jobs/${jobId}`,
+    jobOriginal: (jobId: string) => `/management/interview/jobs/${jobId}/original`,
+
+    // Interview management moved to /interviews (RESTful)
+    interviews: '/interviews',
+    interview: (interviewId: string) => `/interviews/${interviewId}`,
+    interviewResume: (interviewId: string) => `/interviews/${interviewId}/resume`,
+    interviewChat: (interviewId: string) => `/interviews/${interviewId}/chat`,
+    interviewStatus: (interviewId: string) => `/interviews/${interviewId}/status`,
+    interviewAnalytics: (interviewId: string) => `/interviews/${interviewId}/analytics`,
+    searchCandidates: '/interview/search/candidates',
+    searchJobs: '/interview/search/jobs',
+    statisticsCandidates: '/interview/statistics/candidates',
+    statisticsJobs: '/interview/statistics/jobs',
+    analysisStatus: (analysisId: string) => `/interview/analysis/${analysisId}/status`,
+    health: '/interview/health',
+    healthDatabase: '/interview/health/database',
+    // WebSocket endpoints
+    websocket: {
+      startInterview: '/ws/interviews/start-interview',
+      analyzeResume: '/ws/interviews/analyze-resume',
+    },
+  },
+
+  // Conversations
+  conversations: {
+    chat: '/conversations',
+    memory: '/conversations/memory',
+    sessions: '/conversations',
+    session: (sessionId: string) => `/conversations/${sessionId}`,
+    sessionName: (sessionId: string) => `/conversations/${sessionId}/name`,
+    createSession: '/conversations/sessions',
+    websocket: {
+      // Real-time conversation chat with knowledge search
+      search: (conversationId: string) => `/ws/conversations/${conversationId}/search`,
+    },
+  },
+
+  // Knowledge Management (RAG System)
+  knowledge: {
+    // Document Search
+    search: '/knowledge/search',
+    searchContextAware: '/knowledge/search/context-aware',
+
+    // Document Ingestion
+    ingest: '/knowledge/ingest',
+    ingestStatus: (fileId: string) => `/knowledge/ingest/${fileId}/status`,
+    ingestJobs: '/knowledge/ingest/jobs',
+  },
+
+  // Knowledge Source Configuration (RAG Settings)
+  knowledgeSources: {
+    // Configuration Management
+    configs: '/knowledge/sources',
+    config: (configId: string) => `/knowledge/sources/${configId}`,
+
+    // URL Source Management (nested under config - RESTful)
+    urlSource: (configId: string, urlSourceId: string) => `/knowledge/sources/${configId}/url-sources/${urlSourceId}`,
+
+    // Job Management (moved to separate endpoint)
+    configJobs: (configId: string) => `/knowledge/sources/${configId}/jobs`,
+  },
+
+  // Knowledge Job Management (separate endpoint)
+  knowledgeJobs: {
+    list: '/knowledge/jobs',
+    create: (configId: string) => `/knowledge/sources/${configId}/jobs`,
+    job: (jobId: string) => `/knowledge/jobs/${jobId}`,
+    update: (jobId: string) => `/knowledge/jobs/${jobId}`,
+    delete: (jobId: string) => `/knowledge/jobs/${jobId}`,
+    execute: (jobId: string) => `/knowledge/jobs/${jobId}/execute`,
+    cancel: (jobId: string) => `/knowledge/jobs/${jobId}/cancel`,
+  },
+
+  // Job Timeline Management
+  jobTimelines: {
+    listByJob: (jobId: string) => `/knowledge/jobs/${jobId}/timelines`,
+    get: (timelineId: string) => `/knowledge/jobs/timelines/${timelineId}`,
+    getLatest: (jobId: string) => `/knowledge/jobs/${jobId}/timelines?latest=true`,
+    getStatistics: (jobId: string) => `/knowledge/jobs/${jobId}/timelines/statistics`,
+    update: (timelineId: string) => `/knowledge/jobs/timelines/${timelineId}`,
+  },
+
+  // Vector DB Collection Management
+  vectordb: {
+    // Milvus collection endpoints (for vector-status page)
+    collections: '/vectordb/collections',
+    collection: (collectionId: string) => `/vectordb/collections/${collectionId}`,
+    schema: (collectionId: string) => `/vectordb/collections/${collectionId}/schema`,
+    stats: (collectionId: string) => `/vectordb/collections/${collectionId}/stats`,
+    records: (collectionId: string) => `/vectordb/collections/${collectionId}/records`,
+
+    // Knowledge VectorDB collection configuration endpoints (for job view modal)
+    knowledgeCollections: '/knowledge/vectordb-collections',
+    knowledgeCollection: (collectionId: string) => `/knowledge/vectordb-collections/${collectionId}`,
+    checkName: (name: string) => `/knowledge/vectordb-collections?name=${encodeURIComponent(name)}`,
+  },
+
+  // LLM Content Filter Management
+  contentFilters: {
+    list: '/knowledge/content-filters',
+    create: '/knowledge/content-filters',
+    filter: (filterId: string) => `/knowledge/content-filters/${filterId}`,
+    update: (filterId: string) => `/knowledge/content-filters/${filterId}`,
+    delete: (filterId: string) => `/knowledge/content-filters/${filterId}`,
+    validate: (filterId: string) => `/knowledge/content-filters/${filterId}/validate`,
+    // Get filter by source config
+    sourceFilter: (configId: string) => `/knowledge/sources/${configId}/content-filter`,
+  },
+
+  // Document Splitter Management
+  documentSplitters: {
+    list: '/knowledge/document-splitters',
+    create: '/knowledge/document-splitters',
+    splitter: (splitterId: string) => `/knowledge/document-splitters/${splitterId}`,
+    update: (splitterId: string) => `/knowledge/document-splitters/${splitterId}`,
+    delete: (splitterId: string) => `/knowledge/document-splitters/${splitterId}`,
+    defaults: '/knowledge/document-splitters/defaults',
+    mostUsed: '/knowledge/document-splitters/most-used',
+    usage: (splitterId: string) => `/knowledge/document-splitters/${splitterId}/usage`,
+  },
+
+  // Pipeline Management
+  pipelines: {
+    list: '/pipelines',
+    create: '/pipelines',
+    pipeline: (pipelineId: string) => `/pipelines/${pipelineId}`,
+    update: (pipelineId: string) => `/pipelines/${pipelineId}`,
+    delete: (pipelineId: string) => `/pipelines/${pipelineId}`,
+    execute: (pipelineId: string) => `/pipelines/${pipelineId}/execute`,
+    status: (pipelineId: string) => `/pipelines/${pipelineId}/status`,
+  },
+
+  // Unified Model Providers Management
+  modelProviders: {
+    list: '/model-providers',
+    create: '/model-providers',
+    get: (providerId: string) => `/model-providers/${providerId}`,
+    update: (providerId: string) => `/model-providers/${providerId}`,
+    active: '/model-providers/active/list',
+    byType: (modelType: string) => `/model-providers/by-type/${modelType}`,
+  },
+
+  // Questions Management
+  questions: {
+    list: '/questions',
+    create: '/questions',
+    question: (questionId: string) => `/questions/${questionId}`,
+    domains: '/questions/domains',
+    domain: (domainId: string) => `/questions/domains/${domainId}`,
+    domainStats: '/questions/domains/stats',
+    byDomain: (domainName: string) => `/questions/by-domain/${domainName}`,
+    byDomainLevel: (domainName: string, level: string) => `/questions/by-domain/${domainName}/difficulty/${level}`,
+    difficultyLevels: '/questions/difficulty-levels',
+    sampleData: '/questions/sample-data',
+  },
+
+  // Smart Features
+  smartFeatures: {
+    questions: {
+      generateProjectBased: '/smart-features/questions/generate/project-based',
+      generateSkillGap: '/smart-features/questions/generate/skill-gap',
+      custom: (questionId: string) => `/smart-features/questions/custom/${questionId}`,
+      customByType: (generationType: string) => `/smart-features/questions/custom/by-type/${generationType}`,
+    },
+    selection: {
+      timeAware: '/smart-features/selection/time-aware',
+    },
+    recommendations: {
+      generate: '/smart-features/recommendations/generate',
+      recommendation: (recommendationId: string) => `/smart-features/recommendations/${recommendationId}`,
+      byPriority: '/smart-features/recommendations/by-priority',
+    },
+    analytics: {
+      generate: '/smart-features/analytics/generate',
+      session: (sessionId: string) => `/smart-features/analytics/session/${sessionId}`,
+      candidate: (candidateId: string) => `/smart-features/analytics/candidate/${candidateId}`,
+    },
+    trends: {
+      generate: '/smart-features/trends/generate',
+      candidate: (candidateId: string) => `/smart-features/trends/candidate/${candidateId}`,
+    },
+    reports: {
+      coverage: {
+        generate: '/smart-features/reports/coverage/generate',
+        report: (reportId: string) => `/smart-features/reports/coverage/${reportId}`,
+        candidate: (candidateId: string) => `/smart-features/reports/coverage/candidate/${candidateId}`,
+      },
+    },
+    dashboard: '/smart-features/dashboard',
+  },
+
+  // Notifications
+  notifications: {
+    list: '/notifications',
+    create: '/notifications',
+    notification: (notificationId: string) => `/notifications/${notificationId}`,
+    markRead: (notificationId: string) => `/notifications/${notificationId}/read`,
+    dismiss: (notificationId: string) => `/notifications/${notificationId}/dismiss`,
+    readAll: '/notifications/read-all',
+    stats: '/notifications/stats/summary',
+    sessionNotifications: (sessionId: string) => `/notifications/session/${sessionId}/notifications`,
+    progress: '/notifications/progress',
+    updateProgress: (notificationId: string) => `/notifications/progress/${notificationId}`,
+    cleanup: '/notifications/cleanup/expired',
+    // WebSocket endpoints
+    websocket: {
+      general: '/ws/notifications',
+      session: (sessionId: string) => `/ws/notifications/${sessionId}`,
+    },
+  },
+
+  // Legacy WebSocket endpoints (deprecated - use structured endpoints above)
+  websocket: {
+    knowledgeSearch: '/ws/knowledge/search',
+    notifications: '/ws/notifications',
+    sessionNotifications: (sessionId: string) => `/ws/notifications/${sessionId}`,
+  },
+};
+
+export const app = {
+  name: import.meta.env.VITE_APP_NAME || 'dataPilotFlow',
+  version: import.meta.env.VITE_APP_VERSION || '1.0.0',
+  apiBaseUrl: buildApiBaseUrl(),
+  fakeBackend: import.meta.env.VITE_ENABLE_FAKE_BACKEND === 'true',
+  redirectQueryParamName: 'r',
+  accessTokenStoreKey: 'jwt_token',
+  environment: currentEnv,
+  isDevelopment,
+  isProduction,
+  debugMode: import.meta.env.VITE_DEBUG_MODE === 'true',
+  logLevel: import.meta.env.VITE_LOG_LEVEL || 'info',
+  // WebSocket configuration
+  ws: {
+    reconnectAttempts: parseInt(import.meta.env.VITE_WS_RECONNECT_ATTEMPTS || '3'),
+    reconnectDelay: parseInt(import.meta.env.VITE_WS_RECONNECT_DELAY || '2000'),
+  },
+};
+
+// API utility functions
+export const apiUtils = {
+  /**
+   * Builds a full API URL from an endpoint
+   * @param endpoint - The API endpoint (e.g., '/interview/resumes')
+   * @returns Full URL with base URL
+   */
+  buildApiUrl: (endpoint: string): string => {
+    const baseUrl = app.apiBaseUrl.replace(/\/$/, ''); // Remove trailing slash
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    return `${baseUrl}${cleanEndpoint}`;
+  },
+
+  /**
+   * Gets the authorization header with JWT token
+   * @returns Authorization header object
+   */
+  getAuthHeaders: (): Record<string, string> => {
+    const token = localStorage.getItem(app.accessTokenStoreKey);
+    return {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    };
+  },
+
+  /**
+   * Makes an authenticated API request
+   * @param endpoint - The API endpoint
+   * @param options - Fetch options
+   * @returns Promise with response
+   */
+  apiRequest: async (endpoint: string, options: RequestInit = {}) => {
+    const url = apiUtils.buildApiUrl(endpoint);
+    const headers = {
+      ...apiUtils.getAuthHeaders(),
+      ...options.headers,
+    };
+
+    return fetch(url, {
+      ...options,
+      headers,
+    });
+  },
+
+  /**
+   * Builds a WebSocket URL from an endpoint
+   * @param endpoint - The WebSocket endpoint (e.g., '/conversations/ws/{id}/search')
+   * @param token - JWT token for authentication
+   * @returns Full WebSocket URL
+   */
+  buildWebSocketUrl: (endpoint: string, token?: string): string => {
+    const baseUrl = app.apiBaseUrl.replace(/\/$/, '').replace('http', 'ws');
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const authParam = token ? `?token=${token}` : '';
+    return `${baseUrl}${cleanEndpoint}${authParam}`;
+  },
+};

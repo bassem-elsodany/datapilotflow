@@ -1,0 +1,38 @@
+@layer mantine, mantine-datatable;
+
+html,
+body {
+  min-height: 100vh;
+}
+
+#root {
+  height: 100vh;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+.fadeIn {
+  animation: fadeIn 0.3s ease-out;
+}

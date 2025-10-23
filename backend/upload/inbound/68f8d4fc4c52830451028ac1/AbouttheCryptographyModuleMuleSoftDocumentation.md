@@ -1,0 +1,40 @@
+# About the Cryptography Module
+
+This module provides cryptography capabilities to a Mule application. Its main
+features include:
+
+  * Symmetric encryption and decryption of messages.
+
+  * Asymmetric encryption and decryption of messages.
+
+  * Message signing and signature validation of signed messages.
+
+This module supports three different strategies to encrypt and sign your
+messages:
+
+  * [PGP](cryptography-pgp): Signature/encryption using PGP.
+
+  * [XML](cryptography-xml): For signing or encrypting XML documents or elements.
+
+  * [JCE](cryptography-jce): For using a wider range of cryptography capabilities as provided by the Java Cryptography Extension.
+
+Additionally, this module offers two general operations to calculate and
+validate stream checksums.  
+See [General Operations](cryptography-reference) for more information.
+
+## Using the Extension in Anypoint Studio 7
+
+You can use this extension by adding it as a dependency in your Mule app.
+
+### Installing the Extension
+
+  1. Open your Mule project in Anypoint Studio.
+
+  2. Go to the Mule Palette.
+
+  3. Select **Search in Exchange** , and search for the Cryptography Module.
+
+  4. Add the extension.
+
+  5. You can now search in the mule Palette for operations of the Cryptography module.
+

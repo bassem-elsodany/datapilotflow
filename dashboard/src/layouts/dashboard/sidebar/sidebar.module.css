@@ -1,0 +1,95 @@
+.sectionTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--mantine-color-gray-6);
+  margin-bottom: var(--mantine-spacing-sm);
+  margin-top: var(--mantine-spacing-sm);
+  padding-left: var(--mantine-spacing-md);
+  padding-right: var(--mantine-spacing-md);
+}
+
+.sectionLink {
+  border-radius: var(--mantine-radius-md);
+  margin-bottom: var(--mantine-spacing-xs);
+  transition: all 0.2s ease;
+
+  &:hover {
+    background-color: var(--mantine-color-gray-1);
+    transform: translateX(2px);
+  }
+
+  & svg {
+    height: 1.25rem;
+    width: 1.25rem;
+  }
+}
+
+.sectionDropdownItemLink {
+  border-radius: var(--mantine-radius-md);
+  padding-left: calc(var(--mantine-spacing-md) + 20px) !important;
+
+  & [data-position='left'] {
+    width: 20px;
+  }
+
+  & :global(.dot) {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  & :global(.dot)::before {
+    content: '';
+    display: inline-block;
+    background-color: var(--mantine-color-dimmed);
+    height: 0.3rem;
+    width: 0.3rem;
+    border-radius: 100%;
+  }
+
+  &[data-active='true'] :global(.dot)::before {
+    background-color: var(--mantine-primary-color-filled);
+    height: 0.4rem;
+    width: 0.4rem;
+  }
+}
+
+.nestedDropdownItemLink {
+  border-radius: var(--mantine-radius-md);
+  padding-left: calc(var(--mantine-spacing-md) + 40px) !important;
+
+  & [data-position='left'] {
+    width: 20px;
+  }
+
+  & :global(.dot) {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  & :global(.dot)::before {
+    content: '';
+    display: inline-block;
+    background-color: var(--mantine-color-dimmed);
+    height: 0.25rem;
+    width: 0.25rem;
+    border-radius: 100%;
+  }
+
+  &[data-active='true'] :global(.dot)::before {
+    background-color: var(--mantine-primary-color-filled);
+    height: 0.3rem;
+    width: 0.3rem;
+  }
+}

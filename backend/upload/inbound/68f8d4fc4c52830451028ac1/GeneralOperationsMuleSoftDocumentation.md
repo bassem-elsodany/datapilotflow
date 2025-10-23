@@ -1,0 +1,110 @@
+# General Operations
+
+The Cryptography module provides operations to calculate and validate a
+checksum to check data for errors. These operations are independent of the
+encryption strategy used.
+
+## Checksum Overview
+
+Checksum operations enable you to ensure message integrity. The Calculate
+Checksum operation acts as an enricher to generate a checksum for a message
+when it enters a system, and then the Validate Checksum operation acts as a
+filter to verify the checksum when the message leaves the system. If the entry
+and exit values do not match, a `CRYPTO:VALIDATION` error is raised.
+
+This pair of operations enables you to verify that a message remains intact
+between the sender and the receiver. Because checksum operations do not
+provide encryption or append a signature to the message, you can use the
+operations in conjunction with any other security features.
+
+## Calculate Checksum
+
+`<crypto:calculate-checksum>`
+
+Calculates the checksum of a given content or value, which can be an
+expression. You can select the hashing algorithm to use.
+
+### Parameters
+
+Name | Type | Description | Default Value | Required  
+---|---|---|---|---  
+Algorithm |  Enumeration, one of:
+
+  * `CRC32`
+  * `MD2`
+  * `MD5`
+  * `SHA_1`
+  * `SHA_256`
+  * `SHA_512`
+
+| the checksum algorithm | `SHA_256` |   
+Content |  Binary | The content for calculating the checksum | `#[payload]` |   
+Target Variable |  String | The name of a variable on which the operation's output will be placed |  |   
+Target Value |  String | An expression that will be evaluated against the operation's output and the outcome of that expression will be stored in the target variable | `#[payload]` |   
+  
+### Output Type
+
+String
+
+### Throws
+
+  * `CRYPTO:CHECKSUM`
+
+## Validate Checksum
+
+`<crypto:validate-checksum>`
+
+Validates the checksum of the content or value against the checksum previously
+calculated using the Calculate Checksum operation.
+
+### Parameters
+
+Name | Type | Description | Default Value | Required  
+---|---|---|---|---  
+Algorithm |  Enumeration, one of:
+
+  * `CRC32`
+  * `MD2`
+  * `MD5`
+  * `SHA_1`
+  * `SHA_256`
+  * `SHA_512`
+
+| The checksum algorithm | `SHA_256` |   
+Value |  Binary | The content for calculating the checksum | `#[payload]` |   
+Expected |  String | The expected checksum as an hexadecimal string |  | **x**  
+  
+### Throws
+
+  * `CRYPTO:MISSING_KEY`
+
+  * `CRYPTO:VALIDATION`
+
+## Configure Use Random Initialization Vectors
+
+You can enable the **Use random IVs** field to use random initialization
+vectors (IVs). If you enable this field, the decryption algorithm assumes IVs
+are prepended to the ciphertext during the decryption operation. To configure
+this field in Anypoint Studio, follow these steps:
+
+  1. In Studio, drag a Cryptography module operation to your flow, for example **Jce sign**.
+
+  2. Select the operation from the flow.
+
+  3. In the operation configuration screen, click the plus sign to access the module global configuration.
+
+  4. In the **Global Element Properties** window, enable the **Use random IVs** field.
+
+![A configuration setting for Crypto JCE with options for keystore and random
+IV usage](_images/crypto-random-iv.png)
+
+In the **XML editor** window, the **Use random IVs** field looks like this:
+
+    
+    
+    crypto:jce-config name="Crypto_Jce" doc:name="Crypto Jce" keystore="/Users/MuleSoft/Desktop/jcekeystore.jks" password="mulesoft" useRandomIVs="true">
+    		<crypto:jce-key-infos >
+    			<crypto:jce-symmetric-key-info keyId="key100" alias="jceclient100" password="mulesoft" />
+    		</crypto:jce-key-infos>
+    	</crypto:jce-config>
+

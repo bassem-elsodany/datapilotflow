@@ -1,0 +1,30 @@
+# Performance Tuning Guide
+
+To achieve optimal performance from your Mule applications, you must evaluate
+both the applications themselves and the environment in which they run.
+Although Mule 4 is designed to tune itself, your applications might exhibit
+performance issues due to their initial construction or dependencies.  
+
+Similarly, for on-premises installations, you might need to tune the
+environment itself so that your Mule applications can take full advantage of
+it. Because many variables influence it, tuning the performance of your
+application requires some trial and error.  
+
+You can simplify performance tuning by using documented best practices and
+testing your applications in ideal test environments. The following
+recommendations come from the Development and Services Engineering teams and
+benchmarking efforts by MuleSoft Performance Engineering.
+
+## Performance Tuning Summary
+
+Optimizing the performance of your Mule apps requires the following actions:
+
+  * Applying tuning recommendations at the application level  
+See [Performance Tuning Recommendations](tuning-recommendations) for details.
+
+  * Considering tuning prerequisites and best practices before testing  
+See [Performance Test Validations](tuning-test-validations) for details.
+
+  * Monitoring performance during testing to determine the resources required by the Mule runtime engine (Mule)  
+See [Performance Monitoring](tuning-monitoring) for details.
+

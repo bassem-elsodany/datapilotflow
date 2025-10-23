@@ -1,0 +1,6 @@
+data/
+.venv/
+.DS_Store
+.vscode/
+.ruff_cache/
+img/

@@ -1,0 +1,87 @@
+[project]
+name = "datapilotflow"
+version = "1.0.0"
+description = "DataPilotFlow is an AI-augmented interview assistant designed to streamline and enhance technical assessments. Built on top of LangGraph, it orchestrates intelligent question selection, automated answer scoring, semantic retrieval, and personalized candidate feedback — all within a structured, explainable flow."
+# readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi[standard]>=0.115.8",
+    "langchain-core>=0.3.34",
+    "langchain-groq>=0.2.4",
+    "langchain-mongodb>=0.4.0",
+    "langgraph>=0.2.70",
+    "langgraph-checkpoint-mongodb>=0.1.0",
+    "opik>=1.4.11",
+    "pre-commit>=4.1.0",
+    "pydantic-settings>=2.7.1",
+    "pymongo>=4.9.2",
+    "loguru>=0.7.3",
+    "langchain-community>=0.3.17",
+    "wikipedia>=1.4.0",
+    "ipykernel>=6.29.5",
+    "pydantic>=2.10.6",
+    "datasketch>=1.6.5",
+    "langgraph-checkpoint-redis>=0.0.6",
+    "crawl4ai>=0.6.3",
+    "html2text>=2025.4.15",
+    "langchain-weaviate>=0.0.5",
+    "langchain>=0.3.25",
+    "sentence-transformers>=4.1.0",
+    "psutil>=5.9.0",
+    "tabulate>=0.9.0",
+    "python-multipart>=0.0.20",
+    "marker-pdf[full]",
+    "aio-pika>=9.5.5",
+    "pango>=0.0.1",
+    "glib>=1.0.0",
+    "minisom>=2.3.5",
+    "matplotlib>=3.10.3",
+    "seaborn>=0.13.2",
+    "scikit-learn>=1.7.0",
+    "pandas>=2.3.0",
+    "numpy>=1.26.4",
+    "PyJWT>=2.10.0",
+    "passlib>=1.7.4",
+    "bcrypt>=4.0.1,<4.1.0",
+    "torch>=2.7.1",
+    "pypdfium2>=4.30.0",
+    "langchain-milvus>=0.2.1",
+    "pymilvus>=2.4.0",
+    "playwright>=1.40.0",
+    "cssselect>=1.2.0",
+    "litellm>=1.77.7",
+    "email-validator>=2.3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.4",
+    "ruff>=0.7.2",
+]
+
+[tool.pip]
+extra-index-url = "https://download.pytorch.org/whl/cpu/torch_stable.html"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/datapilotflow"]
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-ra -q"
+testpaths = [
+    "tests"
+]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+
+[tool.uv.sources]
+# marker-pdf = { path = "../libs/marker-pdf" }
