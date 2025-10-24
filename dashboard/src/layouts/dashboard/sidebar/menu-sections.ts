@@ -82,16 +82,7 @@ export const menu: MenuItem[] = [
               },
             ],
           },
-          {
-            name: 'Processing',
-            href: paths.dashboard.management.knowledge.ingest,
-            dropdownItems: [
-              {
-                name: 'Ingest',
-                href: paths.dashboard.management.knowledge.ingest,
-              },
-            ],
-          },
+          // Processing section removed - ingestion now handled through knowledge source configs
           {
             name: 'Monitoring',
             href: paths.dashboard.management.knowledge.status,

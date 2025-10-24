@@ -17,7 +17,6 @@ export const paths = {
       root: '/dashboard/management',
       knowledge: {
         root: '/dashboard/management/knowledge',
-        ingest: '/dashboard/management/knowledge/ingest',
         status: '/dashboard/management/knowledge/status',
         vectorStatus: '/dashboard/management/knowledge/vector-status',
       },
@@ -56,6 +55,7 @@ export const paths = {
     apps: {
       root: '/dashboard/apps',
       knowledgeSearch: '/dashboard/apps/knowledge-search',
+      conversationCreate: '/dashboard/apps/conversation/create',
       conversation: (sessionId: string) => `/dashboard/apps/conversation/${sessionId}`,
     },
   },

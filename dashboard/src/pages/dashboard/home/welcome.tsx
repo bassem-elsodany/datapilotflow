@@ -1,29 +1,25 @@
-import { 
-  Anchor, 
-  Text, 
-  Title, 
-  Stack, 
-  Grid, 
-  Card, 
-  Group, 
-  Badge, 
-  Divider,
+import {
+  Badge,
   Button,
-  ThemeIcon
+  Card,
+  Divider,
+  Grid,
+  Group,
+  Stack,
+  Text,
+  ThemeIcon,
+  Title
 } from '@mantine/core';
-import { 
-  IconBrain, 
-  IconSearch, 
-  IconFileText, 
-  IconUsers, 
-  IconChartBar, 
-  IconDatabase,
+import {
+  IconBrain,
+  IconChartBar,
+  IconFileText,
   IconMessageCircle,
-  IconTarget,
   IconRocket,
-  IconShield,
-  IconTrendingUp,
-  IconSettings
+  IconSearch,
+  IconSettings,
+  IconTarget,
+  IconUsers
 } from '@tabler/icons-react';
 import classes from './welcome.module.css';
 
@@ -33,7 +29,7 @@ export function Welcome() {
       {/* Hero Section */}
       <Stack align="center" gap="md">
         <Title className={classes.title} ta="center">
-        Welcome to{' '}
+          Welcome to{' '}
           <Text inherit variant="gradient" component="span" gradient={{ from: 'blue', to: 'cyan' }}>
             DataPilotFlow
           </Text>
@@ -42,7 +38,7 @@ export function Welcome() {
           AI-Powered RAG Management & Knowledge System
         </Text>
         <Text c="dimmed" ta="center" size="lg" maw={600} mx="auto">
-          Upload documents, configure RAG injections, and have intelligent conversations with your knowledge sources. 
+          Upload documents, configure RAG injections, and have intelligent conversations with your knowledge sources.
           Build and manage comprehensive RAG systems with advanced AI workflows.
         </Text>
       </Stack>
@@ -52,34 +48,9 @@ export function Welcome() {
       {/* Core Features Overview */}
       <Stack gap="lg">
         <Title order={2} ta="center">🚀 Core Features</Title>
-        
+
         <Grid gutter="md">
-          {/* Interview Process */}
-          <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
-            <Card shadow="sm" padding="lg" radius="md" withBorder>
-              <Group mb="md">
-                <ThemeIcon size="lg" variant="light" color="blue">
-                  <IconBrain size={24} />
-                </ThemeIcon>
-                <div>
-                  <Text fw={600} size="lg">AI Interview Process</Text>
-                  <Badge color="blue" variant="light">Core Feature</Badge>
-                </div>
-              </Group>
-              <Text size="sm" c="dimmed" mb="md">
-                Intelligent interview workflow with dynamic question selection, adaptive scoring, 
-                and real-time follow-up suggestions using LangGraph and LLMs.
-              </Text>
-              <Stack gap="xs">
-                <Text size="xs" fw={500}>✓ Live Adaptive Question Flow</Text>
-                <Text size="xs" fw={500}>✓ Smart Answer Scoring</Text>
-                <Text size="xs" fw={500}>✓ Follow-up Suggestions</Text>
-                <Text size="xs" fw={500}>✓ State-Aware Tracking</Text>
-                <Text size="xs" fw={500}>✓ Dual Experience Analysis</Text>
-                <Text size="xs" fw={500}>✓ Project Role Extraction</Text>
-              </Stack>
-            </Card>
-          </Grid.Col>
+          {/* Interview Process removed - focusing on knowledge management */}
 
           {/* Knowledge Management */}
           <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
@@ -94,7 +65,7 @@ export function Welcome() {
                 </div>
               </Group>
               <Text size="sm" c="dimmed" mb="md">
-                Advanced RAG (Retrieval-Augmented Generation) system with semantic search, 
+                Advanced RAG (Retrieval-Augmented Generation) system with semantic search,
                 context-aware conversations, and knowledge graph integration.
               </Text>
               <Stack gap="xs">
@@ -119,7 +90,7 @@ export function Welcome() {
                 </div>
               </Group>
               <Text size="sm" c="dimmed" mb="md">
-                Intelligent document processing with web crawling, text extraction, 
+                Intelligent document processing with web crawling, text extraction,
                 chunking, and vector storage for comprehensive knowledge base building.
               </Text>
               <Stack gap="xs">
@@ -144,7 +115,7 @@ export function Welcome() {
                 </div>
               </Group>
               <Text size="sm" c="dimmed" mb="md">
-                Comprehensive analytics dashboard with skills overview, performance trends, 
+                Comprehensive analytics dashboard with skills overview, performance trends,
                 coverage reports, and gap analysis for data-driven hiring decisions.
               </Text>
               <Stack gap="xs">
@@ -156,30 +127,7 @@ export function Welcome() {
             </Card>
           </Grid.Col>
 
-          {/* Data Management */}
-          <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
-            <Card shadow="sm" padding="lg" radius="md" withBorder>
-              <Group mb="md">
-                <ThemeIcon size="lg" variant="light" color="teal">
-                  <IconDatabase size={24} />
-                </ThemeIcon>
-                <div>
-                  <Text fw={600} size="lg">Interview Data</Text>
-                  <Badge color="teal" variant="light">Management</Badge>
-                </div>
-              </Group>
-              <Text size="sm" c="dimmed" mb="md">
-                Centralized management of resumes, job descriptions, interview sessions, 
-                and candidate data with secure storage and retrieval capabilities.
-              </Text>
-              <Stack gap="xs">
-                <Text size="xs" fw={500}>✓ Resume Management</Text>
-                <Text size="xs" fw={500}>✓ Job Descriptions</Text>
-                <Text size="xs" fw={500}>✓ Session History</Text>
-                <Text size="xs" fw={500}>✓ Candidate Profiles</Text>
-              </Stack>
-            </Card>
-          </Grid.Col>
+          {/* Interview Data section removed - focusing on knowledge management */}
 
           {/* Smart Features */}
           <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
@@ -194,8 +142,8 @@ export function Welcome() {
                 </div>
               </Group>
               <Text size="sm" c="dimmed" mb="md">
-                Advanced AI features including custom question generation, time-aware selection, 
-                intelligent recommendations, and adaptive interview strategies.
+                Advanced AI features including query enhancement, document retrieval,
+                intelligent recommendations, and adaptive knowledge strategies.
               </Text>
               <Stack gap="xs">
                 <Text size="xs" fw={500}>✓ Custom Questions</Text>
@@ -215,7 +163,7 @@ export function Welcome() {
       {/* Enhanced Features */}
       <Stack gap="lg">
         <Title order={2} ta="center">🎯 Enhanced Analysis Features</Title>
-        
+
         <Grid gutter="md">
           <Grid.Col span={{ base: 12, md: 6 }}>
             <Card shadow="sm" padding="lg" radius="md" withBorder>
@@ -229,7 +177,7 @@ export function Welcome() {
                 </div>
               </Group>
               <Text size="sm" c="dimmed" mb="md">
-                Distinguish between stated experience and calculated experience from project dates. 
+                Distinguish between stated experience and calculated experience from project dates.
                 Provides more accurate assessment and transparency in candidate evaluation.
               </Text>
               <Stack gap="xs">
@@ -253,7 +201,7 @@ export function Welcome() {
                 </div>
               </Group>
               <Text size="sm" c="dimmed" mb="md">
-                Extract detailed project information including roles, locations, assignment types, 
+                Extract detailed project information including roles, locations, assignment types,
                 responsibilities, contributions, challenges, and measurable outcomes.
               </Text>
               <Stack gap="xs">
@@ -272,7 +220,7 @@ export function Welcome() {
       {/* Technology Stack */}
       <Stack gap="lg">
         <Title order={2} ta="center">🛠️ Technology Stack</Title>
-        
+
         <Grid gutter="md">
           <Grid.Col span={{ base: 12, md: 6 }}>
             <Card shadow="sm" padding="lg" radius="md" withBorder>
@@ -337,7 +285,7 @@ export function Welcome() {
       {/* Getting Started */}
       <Stack gap="lg" align="center">
         <Title order={2} ta="center">🚀 Getting Started</Title>
-        
+
         <Text c="dimmed" ta="center" size="lg" maw={600}>
           Ready to build your RAG system? Here's how to get started:
         </Text>
@@ -387,7 +335,7 @@ export function Welcome() {
         </Grid>
 
         <Group mt="md">
-          <Button 
+          <Button
             leftSection={<IconRocket size={16} />}
             size="lg"
             variant="gradient"
@@ -395,7 +343,7 @@ export function Welcome() {
           >
             Start Your First RAG System
           </Button>
-          <Button 
+          <Button
             leftSection={<IconSettings size={16} />}
             size="lg"
             variant="light"
@@ -414,7 +362,7 @@ export function Welcome() {
         </Text>
         <Text size="xs" c="dimmed" ta="center">
           dataPilotFlow - AI-Powered RAG Management & Knowledge System
-      </Text>
+        </Text>
       </Stack>
     </Stack>
   );

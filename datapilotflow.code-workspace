@@ -11,10 +11,6 @@
         {
             "name": "docker",
             "path": "./docker"
-        },
-        {
-            "name": "datapilotflow",
-            "path": "."
         }
     ],
     "settings": {
