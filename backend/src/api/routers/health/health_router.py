@@ -4,13 +4,13 @@ Health Router
 Provides service-wide health endpoints (API and database checks).
 """
 
-from fastapi import APIRouter
-from datetime import datetime, timezone
-from typing import List, Dict, Any
 import os
+from datetime import datetime, timezone
+from typing import Any, Dict, List
+
+from fastapi import APIRouter
 
 from src.config import settings
-
 
 router = APIRouter(prefix="/health", tags=["Health"])
 
@@ -19,6 +19,7 @@ def _read_project_version() -> str:
     """Resolve version from nearest pyproject.toml; fallback to env."""
     try:
         import tomllib  # Python 3.11+
+
         # Walk up from this file's directory to find pyproject.toml
         current_dir = os.path.dirname(__file__)
         for _ in range(8):  # search up to 8 parent levels
@@ -46,34 +47,36 @@ def _feature_statuses() -> List[Dict[str, Any]]:
     features: List[Dict[str, Any]] = []
 
     # UI-mapped features (align with dashboard routes)
-    features.extend([
-        {
-            "id": "knowledge-search",
-            "name": "knowledge-search",
-            "display_name": "Knowledge Search",
-            "enabled": True,
-            "menu": {"path": "/dashboard/apps/knowledge-search", "wildcard": False}
-        },
-        {
-            "id": "conversation-chat",
-            "name": "conversation-chat",
-            "display_name": "Conversation Chat",
-            "enabled": True,
-            "details": {
-                "websocket_endpoint": "/api/v1/ws/conversations/{conversation_id}/search",
-                "protocol": "WebSocket",
-                "authentication": "JWT Token"
+    features.extend(
+        [
+            {
+                "id": "knowledge-search",
+                "name": "knowledge-search",
+                "display_name": "Knowledge Search",
+                "enabled": True,
+                "menu": {"path": "/dashboard/apps/knowledge-search", "wildcard": False},
             },
-            "menu": {"path": "/dashboard/apps/conversation/*", "wildcard": True}
-        },
-        {
-            "id": "knowledge-management",
-            "name": "knowledge-management",
-            "display_name": "Knowledge Management",
-            "enabled": True,
-            "menu": {"path": "/dashboard/management/knowledge/*", "wildcard": True}
-        },
-    ])
+            {
+                "id": "conversation-chat",
+                "name": "conversation-chat",
+                "display_name": "Conversation Chat",
+                "enabled": True,
+                "details": {
+                    "websocket_endpoint": "/api/v1/ws/conversations/{conversation_id}/search",
+                    "protocol": "WebSocket",
+                    "authentication": "JWT Token",
+                },
+                "menu": {"path": "/dashboard/apps/conversation/*", "wildcard": True},
+            },
+            {
+                "id": "knowledge-management",
+                "name": "knowledge-management",
+                "display_name": "Knowledge Management",
+                "enabled": True,
+                "menu": {"path": "/dashboard/management/knowledge/*", "wildcard": True},
+            },
+        ]
+    )
 
     # Note: Technical feature diagnostics intentionally omitted per requirements
 
@@ -89,6 +92,19 @@ async def api_health():
         "status": "healthy",
         "features": _feature_statuses(),
         "websocket_endpoints": {
+            "agent_query": {
+                "endpoint": "/api/v1/ws/agent/query",
+                "description": "AI agent with LangGraph workflow and query enhancement",
+                "authentication": "JWT Token via query parameter",
+                "protocol": "WebSocket",
+                "features": [
+                    "Query enhancement strategies (Step-back, HyDE, Decomposition, RAG-Fusion, Multi-Query, Query-Fusion)",
+                    "LangGraph workflow execution",
+                    "Streaming AI responses",
+                    "Document retrieval",
+                    "Configurable LLM providers",
+                ],
+            },
             "conversation_search": {
                 "endpoint": "/api/v1/ws/conversations/{conversation_id}/search",
                 "description": "Real-time conversation chat with knowledge search",
@@ -98,22 +114,21 @@ async def api_health():
                     "Streaming AI responses",
                     "Knowledge base search",
                     "Conversation history management",
-                    "Context-aware responses"
-                ]
+                    "Context-aware responses",
+                ],
             },
             "notifications": {
                 "endpoint": "/api/v1/notifications/ws",
                 "description": "Real-time notification updates",
                 "authentication": "JWT Token via query parameter",
-                "protocol": "WebSocket"
+                "protocol": "WebSocket",
             },
             "interview_websocket": {
                 "endpoint": "/api/v1/interviews/ws/start-interview",
                 "description": "Real-time interview session management",
                 "authentication": "JWT Token via query parameter",
-                "protocol": "WebSocket"
-            }
+                "protocol": "WebSocket",
+            },
         },
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
-

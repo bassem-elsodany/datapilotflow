@@ -147,6 +147,16 @@ class Settings(BaseSettings):
         default=False, description="Whether to enable Opik observability.", ge=0, le=1
     )
 
+    # --- Agent Tracing Configuration ---
+    AGENT_TRACING_ENABLED: bool = Field(
+        default=False,
+        description="Whether to enable agent tracing and prompt versioning with Opik",
+    )
+    OPIK_URL_OVERRIDE: Optional[str] = Field(
+        default="http://localhost:5173/api",
+        description="Override Opik URL for custom deployment or testing",
+    )
+
     # --- RAG Configuration ---
 
     RAG_TOP_K: int = Field(

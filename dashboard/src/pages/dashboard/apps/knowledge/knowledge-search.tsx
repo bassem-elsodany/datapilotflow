@@ -1,45 +1,23 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { DataTableColumn } from 'mantine-datatable';
-import { Grid } from '@mantine/core';
-import {
-  Box,
-  Paper,
-  Text,
-  Button,
-  Group,
-  Stack,
-  Title,
-  Badge,
-  ScrollArea,
-  Alert,
-  LoadingOverlay,
-  Code,
-  ActionIcon,
-  Tooltip,
-  Table,
-  Modal,
-  TextInput,
-  Menu,
-} from '@mantine/core';
-import { 
-  IconSearch, 
-  IconCopy, 
-  IconMessageCircle, 
-  IconTrash, 
-  IconPlus,
-  IconEdit,
-  IconEye,
-  IconDots,
-  IconCalendar,
-  IconMessages
-} from '@tabler/icons-react';
-import { useNavigate } from 'react-router-dom';
-import { paths } from '@/routes/paths';
 import { DataTable } from '@/components/data-table';
 import { Page } from '@/components/page';
 import { PageHeader } from '@/components/page-header';
 import { apiUtils } from '@/config';
+import { paths } from '@/routes/paths';
+import { ActionIcon, Alert, Badge, Box, Button, Grid, Group, Menu, Modal, Stack, Text, TextInput } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
+import {
+  IconCalendar,
+  IconDots,
+  IconEdit,
+  IconEye,
+  IconMessageCircle,
+  IconMessages,
+  IconPlus,
+  IconTrash
+} from '@tabler/icons-react';
+import { DataTableColumn } from 'mantine-datatable';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 interface Conversation {
   id: string; // MongoDB _id
@@ -93,19 +71,19 @@ export default function KnowledgeSearch() {
       console.log('🔄 Loading conversation history...');
       const token = localStorage.getItem('jwt_token');
       console.log('🔑 Token available:', !!token);
-      
+
       const response = await fetch(buildApiUrl('/conversations'), {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
-      
+
       console.log('📡 Response status:', response.status);
-      
+
       if (response.ok) {
         const data = await response.json();
         console.log('📦 API Response:', data);
-        
+
         // Map backend response to frontend interface
         const mappedSessions = (data.sessions || []).map((session: any) => ({
           id: session.id,
@@ -114,7 +92,7 @@ export default function KnowledgeSearch() {
           createdAt: session.created_at,
           updatedAt: session.created_at, // Backend doesn't provide updated_at, use created_at
         }));
-        
+
         console.log('🗺️ Mapped sessions:', mappedSessions);
         setConversationHistory(mappedSessions);
       } else {
@@ -129,30 +107,8 @@ export default function KnowledgeSearch() {
     }
   };
 
-  const createNewConversation = async () => {
-    try {
-      const token = localStorage.getItem('jwt_token');
-      const response = await fetch(buildApiUrl('/conversations'), {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ name: 'New Conversation' }),
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        const sessionId = data.id;
-        
-        // Navigate to the conversation window
-        navigate(paths.dashboard.apps.conversation(sessionId));
-      } else {
-        console.error('Failed to create new conversation:', response.status);
-      }
-    } catch (error) {
-      console.error('Error creating new conversation:', error);
-    }
+  const navigateToCreateConversation = () => {
+    navigate(paths.dashboard.apps.conversationCreate);
   };
 
   const selectConversation = async (sessionId: string) => {
@@ -169,7 +125,7 @@ export default function KnowledgeSearch() {
           'Authorization': `Bearer ${token}`,
         },
       });
-      
+
       if (response.ok) {
         await loadConversationHistory();
         // If the deleted session was the current one, create a new session
@@ -214,7 +170,7 @@ export default function KnowledgeSearch() {
         },
         body: JSON.stringify({ new_name: sessionToRename.newName }),
       });
-      
+
       if (response.ok) {
         await loadConversationHistory();
         setRenameModalOpen(false);
@@ -271,16 +227,16 @@ export default function KnowledgeSearch() {
 
   const filteredSessions = useMemo(() => {
     if (!conversationHistory) return [];
-    
-            return conversationHistory.filter(session => {
-          const currentMatch = tabs.value === '*' || 
-            (tabs.value === 'current' && session.id === currentSessionId);
-          
-          return currentMatch;
-        }).map(session => ({
-          ...session,
-          id: session.id // Use MongoDB _id
-        }));
+
+    return conversationHistory.filter(session => {
+      const currentMatch = tabs.value === '*' ||
+        (tabs.value === 'current' && session.id === currentSessionId);
+
+      return currentMatch;
+    }).map(session => ({
+      ...session,
+      id: session.id // Use MongoDB _id
+    }));
   }, [conversationHistory, tabs.value, currentSessionId]);
 
   const columns: DataTableColumn<Conversation>[] = useMemo(
@@ -395,7 +351,7 @@ export default function KnowledgeSearch() {
                   variant="default"
                   size="xs"
                   leftSection={<IconPlus size="1rem" />}
-                  onClick={createNewConversation}
+                  onClick={navigateToCreateConversation}
                   loading={isLoading}
                 >
                   New Session
@@ -416,7 +372,7 @@ export default function KnowledgeSearch() {
                   </Text>
                   <Button
                     leftSection={<IconPlus size={16} />}
-                    onClick={createNewConversation}
+                    onClick={navigateToCreateConversation}
                     size="md"
                   >
                     Start New Conversation
@@ -431,10 +387,10 @@ export default function KnowledgeSearch() {
                   page={1}
                   records={filteredSessions}
                   fetching={isLoading}
-                  onPageChange={() => {}}
+                  onPageChange={() => { }}
                   recordsPerPage={10}
                   totalRecords={filteredSessions.length}
-                  onRecordsPerPageChange={() => {}}
+                  onRecordsPerPageChange={() => { }}
                   recordsPerPageOptions={[5, 10, 20]}
                   sortStatus={sort.status}
                   onSortStatusChange={sort.change}

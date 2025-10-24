@@ -5,18 +5,20 @@ This service handles the initialization of predefined model providers during sys
 These providers support both embedding and generative models with a single API key.
 """
 
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
 from loguru import logger
+
 from src.domain.model_provider.model_provider import ModelProviderCreate, ModelType
 from src.services.model_provider.model_provider_service import ModelProviderService
 
 
 class ModelProviderInitializationService:
     """Service for initializing predefined unified model providers."""
-    
+
     def __init__(self):
         self.model_provider_service = ModelProviderService()
-    
+
     def get_predefined_model_providers(self) -> List[Dict[str, Any]]:
         """Get the list of predefined unified model providers."""
         return [
@@ -32,14 +34,14 @@ class ModelProviderInitializationService:
                 "embedding": {
                     "models": [
                         "text-embedding-3-small",
-                        "text-embedding-3-large", 
-                        "text-embedding-ada-002"
+                        "text-embedding-3-large",
+                        "text-embedding-ada-002",
                     ],
                     "config": {
                         "endpoint_suffix": "/embeddings",
                         "max_input_tokens": 8191,
-                        "batch_size": 100
-                    }
+                        "batch_size": 100,
+                    },
                 },
                 "generative": {
                     "models": [
@@ -47,7 +49,7 @@ class ModelProviderInitializationService:
                         "gpt-4o-mini",
                         "gpt-4-turbo",
                         "gpt-4",
-                        "gpt-3.5-turbo"
+                        "gpt-3.5-turbo",
                     ],
                     "config": {
                         "endpoint_suffix": "/chat/completions",
@@ -55,9 +57,10 @@ class ModelProviderInitializationService:
                         "temperature": 0.7,
                         "top_p": 1.0,
                         "frequency_penalty": 0.0,
-                        "presence_penalty": 0.0
-                    }
-                }
+                        "presence_penalty": 0.0,
+                    },
+                },
+                "reranker": None,  # OpenAI can be used for reranking but not primary role
             },
             {
                 "name": "Anthropic",
@@ -72,13 +75,13 @@ class ModelProviderInitializationService:
                     "models": [
                         "claude-3-5-sonnet-embedding",
                         "claude-3-opus-embedding",
-                        "claude-3-sonnet-embedding"
+                        "claude-3-sonnet-embedding",
                     ],
                     "config": {
                         "endpoint_suffix": "/embeddings",
                         "max_input_tokens": 200000,
-                        "batch_size": 50
-                    }
+                        "batch_size": 50,
+                    },
                 },
                 "generative": {
                     "models": [
@@ -86,15 +89,16 @@ class ModelProviderInitializationService:
                         "claude-3-5-haiku-20241022",
                         "claude-3-opus-20240229",
                         "claude-3-sonnet-20240229",
-                        "claude-3-haiku-20240307"
+                        "claude-3-haiku-20240307",
                     ],
                     "config": {
                         "endpoint_suffix": "/messages",
                         "max_tokens": 4096,
                         "temperature": 0.7,
-                        "top_p": 1.0
-                    }
-                }
+                        "top_p": 1.0,
+                    },
+                },
+                "reranker": None,  # Anthropic can be used for reranking but not primary role
             },
             {
                 "name": "Google",
@@ -106,29 +110,23 @@ class ModelProviderInitializationService:
                 "is_active": False,
                 "timeout": 60,
                 "embedding": {
-                    "models": [
-                        "text-embedding-004",
-                        "text-multilingual-embedding-002"
-                    ],
+                    "models": ["text-embedding-004", "text-multilingual-embedding-002"],
                     "config": {
                         "endpoint_suffix": "/models",
                         "max_input_tokens": 2048,
-                        "batch_size": 100
-                    }
+                        "batch_size": 100,
+                    },
                 },
                 "generative": {
-                    "models": [
-                        "gemini-1.5-pro",
-                        "gemini-1.5-flash",
-                        "gemini-1.0-pro"
-                    ],
+                    "models": ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-1.0-pro"],
                     "config": {
                         "endpoint_suffix": "/models",
                         "max_tokens": 4096,
                         "temperature": 0.7,
-                        "top_p": 1.0
-                    }
-                }
+                        "top_p": 1.0,
+                    },
+                },
+                "reranker": None,  # Google can be used for reranking but not primary role
             },
             {
                 "name": "Ollama",
@@ -145,13 +143,13 @@ class ModelProviderInitializationService:
                         "mxbai-embed-large",
                         "all-minilm",
                         "bge-large-en",
-                        "bge-base-en"
+                        "bge-base-en",
                     ],
                     "config": {
                         "endpoint_suffix": "/embeddings",
                         "max_input_tokens": 8192,
-                        "batch_size": 10  # Smaller batch for local models
-                    }
+                        "batch_size": 10,  # Smaller batch for local models
+                    },
                 },
                 "generative": {
                     "models": [
@@ -159,15 +157,16 @@ class ModelProviderInitializationService:
                         "llama3.1:70b",
                         "mistral:7b",
                         "codellama:7b",
-                        "phi3:3.8b"
+                        "phi3:3.8b",
                     ],
                     "config": {
                         "endpoint_suffix": "/generate",
                         "max_tokens": 4096,
                         "temperature": 0.7,
-                        "top_p": 1.0
-                    }
-                }
+                        "top_p": 1.0,
+                    },
+                },
+                "reranker": None,  # Ollama doesn't support reranking
             },
             {
                 "name": "Hugging Face",
@@ -183,27 +182,28 @@ class ModelProviderInitializationService:
                         "sentence-transformers/all-MiniLM-L6-v2",
                         "sentence-transformers/all-mpnet-base-v2",
                         "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
-                        "sentence-transformers/distilbert-base-nli-mean-tokens"
+                        "sentence-transformers/distilbert-base-nli-mean-tokens",
                     ],
                     "config": {
                         "endpoint_suffix": "/",
                         "max_input_tokens": 512,
-                        "batch_size": 50
-                    }
+                        "batch_size": 50,
+                    },
                 },
                 "generative": {
                     "models": [
                         "microsoft/DialoGPT-medium",
                         "facebook/blenderbot-400M-distill",
-                        "google/flan-t5-base"
+                        "google/flan-t5-base",
                     ],
                     "config": {
                         "endpoint_suffix": "/",
                         "max_tokens": 4096,
                         "temperature": 0.7,
-                        "top_p": 1.0
-                    }
-                }
+                        "top_p": 1.0,
+                    },
+                },
+                "reranker": None,  # Hugging Face can be used for reranking but not primary role
             },
             {
                 "name": "Groq",
@@ -220,135 +220,251 @@ class ModelProviderInitializationService:
                         "llama-3.1-70b-versatile",
                         "llama-3.1-8b-instant",
                         "mixtral-8x7b-32768",
-                        "gemma-7b-it"
+                        "gemma-7b-it",
                     ],
                     "config": {
                         "endpoint_suffix": "/chat/completions",
                         "max_tokens": 4096,
                         "temperature": 0.7,
-                        "top_p": 1.0
-                    }
-                }
-            }
+                        "top_p": 1.0,
+                    },
+                },
+                "reranker": None,  # Groq doesn't support reranking
+            },
+            {
+                "name": "Cohere",
+                "provider_type": "cohere",
+                "endpoint": "https://api.cohere.ai/v1",
+                "api_key": None,
+                "api_key_env_var": "COHERE_API_KEY",
+                "description": "Cohere's unified provider for embeddings, generative AI, and reranking",
+                "is_active": False,
+                "timeout": 60,
+                "embedding": {
+                    "models": [
+                        "embed-english-v3.0",
+                        "embed-english-light-v3.0",
+                        "embed-multilingual-v3.0",
+                        "embed-multilingual-light-v3.0",
+                    ],
+                    "config": {
+                        "endpoint_suffix": "/embed",
+                        "max_input_tokens": 512,
+                        "batch_size": 96,
+                    },
+                },
+                "generative": {
+                    "models": [
+                        "command-r-plus",
+                        "command-r",
+                        "command",
+                        "command-light",
+                    ],
+                    "config": {
+                        "endpoint_suffix": "/generate",
+                        "max_tokens": 4096,
+                        "temperature": 0.7,
+                        "top_p": 1.0,
+                    },
+                },
+                "reranker": {
+                    "models": [
+                        "rerank-english-v3.0",
+                        "rerank-multilingual-v3.0",
+                        "rerank-english-v2.0",
+                        "rerank-multilingual-v2.0",
+                    ],
+                    "config": {
+                        "endpoint_suffix": "/rerank",
+                        "max_documents": 1000,
+                        "top_n": 10,
+                    },
+                },
+            },
+            {
+                "name": "Voyage AI",
+                "provider_type": "voyage",
+                "endpoint": "https://api.voyageai.com/v1",
+                "api_key": None,
+                "api_key_env_var": "VOYAGE_API_KEY",
+                "description": "Voyage AI's provider for embeddings and reranking",
+                "is_active": False,
+                "timeout": 60,
+                "embedding": {
+                    "models": [
+                        "voyage-large-2",
+                        "voyage-code-2",
+                        "voyage-2",
+                        "voyage-lite-02-instruct",
+                    ],
+                    "config": {
+                        "endpoint_suffix": "/embeddings",
+                        "max_input_tokens": 16000,
+                        "batch_size": 128,
+                    },
+                },
+                "generative": None,  # Voyage AI doesn't support generative models
+                "reranker": {
+                    "models": ["rerank-lite-1", "rerank-1"],
+                    "config": {
+                        "endpoint_suffix": "/rerank",
+                        "max_documents": 1000,
+                        "top_n": 10,
+                    },
+                },
+            },
         ]
-    
+
     async def initialize_predefined_model_providers(self, admin_user_id: str) -> bool:
         """Initialize predefined model providers in the database."""
         try:
             logger.info("Starting initialization of predefined model providers")
-            
+
             predefined_providers = self.get_predefined_model_providers()
-            
+
             for provider_data in predefined_providers:
                 try:
                     # Check if provider already exists
-                    existing_provider = self.model_provider_service.get_provider_by_name(
-                        admin_user_id, provider_data["name"]
+                    existing_provider = (
+                        self.model_provider_service.get_provider_by_name(
+                            admin_user_id, provider_data["name"]
+                        )
                     )
-                    
+
                     if existing_provider:
-                        logger.info(f"Model provider '{provider_data['name']}' already exists, skipping")
+                        logger.info(
+                            f"Model provider '{provider_data['name']}' already exists, skipping"
+                        )
                         continue
-                    
+
                     # Create provider
                     provider_create = ModelProviderCreate(**provider_data)
-                    created_provider = self.model_provider_service.create_model_provider(
-                        provider_create, admin_user_id
+                    created_provider = (
+                        self.model_provider_service.create_model_provider(
+                            provider_create, admin_user_id
+                        )
                     )
-                    
+
                     if created_provider:
-                        logger.info(f"Successfully initialized model provider: {created_provider.name}")
+                        logger.info(
+                            f"Successfully initialized model provider: {created_provider.name}"
+                        )
                     else:
-                        logger.warning(f"Failed to initialize model provider: {provider_data['name']}")
-                        
+                        logger.warning(
+                            f"Failed to initialize model provider: {provider_data['name']}"
+                        )
+
                 except Exception as e:
-                    logger.error(f"Error initializing model provider '{provider_data['name']}': {e}")
+                    logger.error(
+                        f"Error initializing model provider '{provider_data['name']}': {e}"
+                    )
                     continue
-            
+
             logger.info("Completed initialization of predefined model providers")
             return True
-            
+
         except Exception as e:
             logger.error(f"Error during model provider initialization: {e}")
             return False
-    
+
     def get_provider_config_for_model_type(
-        self, 
-        provider_name: str, 
-        model_type: ModelType
+        self, provider_name: str, model_type: ModelType
     ) -> Optional[Dict[str, Any]]:
         """Get provider configuration for a specific model type."""
         predefined_providers = self.get_predefined_model_providers()
-        
+
         for provider in predefined_providers:
             if provider["name"] == provider_name:
                 # Check if the provider supports the requested model type
                 has_embedding = provider.get("embedding") is not None
                 has_generative = provider.get("generative") is not None
-                
-                if (model_type == ModelType.EMBEDDING and has_embedding) or \
-                   (model_type == ModelType.GENERATIVE and has_generative):
-                    
+                has_reranker = provider.get("reranker") is not None
+
+                if (
+                    (model_type == ModelType.EMBEDDING and has_embedding)
+                    or (model_type == ModelType.GENERATIVE and has_generative)
+                    or (model_type == ModelType.RERANKER and has_reranker)
+                ):
+
                     config = {
                         "name": provider["name"],
                         "provider_type": provider["provider_type"],
                         "endpoint": provider["endpoint"],
                         "api_key_env_var": provider["api_key_env_var"],
                         "api_key_required": provider["api_key_env_var"] is not None,
-                        "timeout": provider["timeout"]
+                        "timeout": provider["timeout"],
                     }
-                    
+
                     # Add model-specific configuration
                     if model_type == ModelType.EMBEDDING and provider.get("embedding"):
                         config.update(provider["embedding"])
-                    elif model_type == ModelType.GENERATIVE and provider.get("generative"):
+                    elif model_type == ModelType.GENERATIVE and provider.get(
+                        "generative"
+                    ):
                         config.update(provider["generative"])
-                    
+                    elif model_type == ModelType.RERANKER and provider.get("reranker"):
+                        config.update(provider["reranker"])
+
                     return config
-        
+
         return None
-    
+
     def get_provider_summary(self) -> List[Dict[str, Any]]:
         """Get a summary of all predefined providers with API key requirements."""
         predefined_providers = self.get_predefined_model_providers()
-        
+
         summary = []
         for provider in predefined_providers:
-            summary.append({
-                "name": provider["name"],
-                "provider_type": provider["provider_type"],
-                "endpoint": provider["endpoint"],
-                "api_key_required": provider["api_key_env_var"] is not None,
-                "api_key_env_var": provider["api_key_env_var"],
-                "supports_embedding": provider.get("embedding") is not None,
-                "supports_generative": provider.get("generative") is not None,
-                "embedding_models_count": len(provider.get("embedding", {}).get("models", [])),
-                "generative_models_count": len(provider.get("generative", {}).get("models", [])),
-                "timeout": provider["timeout"],
-                "description": provider["description"]
-            })
-        
-        return summary
-    
-    def get_providers_by_api_key_requirement(self, requires_api_key: bool) -> List[Dict[str, Any]]:
-        """Get providers filtered by API key requirement status."""
-        predefined_providers = self.get_predefined_model_providers()
-        
-        filtered_providers = []
-        for provider in predefined_providers:
-            provider_requires_api_key = provider["api_key_env_var"] is not None
-            
-            if provider_requires_api_key == requires_api_key:
-                filtered_providers.append({
+            summary.append(
+                {
                     "name": provider["name"],
                     "provider_type": provider["provider_type"],
                     "endpoint": provider["endpoint"],
-                    "api_key_required": provider_requires_api_key,
+                    "api_key_required": provider["api_key_env_var"] is not None,
                     "api_key_env_var": provider["api_key_env_var"],
                     "supports_embedding": provider.get("embedding") is not None,
                     "supports_generative": provider.get("generative") is not None,
+                    "supports_reranker": provider.get("reranker") is not None,
+                    "embedding_models_count": len(
+                        provider.get("embedding", {}).get("models", [])
+                    ),
+                    "generative_models_count": len(
+                        provider.get("generative", {}).get("models", [])
+                    ),
+                    "reranker_models_count": len(
+                        provider.get("reranker", {}).get("models", [])
+                    ),
                     "timeout": provider["timeout"],
-                    "description": provider["description"]
-                })
-        
+                    "description": provider["description"],
+                }
+            )
+
+        return summary
+
+    def get_providers_by_api_key_requirement(
+        self, requires_api_key: bool
+    ) -> List[Dict[str, Any]]:
+        """Get providers filtered by API key requirement status."""
+        predefined_providers = self.get_predefined_model_providers()
+
+        filtered_providers = []
+        for provider in predefined_providers:
+            provider_requires_api_key = provider["api_key_env_var"] is not None
+
+            if provider_requires_api_key == requires_api_key:
+                filtered_providers.append(
+                    {
+                        "name": provider["name"],
+                        "provider_type": provider["provider_type"],
+                        "endpoint": provider["endpoint"],
+                        "api_key_required": provider_requires_api_key,
+                        "api_key_env_var": provider["api_key_env_var"],
+                        "supports_embedding": provider.get("embedding") is not None,
+                        "supports_generative": provider.get("generative") is not None,
+                        "supports_reranker": provider.get("reranker") is not None,
+                        "timeout": provider["timeout"],
+                        "description": provider["description"],
+                    }
+                )
+
         return filtered_providers

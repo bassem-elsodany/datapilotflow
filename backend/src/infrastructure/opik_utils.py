@@ -8,12 +8,13 @@ from src.config import settings
 
 
 def configure() -> None:
-    if settings.COMET_API_KEY and settings.COMET_PROJECT:
+    if settings.AGENT_TRACING_ENABLED:
         try:
-            client = OpikConfigurator(api_key=settings.COMET_API_KEY)
+            client = OpikConfigurator(use_local=True, url=settings.OPIK_URL_OVERRIDE)
             default_workspace = client._get_default_workspace()
+            logger.info(f"Default workspace: {default_workspace}")
         except Exception:
-            logger.warning(
+            logger.error(
                 "Default workspace not found. Setting workspace to None and enabling interactive mode."
             )
             default_workspace = None
@@ -24,20 +25,19 @@ def configure() -> None:
             opik.configure(
                 api_key=settings.COMET_API_KEY,
                 workspace=default_workspace,
-                use_local=False,
+                use_local=True,
+                url=settings.OPIK_URL_OVERRIDE,
                 force=True,
             )
             logger.info(
                 f"Opik configured successfully using workspace '{default_workspace}'"
             )
         except Exception:
-            logger.warning(
-                "Couldn't configure Opik. There is probably a problem with the COMET_API_KEY or COMET_PROJECT environment variables or with the Opik server."
+            logger.error(
+                "Couldn't configure Opik. There is probably a problem with AGENT_TRACING_ENABLED or OPIK_URL_OVERRIDE environment variables or with the Opik server."
             )
     else:
-        logger.warning(
-            "COMET_API_KEY and COMET_PROJECT are not set. Set them to enable prompt monitoring with Opik (powered by Comet ML)."
-        )
+        logger.debug("Agent tracing is disabled, skipping Opik configuration")
 
 
 def get_dataset(name: str) -> opik.Dataset | None:

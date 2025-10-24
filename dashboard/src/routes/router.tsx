@@ -77,6 +77,10 @@ const router = createBrowserRouter([
         element: LazyPage(() => import('@/pages/dashboard/apps/knowledge/knowledge-search')),
       },
       {
+        path: paths.dashboard.apps.conversationCreate,
+        element: LazyPage(() => import('@/pages/dashboard/apps/knowledge/conversation-create')),
+      },
+      {
         path: '/dashboard/apps/conversation/:sessionId',
         element: LazyPage(() => import('@/pages/dashboard/apps/knowledge/conversation-window')),
       },
@@ -95,11 +99,7 @@ const router = createBrowserRouter([
               {
                 index: true,
                 path: paths.dashboard.management.knowledge.root,
-                element: <Navigate to={paths.dashboard.management.knowledge.ingest} replace />,
-              },
-              {
-                path: paths.dashboard.management.knowledge.ingest,
-                element: LazyPage(() => import('@/pages/dashboard/management/knowledge/ingest')),
+                element: <Navigate to={paths.dashboard.management.knowledge.status} replace />,
               },
               {
                 path: paths.dashboard.management.knowledge.status,

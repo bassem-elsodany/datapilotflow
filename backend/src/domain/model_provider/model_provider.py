@@ -17,7 +17,8 @@ class ModelType(str, Enum):
 
     EMBEDDING = "embedding"
     GENERATIVE = "generative"
-    BOTH = "both"  # Provider supports both embedding and generative models
+    RERANKER = "reranker"
+    BOTH = "both"  # Provider supports multiple model types
 
 
 class ModelTypeConfig(BaseModel):
@@ -70,6 +71,10 @@ class ModelProvider(BaseModel):
         default=None,
         description="Generative model configuration (models list and config)",
     )
+    reranker: Optional[ModelTypeConfig] = Field(
+        default=None,
+        description="Reranker model configuration (models list and config)",
+    )
 
     # Metadata
     created_at: datetime = Field(description="Timestamp when the provider was created")
@@ -87,6 +92,8 @@ class ModelProvider(BaseModel):
             types.append(ModelType.EMBEDDING)
         if self.generative is not None:
             types.append(ModelType.GENERATIVE)
+        if self.reranker is not None:
+            types.append(ModelType.RERANKER)
         return types
 
     @property
@@ -98,6 +105,11 @@ class ModelProvider(BaseModel):
     def generative_models(self) -> List[str]:
         """Get list of generative models."""
         return self.generative.models if self.generative else []
+
+    @property
+    def reranker_models(self) -> List[str]:
+        """Get list of reranker models."""
+        return self.reranker.models if self.reranker else []
 
     @property
     def api_key_required(self) -> bool:
@@ -149,6 +161,10 @@ class ModelProviderCreate(BaseModel):
         default=None,
         description="Generative model configuration (models list and config)",
     )
+    reranker: Optional[ModelTypeConfig] = Field(
+        default=None,
+        description="Reranker model configuration (models list and config)",
+    )
 
 
 # Use the same model for both create and update
@@ -176,10 +192,16 @@ class ModelProviderResponse(BaseModel):
 
     # Nested model type configurations
     embedding: Optional[ModelTypeConfig] = Field(
-        description="Embedding model configuration (models list and config)"
+        default=None,
+        description="Embedding model configuration (models list and config)",
     )
     generative: Optional[ModelTypeConfig] = Field(
-        description="Generative model configuration (models list and config)"
+        default=None,
+        description="Generative model configuration (models list and config)",
+    )
+    reranker: Optional[ModelTypeConfig] = Field(
+        default=None,
+        description="Reranker model configuration (models list and config)",
     )
 
     # Metadata
@@ -198,6 +220,8 @@ class ModelProviderResponse(BaseModel):
             types.append(ModelType.EMBEDDING)
         if self.generative is not None:
             types.append(ModelType.GENERATIVE)
+        if self.reranker is not None:
+            types.append(ModelType.RERANKER)
         return types
 
     @property
@@ -209,6 +233,11 @@ class ModelProviderResponse(BaseModel):
     def generative_models(self) -> List[str]:
         """Get list of generative models."""
         return self.generative.models if self.generative else []
+
+    @property
+    def reranker_models(self) -> List[str]:
+        """Get list of reranker models."""
+        return self.reranker.models if self.reranker else []
 
     @property
     def api_key_required(self) -> bool:

@@ -18,12 +18,22 @@ from langgraph.checkpoint.mongodb.aio import (
     AsyncMongoDBSaver,  # pyright: ignore[reportMissingImports]
 )
 from loguru import logger
+from opik.integrations.langchain import OpikTracer
+
+from src.config import settings
+from src.infrastructure.opik_utils import configure
+
+if settings.AGENT_TRACING_ENABLED:
+    logger.info("Agent tracing is enabled, configuring Opik")
+    configure()
+else:
+    logger.info("Agent tracing is disabled, skipping Opik configuration")
 
 from src.api.constants import API_CONFIG, API_PREFIX
 from src.api.routers import (
+    agent_websocket_router,
     auth_router,
     conversation_router,
-    conversation_websocket_router,
     document_splitter_router,
     health_router,
     knowledge_collection_router,
@@ -43,7 +53,6 @@ from src.api.routers.knowledge.knowledge_source_preview_router import (
 
 # Job timeline endpoints are now part of the knowledge job router
 from src.api.routers.users import roles_router, users_router
-from src.config import settings
 
 agent_mongo_uri = f"mongodb://{settings.MONGO_USER}:{settings.MONGO_PASS}@{settings.MONGO_HOST}:{settings.MONGO_PORT}/{settings.MONGO_AGENT_STATE_CHECKPOINT_DB_NAME}?authSource=admin"
 
@@ -77,7 +86,6 @@ async def initialize_system_if_needed():
                 admin_user.id
             )
         )
-
 
         if model_provider_success:
             logger.info("✅ System initialization completed successfully!")
@@ -119,6 +127,14 @@ async def lifespan(app: FastAPI):
         logger.info("DataPilotFlow API ready and running")
         logger.info(f"Checkpointer stored in app.state and global: {checkpointer}")
         yield {"checkpointer": checkpointer}  # Application is running
+
+        if settings.AGENT_TRACING_ENABLED:
+            logger.info("Flushing Opik tracer")
+            opik_tracer = OpikTracer()
+            opik_tracer.flush()
+            logger.info("✅ Opik tracer flushed")
+        else:
+            logger.info("❌ Opik tracer not flushed")
 
     # Setup signal handlers for graceful shutdown
     def signal_handler(signum, frame):
@@ -171,11 +187,9 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 # Include routers under API version prefix
 app.include_router(auth_router, prefix=API_PREFIX, tags=["Authentication Management"])
+app.include_router(agent_websocket_router, prefix=API_PREFIX, tags=["Agent WebSocket"])
 app.include_router(
     conversation_router, prefix=API_PREFIX, tags=["Conversations Management"]
-)
-app.include_router(
-    conversation_websocket_router, prefix=API_PREFIX, tags=["Conversations WebSocket"]
 )
 app.include_router(
     notification_router, prefix=API_PREFIX, tags=["Notifications Management"]

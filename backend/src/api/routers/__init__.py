@@ -6,14 +6,15 @@ organized by functionality for better maintainability.
 """
 
 # Import from subpackages
+from .agent import agent_websocket_router
 from .auth import auth_router
-from .conversation import conversation_router, conversation_websocket_router
+from .conversation import conversation_router
 from .health import health_router
 from .knowledge import knowledge_source_router
+from .knowledge.document_splitter_router import router as document_splitter_router
 from .knowledge.knowledge_collection_router import knowledge_collection_router
 from .knowledge.knowledge_job_router import router as knowledge_job_router
 from .knowledge.knowledge_router import router as knowledge_router
-from .knowledge.document_splitter_router import router as document_splitter_router
 from .knowledge.llm_content_filter_router import router as llm_content_filter_router
 from .knowledge.pipeline_router import router as pipeline_router
 from .model_provider import router as model_provider_router
@@ -21,6 +22,7 @@ from .notifications import notification_router, notification_websocket_router
 from .vectordb.collection_router import router as vectordb_collection_router
 
 __all__ = [
+    "agent_websocket_router",
     "auth_router",
     "knowledge_router",
     "knowledge_source_router",
@@ -32,7 +34,6 @@ __all__ = [
     "pipeline_router",
     "model_provider_router",
     "conversation_router",
-    "conversation_websocket_router",
     "notification_router",
     "notification_websocket_router",
     "health_router",

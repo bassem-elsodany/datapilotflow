@@ -53,36 +53,6 @@ export const apiEndpoints = {
     userRoles: (userId: string) => `/roles/user/${userId}`,
   },
 
-  // Interview Management
-  interview: {
-    // Resume and Job management moved to /management/interview
-    resumes: '/management/interview/resumes',
-    resume: (candidateId: string) => `/management/interview/resumes/${candidateId}`,
-    jobs: '/management/interview/jobs',
-    job: (jobId: string) => `/management/interview/jobs/${jobId}`,
-    jobOriginal: (jobId: string) => `/management/interview/jobs/${jobId}/original`,
-
-    // Interview management moved to /interviews (RESTful)
-    interviews: '/interviews',
-    interview: (interviewId: string) => `/interviews/${interviewId}`,
-    interviewResume: (interviewId: string) => `/interviews/${interviewId}/resume`,
-    interviewChat: (interviewId: string) => `/interviews/${interviewId}/chat`,
-    interviewStatus: (interviewId: string) => `/interviews/${interviewId}/status`,
-    interviewAnalytics: (interviewId: string) => `/interviews/${interviewId}/analytics`,
-    searchCandidates: '/interview/search/candidates',
-    searchJobs: '/interview/search/jobs',
-    statisticsCandidates: '/interview/statistics/candidates',
-    statisticsJobs: '/interview/statistics/jobs',
-    analysisStatus: (analysisId: string) => `/interview/analysis/${analysisId}/status`,
-    health: '/interview/health',
-    healthDatabase: '/interview/health/database',
-    // WebSocket endpoints
-    websocket: {
-      startInterview: '/ws/interviews/start-interview',
-      analyzeResume: '/ws/interviews/analyze-resume',
-    },
-  },
-
   // Conversations
   conversations: {
     chat: '/conversations',
@@ -97,16 +67,12 @@ export const apiEndpoints = {
     },
   },
 
-  // Knowledge Management (RAG System)
-  knowledge: {
-    // Document Search
-    search: '/knowledge/search',
-    searchContextAware: '/knowledge/search/context-aware',
-
-    // Document Ingestion
-    ingest: '/knowledge/ingest',
-    ingestStatus: (fileId: string) => `/knowledge/ingest/${fileId}/status`,
-    ingestJobs: '/knowledge/ingest/jobs',
+  // Agent (LangGraph Workflow)
+  agent: {
+    websocket: {
+      // Real-time AI agent with LangGraph workflow
+      query: '/ws/agent/query',
+    },
   },
 
   // Knowledge Source Configuration (RAG Settings)
@@ -200,55 +166,6 @@ export const apiEndpoints = {
     update: (providerId: string) => `/model-providers/${providerId}`,
     active: '/model-providers/active/list',
     byType: (modelType: string) => `/model-providers/by-type/${modelType}`,
-  },
-
-  // Questions Management
-  questions: {
-    list: '/questions',
-    create: '/questions',
-    question: (questionId: string) => `/questions/${questionId}`,
-    domains: '/questions/domains',
-    domain: (domainId: string) => `/questions/domains/${domainId}`,
-    domainStats: '/questions/domains/stats',
-    byDomain: (domainName: string) => `/questions/by-domain/${domainName}`,
-    byDomainLevel: (domainName: string, level: string) => `/questions/by-domain/${domainName}/difficulty/${level}`,
-    difficultyLevels: '/questions/difficulty-levels',
-    sampleData: '/questions/sample-data',
-  },
-
-  // Smart Features
-  smartFeatures: {
-    questions: {
-      generateProjectBased: '/smart-features/questions/generate/project-based',
-      generateSkillGap: '/smart-features/questions/generate/skill-gap',
-      custom: (questionId: string) => `/smart-features/questions/custom/${questionId}`,
-      customByType: (generationType: string) => `/smart-features/questions/custom/by-type/${generationType}`,
-    },
-    selection: {
-      timeAware: '/smart-features/selection/time-aware',
-    },
-    recommendations: {
-      generate: '/smart-features/recommendations/generate',
-      recommendation: (recommendationId: string) => `/smart-features/recommendations/${recommendationId}`,
-      byPriority: '/smart-features/recommendations/by-priority',
-    },
-    analytics: {
-      generate: '/smart-features/analytics/generate',
-      session: (sessionId: string) => `/smart-features/analytics/session/${sessionId}`,
-      candidate: (candidateId: string) => `/smart-features/analytics/candidate/${candidateId}`,
-    },
-    trends: {
-      generate: '/smart-features/trends/generate',
-      candidate: (candidateId: string) => `/smart-features/trends/candidate/${candidateId}`,
-    },
-    reports: {
-      coverage: {
-        generate: '/smart-features/reports/coverage/generate',
-        report: (reportId: string) => `/smart-features/reports/coverage/${reportId}`,
-        candidate: (candidateId: string) => `/smart-features/reports/coverage/candidate/${candidateId}`,
-      },
-    },
-    dashboard: '/smart-features/dashboard',
   },
 
   // Notifications

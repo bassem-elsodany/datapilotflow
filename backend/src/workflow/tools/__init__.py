@@ -1,27 +1,13 @@
 """
 Workflow tools package for DataPilotFlow.
 
-This package contains all the tools for the workflow execution.
+This package contains LangChain tools used by workflow nodes to enrich context.
 """
 
-from .retrieval_tools import (
-    vector_search,
-    semantic_search,
-    hybrid_search,
-    entity_search,
-    relationship_search,
-    knowledge_graph_search,
-    get_document_by_id
-)
+from .retriever_tool import get_retriever_tool
 
 __version__ = "1.0.0"
 
 __all__ = [
-    "vector_search",
-    "semantic_search", 
-    "hybrid_search",
-    "entity_search",
-    "relationship_search",
-    "knowledge_graph_search",
-    "get_document_by_id"
+    "get_retriever_tool",
 ]
