@@ -39,7 +39,7 @@ Return ONLY the hypothetical answer, nothing else. No preamble, no explanation."
 
 HYDE_USER_PROMPT = Prompt(
     name="hyde_user_prompt",
-    prompt="""Question: {query}
+    prompt="""Question: {{ query }}
 
 Generate a hypothetical answer that would be found in a relevant document:""",
 )

@@ -104,11 +104,26 @@ class MilvusRetriever(BaseRetriever):
 
             # Convert to LangChain Documents
             documents = []
-            for result in results:
+            for i, result in enumerate(results):
+                # Milvus search results have structure: {id, distance, score, properties}
+                # The actual document fields are in 'properties'
+                properties = result.get("properties", {})
+                content = properties.get("page_content", properties.get("text", ""))
+
+                # Debug logging
+                if i == 0:
+                    logger.debug(f"🔍 First Milvus result keys: {list(result.keys())}")
+                    logger.debug(f"🔍 Properties keys: {list(properties.keys())}")
+                    logger.debug(
+                        f"🔍 page_content value: '{content[:100]}...'"
+                        if content
+                        else f"🔍 page_content is EMPTY or None: {repr(content)}"
+                    )
+
                 doc = Document(
-                    page_content=result.get("text", ""),
+                    page_content=content,
                     metadata={
-                        **result.get("metadata", {}),
+                        **{k: v for k, v in properties.items() if k != "page_content"},
                         "id": result.get("id"),
                         "distance": result.get("distance", 0.0),
                     },

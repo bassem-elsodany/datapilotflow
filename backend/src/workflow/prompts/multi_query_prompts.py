@@ -50,7 +50,7 @@ No preamble, no explanation.""",
 
 MULTI_QUERY_USER_PROMPT = Prompt(
     name="multi_query_user_prompt",
-    prompt="""Original Question: {query}
+    prompt="""Original Question: {{ query }}
 
 Generate alternative phrasings:""",
 )

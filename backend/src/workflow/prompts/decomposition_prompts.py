@@ -46,7 +46,7 @@ No preamble, no explanation.""",
 
 DECOMPOSITION_USER_PROMPT = Prompt(
     name="decomposition_user_prompt",
-    prompt="""Original Question: {query}
+    prompt="""Original Question: {{ query }}
 
 Break this down into focused sub-questions:""",
 )

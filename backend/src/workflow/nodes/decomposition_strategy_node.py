@@ -12,14 +12,11 @@ from typing import Any, Dict, List
 import opik
 from loguru import logger
 
-from ..chains import get_decomposition_chain
-from ..state import WorkflowState
+from src.workflow.chains import get_decomposition_chain
+from src.workflow.state import WorkflowState
 
 
-@opik.track(
-    name="decomposition_strategy_node", tags=["query_enhancement", "decomposition"]
-)
-async def decomposition_strategy_node(state: WorkflowState) -> Dict[str, Any]:
+async def decomposition_strategy_node(state: WorkflowState) -> WorkflowState:
     """
     Execute Query Decomposition strategy.
 
@@ -29,8 +26,9 @@ async def decomposition_strategy_node(state: WorkflowState) -> Dict[str, Any]:
         state (WorkflowState): Current workflow state
 
     Returns:
-        Dict[str, Any]: Updated state with sub-queries
+        WorkflowState: Updated state with sub-queries
     """
+    logger.info("🚀 [NODE START] decomposition_strategy_node")
     start_time = time.time()
     logger.info("🔄 Executing Decomposition Strategy Node")
 
@@ -61,28 +59,33 @@ async def decomposition_strategy_node(state: WorkflowState) -> Dict[str, Any]:
         if is_complex and sub_queries:
             logger.info(f"✅ Decomposition: Generated {len(sub_queries)} sub-queries")
 
-            return {
-                "enhanced_query": {
-                    "sub_queries": sub_queries,
-                },
-                "enhancement_strategies_applied": ["decomposition"],
-            }
+            # Update state
+            state["enhanced_query"] = {"sub_queries": sub_queries}
+            state["enhancement_strategies_applied"] = ["decomposition"]
+
+            logger.info("✅ [NODE FINISH] decomposition_strategy_node")
+            return state
         else:
             logger.info("ℹ️  Query is simple, no decomposition needed")
-            return {
-                "enhanced_query": {},
-                "enhancement_strategies_applied": [],
-            }
+
+            # Update state
+            state["enhanced_query"] = {}
+            state["enhancement_strategies_applied"] = []
+
+            logger.info("✅ [NODE FINISH] decomposition_strategy_node")
+            return state
 
     except Exception as e:
         logger.error(f"❌ Decomposition node error: {e}")
         import traceback
 
         logger.error(f"Traceback: {traceback.format_exc()}")
-        return {
-            "enhanced_query": {},
-            "enhancement_strategies_applied": [],
-        }
+        logger.error("❌ [NODE FINISH] decomposition_strategy_node (with error)")
+
+        # Fallback
+        state["enhanced_query"] = {}
+        state["enhancement_strategies_applied"] = []
+        return state
     finally:
         elapsed = (time.time() - start_time) * 1000
         logger.info(f"⏱️  Decomposition node completed in {elapsed:.2f}ms")

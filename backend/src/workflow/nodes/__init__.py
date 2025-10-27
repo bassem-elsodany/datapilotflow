@@ -12,6 +12,7 @@ from .document_retriever import document_retriever
 from .hyde_strategy_node import hyde_strategy_node
 from .multi_query_strategy_node import multi_query_strategy_node
 from .rag_fusion_strategy_node import rag_fusion_strategy_node
+from .raw_response_formatter import raw_response_formatter
 from .step_back_strategy_node import step_back_strategy_node
 
 __version__ = "1.0.0"
@@ -28,4 +29,5 @@ __all__ = [
     "answer_generator",
     "document_judger",
     "document_retriever",
+    "raw_response_formatter",
 ]

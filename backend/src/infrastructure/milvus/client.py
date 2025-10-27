@@ -60,6 +60,8 @@ class MilvusClientWrapper(Generic[T]):
         milvus_user: str = settings.VECTOR_DB_USERNAME,
         milvus_password: str = settings.VECTOR_DB_PASSWORD,
         connection_alias: Optional[str] = None,
+        index_type: str = "HNSW",
+        index_params: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Initialize a connection to the Milvus instance.
 
@@ -72,6 +74,8 @@ class MilvusClientWrapper(Generic[T]):
             milvus_user (str, optional): Username for Milvus authentication.
             milvus_password (str, optional): Password for Milvus authentication.
             connection_alias (str, optional): Alias for the connection.
+            index_type (str, optional): Type of index to use. Defaults to "HNSW".
+            index_params (Dict[str, Any], optional): Custom index parameters.
 
         Raises:
             Exception: If connection to Milvus fails.
@@ -79,6 +83,8 @@ class MilvusClientWrapper(Generic[T]):
         self.model = model
         self.collection_name = collection_name
         self.vector_dimension = vector_dimension
+        self.index_type = index_type
+        self.index_params = index_params or self._get_default_index_params(index_type)
 
         # Generate unique connection alias if none provided
         if connection_alias is None:
@@ -124,6 +130,109 @@ class MilvusClientWrapper(Generic[T]):
             logger.error("Make sure Milvus is running and accessible")
             logger.error(f"Traceback: {traceback.format_exc()}")
             raise
+
+    def _get_default_index_params(self, index_type: str) -> Dict[str, Any]:
+        """
+        Get default index parameters based on index type and vector dimension.
+
+        Args:
+            index_type: Type of index (HNSW, IVF_FLAT, IVF_PQ, FLAT, etc.)
+
+        Returns:
+            Dictionary of optimal index parameters
+        """
+        if index_type == "HNSW":
+            # HNSW: Best for production RAG (high recall, fast search)
+            # M: connections per layer (8-64, higher = better recall + more memory)
+            # efConstruction: build quality (100-500, higher = better index + slower build)
+            return {
+                "M": 16,  # Balanced for most use cases
+                "efConstruction": 256,  # Good quality/speed tradeoff
+            }
+        elif index_type == "IVF_FLAT":
+            # IVF_FLAT: Good for medium datasets (< 1M vectors)
+            # nlist: number of clusters (recommend 4 * sqrt(n))
+            # For typical RAG: 128-2048
+            return {"nlist": 1024}  # Increased from 128 for better recall
+        elif index_type == "IVF_PQ":
+            # IVF_PQ: Memory efficient for large datasets (> 1M vectors)
+            return {
+                "nlist": 2048,
+                "m": 8,  # Number of subvectors (must divide dimension evenly)
+                "nbits": 8,  # Bits per subvector
+            }
+        elif index_type == "FLAT":
+            # FLAT: Exact search (100% recall, slow for large datasets)
+            return {}
+        else:
+            logger.warning(f"Unknown index type '{index_type}', using HNSW defaults")
+            return {"M": 16, "efConstruction": 256}
+
+    def _calculate_search_params(self, limit: int, filter_expr: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Calculate adaptive search parameters based on collection size and query requirements.
+
+        Args:
+            limit: Number of results requested
+            filter_expr: Optional filter expression (affects search strategy)
+
+        Returns:
+            Optimized search parameters for the index type
+        """
+        try:
+            # Get collection size for adaptive parameter calculation
+            self.collection.load()
+            collection_size = self.collection.num_entities
+        except Exception as e:
+            logger.warning(f"Could not get collection size: {e}, using default params")
+            collection_size = 10000  # Fallback estimate
+
+        if self.index_type == "HNSW":
+            # ef: search quality parameter (higher = better recall, slower search)
+            # Should be >= top_k, ideally 2-4x top_k for good recall
+            # Range: top_k to 512
+            ef = max(limit * 3, 64)  # 3x multiplier for high recall
+            ef = min(ef, 512)  # Cap at 512 for performance
+
+            logger.debug(f"HNSW search params: ef={ef} (limit={limit}, collection_size={collection_size})")
+
+            return {
+                "metric_type": "COSINE",
+                "params": {"ef": ef}
+            }
+
+        elif self.index_type == "IVF_FLAT":
+            # nprobe: number of clusters to search
+            # Should be 5-20% of nlist for good recall/performance balance
+            nlist = self.index_params.get("nlist", 1024)
+            nprobe = max(int(nlist * 0.1), 20)  # 10% of clusters, minimum 20
+            nprobe = min(nprobe, nlist)  # Cannot exceed nlist
+
+            logger.debug(f"IVF_FLAT search params: nprobe={nprobe} (nlist={nlist}, limit={limit})")
+
+            return {
+                "metric_type": "COSINE",
+                "params": {"nprobe": nprobe}
+            }
+
+        elif self.index_type == "IVF_PQ":
+            # Similar to IVF_FLAT
+            nlist = self.index_params.get("nlist", 2048)
+            nprobe = max(int(nlist * 0.1), 32)
+            nprobe = min(nprobe, nlist)
+
+            return {
+                "metric_type": "COSINE",
+                "params": {"nprobe": nprobe}
+            }
+
+        elif self.index_type == "FLAT":
+            # FLAT index doesn't need search params (exact search)
+            return {"metric_type": "COSINE"}
+
+        else:
+            # Default to COSINE with basic params
+            return {"metric_type": "COSINE"}
 
     def _initialize_collection(self) -> None:
         """Initialize or get the Milvus collection with proper schema."""
@@ -192,13 +301,47 @@ class MilvusClientWrapper(Generic[T]):
                 name=self.collection_name, schema=schema, using=self.connection_alias
             )
 
-            # Create index for vector field
-            index_params = {
+            # Create index for vector field with optimized parameters
+            vector_index_params = {
                 "metric_type": "COSINE",
-                "index_type": "IVF_FLAT",
-                "params": {"nlist": 128},
+                "index_type": self.index_type,
+                "params": self.index_params,
             }
-            self.collection.create_index(field_name="vector", index_params=index_params)
+            self.collection.create_index(field_name="vector", index_params=vector_index_params)
+            logger.info(f"Created {self.index_type} vector index with params: {self.index_params}")
+
+            # Create scalar indexes for efficient filtering
+            # STL_SORT for numeric fields
+            numeric_index_fields = ["chunk_index"]
+            for field_name in numeric_index_fields:
+                try:
+                    scalar_index_params = {
+                        "index_type": "STL_SORT",  # Sorted index for fast range queries
+                    }
+                    self.collection.create_index(
+                        field_name=field_name, index_params=scalar_index_params
+                    )
+                    logger.info(f"Created STL_SORT index on '{field_name}' for fast filtering")
+                except Exception as idx_error:
+                    logger.warning(
+                        f"Could not create scalar index on {field_name}: {idx_error}"
+                    )
+
+            # INVERTED index for VARCHAR fields
+            varchar_index_fields = ["job_id"]
+            for field_name in varchar_index_fields:
+                try:
+                    scalar_index_params = {
+                        "index_type": "INVERTED",  # Inverted index for VARCHAR fields
+                    }
+                    self.collection.create_index(
+                        field_name=field_name, index_params=scalar_index_params
+                    )
+                    logger.info(f"Created INVERTED index on '{field_name}' for fast filtering")
+                except Exception as idx_error:
+                    logger.warning(
+                        f"Could not create inverted index on {field_name}: {idx_error}"
+                    )
 
             # Create full-text index for source_url field
             try:
@@ -209,7 +352,7 @@ class MilvusClientWrapper(Generic[T]):
                     field_name="source_url", index_params=source_url_index_params
                 )
                 logger.info(
-                    f"Created inverted index on source_url field for full-text search"
+                    f"Created INVERTED index on 'source_url' for full-text search"
                 )
             except Exception as idx_error:
                 logger.warning(
@@ -217,7 +360,10 @@ class MilvusClientWrapper(Generic[T]):
                     "Full-text search may not be available."
                 )
 
-            logger.info(f"Created collection {self.collection_name} with vector index")
+            logger.info(
+                f"Created collection '{self.collection_name}' with {self.index_type} vector index "
+                f"and scalar indexes for filtering"
+            )
 
         except Exception as e:
             logger.error(f"Error creating collection: {e}")
@@ -396,17 +542,23 @@ class MilvusClientWrapper(Generic[T]):
     def search_with_vector(
         self,
         query_vector: List[float],
-        limit: int = 10,
+        limit: int = 5,
         filter_expr: Optional[str] = None,
         return_fields: Optional[List[str]] = None,
+        distance_threshold: Optional[float] = None,
+        use_adaptive_params: bool = True,
     ) -> List[Dict[str, Any]]:
-        """Search for documents using a vector query.
+        """Search for documents using a vector query with optimized parameters.
 
         Args:
             query_vector (List[float]): The vector to search for similar documents.
-            limit (int): Maximum number of results to return. Defaults to 10.
+            limit (int): Maximum number of results to return. Defaults to 5.
             filter_expr (Optional[str]): Filter expression for the search.
             return_fields (Optional[List[str]]): Fields to return in results.
+            distance_threshold (Optional[float]): Maximum distance for results (COSINE: 0-2, lower=better).
+                Recommended: 0.3-0.5 for high quality, 0.5-0.7 for medium quality.
+            use_adaptive_params (bool): Use adaptive search parameters based on collection size.
+                Defaults to True.
 
         Returns:
             List[Dict[str, Any]]: List of search results with properties and metadata.
@@ -441,15 +593,22 @@ class MilvusClientWrapper(Generic[T]):
                     "created_at",
                 ]
 
-            # Build search parameters
-            search_params = {"metric_type": "COSINE", "params": {"nprobe": 10}}
+            # Calculate adaptive search parameters
+            if use_adaptive_params:
+                search_params = self._calculate_search_params(limit, filter_expr)
+            else:
+                # Fallback to basic params
+                search_params = {"metric_type": "COSINE", "params": {"nprobe": 10}}
+
+            # Retrieve more candidates if distance threshold is set
+            search_limit = limit * 2 if distance_threshold else limit
 
             # Perform search
             results = self.collection.search(
                 data=[query_vector],
                 anns_field="vector",
                 param=search_params,
-                limit=limit,
+                limit=search_limit,
                 expr=filter_expr,
                 output_fields=return_fields,
             )
@@ -458,6 +617,10 @@ class MilvusClientWrapper(Generic[T]):
             formatted_results = []
             for hits in results:
                 for hit in hits:
+                    # Apply distance threshold filtering
+                    if distance_threshold and hit.distance > distance_threshold:
+                        continue
+
                     result = {
                         "id": hit.id,
                         "distance": hit.distance,
@@ -474,8 +637,15 @@ class MilvusClientWrapper(Generic[T]):
 
                     formatted_results.append(result)
 
+                    # Stop if we have enough results after filtering
+                    if len(formatted_results) >= limit:
+                        break
+
             logger.info(
-                f"Vector search completed | Vector dimension: {len(query_vector)} | Results: {len(formatted_results)}"
+                f"Vector search completed | Index: {self.index_type} | "
+                f"Vector dim: {len(query_vector)} | "
+                f"Results: {len(formatted_results)}/{search_limit} | "
+                f"Distance threshold: {distance_threshold or 'None'}"
             )
             return formatted_results
 

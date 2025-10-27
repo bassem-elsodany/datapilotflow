@@ -3,27 +3,30 @@ import { useGetActiveModelProviders } from '@/api/resources/model-providers';
 import { useGetCollections } from '@/api/resources/vectordb';
 import { StreamingMessage } from '@/components/streaming-message';
 import { TypingIndicator } from '@/components/typing-indicator';
+import { WorkflowProgressModal } from '@/components/workflow-progress-modal';
 import { apiEndpoints, apiUtils } from '@/config';
 import { paths } from '@/routes/paths';
 import {
   ActionIcon,
   Alert,
+  Anchor,
   Badge,
   Box,
   Button,
+  Collapse,
   Divider,
   Grid,
   Group,
   LoadingOverlay,
   Modal,
+  NumberInput,
   Paper,
-  ScrollArea,
   Select,
   Stack,
   Switch,
   Text,
   TextInput,
-  Title,
+  ThemeIcon,
   Tooltip
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
@@ -31,8 +34,9 @@ import {
   IconAlertCircle,
   IconArrowLeft,
   IconCheck,
+  IconChevronDown,
   IconEdit,
-  IconFilter,
+  IconExternalLink,
   IconInfoCircle,
   IconLoader,
   IconMessageCircle,
@@ -49,11 +53,19 @@ interface Message {
   content: string;
   timestamp: Date | string;
   isStreaming?: boolean;
+  metadata?: {
+    source_urls?: string[];
+    correlation_ids?: string[];
+    chunk_ids?: string[];
+    document_count?: number;
+    enhancement_strategy?: string;
+    enhanced_query?: string;
+  };
 }
 
 // Query enhancement strategies
 const ENHANCEMENT_STRATEGIES = [
-  { value: 'native', label: 'Native RAG (Recommended)' },
+  { value: 'native', label: 'Native RAG' },
   { value: 'augmented', label: 'Augmented (Best Coverage)' },
   { value: 'step_back', label: 'Step-Back' },
   { value: 'multi_query', label: 'Multi-Query' },
@@ -63,6 +75,22 @@ const ENHANCEMENT_STRATEGIES = [
 ];
 
 export default function ConversationWindow() {
+  // CSS animations for smooth chat experience
+  const chatAnimations = `
+    @keyframes fadeIn {
+      0% { opacity: 0; transform: translateY(10px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes slideInLeft {
+      0% { opacity: 0; transform: translateX(-20px); }
+      100% { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes slideInRight {
+      0% { opacity: 0; transform: translateX(20px); }
+      100% { opacity: 1; transform: translateX(0); }
+    }
+  `;
+
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -79,14 +107,56 @@ export default function ConversationWindow() {
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [selectedStrategy, setSelectedStrategy] = useState<string>('native');
   const [collectionName, setCollectionName] = useState('LongTermMemory');
-  const [enableReranking, setEnableReranking] = useState(true);
+  const [enableReranking, setEnableReranking] = useState(false);
   const [selectedRerankerId, setSelectedRerankerId] = useState<string | null>(null);
   const [selectedRerankerModel, setSelectedRerankerModel] = useState<string | null>(null);
+  const [enableLLMGeneration, setEnableLLMGeneration] = useState(true);
+  const [topK, setTopK] = useState<number | undefined>(undefined);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [expandedMetadata, setExpandedMetadata] = useState<Set<number>>(new Set());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const resetMessagesMutation = useResetConversationMessages();
+
+  // Update reranker defaults when LLM provider or model changes
+  useEffect(() => {
+    if (enableReranking && selectedProviderId && selectedModel) {
+      setSelectedRerankerId(selectedProviderId);
+      setSelectedRerankerModel(selectedModel);
+    }
+  }, [selectedProviderId, selectedModel, enableReranking]);
+
+  // Enhanced workflow visualization state
+  const [workflowState, setWorkflowState] = useState<{
+    currentStage: string | null;
+    completedStages: string[];
+    originalQuery: string | null;
+    enhancedQuery: string | null;
+    strategy: string | null;
+    documentCount: number;
+    relevantCount: number;
+    rerankingEnabled: boolean;
+    indexType: string;
+    vectorDimension: number;
+    searchTime: number;
+    isActive: boolean;
+  }>({
+    currentStage: null,
+    completedStages: [],
+    originalQuery: null,
+    enhancedQuery: null,
+    strategy: null,
+    documentCount: 0,
+    relevantCount: 0,
+    rerankingEnabled: enableReranking,
+    indexType: 'HNSW',
+    vectorDimension: 1536,
+    searchTime: 0,
+    isActive: false,
+  });
 
   // Fetch data
   const { data: providers, isLoading: providersLoading } = useGetActiveModelProviders();
@@ -104,20 +174,21 @@ export default function ConversationWindow() {
     });
   };
 
-  // Scroll to bottom when new messages arrive (but not during initial load)
+  // Auto-scroll to show most recent messages (like a chat app)
   useEffect(() => {
-    // Only auto-scroll if we're not loading history and there are messages
-    // Also check if the last message is recent (within last 5 seconds) to avoid scrolling on history load
+    // Always scroll to bottom when messages change (except during initial history load)
     if (!isLoadingHistory && messages.length > 0) {
-      const lastMessage = messages[messages.length - 1];
-      const now = new Date();
-      const messageTime = new Date(lastMessage.timestamp);
-      const timeDiff = now.getTime() - messageTime.getTime();
-
-      // Only auto-scroll if the message is very recent (within 5 seconds) or if it's streaming
-      if (timeDiff < 5000 || lastMessage.isStreaming) {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }
+      // Use requestAnimationFrame + setTimeout to ensure DOM is fully rendered
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          if (viewportRef.current) {
+            const el = viewportRef.current;
+            el.scrollTop = el.scrollHeight;
+          } else {
+            console.warn('⚠️ Viewport ref not available');
+          }
+        }, 200);
+      });
     }
   }, [messages, isLoadingHistory]);
 
@@ -146,7 +217,18 @@ export default function ConversationWindow() {
         setTimeout(() => reject(new Error('Request timeout')), 10000)
       );
 
-      const fetchPromise = apiUtils.apiRequest(`/conversations/${sessionId}`);
+      // Force fresh data - no caching
+      const token = localStorage.getItem('jwt_token');
+      const fetchPromise = fetch(apiUtils.buildApiUrl(`/conversations/${sessionId}?t=${Date.now()}`), {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
 
       const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
 
@@ -154,15 +236,33 @@ export default function ConversationWindow() {
         const data = await response.json();
         setSessionName(data.session?.name || 'Conversation');
 
-        // Load conversation settings
+        // Load conversation settings - NO FALLBACKS, USE EXACT DB VALUES
         if (data.session) {
           setSelectedProviderId(data.session.llm_provider_id || null);
           setSelectedModel(data.session.llm_model_name || null);
           setSelectedStrategy(data.session.enhancement_config?.strategy || 'native');
           setCollectionName(data.session.collection_name || 'LongTermMemory');
-          setEnableReranking(data.session.enable_reranking !== undefined ? data.session.enable_reranking : true);
+
+          // Load reranking settings - exact values from DB
+          const newEnableReranking = data.session.enable_reranking !== undefined ? data.session.enable_reranking : false;
+          setEnableReranking(newEnableReranking);
+
           setSelectedRerankerId(data.session.reranker_provider_id || null);
           setSelectedRerankerModel(data.session.reranker_model_name || null);
+          
+          // Load LLM generation setting - exact value from DB
+          const newEnableLLMGeneration = data.session.enable_llm_generation !== undefined ? data.session.enable_llm_generation : false;
+          setEnableLLMGeneration(newEnableLLMGeneration);
+          
+          // Load top_k - exact value from DB
+          setTopK(data.session.top_k);
+          
+          console.log('✅ Loaded conversation settings:', {
+            enableReranking: newEnableReranking,
+            enableLLMGeneration: newEnableLLMGeneration,
+            topK: data.session.top_k,
+            strategy: data.session.enhancement_config?.strategy
+          });
         }
 
         // Optimize timestamp conversion - only process if messages exist
@@ -338,29 +438,53 @@ export default function ConversationWindow() {
     const { stage, message, error, chunk } = data;
     const response = data.response || data.data?.response;
 
-    // Debug logging
-    console.log('WebSocket message:', { stage, message, hasResponse: !!response, hasChunk: !!chunk });
-
     switch (stage) {
       case 'starting':
-        // Show starting status
-        setMessages(prev => [
-          ...prev,
-          {
-            role: 'assistant',
-            content: '🤖 Starting conversation...',
-            timestamp: new Date(),
-            isStreaming: true
-          }
-        ]);
+      case 'workflow_started':
+        // Initialize enhanced workflow visualization
+        console.log('🔍 Initializing workflow state:', {
+          strategy: data?.data?.strategy || data?.strategy || selectedStrategy,
+          rerankingEnabled: enableReranking,
+          enableLLMGeneration: enableLLMGeneration
+        });
+
+        setWorkflowState({
+          currentStage: null,
+          completedStages: [],
+          originalQuery: inputMessage,
+          enhancedQuery: null,
+          strategy: data?.data?.strategy || data?.strategy || selectedStrategy,
+          documentCount: 0,
+          relevantCount: 0,
+          rerankingEnabled: enableReranking,
+          indexType: 'HNSW',
+          vectorDimension: 1536,
+          searchTime: 0,
+          isActive: true,
+        });
         break;
 
       case 'query_enhancement':
       case 'query_enhancement_complete':
-        // Show query enhancement status
+        // Create or update the streaming message with query enhancement status
         setMessages(prev => {
           const lastMessage = prev[prev.length - 1];
-          if (lastMessage && lastMessage.role === 'assistant' && lastMessage.isStreaming) {
+
+          // If no assistant message exists, create one
+          if (!lastMessage || lastMessage.role !== 'assistant') {
+            return [
+              ...prev,
+              {
+                role: 'assistant',
+                content: '✨ Enhancing query...',
+                timestamp: new Date(),
+                isStreaming: true
+              }
+            ];
+          }
+
+          // Update existing streaming message
+          if (lastMessage.isStreaming) {
             return [
               ...prev.slice(0, -1),
               {
@@ -369,16 +493,41 @@ export default function ConversationWindow() {
               }
             ];
           }
+
           return prev;
         });
+
+        // Update workflow state for query enhancement
+        setWorkflowState(prev => ({
+          ...prev,
+          currentStage: 'query_enhancement',
+          enhancedQuery: data?.data?.enhanced_query || data?.enhanced_query || null,
+        }));
         break;
 
       case 'document_retrieval':
       case 'document_retrieval_complete':
-        // Show document retrieval status
+        console.log('🔄 DOCUMENT RETRIEVAL - Current messages count:', messages.length);
+        // Create or update the streaming message with document retrieval status
         setMessages(prev => {
           const lastMessage = prev[prev.length - 1];
-          if (lastMessage && lastMessage.role === 'assistant' && lastMessage.isStreaming) {
+          console.log('🔄 Last message:', lastMessage?.content, 'isStreaming:', lastMessage?.isStreaming);
+
+          // If no assistant message exists, create one
+          if (!lastMessage || lastMessage.role !== 'assistant') {
+            return [
+              ...prev,
+              {
+                role: 'assistant',
+                content: '🔍 Retrieving relevant documents...',
+                timestamp: new Date(),
+                isStreaming: true
+              }
+            ];
+          }
+
+          // Update existing streaming message
+          if (lastMessage.isStreaming) {
             return [
               ...prev.slice(0, -1),
               {
@@ -387,12 +536,28 @@ export default function ConversationWindow() {
               }
             ];
           }
+
           return prev;
+        });
+
+        // Update workflow state for document retrieval
+        setWorkflowState(prev => {
+          const newCompleted = prev.currentStage === 'query_enhancement' && !prev.completedStages.includes('query_enhancement')
+            ? [...prev.completedStages, 'query_enhancement']
+            : prev.completedStages;
+
+          return {
+            ...prev,
+            currentStage: 'document_retrieval',
+            completedStages: newCompleted,
+            documentCount: data?.data?.document_count || data?.document_count || 0,
+          };
         });
         break;
 
       case 'document_judging':
-        // Show document judging status
+      case 'document_reranking':
+        // Update the existing streaming message with document judging status
         setMessages(prev => {
           const lastMessage = prev[prev.length - 1];
           if (lastMessage && lastMessage.role === 'assistant' && lastMessage.isStreaming) {
@@ -406,10 +571,24 @@ export default function ConversationWindow() {
           }
           return prev;
         });
+
+        // Update workflow state for document judging/reranking
+        setWorkflowState(prev => {
+          const newCompleted = prev.currentStage === 'document_retrieval' && !prev.completedStages.includes('document_retrieval')
+            ? [...prev.completedStages, 'document_retrieval']
+            : prev.completedStages;
+
+          return {
+            ...prev,
+            currentStage: 'document_judging',
+            completedStages: newCompleted,
+            relevantCount: data?.data?.relevant_count || data?.relevant_count || 0,
+          };
+        });
         break;
 
       case 'response_generation':
-        // Show AI generation status
+        // Update the existing streaming message with response generation status
         setMessages(prev => {
           const lastMessage = prev[prev.length - 1];
           if (lastMessage && lastMessage.role === 'assistant' && lastMessage.isStreaming) {
@@ -423,20 +602,46 @@ export default function ConversationWindow() {
           }
           return prev;
         });
+
+        // Update workflow state for response generation
+        setWorkflowState(prev => {
+          const newCompleted = [...prev.completedStages];
+
+          // Add current stage to completed if not already there
+          if (prev.currentStage === 'document_judging' && !newCompleted.includes('document_judging')) {
+            newCompleted.push('document_judging');
+          } else if (prev.currentStage === 'document_retrieval' && !newCompleted.includes('document_retrieval')) {
+            newCompleted.push('document_retrieval');
+          } else if (prev.currentStage === 'query_enhancement' && !newCompleted.includes('query_enhancement')) {
+            newCompleted.push('query_enhancement');
+          }
+
+          return {
+            ...prev,
+            currentStage: 'response_generation',
+            completedStages: newCompleted,
+          };
+        });
         break;
 
       case 'streaming_response':
         // Handle streaming response chunks from agent
-        if (chunk) {
+        // Extract chunk from data.chunk or chunk property
+        const textChunk = data?.data?.chunk || data?.chunk || chunk;
+
+        if (textChunk) {
           setMessages(prev => {
             const lastMessage = prev[prev.length - 1];
             if (lastMessage && lastMessage.role === 'assistant' && lastMessage.isStreaming) {
+              // Check if this is the placeholder "Starting" message - replace it instead of appending
+              const isPlaceholder = lastMessage.content.includes('🤖 Starting conversation');
+
               // Update existing streaming message
               return [
                 ...prev.slice(0, -1),
                 {
                   ...lastMessage,
-                  content: lastMessage.content + chunk,
+                  content: isPlaceholder ? textChunk : lastMessage.content + textChunk,
                   isStreaming: true
                 }
               ];
@@ -446,7 +651,7 @@ export default function ConversationWindow() {
                 ...prev,
                 {
                   role: 'assistant',
-                  content: chunk,
+                  content: textChunk,
                   timestamp: new Date(),
                   isStreaming: true
                 }
@@ -458,35 +663,54 @@ export default function ConversationWindow() {
 
       case 'completed':
         // Handle completion from agent WebSocket
-        if (response) {
-          setMessages(prev => {
-            const lastMessage = prev[prev.length - 1];
-            if (lastMessage && lastMessage.role === 'assistant' && lastMessage.isStreaming) {
-              // Update the streaming message to final
-              return [
-                ...prev.slice(0, -1),
-                {
-                  ...lastMessage,
-                  content: response,
-                  isStreaming: false
-                }
-              ];
-            } else {
-              // Add new final message
-              return [
-                ...prev,
-                {
-                  role: 'assistant',
-                  content: response,
-                  timestamp: new Date(),
-                  isStreaming: false
-                }
-              ];
-            }
-          });
-        }
+        const metadata = data.data ? {
+          source_urls: data.data.source_urls || [],
+          correlation_ids: data.data.correlation_ids || [],
+          chunk_ids: data.data.chunk_ids || [],
+          document_count: data.data.document_count || 0,
+          enhancement_strategy: data.data.enhancement_strategy,
+          enhanced_query: data.data.enhanced_query,
+        } : undefined;
+
+        setMessages(prev => {
+          const lastMessage = prev[prev.length - 1];
+          if (lastMessage && lastMessage.role === 'assistant' && lastMessage.isStreaming) {
+            // Finalize the streaming message (keep existing content, just mark as complete)
+            return [
+              ...prev.slice(0, -1),
+              {
+                ...lastMessage,
+                content: response || lastMessage.content, // Use response as fallback, prefer streamed content
+                isStreaming: false,
+                metadata: metadata
+              }
+            ];
+          } else if (response) {
+            // Only add new message if no streaming message exists
+            return [
+              ...prev,
+              {
+                role: 'assistant',
+                content: response,
+                timestamp: new Date(),
+                isStreaming: false,
+                metadata: metadata
+              }
+            ];
+          }
+          return prev;
+        });
+
         setIsLoading(false);
         finalizeStreamingMessages();
+
+        // Mark workflow as complete
+        setWorkflowState(prev => ({
+          ...prev,
+          currentStage: null,
+          completedStages: [...prev.completedStages, 'response_generation'],
+          isActive: false,
+        }));
         break;
 
       case 'error':
@@ -554,433 +778,911 @@ export default function ConversationWindow() {
   const handleSaveSettings = async () => {
     if (!sessionId) return;
 
-    try:
-    setIsSavingSettings(true);
-    const token = localStorage.getItem('jwt_token');
+    try {
+      setIsSavingSettings(true);
+      const token = localStorage.getItem('jwt_token');
 
-    const payload: any = {
-      llm_provider_id: selectedProviderId,
-      llm_model_name: selectedModel,
-      enhancement_strategy: selectedStrategy !== 'none' ? selectedStrategy : null,
-      collection_name: collectionName,
-      enable_reranking: enableReranking,
-      reranker_provider_id: enableReranking ? selectedRerankerId : null,
-      reranker_model_name: enableReranking ? selectedRerankerModel : null,
-    };
+      // Validate LLM provider and model when generative answer is enabled
+      if (enableLLMGeneration && !selectedProviderId) {
+        notifications.show({
+          title: 'Error',
+          message: 'Please select an LLM provider when Generative Answer is enabled',
+          color: 'red',
+        });
+        return;
+      }
 
-    const response = await fetch(apiUtils.buildApiUrl(`/conversations/${sessionId}/config`), {
-      method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
+      if (enableLLMGeneration && !selectedModel) {
+        notifications.show({
+          title: 'Error',
+          message: 'Please select an LLM model when Generative Answer is enabled',
+          color: 'red',
+        });
+        return;
+      }
 
-    if (response.ok) {
-      notifications.show({
-        title: 'Success',
-        message: 'Conversation settings updated successfully',
-        color: 'green',
-        icon: <IconCheck size={16} />,
+      const payload: any = {
+        llm_provider_id: enableLLMGeneration ? selectedProviderId : null,
+        llm_model_name: enableLLMGeneration ? selectedModel : null,
+        enhancement_strategy: selectedStrategy !== 'none' ? selectedStrategy : null,
+        collection_name: collectionName,
+        enable_reranking: enableReranking,
+        reranker_provider_id: enableReranking ? selectedRerankerId : null,
+        reranker_model_name: enableReranking ? selectedRerankerModel : null,
+        enable_llm_generation: enableLLMGeneration,
+        top_k: topK,
+      };
+
+      console.log('💾 Saving conversation settings:', payload);
+
+      const response = await fetch(apiUtils.buildApiUrl(`/conversations/${sessionId}`), {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
       });
-      setSettingsModalOpen(false);
-    } else {
-      const errorData = await response.json().catch(() => ({}));
+
+      if (response.ok) {
+        const responseData = await response.json();
+
+        notifications.show({
+          title: 'Success',
+          message: 'Conversation settings updated successfully',
+          color: 'green',
+          icon: <IconCheck size={16} />,
+        });
+        setSettingsModalOpen(false);
+
+        // Reload conversation data to reflect new settings
+        await loadConversationHistory();
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        notifications.show({
+          title: 'Error',
+          message: errorData.detail || 'Failed to update settings',
+          color: 'red',
+          icon: <IconAlertCircle size={16} />,
+        });
+      }
+    } catch (error) {
+      console.error('Error updating conversation settings:', error);
       notifications.show({
         title: 'Error',
-        message: errorData.detail || 'Failed to update settings',
+        message: 'Failed to update conversation settings',
         color: 'red',
         icon: <IconAlertCircle size={16} />,
       });
+    } finally {
+      setIsSavingSettings(false);
     }
-  } catch (error) {
-    console.error('Error updating conversation settings:', error);
-    notifications.show({
-      title: 'Error',
-      message: 'Failed to update conversation settings',
-      color: 'red',
-      icon: <IconAlertCircle size={16} />,
-    });
-  } finally {
-    setIsSavingSettings(false);
-  }
-};
+  };
 
-const handleBack = () => {
-  navigate(paths.dashboard.apps.knowledgeSearch);
-};
+  const handleBack = () => {
+    navigate(paths.dashboard.apps.knowledgeSearch);
+  };
 
-return (
-  <Box display="flex" style={{ flexDirection: 'column', flex: 1, minHeight: 0 }}>
-    {/* Header */}
-    <Paper p="md" withBorder style={{ borderBottom: '1px solid var(--mantine-color-gray-3)' }}>
-      <Group justify="space-between">
-        <Group>
-          <ActionIcon variant="subtle" onClick={handleBack}>
-            <IconArrowLeft size={20} />
-          </ActionIcon>
-          <div>
-            <Title order={3}>{sessionName}</Title>
-            <Group gap="xs">
-              <Text size="sm" c="dimmed">Session ID: {sessionId}</Text>
-              <Tooltip label="Real-time WebSocket connection for streaming AI responses">
-                <Badge
-                  size="xs"
-                  color="green"
-                  variant="light"
-                  leftSection={
-                    <Box style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: 'currentColor' }} />
-                  }
+  return (
+    <Box style={{
+      display: 'flex',
+      flexDirection: 'column',
+      height: 'calc(100vh - 80px)',
+      maxHeight: 'calc(100vh - 80px)',
+      overflow: 'hidden'
+    }}>
+      {/* CSS Animations */}
+      <style>{chatAnimations}</style>
+
+      {/* Header */}
+      <Paper p="md" withBorder style={{ borderBottom: '1px solid var(--mantine-color-gray-3)', flexShrink: 0 }}>
+        <Group justify="space-between">
+          <Group>
+            <ActionIcon variant="subtle" onClick={handleBack}>
+              <IconArrowLeft size={20} />
+            </ActionIcon>
+            <div>
+              <Tooltip label="Click to go to Knowledge Search">
+                <Anchor
+                  component="button"
+                  onClick={() => navigate(paths.dashboard.apps.knowledgeSearch)}
+                  style={{
+                    fontSize: 'var(--mantine-h3-font-size)',
+                    fontWeight: 'var(--mantine-h3-font-weight)',
+                    lineHeight: 'var(--mantine-h3-line-height)',
+                    color: 'var(--mantine-color-blue-6)',
+                    textDecoration: 'none',
+                    cursor: 'pointer',
+                    background: 'none',
+                    border: 'none',
+                    padding: 0
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.textDecoration = 'underline';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.textDecoration = 'none';
+                  }}
                 >
-                  Ready
-                </Badge>
+                  {sessionName}
+                </Anchor>
               </Tooltip>
-              <Text size="xs" c="dimmed">•</Text>
-              <Text size="xs" c="dimmed">Endpoint: {apiEndpoints.agent.websocket.query}</Text>
-            </Group>
-          </div>
+              <Group gap="xs">
+                <Text size="sm" c="dimmed">Session ID: {sessionId}</Text>
+                <Tooltip label="Real-time WebSocket connection for streaming AI responses">
+                  <Badge
+                    size="xs"
+                    color="green"
+                    variant="light"
+                    leftSection={
+                      <Box style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: 'currentColor' }} />
+                    }
+                  >
+                    Ready
+                  </Badge>
+                </Tooltip>
+                <Text size="xs" c="dimmed">•</Text>
+                <Text size="xs" c="dimmed">Endpoint: {apiEndpoints.agent.websocket.query}</Text>
+              </Group>
+            </div>
+          </Group>
+          <Group>
+            <Tooltip label="Reset messages">
+              <ActionIcon
+                variant="subtle"
+                color="orange"
+                onClick={handleResetMessages}
+                loading={resetMessagesMutation.isPending}
+              >
+                <IconRefresh size={16} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="Edit session name">
+              <ActionIcon variant="subtle">
+                <IconEdit size={16} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="Delete session">
+              <ActionIcon variant="subtle" color="red">
+                <IconTrash size={16} />
+              </ActionIcon>
+            </Tooltip>
+          </Group>
         </Group>
-        <Group>
-          <Tooltip label="Reset messages">
-            <ActionIcon
-              variant="subtle"
-              color="orange"
-              onClick={handleResetMessages}
-              loading={resetMessagesMutation.isPending}
-            >
-              <IconRefresh size={16} />
-            </ActionIcon>
-          </Tooltip>
-          <Tooltip label="Edit session name">
-            <ActionIcon variant="subtle">
-              <IconEdit size={16} />
-            </ActionIcon>
-          </Tooltip>
-          <Tooltip label="Delete session">
-            <ActionIcon variant="subtle" color="red">
-              <IconTrash size={16} />
-            </ActionIcon>
-          </Tooltip>
-        </Group>
-      </Group>
-    </Paper>
+      </Paper>
 
-    {/* Messages Area */}
-    <ScrollArea style={{ flex: 1 }} p="md">
-      <Stack gap="md">
-        {messages.length === 0 && !isLoadingHistory ? (
-          <Box ta="center" py="xl">
-            <IconMessageCircle size={48} color="var(--mantine-color-gray-4)" />
-            <Text size="lg" c="dimmed" mt="md">
-              Start a conversation
-            </Text>
-            <Text size="sm" c="dimmed">
-              Ask questions about your knowledge base
-            </Text>
-          </Box>
-        ) : (
-          messages.map((message, index) => (
-            message.role === 'assistant' ? (
-              <StreamingMessage
-                key={index}
-                content={message.content}
-                isStreaming={message.isStreaming || false}
-                timestamp={message.timestamp}
-                showSender={!message.isStreaming || !message.content.startsWith('🤖') && !message.content.startsWith('🔍') && !message.content.startsWith('🧠')}
-              />
-            ) : (
-              <Paper
-                key={index}
-                p="md"
+      {/* Messages Area - Full Width */}
+      <Box
+        ref={viewportRef}
+        style={{
+          flexGrow: 1,
+          flexShrink: 1,
+          flexBasis: 0,
+          overflowY: 'scroll',
+          padding: 'var(--mantine-spacing-md)'
+        }}
+      >
+        <Stack gap="md">
+          {messages.length === 0 && !isLoadingHistory ? (
+            <Box ta="center" py="xl">
+              <IconMessageCircle size={48} color="var(--mantine-color-gray-4)" />
+              <Text size="lg" c="dimmed" mt="md">
+                Start a conversation
+              </Text>
+              <Text size="sm" c="dimmed">
+                Ask questions about your knowledge base
+              </Text>
+            </Box>
+          ) : (
+            messages.map((message, index) => (
+              message.role === 'assistant' ? (
+                <Box
+                  key={index}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'flex-start',
+                    marginBottom: '16px',
+                    animation: 'slideInLeft 0.4s ease-out',
+                  }}
+                >
+                  <Box
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '12px',
+                      maxWidth: '85%',
+                    }}
+                  >
+                    {/* Assistant Avatar */}
+                    <Box
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        backgroundColor: 'var(--mantine-color-blue-6)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        marginTop: '4px',
+                      }}
+                    >
+                      <Text size="xs" c="white" fw={600}>
+                        AI
+                      </Text>
+                    </Box>
+
+                    {/* Message Content */}
+                    <Box style={{ flex: 1 }}>
+                      <StreamingMessage
+                        content={message.content}
+                        isStreaming={message.isStreaming || false}
+                        timestamp={message.timestamp}
+                        showSender={false}
+                        senderName="Assistant"
+                      />
+
+                      {/* Metadata Section */}
+                      {message.metadata && !message.isStreaming && (
+                        <Box mt="sm">
+                          <Paper
+                            p="sm"
+                            radius="md"
+                            style={{
+                              backgroundColor: 'var(--mantine-color-gray-0)',
+                              border: '1px solid var(--mantine-color-gray-2)',
+                            }}
+                          >
+                            <Stack gap="xs">
+                              <Group gap="xs" justify="space-between">
+                                <Group gap="xs">
+                                  <ThemeIcon size="sm" variant="light" color="blue">
+                                    <IconInfoCircle size={14} />
+                                  </ThemeIcon>
+                                  <Text size="xs" fw={600} c="dimmed">Response Metadata</Text>
+                                </Group>
+                                <Group gap="xs">
+                                  {message.metadata.document_count && (
+                                    <Badge size="xs" variant="light" color="blue">
+                                      {message.metadata.document_count} docs
+                                    </Badge>
+                                  )}
+                                  {message.metadata.enhancement_strategy && (
+                                    <Badge size="xs" variant="light" color="purple">
+                                      {message.metadata.enhancement_strategy}
+                                    </Badge>
+                                  )}
+                                  <ActionIcon
+                                    size="xs"
+                                    variant="subtle"
+                                    color="dimmed"
+                                    onClick={() => {
+                                      const newExpanded = new Set(expandedMetadata);
+                                      if (newExpanded.has(index)) {
+                                        newExpanded.delete(index);
+                                      } else {
+                                        newExpanded.add(index);
+                                      }
+                                      setExpandedMetadata(newExpanded);
+                                    }}
+                                  >
+                                    <IconChevronDown
+                                      size={12}
+                                      style={{
+                                        transform: expandedMetadata.has(index) ? 'rotate(180deg)' : 'rotate(0deg)',
+                                        transition: 'transform 0.2s ease'
+                                      }}
+                                    />
+                                  </ActionIcon>
+                                </Group>
+                              </Group>
+
+                              <Collapse in={expandedMetadata.has(index)}>
+                                {/* Source URLs with Correlation IDs */}
+                                {message.metadata.source_urls && message.metadata.source_urls.length > 0 && (
+                                  <Box>
+                                    <Text size="xs" fw={500} c="dimmed" mb="xs">
+                                      Sources ({message.metadata.source_urls.length}):
+                                    </Text>
+                                    <Stack gap="xs">
+                                      {(() => {
+                                        // Group sources by URL and collect chunk IDs
+                                        const urlGroups: { [url: string]: string[] } = {};
+
+                                        console.log('🔍 Frontend source_urls:', message.metadata.source_urls);
+                                        console.log('🔍 Frontend chunk_ids:', message.metadata.chunk_ids);
+
+                                        message.metadata.source_urls.forEach((url, urlIndex) => {
+                                          const chunkId = message.metadata?.chunk_ids?.[urlIndex];
+                                          if (!urlGroups[url]) {
+                                            urlGroups[url] = [];
+                                          }
+                                          if (chunkId) {
+                                            urlGroups[url].push(chunkId);
+                                          }
+                                        });
+
+                                        console.log('🔍 Frontend urlGroups:', urlGroups);
+
+                                        return Object.entries(urlGroups).map(([url, chunkIds], groupIndex) => (
+                                          <Group key={groupIndex} gap="xs" align="flex-start">
+                                            <ThemeIcon size="xs" variant="light" color="green">
+                                              <IconExternalLink size={12} />
+                                            </ThemeIcon>
+                                            <Box style={{ flex: 1 }}>
+                                              <Anchor
+                                                href={url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                size="xs"
+                                                style={{ wordBreak: 'break-all' }}
+                                              >
+                                                {url}
+                                              </Anchor>
+                                              {chunkIds.length > 0 && (
+                                                <Text size="xs" c="dimmed" style={{ fontFamily: 'monospace', marginTop: '2px' }}>
+                                                  ({chunkIds.join(', ')})
+                                                </Text>
+                                              )}
+                                            </Box>
+                                          </Group>
+                                        ));
+                                      })()}
+                                    </Stack>
+                                  </Box>
+                                )}
+                              </Collapse>
+                            </Stack>
+                          </Paper>
+                        </Box>
+                      )}
+                    </Box>
+                  </Box>
+                </Box>
+              ) : (
+                <Box
+                  key={index}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    marginBottom: '16px',
+                    animation: 'slideInRight 0.4s ease-out',
+                  }}
+                >
+                  <Box
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '12px',
+                      maxWidth: '85%',
+                      flexDirection: 'row-reverse',
+                    }}
+                  >
+                    {/* User Avatar */}
+                    <Box
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        backgroundColor: 'var(--mantine-color-green-6)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        marginTop: '4px',
+                      }}
+                    >
+                      <Text size="xs" c="white" fw={600}>
+                        U
+                      </Text>
+                    </Box>
+
+                    {/* Message Content */}
+                    <Paper
+                      p="md"
+                      style={{
+                        backgroundColor: 'var(--mantine-color-blue-6)',
+                        color: 'white',
+                        borderRadius: '18px 18px 4px 18px',
+                        maxWidth: '100%',
+                        wordWrap: 'break-word',
+                      }}
+                    >
+                      <Text size="xs" c="white" style={{ lineHeight: '1.5' }}>
+                        {message.content}
+                      </Text>
+                      <Text size="xs" c="rgba(255,255,255,0.7)" mt="xs">
+                        {formatTimestamp(message.timestamp)}
+                      </Text>
+                    </Paper>
+                  </Box>
+                </Box>
+              )
+            ))
+          )}
+          {isLoadingHistory && (
+            <Box ta="center" py="xl">
+              <LoadingOverlay visible={true} />
+              <Text size="sm" c="dimmed">Loading conversation history...</Text>
+            </Box>
+          )}
+          {isLoading && !isLoadingHistory && (
+            <Box
+              style={{
+                display: 'flex',
+                justifyContent: 'flex-start',
+                marginBottom: '16px',
+                animation: 'slideInLeft 0.4s ease-out',
+              }}
+            >
+              <Box
                 style={{
-                  backgroundColor: 'var(--mantine-color-blue-0)',
-                  alignSelf: 'flex-end',
-                  maxWidth: '80%',
-                  animation: 'fadeIn 0.3s ease-out',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '12px',
+                  maxWidth: '85%',
                 }}
               >
-                <Text size="sm" fw={500} mb="xs">
-                  You
-                </Text>
-                <Text size="sm">{message.content}</Text>
-                <Text size="xs" c="dimmed" mt="xs">
-                  {formatTimestamp(message.timestamp)}
-                </Text>
-              </Paper>
-            )
-          ))
-        )}
-        {isLoadingHistory && (
-          <Box ta="center" py="xl">
-            <LoadingOverlay visible={true} />
-            <Text size="sm" c="dimmed">Loading conversation history...</Text>
-          </Box>
-        )}
-        {isLoading && !isLoadingHistory && (
-          <Paper p="md" style={{ backgroundColor: 'var(--mantine-color-gray-0)' }}>
-            <TypingIndicator message="Assistant is thinking..." />
-          </Paper>
-        )}
-        <div ref={messagesEndRef} />
-      </Stack>
-    </ScrollArea>
+                {/* Assistant Avatar */}
+                <Box
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '50%',
+                    backgroundColor: 'var(--mantine-color-blue-6)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    marginTop: '4px',
+                  }}
+                >
+                  <Text size="xs" c="white" fw={600}>
+                    AI
+                  </Text>
+                </Box>
 
-    {/* Input Area */}
-    <Paper p="md" withBorder style={{ borderTop: '1px solid var(--mantine-color-gray-3)' }}>
-      <Stack gap="xs">
-        <Group gap="md" align="flex-end">
-          <Box style={{ flex: 1 }}>
-            <TextInput
-              placeholder="Type your message..."
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
-              style={{
-                borderColor: isConnected ? undefined : 'var(--mantine-color-orange-4)',
-                transition: 'border-color 0.3s ease',
-              }}
-              disabled={isLoading || isLoadingHistory}
-              rightSection={
-                !isConnected && (
-                  <IconLoader size={16} className="animate-spin" style={{ color: 'var(--mantine-color-orange-6)' }} />
+                {/* Typing Indicator */}
+                <Paper
+                  p="md"
+                  style={{
+                    backgroundColor: 'var(--mantine-color-gray-1)',
+                    borderRadius: '18px 18px 18px 4px',
+                    border: '1px solid var(--mantine-color-gray-3)',
+                  }}
+                >
+                  <TypingIndicator message="Assistant is thinking..." />
+                </Paper>
+              </Box>
+            </Box>
+          )}
+          <div ref={messagesEndRef} />
+        </Stack>
+      </Box>
+
+      {/* Input Area - Full Width Below Both Columns */}
+      <Paper p="md" withBorder style={{ borderTop: '1px solid var(--mantine-color-gray-3)', flexShrink: 0 }}>
+        <Stack gap="xs">
+          <Group gap="md" align="flex-end">
+            <Box style={{ flex: 1 }}>
+              <TextInput
+                placeholder="Type your message..."
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyPress={handleKeyPress}
+                style={{
+                  borderColor: isConnected ? undefined : 'var(--mantine-color-orange-4)',
+                  transition: 'border-color 0.3s ease',
+                }}
+                disabled={isLoading || isLoadingHistory}
+                rightSection={
+                  !isConnected && (
+                    <IconLoader size={16} className="animate-spin" style={{ color: 'var(--mantine-color-orange-6)' }} />
+                  )
+                }
+              />
+            </Box>
+            <Button
+              onClick={sendMessage}
+              disabled={!inputMessage.trim() || isLoading || isLoadingHistory}
+              leftSection={
+                isLoading ? (
+                  <IconLoader size={16} className="animate-spin" />
+                ) : (
+                  <IconSend size={16} />
                 )
               }
-            />
-          </Box>
-          <Button
-            onClick={sendMessage}
-            disabled={!inputMessage.trim() || isLoading || isLoadingHistory}
-            leftSection={
-              isLoading ? (
-                <IconLoader size={16} className="animate-spin" />
-              ) : (
-                <IconSend size={16} />
-              )
-            }
-            loading={isLoading}
-          >
-            {isLoading ? 'Sending...' : 'Send'}
-          </Button>
-          <Tooltip label="Conversation Settings">
-            <ActionIcon
-              size="lg"
-              variant="light"
-              color="blue"
-              onClick={() => setSettingsModalOpen(true)}
-              disabled={isLoading || isLoadingHistory}
+              loading={isLoading}
+            >
+              {isLoading ? 'Sending...' : 'Send'}
+            </Button>
+            <Tooltip label="Conversation Settings">
+              <ActionIcon
+                size="lg"
+                variant="light"
+                color="blue"
+                onClick={async () => {
+                  // Reload conversation data to get latest settings FIRST
+                  await loadConversationHistory();
+                  // Then open the modal
+                  setSettingsModalOpen(true);
+                }}
+                disabled={isLoading || isLoadingHistory}
+              >
+                <IconSettings size={18} />
+              </ActionIcon>
+            </Tooltip>
+          </Group>
+
+          {/* Current Settings Display */}
+          <Group gap="md" px="xs">
+            {enableLLMGeneration && (
+              <>
+                <Text size="xs" c="dimmed">
+                  Provider: {selectedProviderId ?
+                    providers?.find(p => p.id === selectedProviderId)?.name || 'Unknown' :
+                    'Default'}
+                  {selectedModel && ` (${selectedModel})`}
+                </Text>
+                <Text size="xs" c="dimmed">•</Text>
+              </>
+            )}
+            <Text size="xs" c="dimmed">
+              Strategy: {ENHANCEMENT_STRATEGIES.find(s => s.value === selectedStrategy)?.label || 'None'}
+            </Text>
+            <Text size="xs" c="dimmed">•</Text>
+            <Text size="xs" c="dimmed">
+              Collection: {collectionName}
+            </Text>
+            <Text size="xs" c="dimmed">•</Text>
+            <Text size="xs" c="dimmed">
+              Reranking: {enableReranking ? (
+                selectedRerankerId ?
+                  `${providers?.find(p => p.id === selectedRerankerId)?.name || 'Unknown'}${selectedRerankerModel ? ` (${selectedRerankerModel})` : ''}` :
+                  'LLM Judging'
+              ) : 'Disabled'}
+            </Text>
+            <Text size="xs" c="dimmed">•</Text>
+            <Text size="xs" c="dimmed">
+              Answer: {enableLLMGeneration ? 'Generative' : 'Raw Results'}
+            </Text>
+          </Group>
+        </Stack>
+      </Paper>
+
+      {/* Enhanced Workflow Progress Modal */}
+      <WorkflowProgressModal
+        opened={workflowState.isActive}
+        onClose={() => { }}
+        currentStage={workflowState.currentStage}
+        completedStages={workflowState.completedStages}
+        rerankingEnabled={enableReranking}
+        enableLLMGeneration={enableLLMGeneration}
+        metadata={{
+          originalQuery: workflowState.originalQuery || undefined,
+          enhancedQuery: workflowState.enhancedQuery || undefined,
+          strategy: workflowState.strategy || undefined,
+          documentCount: workflowState.documentCount,
+          relevantCount: workflowState.relevantCount,
+          indexType: workflowState.indexType,
+          vectorDimension: workflowState.vectorDimension,
+          searchTime: workflowState.searchTime,
+        }}
+      />
+
+      {/* Settings Modal */}
+      <Modal
+        opened={settingsModalOpen}
+        onClose={() => setSettingsModalOpen(false)}
+        title={
+          <Group gap="xs">
+            <ThemeIcon
+              size="md"
+              variant="filled"
+              style={{
+                background: 'linear-gradient(135deg, #45c9bb 0%, #9dd245 100%)',
+              }}
             >
               <IconSettings size={18} />
-            </ActionIcon>
-          </Tooltip>
-        </Group>
-
-        {/* Current Settings Display */}
-        <Group gap="md" px="xs">
-          <Text size="xs" c="dimmed">
-            Provider: {selectedProviderId ?
-              providers?.find(p => p.id === selectedProviderId)?.name || 'Unknown' :
-              'Default'}
-            {selectedModel && ` (${selectedModel})`}
+            </ThemeIcon>
+            <Text fw={600}>Conversation Settings</Text>
+          </Group>
+        }
+        size="lg"
+      >
+        <Stack gap="md">
+          <Text size="sm" c="dimmed">
+            Configure query enhancement strategy, vector database collection, and answer generation for this conversation.
           </Text>
-          <Text size="xs" c="dimmed">•</Text>
-          <Text size="xs" c="dimmed">
-            Strategy: {ENHANCEMENT_STRATEGIES.find(s => s.value === selectedStrategy)?.label || 'None'}
-          </Text>
-          <Text size="xs" c="dimmed">•</Text>
-          <Text size="xs" c="dimmed">
-            Collection: {collectionName}
-          </Text>
-        </Group>
-      </Stack>
-    </Paper>
 
-    {/* Settings Modal */}
-    <Modal
-      opened={settingsModalOpen}
-      onClose={() => setSettingsModalOpen(false)}
-      title={
-        <Group gap="xs">
-          <IconSettings size={20} />
-          <Text fw={600}>Conversation Settings</Text>
-        </Group>
-      }
-      size="lg"
-    >
-      <Stack gap="md">
-        <Text size="sm" c="dimmed">
-          Configure LLM provider, query enhancement strategy, and vector database collection for this conversation.
-        </Text>
+          <Divider label="Query Enhancement" labelPosition="left" />
 
-        <Divider label="LLM Provider" labelPosition="left" />
-
-        <Select
-          label="LLM Provider"
-          placeholder={providersLoading ? 'Loading providers...' : 'Select a provider (optional)'}
-          data={providers?.map((p) => ({
-            value: p.id,
-            label: `${p.name} (${p.provider_type})`,
-          })) || []}
-          value={selectedProviderId}
-          onChange={(value) => {
-            setSelectedProviderId(value);
-            setSelectedModel(null);
-          }}
-          searchable
-          clearable
-          disabled={providersLoading || !providers || providers.length === 0}
-          description="Choose the LLM provider for this conversation"
-        />
-
-        {selectedProviderId && providers && (
           <Select
-            label="Model"
-            placeholder="Select a model (optional)"
-            data={
-              providers
-                .find((p) => p.id === selectedProviderId)
-                ?.generative?.models.map((model) => ({
-                  value: model,
-                  label: model,
-                })) || []
-            }
-            value={selectedModel}
-            onChange={setSelectedModel}
-            searchable
-            clearable
-            description="Leave empty to use provider's default model"
+            label="Enhancement Strategy"
+            placeholder="Select strategy"
+            data={ENHANCEMENT_STRATEGIES.map((s) => ({
+              value: s.value,
+              label: s.label,
+            }))}
+            value={selectedStrategy}
+            onChange={(value) => setSelectedStrategy(value || 'native')}
+            description="Select how your queries will be enhanced for better retrieval"
           />
-        )}
 
-        <Divider label="Query Enhancement" labelPosition="left" />
+          <Divider label="Vector Database" labelPosition="left" />
 
-        <Select
-          label="Enhancement Strategy"
-          placeholder="Select strategy"
-          data={ENHANCEMENT_STRATEGIES.map((s) => ({
-            value: s.value,
-            label: s.label,
-          }))}
-          value={selectedStrategy}
-          onChange={(value) => setSelectedStrategy(value || 'native')}
-          description="Select how your queries will be enhanced for better retrieval"
-        />
+          <Grid gutter="md">
+            <Grid.Col span={6}>
+              <Select
+                label="Vector DB Collection"
+                placeholder={collectionsLoading ? 'Loading collections...' : 'Select a collection'}
+                data={collections?.map((c) => ({
+                  value: c.name,
+                  label: `${c.name} (${c.record_count.toLocaleString()} records)`,
+                })) || []}
+                value={collectionName}
+                onChange={(value) => setCollectionName(value || 'LongTermMemory')}
+                searchable
+                clearable
+                disabled={collectionsLoading}
+                description="Choose the vector database collection to search"
+              />
+            </Grid.Col>
 
-        <Divider label="Vector Database" labelPosition="left" />
+            <Grid.Col span={6}>
+              <NumberInput
+                label="Search Results Limit"
+                placeholder="Number of documents to retrieve"
+                value={topK || undefined}
+                onChange={(value) => {
+                  console.log('🔍 NumberInput onChange:', value, 'current topK state:', topK);
+                  setTopK(typeof value === 'number' ? value : undefined);
+                }}
+                min={3}
+                max={10}
+                description="Top K to retrieve from vector database (3-10)"
+              />
+            </Grid.Col>
+          </Grid>
 
-        <Select
-          label="Vector DB Collection"
-          placeholder={collectionsLoading ? 'Loading collections...' : 'Select a collection'}
-          data={collections?.map((c) => ({
-            value: c.name,
-            label: `${c.name} (${c.record_count.toLocaleString()} records)`,
-          })) || []}
-          value={collectionName}
-          onChange={(value) => setCollectionName(value || 'LongTermMemory')}
-          searchable
-          clearable
-          disabled={collectionsLoading}
-          description="Choose the vector database collection to search"
-        />
+          <Divider label="Document Reranking" labelPosition="left" />
 
-        <Divider label="Document Reranking" labelPosition="left" />
+          <Switch
+            label="Enable Document Reranking"
+            description="Rerank retrieved documents to improve relevance"
+            checked={enableReranking}
+            onChange={(event) => {
+              setEnableReranking(event.currentTarget.checked);
+              if (!event.currentTarget.checked) {
+                setSelectedRerankerId(null);
+                setSelectedRerankerModel(null);
+              } else {
+                // When enabling reranking, default to LLM provider and model
+                setSelectedRerankerId(selectedProviderId);
+                setSelectedRerankerModel(selectedModel);
+              }
+            }}
+          />
 
-        <Switch
-          label="Enable Document Reranking"
-          description="Rerank retrieved documents to improve relevance"
-          checked={enableReranking}
-          onChange={(event) => {
-            setEnableReranking(event.currentTarget.checked);
-            if (!event.currentTarget.checked) {
-              setSelectedRerankerId(null);
-              setSelectedRerankerModel(null);
-            }
-          }}
-        />
+          {enableReranking && (
+            <>
+              <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+                <Text size="sm">
+                  <strong>Dedicated Reranker:</strong> Specialized models (Cohere, Voyage AI)
+                  <br />
+                  <strong>LLM as Reranker:</strong> Any generative LLM for judging
+                  <br />
+                  <strong>No Provider:</strong> Uses conversation's main LLM (default)
+                  <br />
+                  <strong>Disabled:</strong> No reranking, direct retrieval → answer
+                </Text>
+              </Alert>
 
-        {enableReranking && (
-          <>
-            <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light" size="sm">
-              <Text size="sm">
-                <strong>No Reranker:</strong> Uses LLM judging (slower)
-                <br />
-                <strong>Dedicated Reranker:</strong> Uses Cohere/Voyage AI (faster, more accurate)
-              </Text>
-            </Alert>
+              <Grid gutter="md">
+                <Grid.Col span={6}>
+                  <Select
+                    label="Reranker Provider (Optional)"
+                    placeholder="Select a provider"
+                    data={[
+                      {
+                        group: 'Specialized Rerankers',
+                        items: providers
+                          ?.filter((p) => p.reranker && p.reranker.models && p.reranker.models.length > 0)
+                          .map((p) => ({
+                            value: p.id,
+                            label: `${p.name} (Dedicated)`,
+                          })) || []
+                      },
+                      {
+                        group: 'LLMs as Rerankers',
+                        items: providers
+                          ?.filter((p) => p.generative && p.generative.models && p.generative.models.length > 0 && (!p.reranker || !p.reranker.models || p.reranker.models.length === 0))
+                          .map((p) => ({
+                            value: p.id,
+                            label: `${p.name} (LLM)`,
+                          })) || []
+                      }
+                    ]}
+                    value={selectedRerankerId}
+                    onChange={(value) => {
+                      setSelectedRerankerId(value);
+                      setSelectedRerankerModel(null);
+                    }}
+                    searchable
+                    clearable
+                    disabled={providersLoading}
+                    description="Choose reranker or LLM"
+                  />
+                </Grid.Col>
 
-            <Grid gutter="md">
-              <Grid.Col span={6}>
-                <Select
-                  label="Reranker Provider (Optional)"
-                  placeholder="Select a reranker"
-                  data={providers
-                    ?.filter((p) => p.reranker && p.reranker.models && p.reranker.models.length > 0)
-                    .map((p) => ({
+                <Grid.Col span={6}>
+                  <Select
+                    label="Reranker Model"
+                    placeholder="Select a model"
+                    data={
+                      selectedRerankerId && providers
+                        ? (() => {
+                          const provider = providers.find((p) => p.id === selectedRerankerId);
+                          if (!provider) return [];
+
+                          // If provider has dedicated reranker models, use those
+                          if (provider.reranker && provider.reranker.models && provider.reranker.models.length > 0) {
+                            return provider.reranker.models.map((model) => ({
+                              value: model,
+                              label: model,
+                            }));
+                          }
+
+                          // Otherwise, use generative models for LLM judging
+                          if (provider.generative && provider.generative.models) {
+                            return provider.generative.models.map((model) => ({
+                              value: model,
+                              label: model,
+                            }));
+                          }
+
+                          return [];
+                        })()
+                        : []
+                    }
+                    value={selectedRerankerModel}
+                    onChange={setSelectedRerankerModel}
+                    searchable
+                    clearable
+                    disabled={!selectedRerankerId}
+                    description="Choose the model"
+                  />
+                </Grid.Col>
+              </Grid>
+            </>
+          )}
+
+          <Divider label="Generative Answer" labelPosition="left" />
+
+          <Switch
+            label="Enable Generative Answer"
+            description="Generate natural language answers (slower, costs tokens) or show raw results (faster, exact sources)"
+            checked={enableLLMGeneration}
+            onChange={(event) => setEnableLLMGeneration(event.currentTarget.checked)}
+          />
+
+          {enableLLMGeneration ? (
+            <>
+              <Grid gutter="md">
+                <Grid.Col span={6}>
+                  <Select
+                    label="LLM Provider"
+                    placeholder={providersLoading ? 'Loading providers...' : 'Select a provider'}
+                    data={providers?.map((p) => ({
                       value: p.id,
                       label: `${p.name} (${p.provider_type})`,
                     })) || []}
-                  value={selectedRerankerId}
-                  onChange={(value) => {
-                    setSelectedRerankerId(value);
-                    setSelectedRerankerModel(null);
-                  }}
-                  searchable
-                  clearable
-                  disabled={providersLoading}
-                  description="Leave empty to use LLM"
-                />
-              </Grid.Col>
+                    value={selectedProviderId}
+                    onChange={(value) => {
+                      setSelectedProviderId(value);
+                      setSelectedModel(null);
+                    }}
+                    searchable
+                    required
+                    disabled={providersLoading || !providers || providers.length === 0}
+                    description="Choose the LLM provider for this conversation"
+                    renderOption={(item) => {
+                      const provider = providers?.find(p => p.id === item.option.value);
+                      const getProviderColor = (providerType: string) => {
+                        switch (providerType) {
+                          case 'openai': return 'green';
+                          case 'anthropic': return 'orange';
+                          case 'google': return 'blue';
+                          case 'cohere': return 'red';
+                          case 'voyage': return 'violet';
+                          default: return 'gray';
+                        }
+                      };
 
-              <Grid.Col span={6}>
-                <Select
-                  label="Reranker Model"
-                  placeholder="Select a model"
-                  data={
-                    selectedRerankerId && providers
-                      ? providers
-                        .find((p) => p.id === selectedRerankerId)
-                        ?.reranker?.models.map((model) => ({
-                          value: model,
-                          label: model,
-                        })) || []
-                      : []
-                  }
-                  value={selectedRerankerModel}
-                  onChange={setSelectedRerankerModel}
-                  searchable
-                  clearable
-                  disabled={!selectedRerankerId}
-                  description="Choose the model"
-                />
-              </Grid.Col>
-            </Grid>
-          </>
-        )}
+                      return (
+                        <Group gap="xs">
+                          <ThemeIcon
+                            size="sm"
+                            variant="filled"
+                            color={getProviderColor(provider?.provider_type || '')}
+                          >
+                            <Text size="xs" fw={700}>
+                              {provider?.name?.charAt(0) || '?'}
+                            </Text>
+                          </ThemeIcon>
+                          <Text size="sm">{item.option.label}</Text>
+                        </Group>
+                      );
+                    }}
+                  />
+                </Grid.Col>
 
-        <Divider />
+                <Grid.Col span={6}>
+                  {selectedProviderId && providers ? (
+                    <Select
+                      label="LLM Provider Model"
+                      placeholder="Select a model"
+                      data={
+                        providers
+                          .find((p) => p.id === selectedProviderId)
+                          ?.generative?.models.map((model) => ({
+                            value: model,
+                            label: model,
+                          })) || []
+                      }
+                      value={selectedModel}
+                      onChange={setSelectedModel}
+                      searchable
+                      required
+                      description="Choose the LLM provider model for this conversation"
+                    />
+                  ) : (
+                    <Select
+                      label="Model"
+                      placeholder="Select a provider first"
+                      disabled
+                      description="Choose a provider first to select a model"
+                    />
+                  )}
+                </Grid.Col>
+              </Grid>
+            </>
+          ) : (
+            <Alert icon={<IconInfoCircle size={16} />} color="yellow" variant="light">
+              <Text size="sm">
+                <strong>Raw Results Mode:</strong> Documents will be displayed as-is without LLM processing.
+                <br />
+                <strong>Benefits:</strong> Faster responses, no token costs, 100% factual accuracy, full traceability.
+                <br />
+                <strong>Best for:</strong> Research, legal review, debugging, technical documentation.
+              </Text>
+            </Alert>
+          )}
 
-        <Group justify="flex-end" gap="xs">
-          <Button
-            variant="subtle"
-            color="gray"
-            onClick={() => setSettingsModalOpen(false)}
-            disabled={isSavingSettings}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSaveSettings}
-            loading={isSavingSettings}
-            leftSection={<IconCheck size={16} />}
-            color="blue"
-          >
-            Save Settings
-          </Button>
-        </Group>
-      </Stack>
-    </Modal>
-  </Box>
-);
+          <Divider />
+
+          <Group justify="flex-end" gap="xs">
+            <Button
+              variant="subtle"
+              color="gray"
+              onClick={() => setSettingsModalOpen(false)}
+              disabled={isSavingSettings}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveSettings}
+              loading={isSavingSettings}
+              leftSection={<IconCheck size={16} />}
+              color="blue"
+            >
+              Save Settings
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+    </Box>
+  );
 }
 
 

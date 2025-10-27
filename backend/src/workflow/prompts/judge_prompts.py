@@ -33,16 +33,16 @@ You will evaluate documents across six key dimensions:
 After providing your explanation, output your final verdict by strictly following this format:
 - Output "1" if the document is highly relevant based upon the factors above
 - Output "0.5" if the document is moderately relevant based upon the factors above  
-- Output "0" if the document is not relevant based upon the factors above"""
+- Output "0" if the document is not relevant based upon the factors above""",
 )
 
 JUDGE_USER_PROMPT = Prompt(
     name="judge_user_prompt",
     prompt="""**User Question:**
-"{query}"
+"{{ query }}"
 
 **Document Content:**
-"{document}"
+"{{ document }}"
 
 **Task:** Evaluate this document's relevance using the six-factor framework.
 
@@ -51,5 +51,5 @@ JUDGE_USER_PROMPT = Prompt(
 - **0.5**: Document is useful in some areas but lacks in others  
 - **0.0**: Document fails most criteria or is unrelated
 
-**Your Score:**"""
+**Your Score:**""",
 )

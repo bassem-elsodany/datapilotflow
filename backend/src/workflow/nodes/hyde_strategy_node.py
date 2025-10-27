@@ -6,17 +6,15 @@ It uses the HyDE chain which includes Opik tracing for observability.
 """
 
 import time
-from typing import Any, Dict
 
 import opik
 from loguru import logger
 
-from ..chains import get_hyde_chain
-from ..state import WorkflowState
+from src.workflow.chains import get_hyde_chain
+from src.workflow.state import WorkflowState
 
 
-@opik.track(name="hyde_strategy_node", tags=["query_enhancement", "hyde"])
-async def hyde_strategy_node(state: WorkflowState) -> Dict[str, Any]:
+async def hyde_strategy_node(state: WorkflowState) -> WorkflowState:
     """
     Execute HyDE (Hypothetical Document Embeddings) strategy.
 
@@ -26,8 +24,9 @@ async def hyde_strategy_node(state: WorkflowState) -> Dict[str, Any]:
         state (WorkflowState): Current workflow state
 
     Returns:
-        Dict[str, Any]: Updated state with hypothetical answer
+        WorkflowState: Updated state with hypothetical answer
     """
+    logger.info("🚀 [NODE START] hyde_strategy_node")
     start_time = time.time()
     logger.info("🔄 Executing HyDE Strategy Node")
 
@@ -62,22 +61,24 @@ async def hyde_strategy_node(state: WorkflowState) -> Dict[str, Any]:
             f"✅ HyDE: Generated {len(hypothetical_answer.split())} word answer"
         )
 
-        return {
-            "enhanced_query": {
-                "hypothetical_answer": hypothetical_answer,
-            },
-            "enhancement_strategies_applied": ["hyde"],
-        }
+        # Update state
+        state["enhanced_query"] = {"hypothetical_answer": hypothetical_answer}
+        state["enhancement_strategies_applied"] = ["hyde"]
+
+        logger.info("✅ [NODE FINISH] hyde_strategy_node")
+        return state
 
     except Exception as e:
         logger.error(f"❌ HyDE node error: {e}")
         import traceback
 
         logger.error(f"Traceback: {traceback.format_exc()}")
-        return {
-            "enhanced_query": {},
-            "enhancement_strategies_applied": [],
-        }
+        logger.error("❌ [NODE FINISH] hyde_strategy_node (with error)")
+
+        # Fallback
+        state["enhanced_query"] = {}
+        state["enhancement_strategies_applied"] = []
+        return state
     finally:
         elapsed = (time.time() - start_time) * 1000
         logger.info(f"⏱️  HyDE node completed in {elapsed:.2f}ms")

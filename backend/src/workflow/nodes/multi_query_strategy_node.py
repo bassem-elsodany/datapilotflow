@@ -7,17 +7,16 @@ It uses the multi-query chain which includes Opik tracing for observability.
 
 import re
 import time
-from typing import Any, Dict, List
+from typing import Any
 
 import opik
 from loguru import logger
 
-from ..chains import get_multi_query_chain
-from ..state import WorkflowState
+from src.workflow.chains import get_multi_query_chain
+from src.workflow.state import WorkflowState
 
 
-@opik.track(name="multi_query_strategy_node", tags=["query_enhancement", "multi_query"])
-async def multi_query_strategy_node(state: WorkflowState) -> Dict[str, Any]:
+async def multi_query_strategy_node(state: WorkflowState) -> WorkflowState:
     """
     Execute Multi-Query Expansion strategy.
 
@@ -27,8 +26,9 @@ async def multi_query_strategy_node(state: WorkflowState) -> Dict[str, Any]:
         state (WorkflowState): Current workflow state
 
     Returns:
-        Dict[str, Any]: Updated state with query variants
+        WorkflowState: Updated state with query variants
     """
+    logger.info("🚀 [NODE START] multi_query_strategy_node")
     start_time = time.time()
     logger.info("🔄 Executing Multi-Query Strategy Node")
 
@@ -72,28 +72,30 @@ async def multi_query_strategy_node(state: WorkflowState) -> Dict[str, Any]:
 
         logger.info(f"✅ Multi-Query: Generated {len(variants)} variants")
 
-        return {
-            "enhanced_query": {
-                "multi_query_variants": variants,
-            },
-            "enhancement_strategies_applied": ["multi_query"],
-        }
+        # Update state
+        state["enhanced_query"] = {"multi_query_variants": variants}
+        state["enhancement_strategies_applied"] = ["multi_query"]
+
+        logger.info("✅ [NODE FINISH] multi_query_strategy_node")
+        return state
 
     except Exception as e:
         logger.error(f"❌ Multi-Query node error: {e}")
         import traceback
 
         logger.error(f"Traceback: {traceback.format_exc()}")
-        return {
-            "enhanced_query": {},
-            "enhancement_strategies_applied": [],
-        }
+        logger.error("❌ [NODE FINISH] multi_query_strategy_node (with error)")
+
+        # Fallback
+        state["enhanced_query"] = {}
+        state["enhancement_strategies_applied"] = []
+        return state
     finally:
         elapsed = (time.time() - start_time) * 1000
         logger.info(f"⏱️  Multi-Query node completed in {elapsed:.2f}ms")
 
 
-def _parse_variants(llm_response: str, config: Dict[str, Any]) -> List[str]:
+def _parse_variants(llm_response: str, config: dict[str, Any]) -> list[str]:
     """
     Parse query variants from LLM response.
 
@@ -106,6 +108,7 @@ def _parse_variants(llm_response: str, config: Dict[str, Any]) -> List[str]:
     Returns:
         List[str]: Parsed query variants
     """
+    logger.info("🚀 [NODE START] multi_query_strategy_node")
     lines = llm_response.strip().split("\n")
     variants = []
 

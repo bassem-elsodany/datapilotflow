@@ -79,11 +79,17 @@ class ConversationSession:
     # Collection configuration
     collection_name: str = "LongTermMemory"
     # Reranking configuration
-    enable_reranking: bool = True  # Enable document judging/reranking by default
+    enable_reranking: bool = False  # Enable document judging/reranking by default
     reranker_provider_id: Optional[str] = (
         None  # Dedicated reranker provider (Cohere/Voyage)
     )
     reranker_model_name: Optional[str] = None  # Reranker model name
+    # Answer generation configuration
+    enable_llm_generation: bool = (
+        False  # Enable LLM answer generation (False = raw results by default, True = generated answers)
+    )
+    # Vector search configuration
+    top_k: int = 5  # Number of documents to retrieve from vector database
     # Session statistics
     total_queries: int = 0
     total_documents_retrieved: int = 0
@@ -150,9 +156,11 @@ class ConversationHistoryService:
         llm_model_name: Optional[str] = None,
         enhancement_strategy: Optional[str] = None,
         collection_name: str = "LongTermMemory",
-        enable_reranking: bool = True,
+        enable_reranking: bool = False,
         reranker_provider_id: Optional[str] = None,
         reranker_model_name: Optional[str] = None,
+        enable_llm_generation: bool = False,
+        top_k: int = 5,
         tags: Optional[List[str]] = None,
         description: Optional[str] = None,
     ) -> str:
@@ -246,6 +254,8 @@ class ConversationHistoryService:
             "enable_reranking": enable_reranking,
             "reranker_provider_id": reranker_provider_id,
             "reranker_model_name": reranker_model_name,
+            "enable_llm_generation": enable_llm_generation,
+            "top_k": top_k,
             "total_queries": 0,
             "total_documents_retrieved": 0,
             "average_response_time_ms": None,
@@ -321,10 +331,14 @@ class ConversationHistoryService:
                     llm_model_name=doc.get("llm_model_name"),
                     enhancement_config=enhancement_config,
                     collection_name=doc.get("collection_name", "LongTermMemory"),
+                    enable_reranking=doc.get("enable_reranking", False),
+                    reranker_provider_id=doc.get("reranker_provider_id"),
+                    reranker_model_name=doc.get("reranker_model_name"),
                     total_queries=doc.get("total_queries", 0),
                     total_documents_retrieved=doc.get("total_documents_retrieved", 0),
                     average_response_time_ms=doc.get("average_response_time_ms"),
                     tags=doc.get("tags", []),
+                    top_k=doc.get("top_k", 5),
                 )
                 return session
             return None
@@ -671,6 +685,8 @@ class ConversationHistoryService:
         enable_reranking: Optional[bool] = None,
         reranker_provider_id: Optional[str] = None,
         reranker_model_name: Optional[str] = None,
+        enable_llm_generation: Optional[bool] = None,
+        top_k: Optional[int] = None,
         tags: Optional[List[str]] = None,
     ) -> bool:
         """Update conversation configuration."""
@@ -756,6 +772,19 @@ class ConversationHistoryService:
             # Update reranker model name
             if reranker_model_name is not None:
                 update_data["$set"]["reranker_model_name"] = reranker_model_name
+
+            # Update LLM generation settings
+            if enable_llm_generation is not None:
+                update_data["$set"]["enable_llm_generation"] = enable_llm_generation
+
+            # Update top_k
+            if top_k is not None:
+                if top_k < 3 or top_k > 10:
+                    logger.warning(
+                        f"Invalid top_k value: {top_k}. Must be between 3 and 10"
+                    )
+                    return False
+                update_data["$set"]["top_k"] = top_k
 
             # Update tags
             if tags is not None:

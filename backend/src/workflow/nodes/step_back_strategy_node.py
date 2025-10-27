@@ -6,17 +6,15 @@ It uses the step-back chain which includes Opik tracing for observability.
 """
 
 import time
-from typing import Any, Dict
 
 import opik
 from loguru import logger
 
-from ..chains import get_step_back_chain
-from ..state import WorkflowState
+from src.workflow.chains import get_step_back_chain
+from src.workflow.state import WorkflowState
 
 
-@opik.track(name="step_back_strategy_node", tags=["query_enhancement", "step_back"])
-async def step_back_strategy_node(state: WorkflowState) -> Dict[str, Any]:
+async def step_back_strategy_node(state: WorkflowState) -> WorkflowState:
     """
     Execute Step-Back Prompting strategy.
 
@@ -26,8 +24,9 @@ async def step_back_strategy_node(state: WorkflowState) -> Dict[str, Any]:
         state (WorkflowState): Current workflow state
 
     Returns:
-        Dict[str, Any]: Updated state with step-back query
+        WorkflowState: Updated state with step-back query
     """
+    logger.info("🚀 [NODE START] step_back_strategy_node")
     start_time = time.time()
     logger.info("🔄 Executing Step-Back Strategy Node")
 
@@ -56,22 +55,24 @@ async def step_back_strategy_node(state: WorkflowState) -> Dict[str, Any]:
 
         logger.info(f"✅ Step-Back: '{query[:50]}...' → '{step_back_query[:50]}...'")
 
-        return {
-            "enhanced_query": {
-                "step_back_query": step_back_query,
-            },
-            "enhancement_strategies_applied": ["step_back"],
-        }
+        # Update state
+        state["enhanced_query"] = {"step_back_query": step_back_query}
+        state["enhancement_strategies_applied"] = ["step_back"]
+
+        logger.info("✅ [NODE FINISH] step_back_strategy_node")
+        return state
 
     except Exception as e:
         logger.error(f"❌ Step-Back node error: {e}")
         import traceback
 
         logger.error(f"Traceback: {traceback.format_exc()}")
-        return {
-            "enhanced_query": {},
-            "enhancement_strategies_applied": [],
-        }
+        logger.error("❌ [NODE FINISH] step_back_strategy_node (with error)")
+
+        # Fallback
+        state["enhanced_query"] = {}
+        state["enhancement_strategies_applied"] = []
+        return state
     finally:
         elapsed = (time.time() - start_time) * 1000
         logger.info(f"⏱️  Step-Back node completed in {elapsed:.2f}ms")

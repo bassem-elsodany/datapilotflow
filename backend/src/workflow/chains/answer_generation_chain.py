@@ -1,7 +1,7 @@
 """
-Augmented query enhancement chain.
+Answer generation chain for final response synthesis.
 
-This chain generates enhanced query variants while preserving the original query.
+This chain generates the final answer based on context and the user's query.
 """
 
 from typing import Any, Dict, Optional
@@ -9,15 +9,16 @@ from typing import Any, Dict, Optional
 from langchain_core.prompts import ChatPromptTemplate
 from loguru import logger
 
-from src.workflow.prompts import AUGMENTED_SYSTEM_PROMPT, AUGMENTED_USER_PROMPT
+from src.workflow.prompts import GENERATION_SYSTEM_PROMPT, GENERATION_USER_PROMPT
 
 
-def get_augmented_chain(llm_client: Any, config: Optional[Dict[str, Any]] = None):
+def get_answer_generation_chain(
+    llm_client: Any, config: Optional[Dict[str, Any]] = None
+):
     """
-    Create an augmented query enhancement chain.
+    Create an answer generation chain.
 
-    This chain generates 2-3 enhanced query variants that complement the original query,
-    ensuring no context is lost while benefiting from query improvements.
+    This chain generates the final answer based on retrieved context and the user's query.
 
     Args:
         llm_client: LLM client for generation (already configured with temperature, max_tokens, etc.)
@@ -26,13 +27,13 @@ def get_augmented_chain(llm_client: Any, config: Optional[Dict[str, Any]] = None
     Returns:
         A runnable chain (prompt | model)
     """
-    logger.debug(f"🔗 Creating Augmented Chain")
+    logger.debug(f"🔗 Creating Answer Generation Chain")
 
     # Create the prompt
     prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", AUGMENTED_SYSTEM_PROMPT.prompt),
-            ("human", AUGMENTED_USER_PROMPT.prompt),
+            ("system", GENERATION_SYSTEM_PROMPT.prompt),
+            ("human", GENERATION_USER_PROMPT.prompt),
         ],
         template_format="jinja2",
     )

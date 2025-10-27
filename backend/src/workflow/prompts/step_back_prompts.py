@@ -40,7 +40,7 @@ Return ONLY the step-back question, nothing else. No preamble, no explanation.""
 
 STEP_BACK_USER_PROMPT = Prompt(
     name="step_back_user_prompt",
-    prompt="""Original Question: {query}
+    prompt="""Original Question: {{ query }}
 
 Generate the step-back question:""",
 )

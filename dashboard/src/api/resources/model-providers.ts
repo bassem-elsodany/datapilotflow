@@ -5,9 +5,9 @@
  * These providers support both embedding and generative models with a single API key.
  */
 
+import { apiEndpoints } from '@/config';
 import { z } from 'zod';
 import { createGetQueryHook, createPostMutationHook, createPutMutationHook } from '../helpers';
-import { apiEndpoints } from '@/config';
 
 // ============================================================================
 // Zod Schemas
@@ -31,6 +31,7 @@ export const ModelProviderSchema = z.object({
   timeout: z.number(),
   embedding: ModelTypeConfigSchema.nullable(),
   generative: ModelTypeConfigSchema.nullable(),
+  reranker: ModelTypeConfigSchema.nullable(),
   created_at: z.string(),
   updated_at: z.string(),
   created_by: z.string(),
@@ -47,6 +48,7 @@ export const ModelProviderResponseSchema = z.object({
   timeout: z.number(),
   embedding: ModelTypeConfigSchema.nullable(),
   generative: ModelTypeConfigSchema.nullable(),
+  reranker: ModelTypeConfigSchema.nullable(),
   created_at: z.string(),
   updated_at: z.string(),
   created_by: z.string(),
@@ -63,6 +65,7 @@ export const ModelProviderCreateSchema = z.object({
   timeout: z.number().min(1).max(300).default(60),
   embedding: ModelTypeConfigSchema.optional(),
   generative: ModelTypeConfigSchema.optional(),
+  reranker: ModelTypeConfigSchema.optional(),
 });
 
 export const ModelProviderUpdateSchema = z.object({
@@ -75,6 +78,7 @@ export const ModelProviderUpdateSchema = z.object({
   timeout: z.number().min(1).max(300).optional(),
   embedding: ModelTypeConfigSchema.optional(),
   generative: ModelTypeConfigSchema.optional(),
+  reranker: ModelTypeConfigSchema.optional(),
 });
 
 // ============================================================================
@@ -96,7 +100,7 @@ export type ModelProviderUpdate = z.infer<typeof ModelProviderUpdateSchema>;
 export const useGetModelProviders = createGetQueryHook({
   endpoint: apiEndpoints.modelProviders.list,
   responseSchema: z.array(ModelProviderResponseSchema),
-  rQueryParams: { 
+  rQueryParams: {
     queryKey: ['model-providers'],
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)

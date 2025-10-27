@@ -44,6 +44,9 @@ class ModelProviderDAO(MongoClientWrapper[ModelProvider]):
             "generative": (
                 provider_data.generative.dict() if provider_data.generative else None
             ),
+            "reranker": (
+                provider_data.reranker.dict() if provider_data.reranker else None
+            ),
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow(),
             "created_by": user_id,
@@ -139,7 +142,7 @@ class ModelProviderDAO(MongoClientWrapper[ModelProvider]):
         # Add non-None fields from update_data
         for field, value in update_data.model_dump(exclude_unset=True).items():
             if value is not None:
-                if field in ["embedding", "generative"]:
+                if field in ["embedding", "generative", "reranker"]:
                     # Convert ModelTypeConfig to dict
                     update_doc[field] = (
                         value.dict() if hasattr(value, "dict") else value

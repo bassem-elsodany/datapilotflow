@@ -4,18 +4,14 @@ Answer generator node for DataPilotFlow LangGraph implementation.
 This node generates the final answer based on the user's question and relevant documents.
 """
 
-from typing import Any, Dict
-
 import opik
+from loguru import logger
 
-from ..prompts.generation_prompts import (
-    GENERATION_SYSTEM_PROMPT,
-    GENERATION_USER_PROMPT,
-)
-from ..state import WorkflowState
+from src.workflow.chains import get_answer_generation_chain
+from src.workflow.state import WorkflowState
 
 
-@opik.track(name="answer_generator", tags=["answer_generation"])
+@opik.track(name="answer_generator", tags=["answer_generation", "response_synthesis"])
 def answer_generator(state: WorkflowState) -> WorkflowState:
     """
     Generate final answer based on relevant documents.
@@ -26,95 +22,107 @@ def answer_generator(state: WorkflowState) -> WorkflowState:
     Returns:
         Updated state with final answer and context
     """
+    logger.info("🚀 [NODE START] answer_generator")
     try:
         # Add processing step
         state["processing_steps"].append("answer_generation")
 
-        # Get LLM configuration from state
+        # Get LLM client from config
         config = state.get("config", {})
-        llm_provider_id = config.get("llm_provider_id")
-        llm_model_name = config.get("llm_model_name")
-        user_id = config.get("user_id")
+        llm_client = config.get("llm_client")
 
-        if not llm_provider_id or not llm_model_name or not user_id:
-            raise ValueError(
-                "LLM provider ID, model name, and user ID are required in config"
-            )
+        if not llm_client:
+            raise ValueError("llm_client not found in config")
 
-        # Get LLM provider
-        from loguru import logger
+        logger.info(f"💬 Generating answer using LLM client")
 
-        from src.services.model_provider.model_provider_service import (
-            get_model_provider_service,
-        )
+        # Get documents - use judged_documents if available, otherwise use retrieved_documents
+        judged_docs = state.get("judged_documents")
 
-        model_provider_service = get_model_provider_service()
-        provider = model_provider_service.get_model_provider(llm_provider_id, user_id)
+        if judged_docs:
+            # Reranking was enabled - filter relevant documents (label = 1)
+            relevant_docs = [
+                doc for doc in judged_docs if doc.get("relevance_label", 0) == 1
+            ]
 
-        if not provider:
-            raise ValueError(f"LLM provider not found: {llm_provider_id}")
-
-        if not provider.generative:
-            raise ValueError(
-                f"Generative model not configured for provider: {provider.name}"
-            )
-
-        logger.info(
-            f"💬 Generating answer using {provider.provider_type}/{llm_model_name}"
-        )
-
-        judged_docs = state.get("judged_documents", [])
-
-        # Filter relevant documents (label = 1)
-        relevant_docs = [
-            doc for doc in judged_docs if doc.get("relevance_label", 0) == 1
-        ]
-
-        if not relevant_docs:
-            print("⚠️ No relevant documents found, using all retrieved documents")
-            relevant_docs = judged_docs
+            if not relevant_docs:
+                logger.warning(
+                    "⚠️ No relevant documents found after judging, using all judged documents"
+                )
+                relevant_docs = judged_docs
+        else:
+            # Reranking was disabled - use all retrieved documents
+            logger.info("ℹ️ Using retrieved documents (reranking disabled)")
+            relevant_docs = state.get("retrieved_documents", [])
+            logger.info(f"📄 Retrieved documents count: {len(relevant_docs)}")
+            if relevant_docs:
+                logger.info(f"📄 First doc keys: {list(relevant_docs[0].keys())}")
+                first_doc_text = relevant_docs[0].get("text", "NO TEXT")
+                logger.info(f"📄 First doc text type: {type(first_doc_text)}")
+                logger.info(
+                    f"📄 First doc text length: {len(first_doc_text) if first_doc_text else 0}"
+                )
+                if first_doc_text:
+                    logger.info(f"📄 First doc text preview: {first_doc_text[:200]}...")
+                else:
+                    logger.error(f"❌ First doc text is empty/None!")
+            else:
+                logger.error(f"❌ No retrieved documents found in state!")
 
         # Build context from relevant documents
         context_parts = []
         for i, doc in enumerate(relevant_docs, 1):
-            context_parts.append(f"{i}. {doc['text']}")
+            doc_text = doc.get("text", "")
+            if doc_text:
+                context_parts.append(f"{i}. {doc_text}")
+                logger.debug(f"📄 Added doc {i}: {len(doc_text)} chars")
+            else:
+                logger.warning(f"⚠️ Doc {i} has no text!")
 
         context = "\n".join(context_parts)
-
-        # Format the generation prompt
-        # Get the prompt text from the Prompt object
-        generation_system_text = (
-            GENERATION_SYSTEM_PROMPT.text
-            if hasattr(GENERATION_SYSTEM_PROMPT, "text")
-            else str(GENERATION_SYSTEM_PROMPT)
-        )
-        generation_user_template = (
-            GENERATION_USER_PROMPT.text
-            if hasattr(GENERATION_USER_PROMPT, "text")
-            else str(GENERATION_USER_PROMPT)
+        logger.info(
+            f"📝 Built context with {len(context_parts)} documents, total {len(context)} chars"
         )
 
-        user_prompt = generation_user_template.format(
-            context=context, question=state["query"]
+        # Check if context is empty
+        if not context or not context.strip():
+            logger.error("❌ Context is empty! No valid document content found.")
+            logger.error(f"❌ relevant_docs count: {len(relevant_docs)}")
+            if relevant_docs:
+                logger.error(f"❌ First doc sample: {relevant_docs[0]}")
+
+            # Set error message as final answer
+            state["final_answer"] = (
+                "I apologize, but I couldn't find any relevant information in the knowledge base to answer your question. The documents were retrieved but contained no readable content."
+            )
+            state["context"] = ""
+            logger.error("❌ [NODE FINISH] answer_generator (empty context)")
+            return state
+
+        # Pre-check: Verify context relevance to question
+        # Quick check if context is semantically related to the query
+        logger.debug("🔍 Pre-checking context relevance to query...")
+
+        # Simple heuristic: Check if the context seems completely unrelated
+        # We'll let the LLM handle the detailed relevance check via the strict prompt
+        # but we can add a basic keyword overlap check here if needed
+
+        # For now, we rely on the strict prompt to handle out-of-domain queries
+        # The LLM will respond with "I cannot answer..." if context is irrelevant
+
+        # Get the answer generation chain
+        chain = get_answer_generation_chain(llm_client=llm_client, config=config)
+
+        # Invoke the chain
+        logger.debug(
+            f"🔧 Invoking chain with context length: {len(context)}, question: {state['query'][:50]}..."
         )
+        response = chain.invoke({"context": context, "question": state["query"]})
 
-        # Call LLM for answer generation using LiteLLM
-        import litellm
-
-        litellm_model = f"{provider.provider_type}/{llm_model_name}"
-
-        llm_response = litellm.completion(
-            model=litellm_model,
-            messages=[
-                {"role": "system", "content": generation_system_text},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.3,
-            api_key=provider.api_key,
-            api_base=provider.endpoint if provider.endpoint else None,
+        # Extract content from response
+        response_text = (
+            response.content if hasattr(response, "content") else str(response)
         )
-
-        response = llm_response.choices[0].message.content
 
         # Get query information to show user the difference
         original_query = state["query"]
@@ -150,15 +158,19 @@ def answer_generator(state: WorkflowState) -> WorkflowState:
 
         # Update state
         state["context"] = context
-        state["final_answer"] = response
+        state["final_answer"] = response_text
         state["query_info"] = query_info  # Add query comparison info
 
-        print(f"✅ Generated answer using {len(relevant_docs)} relevant documents")
+        logger.info(
+            f"✅ Generated answer using {len(relevant_docs)} relevant documents"
+        )
+        logger.info("✅ [NODE FINISH] answer_generator")
 
     except Exception as e:
         error_msg = f"Answer generation failed: {str(e)}"
         state["errors"].append(error_msg)
-        print(f"❌ {error_msg}")
+        logger.error(f"❌ {error_msg}")
+        logger.error("❌ [NODE FINISH] answer_generator (with error)")
 
         # Set fallback answer
         state["context"] = ""

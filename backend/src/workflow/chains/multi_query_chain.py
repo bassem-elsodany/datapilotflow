@@ -21,8 +21,8 @@ def get_multi_query_chain(llm_client: Any, config: Optional[Dict[str, Any]] = No
     traceability of the multi-query expansion process.
 
     Args:
-        llm_client (Any): LLM client for generation
-        config (Dict[str, Any], optional): Chain configuration
+        llm_client (Any): LLM client for generation (already configured with temperature, max_tokens, etc.)
+        config (Dict[str, Any], optional): Chain configuration (not used currently, for future extensibility)
 
     Returns:
         Runnable chain (prompt | model)
@@ -33,12 +33,7 @@ def get_multi_query_chain(llm_client: Any, config: Optional[Dict[str, Any]] = No
         >>> print(result.content)
         "1. What are microservices deployment strategies?\\n2. How to containerize..."
     """
-    config = config or {}
-    config.setdefault("temperature", 0.7)
-    config.setdefault("max_tokens", 300)
-    config.setdefault("num_variants", 5)
-
-    logger.debug(f"🔗 Creating Multi-Query Chain with config: {config}")
+    logger.debug(f"🔗 Creating Multi-Query Chain")
 
     # Get prompts (Opik tracking happens in Prompt class if enabled)
     system_prompt = MULTI_QUERY_SYSTEM_PROMPT.prompt
@@ -53,4 +48,5 @@ def get_multi_query_chain(llm_client: Any, config: Optional[Dict[str, Any]] = No
     )
 
     # Return the chain (prompt | model)
+    # Note: llm_client is already configured with temperature, max_tokens, etc. from conversation settings
     return prompt | llm_client

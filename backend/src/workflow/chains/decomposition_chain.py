@@ -21,8 +21,8 @@ def get_decomposition_chain(llm_client: Any, config: Optional[Dict[str, Any]] = 
     traceability of the decomposition process.
 
     Args:
-        llm_client (Any): LLM client for generation
-        config (Dict[str, Any], optional): Chain configuration
+        llm_client (Any): LLM client for generation (already configured with temperature, max_tokens, etc.)
+        config (Dict[str, Any], optional): Chain configuration (not used currently, for future extensibility)
 
     Returns:
         Runnable chain (prompt | model)
@@ -33,12 +33,7 @@ def get_decomposition_chain(llm_client: Any, config: Optional[Dict[str, Any]] = 
         >>> print(result.content)
         "COMPLEX\\n1. How to set up authentication?\\n2. How to configure rate limiting?"
     """
-    config = config or {}
-    config.setdefault("temperature", 0.2)
-    config.setdefault("max_tokens", 300)
-    config.setdefault("max_sub_queries", 5)
-
-    logger.debug(f"🔗 Creating Decomposition Chain with config: {config}")
+    logger.debug(f"🔗 Creating Decomposition Chain")
 
     # Get prompts (Opik tracking happens in Prompt class if enabled)
     system_prompt = DECOMPOSITION_SYSTEM_PROMPT.prompt
@@ -53,4 +48,5 @@ def get_decomposition_chain(llm_client: Any, config: Optional[Dict[str, Any]] = 
     )
 
     # Return the chain (prompt | model)
+    # Note: llm_client is already configured with temperature, max_tokens, etc. from conversation settings
     return prompt | llm_client

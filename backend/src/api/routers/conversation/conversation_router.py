@@ -67,6 +67,16 @@ class CreateSessionRequest(BaseModel):
         None, description="Dedicated reranker provider ID (Cohere/Voyage AI)"
     )
     reranker_model_name: Optional[str] = Field(None, description="Reranker model name")
+    enable_llm_generation: bool = Field(
+        False,
+        description="Enable LLM answer generation (False = raw results by default, True = generated)",
+    )
+    top_k: int = Field(
+        5,
+        ge=3,
+        le=10,
+        description="Number of documents to retrieve from vector database",
+    )
     tags: Optional[str] = Field(None, description="Tags for organizing conversations")
 
 
@@ -92,6 +102,15 @@ class UpdateSessionConfigRequest(BaseModel):
         None, description="Dedicated reranker provider ID"
     )
     reranker_model_name: Optional[str] = Field(None, description="Reranker model name")
+    enable_llm_generation: Optional[bool] = Field(
+        None, description="Enable LLM answer generation"
+    )
+    top_k: Optional[int] = Field(
+        None,
+        ge=3,
+        le=10,
+        description="Number of documents to retrieve from vector database",
+    )
     tags: Optional[List[str]] = Field(None, description="Tags for organizing")
 
 
@@ -120,6 +139,8 @@ async def create_conversation_session(
             enable_reranking=create_request.enable_reranking,
             reranker_provider_id=create_request.reranker_provider_id,
             reranker_model_name=create_request.reranker_model_name,
+            enable_llm_generation=create_request.enable_llm_generation,
+            top_k=create_request.top_k,
             tags=create_request.tags,
         )
 
@@ -133,6 +154,7 @@ async def create_conversation_session(
             "enable_reranking": create_request.enable_reranking,
             "reranker_provider_id": create_request.reranker_provider_id,
             "reranker_model_name": create_request.reranker_model_name,
+            "enable_llm_generation": create_request.enable_llm_generation,
             "message": "Conversation session created successfully",
         }
 
@@ -318,6 +340,11 @@ async def get_conversation_session(
             "total_documents_retrieved": session.total_documents_retrieved,
             "average_response_time_ms": session.average_response_time_ms,
             "tags": session.tags or [],
+            "enable_reranking": getattr(session, "enable_reranking", False),
+            "reranker_provider_id": getattr(session, "reranker_provider_id", None),
+            "reranker_model_name": getattr(session, "reranker_model_name", None),
+            "enable_llm_generation": getattr(session, "enable_llm_generation", True),
+            "top_k": getattr(session, "top_k", None),
         }
 
         # Add enhancement config
@@ -428,14 +455,14 @@ async def rename_conversation_session(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.put("/{conversation_id}/config", status_code=status.HTTP_200_OK)
-async def update_conversation_config(
+@router.put("/{conversation_id}", status_code=status.HTTP_200_OK)
+async def update_conversation_session(
     conversation_id: str,
     config_request: UpdateSessionConfigRequest,
     current_user: User = Depends(get_current_user),
 ):
     """
-    Update conversation configuration (LLM provider, enhancement strategy, etc).
+    Update conversation session (RESTful endpoint).
     """
     try:
         success = conversation_history_service.update_conversation_config(
@@ -448,6 +475,8 @@ async def update_conversation_config(
             enable_reranking=config_request.enable_reranking,
             reranker_provider_id=config_request.reranker_provider_id,
             reranker_model_name=config_request.reranker_model_name,
+            enable_llm_generation=config_request.enable_llm_generation,
+            top_k=config_request.top_k,
             tags=config_request.tags,
         )
 
@@ -460,11 +489,11 @@ async def update_conversation_config(
         return {
             "success": True,
             "id": conversation_id,
-            "message": "Conversation configuration updated successfully",
+            "message": "Conversation updated successfully",
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error updating conversation config: {e}")
+        logger.error(f"Error updating conversation: {e}")
         raise HTTPException(status_code=500, detail=str(e))

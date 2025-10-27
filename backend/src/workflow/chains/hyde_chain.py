@@ -21,8 +21,8 @@ def get_hyde_chain(llm_client: Any, config: Optional[Dict[str, Any]] = None):
     traceability of the HyDE generation process.
 
     Args:
-        llm_client (Any): LLM client for generation
-        config (Dict[str, Any], optional): Chain configuration
+        llm_client (Any): LLM client for generation (already configured with temperature, max_tokens, etc.)
+        config (Dict[str, Any], optional): Chain configuration (not used currently, for future extensibility)
 
     Returns:
         Runnable chain (prompt | model)
@@ -33,12 +33,7 @@ def get_hyde_chain(llm_client: Any, config: Optional[Dict[str, Any]] = None):
         >>> print(result.content[:100])
         "Database connection pooling is configured through application.properties..."
     """
-    config = config or {}
-    config.setdefault("temperature", 0.7)
-    config.setdefault("max_tokens", 500)
-    config.setdefault("style", "documentation")
-
-    logger.debug(f"🔗 Creating HyDE Chain with config: {config}")
+    logger.debug(f"🔗 Creating HyDE Chain")
 
     # Get prompts (Opik tracking happens in Prompt class if enabled)
     system_prompt = HYDE_SYSTEM_PROMPT.prompt
@@ -53,4 +48,5 @@ def get_hyde_chain(llm_client: Any, config: Optional[Dict[str, Any]] = None):
     )
 
     # Return the chain (prompt | model)
+    # Note: llm_client is already configured with temperature, max_tokens, etc. from conversation settings
     return prompt | llm_client

@@ -50,7 +50,7 @@ No preamble, no explanation.""",
 
 RAG_FUSION_USER_PROMPT = Prompt(
     name="rag_fusion_user_prompt",
-    prompt="""Original Question: {query}
+    prompt="""Original Question: {{ query }}
 
 Generate multiple query perspectives:""",
 )

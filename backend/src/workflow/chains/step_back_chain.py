@@ -22,8 +22,8 @@ def get_step_back_chain(llm_client: Any, config: Optional[Dict[str, Any]] = None
     traceability of the step-back prompting process.
 
     Args:
-        llm_client (Any): LLM client for generation
-        config (Dict[str, Any], optional): Chain configuration
+        llm_client (Any): LLM client for generation (already configured with temperature, max_tokens, etc.)
+        config (Dict[str, Any], optional): Chain configuration (not used currently, for future extensibility)
 
     Returns:
         Runnable chain (prompt | model)
@@ -34,11 +34,7 @@ def get_step_back_chain(llm_client: Any, config: Optional[Dict[str, Any]] = None
         >>> print(result.content)
         "What are the fundamental principles of security configuration in MuleSoft?"
     """
-    config = config or {}
-    config.setdefault("temperature", 0.3)
-    config.setdefault("max_tokens", 100)
-
-    logger.debug(f"🔗 Creating Step-Back Chain with config: {config}")
+    logger.debug(f"🔗 Creating Step-Back Chain")
 
     # Get prompts (Opik tracking happens in Prompt class if enabled)
     system_prompt = STEP_BACK_SYSTEM_PROMPT.prompt
@@ -53,4 +49,5 @@ def get_step_back_chain(llm_client: Any, config: Optional[Dict[str, Any]] = None
     )
 
     # Return the chain (prompt | model)
+    # Note: llm_client is already configured with temperature, max_tokens, etc. from conversation settings
     return prompt | llm_client

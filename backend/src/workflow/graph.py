@@ -31,6 +31,7 @@ from src.workflow.nodes import (
     hyde_strategy_node,
     multi_query_strategy_node,
     rag_fusion_strategy_node,
+    raw_response_formatter,
     step_back_strategy_node,
 )
 from src.workflow.state import WorkflowState
@@ -111,18 +112,43 @@ def get_graph(use_checkpointer: bool = False) -> CompiledStateGraph:
         # Check if reranking is enabled
         config = state.get("config", {})
         enable_reranking = config.get("enable_reranking", True)
+        enable_llm_generation = config.get("enable_llm_generation", True)
+
+        logger.info(
+            f"🔀 Routing decision after retrieval: enable_reranking={enable_reranking}, "
+            f"enable_llm_generation={enable_llm_generation}"
+        )
+        logger.debug(f"Config keys: {list(config.keys())}")
 
         if enable_reranking:
+            logger.info("➡️  Routing to document_judger (reranking enabled)")
             return "document_judger"
-        else:
-            # Skip judger, go directly to answer generation
+        elif enable_llm_generation:
+            logger.info(
+                "➡️  Routing to answer_generator (reranking disabled, LLM generation enabled)"
+            )
             return "answer_generator"
+        else:
+            logger.info(
+                "➡️  Routing to raw_response_formatter (reranking disabled, LLM generation disabled)"
+            )
+            return "raw_response_formatter"
 
     def should_continue_after_judger(state: WorkflowState) -> str:
         """Decide whether to continue after document judging."""
         if not state.get("judged_documents"):
             return END  # No documents to judge, end the process
-        return "answer_generator"
+
+        # Check if LLM answer generation is enabled
+        config = state.get("config", {})
+        enable_llm_generation = config.get("enable_llm_generation", True)
+
+        if enable_llm_generation:
+            logger.info("➡️  Routing to answer_generator (LLM generation enabled)")
+            return "answer_generator"
+        else:
+            logger.info("➡️  Routing to raw_response_formatter (LLM generation disabled)")
+            return "raw_response_formatter"
 
     # Create the state graph
     graph_builder = StateGraph(WorkflowState)
@@ -139,6 +165,7 @@ def get_graph(use_checkpointer: bool = False) -> CompiledStateGraph:
     graph_builder.add_node("document_retriever", document_retriever)
     graph_builder.add_node("document_judger", document_judger)
     graph_builder.add_node("answer_generator", answer_generator)
+    graph_builder.add_node("raw_response_formatter", raw_response_formatter)
 
     # Define the workflow edges
     # Start with conditional routing to the selected strategy (or native RAG)
@@ -170,6 +197,7 @@ def get_graph(use_checkpointer: bool = False) -> CompiledStateGraph:
         {
             "document_judger": "document_judger",
             "answer_generator": "answer_generator",  # Skip judger if reranking disabled
+            "raw_response_formatter": "raw_response_formatter",  # Skip judger + LLM generation
             END: END,
         },
     )
@@ -177,10 +205,15 @@ def get_graph(use_checkpointer: bool = False) -> CompiledStateGraph:
     graph_builder.add_conditional_edges(
         "document_judger",
         should_continue_after_judger,
-        {"answer_generator": "answer_generator", END: END},
+        {
+            "answer_generator": "answer_generator",
+            "raw_response_formatter": "raw_response_formatter",  # Skip LLM generation
+            END: END
+        },
     )
 
     graph_builder.add_edge("answer_generator", END)
+    graph_builder.add_edge("raw_response_formatter", END)
 
     logger.debug("DataPilotFlow Agent with workflow nodes created successfully")
 

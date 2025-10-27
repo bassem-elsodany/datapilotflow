@@ -15,8 +15,7 @@ from src.workflow.chains import get_augmented_chain
 from src.workflow.state import WorkflowState
 
 
-@opik.track(name="augmented_strategy_node", tags=["query_enhancement", "augmented"])
-async def augmented_strategy_node(state: WorkflowState) -> Dict[str, Any]:
+async def augmented_strategy_node(state: WorkflowState) -> WorkflowState:
     """
     Apply the Augmented query enhancement strategy.
 
@@ -29,6 +28,7 @@ async def augmented_strategy_node(state: WorkflowState) -> Dict[str, Any]:
     Returns:
         Updated state with augmented queries
     """
+    logger.info("🚀 [NODE START] augmented_strategy_node")
     query = state["query"]
     config = state.get("config", {})
 
@@ -98,19 +98,20 @@ async def augmented_strategy_node(state: WorkflowState) -> Dict[str, Any]:
             logger.debug(f"   Variant {i}: {variant}")
 
         # Update state
-        return {
-            "enhanced_query": query,  # Keep original as primary
-            "augmented_queries": augmented_queries,  # Original + variants
-            "enhancement_strategies_applied": ["augmented"],
-        }
+        state["enhanced_query"] = query  # Keep original as primary
+        state["augmented_queries"] = augmented_queries  # Original + variants
+        state["enhancement_strategies_applied"] = ["augmented"]
+
+        logger.info("✅ [NODE FINISH] augmented_strategy_node")
+        return state
 
     except Exception as e:
         logger.error(f"❌ Augmented Strategy failed: {e}")
         logger.exception(e)
+        logger.error("❌ [NODE FINISH] augmented_strategy_node (with error)")
 
         # Fallback: use original query only
-        return {
-            "enhanced_query": query,
-            "augmented_queries": [query],
-            "enhancement_strategies_applied": ["augmented_fallback"],
-        }
+        state["enhanced_query"] = query
+        state["augmented_queries"] = [query]
+        state["enhancement_strategies_applied"] = ["augmented_fallback"]
+        return state

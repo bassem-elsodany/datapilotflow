@@ -21,8 +21,8 @@ def get_rag_fusion_chain(llm_client: Any, config: Optional[Dict[str, Any]] = Non
     traceability of the RAG-Fusion generation process.
 
     Args:
-        llm_client (Any): LLM client for generation
-        config (Dict[str, Any], optional): Chain configuration
+        llm_client (Any): LLM client for generation (already configured with temperature, max_tokens, etc.)
+        config (Dict[str, Any], optional): Chain configuration (not used currently, for future extensibility)
 
     Returns:
         Runnable chain (prompt | model)
@@ -33,12 +33,7 @@ def get_rag_fusion_chain(llm_client: Any, config: Optional[Dict[str, Any]] = Non
         >>> print(result.content)
         "1. What are SQL optimization techniques?\\n2. How to improve indexes?..."
     """
-    config = config or {}
-    config.setdefault("temperature", 0.8)
-    config.setdefault("max_tokens", 100)
-    config.setdefault("num_perspectives", 3)
-
-    logger.debug(f"🔗 Creating RAG-Fusion Chain with config: {config}")
+    logger.debug(f"🔗 Creating RAG-Fusion Chain")
 
     # Get prompts (Opik tracking happens in Prompt class if enabled)
     system_prompt = RAG_FUSION_SYSTEM_PROMPT.prompt
@@ -53,4 +48,5 @@ def get_rag_fusion_chain(llm_client: Any, config: Optional[Dict[str, Any]] = Non
     )
 
     # Return the chain (prompt | model)
+    # Note: llm_client is already configured with temperature, max_tokens, etc. from conversation settings
     return prompt | llm_client
