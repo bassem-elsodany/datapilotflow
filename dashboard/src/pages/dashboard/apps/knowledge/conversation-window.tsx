@@ -249,14 +249,14 @@ export default function ConversationWindow() {
 
           setSelectedRerankerId(data.session.reranker_provider_id || null);
           setSelectedRerankerModel(data.session.reranker_model_name || null);
-          
+
           // Load LLM generation setting - exact value from DB
           const newEnableLLMGeneration = data.session.enable_llm_generation !== undefined ? data.session.enable_llm_generation : false;
           setEnableLLMGeneration(newEnableLLMGeneration);
-          
+
           // Load top_k - exact value from DB
           setTopK(data.session.top_k);
-          
+
           console.log('✅ Loaded conversation settings:', {
             enableReranking: newEnableReranking,
             enableLLMGeneration: newEnableLLMGeneration,
