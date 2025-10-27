@@ -3,7 +3,7 @@ import { Page } from '@/components/page';
 import { PageHeader } from '@/components/page-header';
 import { apiUtils } from '@/config';
 import { paths } from '@/routes/paths';
-import { ActionIcon, Alert, Badge, Box, Button, Grid, Group, Menu, Modal, Stack, Text, TextInput } from '@mantine/core';
+import { ActionIcon, Alert, Badge, Box, Button, Grid, Group, Menu, Modal, Stack, Text, TextInput, Tooltip } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import {
   IconCalendar,
@@ -248,9 +248,26 @@ export default function KnowledgeSearch() {
         sortable: true,
         render: (session) => (
           <Group gap="xs">
-            <Text fw={500} size="sm">
-              {session.sessionName}
-            </Text>
+            <Tooltip label="Click to open conversation">
+              <Text
+                fw={500}
+                size="sm"
+                style={{
+                  cursor: 'pointer',
+                  color: 'var(--mantine-color-blue-6)',
+                  textDecoration: 'none'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.textDecoration = 'underline';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.textDecoration = 'none';
+                }}
+                onClick={() => navigate(paths.dashboard.apps.conversation(session.id))}
+              >
+                {session.sessionName}
+              </Text>
+            </Tooltip>
             {session.id === currentSessionId && (
               <Badge size="xs" color="blue">Current</Badge>
             )}

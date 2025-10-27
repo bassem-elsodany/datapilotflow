@@ -30,6 +30,7 @@ import {
   IconBrandOpenai,
   IconDatabase,
   IconEdit,
+  IconFilter,
   IconKey,
   IconPlus,
   IconRefresh,
@@ -64,6 +65,10 @@ const getProviderIcon = (providerType: string) => {
       return <IconBrain size={16} />;
     case 'groq':
       return <IconServer size={16} />;
+    case 'cohere':
+      return <IconFilter size={16} />;
+    case 'voyage':
+      return <IconFilter size={16} />;
     default:
       return <IconDatabase size={16} />;
   }
@@ -77,6 +82,9 @@ const getModelTypeBadge = (provider: ModelProviderResponse) => {
   }
   if (provider.generative) {
     badges.push(<Badge key="generative" color="purple" size="sm">Generative</Badge>);
+  }
+  if (provider.reranker) {
+    badges.push(<Badge key="reranker" color="orange" size="sm">Reranker</Badge>);
   }
 
   if (badges.length === 0) {
@@ -169,6 +177,7 @@ export default function ModelProviders() {
       timeout: provider.timeout,
       embedding: provider.embedding || { models: [], config: {} },
       generative: provider.generative || { models: [], config: {} },
+      reranker: provider.reranker || { models: [], config: {} },
     });
     setEditModalOpen(true);
   };
@@ -181,6 +190,14 @@ export default function ModelProviders() {
   const handleToggleActive = async (provider: ModelProviderResponse) => {
     try {
       await client.put(`/model-providers/${provider.id}`, {
+        name: provider.name,
+        provider_type: provider.provider_type,
+        endpoint: provider.endpoint,
+        description: provider.description,
+        timeout: provider.timeout,
+        embedding: provider.embedding,
+        generative: provider.generative,
+        reranker: provider.reranker,
         is_active: !provider.is_active
       });
       notifications.show({
@@ -280,6 +297,25 @@ export default function ModelProviders() {
               </Text>
               <Text size="xs" c="dimmed">
                 Top P: {provider.generative.config?.top_p || 'N/A'}
+              </Text>
+            </Stack>
+          )}
+        </Stack>
+      ),
+    },
+    {
+      accessor: 'reranker_models',
+      title: 'Reranker Models',
+      render: (provider) => (
+        <Stack gap="xs">
+          <Text size="sm" fw={500}>{provider.reranker?.models.length || 0} models</Text>
+          {provider.reranker && (
+            <Stack gap={4}>
+              <Text size="xs" c="dimmed">
+                Max docs: {provider.reranker.config?.max_documents || 'N/A'}
+              </Text>
+              <Text size="xs" c="dimmed">
+                Top N: {provider.reranker.config?.top_n || 'N/A'}
               </Text>
             </Stack>
           )}
@@ -510,105 +546,144 @@ export default function ModelProviders() {
               {...editForm.getInputProps('api_key')}
             />
 
-            <Textarea
-              label="Description"
-              placeholder="Provider description"
-              readOnly
-              {...editForm.getInputProps('description')}
-            />
-
-            <TextInput
-              label="Timeout (seconds)"
-              type="number"
-              min={1}
-              max={300}
-              {...editForm.getInputProps('timeout')}
-            />
-
             <SimpleGrid cols={2}>
-              <TagsInput
-                label="Embedding Models"
-                placeholder="Add embedding models"
-                {...editForm.getInputProps('embedding.models')}
+              <Textarea
+                label="Description"
+                placeholder="Provider description"
+                readOnly
+                {...editForm.getInputProps('description')}
               />
-              <TagsInput
-                label="Generative Models"
-                placeholder="Add generative models"
-                {...editForm.getInputProps('generative.models')}
+              <TextInput
+                label="Timeout (seconds)"
+                type="number"
+                min={1}
+                max={300}
+                {...editForm.getInputProps('timeout')}
               />
             </SimpleGrid>
 
-            {/* Embedding Configuration */}
-            {editForm.values.embedding && editForm.values.embedding.models.length > 0 && (
-              <Card withBorder p="md" shadow="sm">
-                <Group gap="sm" mb="md">
-                  <IconBrain size={18} color="var(--mantine-color-green-6)" />
-                  <Title order={6} c="green.8">Embedding Configuration</Title>
-                </Group>
-                <SimpleGrid cols={3}>
+            {/* Embedding Section */}
+            <Card withBorder p="md" shadow="sm">
+              <Group gap="sm" mb="md">
+                <IconBrain size={18} color="var(--mantine-color-green-6)" />
+                <Title order={6} c="green.8">Embedding Models</Title>
+              </Group>
+              <TagsInput
+                label="Models"
+                placeholder="Add embedding models"
+                {...editForm.getInputProps('embedding.models')}
+              />
+              {editForm.values.embedding && editForm.values.embedding.models.length > 0 && (
+                <>
+                  <SimpleGrid cols={2} mt="md">
+                    <TextInput
+                      label="Max Input Tokens"
+                      type="number"
+                      placeholder="8191"
+                      {...editForm.getInputProps('embedding.config.max_input_tokens')}
+                    />
+                    <TextInput
+                      label="Batch Size"
+                      type="number"
+                      placeholder="100"
+                      {...editForm.getInputProps('embedding.config.batch_size')}
+                    />
+                  </SimpleGrid>
                   <TextInput
-                    label="Max Input Tokens"
-                    type="number"
-                    placeholder="8191"
-                    {...editForm.getInputProps('embedding.config.max_input_tokens')}
+                    label="Endpoint Suffix"
+                    placeholder="/embeddings"
+                    mt="md"
+                    {...editForm.getInputProps('embedding.config.endpoint_suffix')}
                   />
-                  <TextInput
-                    label="Batch Size"
-                    type="number"
-                    placeholder="100"
-                    {...editForm.getInputProps('embedding.config.batch_size')}
-                  />
-                </SimpleGrid>
-                <TextInput
-                  label="Endpoint Suffix"
-                  placeholder="/embeddings"
-                  mt="md"
-                  {...editForm.getInputProps('embedding.config.endpoint_suffix')}
-                />
-              </Card>
-            )}
+                </>
+              )}
+            </Card>
 
-            {/* Generative Configuration */}
-            {editForm.values.generative && editForm.values.generative.models.length > 0 && (
-              <Card withBorder p="md" shadow="sm">
-                <Group gap="sm" mb="md">
-                  <IconRobot size={18} color="var(--mantine-color-purple-6)" />
-                  <Title order={6} c="purple.8">Generative Configuration</Title>
-                </Group>
-                <SimpleGrid cols={3}>
+            {/* Generative Section */}
+            <Card withBorder p="md" shadow="sm">
+              <Group gap="sm" mb="md">
+                <IconRobot size={18} color="var(--mantine-color-purple-6)" />
+                <Title order={6} c="purple.8">Generative Models</Title>
+              </Group>
+              <TagsInput
+                label="Models"
+                placeholder="Add generative models"
+                {...editForm.getInputProps('generative.models')}
+              />
+              {editForm.values.generative && editForm.values.generative.models.length > 0 && (
+                <>
+                  <SimpleGrid cols={3} mt="md">
+                    <TextInput
+                      label="Max Tokens"
+                      type="number"
+                      placeholder="4096"
+                      {...editForm.getInputProps('generative.config.max_tokens')}
+                    />
+                    <TextInput
+                      label="Temperature"
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="2"
+                      placeholder="0.7"
+                      {...editForm.getInputProps('generative.config.temperature')}
+                    />
+                    <TextInput
+                      label="Top P"
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="1"
+                      placeholder="1.0"
+                      {...editForm.getInputProps('generative.config.top_p')}
+                    />
+                  </SimpleGrid>
                   <TextInput
-                    label="Max Tokens"
-                    type="number"
-                    placeholder="4096"
-                    {...editForm.getInputProps('generative.config.max_tokens')}
+                    label="Endpoint Suffix"
+                    placeholder="/chat/completions"
+                    mt="md"
+                    {...editForm.getInputProps('generative.config.endpoint_suffix')}
                   />
+                </>
+              )}
+            </Card>
+
+            {/* Reranker Section */}
+            <Card withBorder p="md" shadow="sm">
+              <Group gap="sm" mb="md">
+                <IconFilter size={18} color="var(--mantine-color-orange-6)" />
+                <Title order={6} c="orange.8">Reranker Models</Title>
+              </Group>
+              <TagsInput
+                label="Models"
+                placeholder="Add reranker models"
+                {...editForm.getInputProps('reranker.models')}
+              />
+              {editForm.values.reranker && editForm.values.reranker.models.length > 0 && (
+                <>
+                  <SimpleGrid cols={2} mt="md">
+                    <TextInput
+                      label="Max Documents"
+                      type="number"
+                      placeholder="100"
+                      {...editForm.getInputProps('reranker.config.max_documents')}
+                    />
+                    <TextInput
+                      label="Top N"
+                      type="number"
+                      placeholder="10"
+                      {...editForm.getInputProps('reranker.config.top_n')}
+                    />
+                  </SimpleGrid>
                   <TextInput
-                    label="Temperature"
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="2"
-                    placeholder="0.7"
-                    {...editForm.getInputProps('generative.config.temperature')}
+                    label="Endpoint Suffix"
+                    placeholder="/rerank"
+                    mt="md"
+                    {...editForm.getInputProps('reranker.config.endpoint_suffix')}
                   />
-                  <TextInput
-                    label="Top P"
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="1"
-                    placeholder="1.0"
-                    {...editForm.getInputProps('generative.config.top_p')}
-                  />
-                </SimpleGrid>
-                <TextInput
-                  label="Endpoint Suffix"
-                  placeholder="/chat/completions"
-                  mt="md"
-                  {...editForm.getInputProps('generative.config.endpoint_suffix')}
-                />
-              </Card>
-            )}
+                </>
+              )}
+            </Card>
 
             <Switch
               label="Active"
@@ -749,6 +824,37 @@ export default function ModelProviders() {
                   <div>
                     <Text size="sm" fw={500} c="dimmed">Endpoint Suffix</Text>
                     <Text>{selectedProvider.generative.config?.endpoint_suffix || 'N/A'}</Text>
+                  </div>
+                </SimpleGrid>
+              </Card>
+            )}
+
+            {selectedProvider.reranker && (
+              <Card withBorder p="md" shadow="sm">
+                <Group gap="sm" mb="md">
+                  <IconFilter size={18} color="var(--mantine-color-orange-6)" />
+                  <Title order={5} c="orange.8">Reranker Configuration</Title>
+                </Group>
+                <div>
+                  <Text size="sm" fw={500} c="dimmed">Models ({selectedProvider.reranker.models.length})</Text>
+                  <Group gap="xs" mt="xs">
+                    {selectedProvider.reranker.models.map((model, index) => (
+                      <Badge key={index} variant="light" color="orange" size="sm">{model}</Badge>
+                    ))}
+                  </Group>
+                </div>
+                <SimpleGrid cols={2} mt="md">
+                  <div>
+                    <Text size="sm" fw={500} c="dimmed">Max Documents</Text>
+                    <Text>{selectedProvider.reranker.config?.max_documents || 'N/A'}</Text>
+                  </div>
+                  <div>
+                    <Text size="sm" fw={500} c="dimmed">Top N</Text>
+                    <Text>{selectedProvider.reranker.config?.top_n || 'N/A'}</Text>
+                  </div>
+                  <div>
+                    <Text size="sm" fw={500} c="dimmed">Endpoint Suffix</Text>
+                    <Text>{selectedProvider.reranker.config?.endpoint_suffix || 'N/A'}</Text>
                   </div>
                 </SimpleGrid>
               </Card>
