@@ -94,6 +94,13 @@ const getModelTypeBadge = (provider: ModelProviderResponse) => {
   return badges;
 };
 
+// Helper function to mask API key for display
+const maskApiKey = (key: string | null | undefined): string => {
+  if (!key) return '';
+  if (key.length <= 8) return key;
+  return key.substring(0, 8) + '•'.repeat(Math.min(key.length - 8, 20));
+};
+
 export default function ModelProviders() {
   const [sortStatus, setSortStatus] = useState<DataTableSortStatus>({
     columnAccessor: 'name',
@@ -104,6 +111,8 @@ export default function ModelProviders() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<ModelProviderResponse | null>(null);
+  const [isEditingApiKey, setIsEditingApiKey] = useState(false);
+  const [originalApiKey, setOriginalApiKey] = useState<string>('');
   const navigate = useNavigate();
 
   // API hooks
@@ -167,11 +176,13 @@ export default function ModelProviders() {
 
   const handleEdit = (provider: ModelProviderResponse) => {
     setSelectedProvider(provider);
+    setOriginalApiKey(provider.api_key || '');
+    setIsEditingApiKey(false);
     editForm.setValues({
       name: provider.name,
       provider_type: provider.provider_type,
       endpoint: provider.endpoint,
-      api_key: '••••••••••••••••',
+      api_key: provider.api_key || '',
       description: provider.description || '',
       is_active: provider.is_active,
       timeout: provider.timeout,
@@ -539,12 +550,46 @@ export default function ModelProviders() {
               {...editForm.getInputProps('endpoint')}
             />
 
-            <TextInput
-              label="API Key"
-              type="password"
-              placeholder="Your API key"
-              {...editForm.getInputProps('api_key')}
-            />
+            <div>
+              <TextInput
+                label="API Key"
+                placeholder="Your API key"
+                value={isEditingApiKey ? editForm.values.api_key : maskApiKey(editForm.values.api_key)}
+                onChange={(e) => {
+                  if (!isEditingApiKey) {
+                    setIsEditingApiKey(true);
+                    editForm.setFieldValue('api_key', '');
+                  } else {
+                    editForm.setFieldValue('api_key', e.currentTarget.value);
+                  }
+                }}
+                onFocus={() => {
+                  if (!isEditingApiKey) {
+                    setIsEditingApiKey(true);
+                    editForm.setFieldValue('api_key', '');
+                  }
+                }}
+                rightSection={
+                  isEditingApiKey && (
+                    <Button
+                      size="xs"
+                      variant="subtle"
+                      onClick={() => {
+                        setIsEditingApiKey(false);
+                        editForm.setFieldValue('api_key', originalApiKey);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  )
+                }
+              />
+              {!isEditingApiKey && (
+                <Text size="xs" c="dimmed" mt={4}>
+                  Click to change API key
+                </Text>
+              )}
+            </div>
 
             <SimpleGrid cols={2}>
               <Textarea

@@ -1,3 +1,4 @@
+import { paths } from '@/routes/paths';
 import {
   Badge,
   Button,
@@ -16,14 +17,15 @@ import {
   IconFileText,
   IconMessageCircle,
   IconRocket,
-  IconSearch,
   IconSettings,
-  IconTarget,
-  IconUsers
+  IconTarget
 } from '@tabler/icons-react';
+import { useNavigate } from 'react-router-dom';
 import classes from './welcome.module.css';
 
 export function Welcome() {
+  const navigate = useNavigate();
+
   return (
     <Stack gap="xl" mt={50}>
       {/* Hero Section */}
@@ -38,8 +40,8 @@ export function Welcome() {
           AI-Powered RAG Management & Knowledge System
         </Text>
         <Text c="dimmed" ta="center" size="lg" maw={600} mx="auto">
-          Upload documents, configure RAG injections, and have intelligent conversations with your knowledge sources.
-          Build and manage comprehensive RAG systems with advanced AI workflows.
+          Build, manage, and query sophisticated RAG knowledge bases with advanced AI workflows.
+          From document ingestion to intelligent conversations - all in one platform.
         </Text>
       </Stack>
 
@@ -52,12 +54,12 @@ export function Welcome() {
         <Grid gutter="md">
           {/* Interview Process removed - focusing on knowledge management */}
 
-          {/* Knowledge Management */}
+          {/* Knowledge Conversations */}
           <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
             <Card shadow="sm" padding="lg" radius="md" withBorder>
               <Group mb="md">
                 <ThemeIcon size="lg" variant="light" color="green">
-                  <IconSearch size={24} />
+                  <IconMessageCircle size={24} />
                 </ThemeIcon>
                 <div>
                   <Text fw={600} size="lg">Knowledge Conversations</Text>
@@ -66,18 +68,18 @@ export function Welcome() {
               </Group>
               <Text size="sm" c="dimmed" mb="md">
                 Advanced RAG (Retrieval-Augmented Generation) system with semantic search,
-                context-aware conversations, and knowledge graph integration.
+                context-aware conversations, and intelligent knowledge retrieval.
               </Text>
               <Stack gap="xs">
                 <Text size="xs" fw={500}>✓ Semantic Search</Text>
                 <Text size="xs" fw={500}>✓ Context-Aware Chat</Text>
-                <Text size="xs" fw={500}>✓ Knowledge Graph</Text>
+                <Text size="xs" fw={500}>✓ Knowledge Retrieval</Text>
                 <Text size="xs" fw={500}>✓ Conversation History</Text>
               </Stack>
             </Card>
           </Grid.Col>
 
-          {/* Document Management */}
+          {/* Document Processing */}
           <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
             <Card shadow="sm" padding="lg" radius="md" withBorder>
               <Group mb="md">
@@ -85,8 +87,8 @@ export function Welcome() {
                   <IconFileText size={24} />
                 </ThemeIcon>
                 <div>
-                  <Text fw={600} size="lg">Document Ingest</Text>
-                  <Badge color="orange" variant="light">Processing</Badge>
+                  <Text fw={600} size="lg">Document Processing</Text>
+                  <Badge color="orange" variant="light">Intelligent</Badge>
                 </div>
               </Group>
               <Text size="sm" c="dimmed" mb="md">
@@ -97,183 +99,108 @@ export function Welcome() {
                 <Text size="xs" fw={500}>✓ Web Crawling</Text>
                 <Text size="xs" fw={500}>✓ Document Processing</Text>
                 <Text size="xs" fw={500}>✓ Vector Storage</Text>
-                <Text size="xs" fw={500}>✓ Metadata Extraction</Text>
+                <Text size="xs" fw={500}>✓ Content Extraction</Text>
               </Stack>
             </Card>
           </Grid.Col>
 
-          {/* Analytics & Insights */}
+          {/* Pipeline Builder */}
           <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
             <Card shadow="sm" padding="lg" radius="md" withBorder>
               <Group mb="md">
                 <ThemeIcon size="lg" variant="light" color="purple">
-                  <IconChartBar size={24} />
+                  <IconSettings size={24} />
                 </ThemeIcon>
                 <div>
-                  <Text fw={600} size="lg">Skills Analytics</Text>
-                  <Badge color="purple" variant="light">Analytics</Badge>
+                  <Text fw={600} size="lg">Pipeline Builder</Text>
+                  <Badge color="purple" variant="light">Visual</Badge>
                 </div>
               </Group>
               <Text size="sm" c="dimmed" mb="md">
-                Comprehensive analytics dashboard with skills overview, performance trends,
-                coverage reports, and gap analysis for data-driven hiring decisions.
+                Visual pipeline builder for creating data processing workflows with drag-and-drop
+                nodes for crawling, extraction, chunking, and vector storage.
               </Text>
               <Stack gap="xs">
-                <Text size="xs" fw={500}>✓ Skills Overview</Text>
-                <Text size="xs" fw={500}>✓ Performance Trends</Text>
-                <Text size="xs" fw={500}>✓ Coverage Reports</Text>
-                <Text size="xs" fw={500}>✓ Gap Analysis</Text>
+                <Text size="xs" fw={500}>✓ Visual Workflow Design</Text>
+                <Text size="xs" fw={500}>✓ Drag & Drop Interface</Text>
+                <Text size="xs" fw={500}>✓ Real-time Execution</Text>
+                <Text size="xs" fw={500}>✓ Pipeline Monitoring</Text>
               </Stack>
             </Card>
           </Grid.Col>
 
-          {/* Interview Data section removed - focusing on knowledge management */}
 
-          {/* Smart Features */}
+          {/* Model Providers */}
           <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
             <Card shadow="sm" padding="lg" radius="md" withBorder>
               <Group mb="md">
                 <ThemeIcon size="lg" variant="light" color="red">
-                  <IconTarget size={24} />
+                  <IconBrain size={24} />
                 </ThemeIcon>
                 <div>
-                  <Text fw={600} size="lg">Smart Features</Text>
+                  <Text fw={600} size="lg">Model Providers</Text>
                   <Badge color="red" variant="light">AI-Powered</Badge>
                 </div>
               </Group>
               <Text size="sm" c="dimmed" mb="md">
-                Advanced AI features including query enhancement, document retrieval,
-                intelligent recommendations, and adaptive knowledge strategies.
+                Configure and manage multiple LLM providers including OpenAI, Anthropic, and local models
+                for embeddings, chat completions, and content generation.
               </Text>
               <Stack gap="xs">
-                <Text size="xs" fw={500}>✓ Custom Questions</Text>
-                <Text size="xs" fw={500}>✓ Time-Aware Selection</Text>
-                <Text size="xs" fw={500}>✓ Smart Recommendations</Text>
-                <Text size="xs" fw={500}>✓ Adaptive Strategies</Text>
-                <Text size="xs" fw={500}>✓ Project-Based Experience</Text>
-                <Text size="xs" fw={500}>✓ Role-Specific Questions</Text>
+                <Text size="xs" fw={500}>✓ Multi-Provider Support</Text>
+                <Text size="xs" fw={500}>✓ OpenAI & Anthropic</Text>
+                <Text size="xs" fw={500}>✓ Local Model Support</Text>
+                <Text size="xs" fw={500}>✓ Embedding Models</Text>
               </Stack>
             </Card>
           </Grid.Col>
-        </Grid>
-      </Stack>
 
-      <Divider />
-
-      {/* Enhanced Features */}
-      <Stack gap="lg">
-        <Title order={2} ta="center">🎯 Enhanced Analysis Features</Title>
-
-        <Grid gutter="md">
-          <Grid.Col span={{ base: 12, md: 6 }}>
+          {/* Query Enhancement */}
+          <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
             <Card shadow="sm" padding="lg" radius="md" withBorder>
               <Group mb="md">
                 <ThemeIcon size="lg" variant="light" color="indigo">
                   <IconTarget size={24} />
                 </ThemeIcon>
                 <div>
-                  <Text fw={600} size="lg">Dual Experience Analysis</Text>
-                  <Badge color="indigo" variant="light">Enhanced</Badge>
+                  <Text fw={600} size="lg">Query Enhancement</Text>
+                  <Badge color="indigo" variant="light">Advanced</Badge>
                 </div>
               </Group>
               <Text size="sm" c="dimmed" mb="md">
-                Distinguish between stated experience and calculated experience from project dates.
-                Provides more accurate assessment and transparency in candidate evaluation.
+                Advanced query enhancement strategies including Step-back, HyDE, Decomposition,
+                RAG-Fusion, Multi-Query, and Query-Fusion for improved retrieval accuracy.
               </Text>
               <Stack gap="xs">
-                <Text size="xs" fw={500}>✓ Stated vs Calculated Experience</Text>
-                <Text size="xs" fw={500}>✓ Project Date Analysis</Text>
-                <Text size="xs" fw={500}>✓ Overlap Detection</Text>
-                <Text size="xs" fw={500}>✓ Smart Experience Selection</Text>
+                <Text size="xs" fw={500}>✓ Step-back Reasoning</Text>
+                <Text size="xs" fw={500}>✓ Hypothetical Document Embeddings</Text>
+                <Text size="xs" fw={500}>✓ Query Decomposition</Text>
+                <Text size="xs" fw={500}>✓ RAG-Fusion Strategies</Text>
               </Stack>
             </Card>
           </Grid.Col>
 
-          <Grid.Col span={{ base: 12, md: 6 }}>
+          {/* Vector Storage & Search */}
+          <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
             <Card shadow="sm" padding="lg" radius="md" withBorder>
               <Group mb="md">
                 <ThemeIcon size="lg" variant="light" color="violet">
-                  <IconBrain size={24} />
+                  <IconChartBar size={24} />
                 </ThemeIcon>
                 <div>
-                  <Text fw={600} size="lg">Project Role Extraction</Text>
-                  <Badge color="violet" variant="light">Advanced</Badge>
+                  <Text fw={600} size="lg">Vector Storage & Search</Text>
+                  <Badge color="violet" variant="light">Scalable</Badge>
                 </div>
               </Group>
               <Text size="sm" c="dimmed" mb="md">
-                Extract detailed project information including roles, locations, assignment types,
-                responsibilities, contributions, challenges, and measurable outcomes.
+                High-performance vector storage with Milvus integration, semantic search,
+                and real-time document retrieval with configurable similarity metrics.
               </Text>
               <Stack gap="xs">
-                <Text size="xs" fw={500}>✓ Role-Specific Analysis</Text>
-                <Text size="xs" fw={500}>✓ Location & Assignment Type</Text>
-                <Text size="xs" fw={500}>✓ Responsibilities & Contributions</Text>
-                <Text size="xs" fw={500}>✓ Challenges & Outcomes</Text>
-              </Stack>
-            </Card>
-          </Grid.Col>
-        </Grid>
-      </Stack>
-
-      <Divider />
-
-      {/* Technology Stack */}
-      <Stack gap="lg">
-        <Title order={2} ta="center">🛠️ Technology Stack</Title>
-
-        <Grid gutter="md">
-          <Grid.Col span={{ base: 12, md: 6 }}>
-            <Card shadow="sm" padding="lg" radius="md" withBorder>
-              <Text fw={600} size="lg" mb="md">Backend & AI</Text>
-              <Stack gap="xs">
-                <Group>
-                  <Badge color="blue" variant="light">FastAPI</Badge>
-                  <Text size="sm">High-performance API framework</Text>
-                </Group>
-                <Group>
-                  <Badge color="green" variant="light">LangGraph</Badge>
-                  <Text size="sm">AI workflow orchestration</Text>
-                </Group>
-                <Group>
-                  <Badge color="purple" variant="light">Weaviate</Badge>
-                  <Text size="sm">Vector database & semantic search</Text>
-                </Group>
-                <Group>
-                  <Badge color="orange" variant="light">MongoDB</Badge>
-                  <Text size="sm">Document storage & session data</Text>
-                </Group>
-                <Group>
-                  <Badge color="red" variant="light">LLMs</Badge>
-                  <Text size="sm">OpenAI, Anthropic, Local models</Text>
-                </Group>
-              </Stack>
-            </Card>
-          </Grid.Col>
-
-          <Grid.Col span={{ base: 12, md: 6 }}>
-            <Card shadow="sm" padding="lg" radius="md" withBorder>
-              <Text fw={600} size="lg" mb="md">Frontend & UI</Text>
-              <Stack gap="xs">
-                <Group>
-                  <Badge color="blue" variant="light">React</Badge>
-                  <Text size="sm">Modern UI framework</Text>
-                </Group>
-                <Group>
-                  <Badge color="cyan" variant="light">Mantine UI</Badge>
-                  <Text size="sm">Component library & theming</Text>
-                </Group>
-                <Group>
-                  <Badge color="grape" variant="light">TypeScript</Badge>
-                  <Text size="sm">Type-safe development</Text>
-                </Group>
-                <Group>
-                  <Badge color="yellow" variant="light">Vite</Badge>
-                  <Text size="sm">Fast build tool</Text>
-                </Group>
-                <Group>
-                  <Badge color="lime" variant="light">React Query</Badge>
-                  <Text size="sm">State management & caching</Text>
-                </Group>
+                <Text size="xs" fw={500}>✓ Milvus Vector Database</Text>
+                <Text size="xs" fw={500}>✓ Semantic Search</Text>
+                <Text size="xs" fw={500}>✓ Real-time Retrieval</Text>
+                <Text size="xs" fw={500}>✓ Configurable Similarity</Text>
               </Stack>
             </Card>
           </Grid.Col>
@@ -287,7 +214,7 @@ export function Welcome() {
         <Title order={2} ta="center">🚀 Getting Started</Title>
 
         <Text c="dimmed" ta="center" size="lg" maw={600}>
-          Ready to build your RAG system? Here's how to get started:
+          Ready to build your RAG knowledge base? Here's how to get started:
         </Text>
 
         <Grid gutter="md" w="100%" maw={800}>
@@ -295,12 +222,12 @@ export function Welcome() {
             <Card shadow="sm" padding="lg" radius="md" withBorder>
               <Group mb="md">
                 <ThemeIcon size="lg" variant="light" color="blue">
-                  <IconFileText size={20} />
+                  <IconSettings size={20} />
                 </ThemeIcon>
-                <Text fw={600}>1. Ingest Knowledge</Text>
+                <Text fw={600}>1. Configure Sources</Text>
               </Group>
               <Text size="sm" c="dimmed">
-                Start by uploading documents or crawling websites to build your knowledge base.
+                Set up knowledge source configurations for web crawling, document processing, and data ingestion.
               </Text>
             </Card>
           </Grid.Col>
@@ -309,12 +236,12 @@ export function Welcome() {
             <Card shadow="sm" padding="lg" radius="md" withBorder>
               <Group mb="md">
                 <ThemeIcon size="lg" variant="light" color="green">
-                  <IconMessageCircle size={20} />
+                  <IconFileText size={20} />
                 </ThemeIcon>
-                <Text fw={600}>2. Start Conversations</Text>
+                <Text fw={600}>2. Process Data</Text>
               </Group>
               <Text size="sm" c="dimmed">
-                Explore your knowledge base through intelligent conversations and semantic search.
+                Create and execute knowledge jobs to process your sources into searchable chunks and embeddings.
               </Text>
             </Card>
           </Grid.Col>
@@ -323,12 +250,12 @@ export function Welcome() {
             <Card shadow="sm" padding="lg" radius="md" withBorder>
               <Group mb="md">
                 <ThemeIcon size="lg" variant="light" color="orange">
-                  <IconUsers size={20} />
+                  <IconMessageCircle size={20} />
                 </ThemeIcon>
-                <Text fw={600}>3. Configure RAG</Text>
+                <Text fw={600}>3. Start Conversations</Text>
               </Group>
               <Text size="sm" c="dimmed">
-                Configure RAG systems and start intelligent conversations with your knowledge base.
+                Query your knowledge base through intelligent conversations with advanced RAG capabilities.
               </Text>
             </Card>
           </Grid.Col>
@@ -340,15 +267,17 @@ export function Welcome() {
             size="lg"
             variant="gradient"
             gradient={{ from: 'blue', to: 'cyan' }}
+            onClick={() => navigate(paths.dashboard.management.knowledgeSources.configCreate)}
           >
-            Start Your First RAG System
+            Start Building Your RAG System
           </Button>
           <Button
             leftSection={<IconSettings size={16} />}
             size="lg"
             variant="light"
+            onClick={() => navigate(paths.dashboard.apps.knowledgeSearch)}
           >
-            Explore Features
+            Explore Knowledge Search
           </Button>
         </Group>
       </Stack>
@@ -358,10 +287,10 @@ export function Welcome() {
       {/* Footer */}
       <Stack gap="xs" align="center">
         <Text size="sm" c="dimmed" ta="center">
-          Built with ❤️ for knowledge management and RAG system builders
+          Built with ❤️ for RAG system builders and knowledge management
         </Text>
         <Text size="xs" c="dimmed" ta="center">
-          dataPilotFlow - AI-Powered RAG Management & Knowledge System
+          DataPilotFlow - AI-Powered RAG Management & Knowledge System
         </Text>
       </Stack>
     </Stack>

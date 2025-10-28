@@ -367,16 +367,6 @@ const VectorStatusPage: React.FC = () => {
     );
   }
 
-  // Render empty state
-  if (!collections || collections.length === 0) {
-    return (
-      <Alert icon={<IconInfoCircle size={16} />} title="No Collections" color="blue">
-        No vector collections found. Create a knowledge source configuration and run a job
-        to populate collections.
-      </Alert>
-    );
-  }
-
   return (
     <Stack gap="lg">
       {/* Header */}
@@ -395,6 +385,14 @@ const VectorStatusPage: React.FC = () => {
           Refresh
         </Button>
       </Group>
+
+      {/* Empty state */}
+      {(!collections || collections.length === 0) && (
+        <Alert icon={<IconInfoCircle size={16} />} title="No Collections" color="blue">
+          No vector collections found. Create a knowledge source configuration and run a job
+          to populate collections.
+        </Alert>
+      )}
 
       {/* Charts and Statistics */}
       {collections && collections.length > 0 && (
@@ -759,7 +757,7 @@ const VectorStatusPage: React.FC = () => {
               recordsPerPage={appliedPageSize}
               page={page}
               onPageChange={setPage}
-              recordsPerPageOptions={[10, 20, 50, 100]}
+              recordsPerPageOptions={[10, 20, 50, 100, 200, 500, 1000]}
               onRecordsPerPageChange={(newPageSize) => {
                 setPageSize(newPageSize);
                 setAppliedPageSize(newPageSize);

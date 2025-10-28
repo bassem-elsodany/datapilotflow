@@ -43,6 +43,7 @@ export const ModelProviderResponseSchema = z.object({
   name: z.string(),
   provider_type: z.string(),
   endpoint: z.string(),
+  api_key: z.string().nullable(),
   description: z.string().nullable(),
   is_active: z.boolean(),
   timeout: z.number(),

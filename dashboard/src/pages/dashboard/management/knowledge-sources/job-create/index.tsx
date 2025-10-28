@@ -183,6 +183,59 @@ export default function KnowledgeJobFormPage({ jobId }: KnowledgeJobFormProps) {
     return provider?.embedding?.models || [];
   }, [modelProviders, form.values.embedding_model_provider_id]);
 
+  // Calculate recommended chunk size and overlap based on embedding model's max token limit
+  const embeddingMaxTokens = useMemo(() => {
+    const provider = modelProviders?.find(p => p.id === form.values.embedding_model_provider_id);
+    if (!provider?.embedding?.config) return null;
+
+    const maxInputTokens = provider.embedding.config.max_input_tokens;
+    if (!maxInputTokens) return null;
+
+    // Parse max_input_tokens (could be string or number)
+    const maxTokens = typeof maxInputTokens === 'string' ? parseInt(maxInputTokens) : maxInputTokens;
+    if (isNaN(maxTokens) || maxTokens <= 0) return null;
+
+    return maxTokens;
+  }, [modelProviders, form.values.embedding_model_provider_id]);
+
+  const recommendedChunkConfig = useMemo(() => {
+    if (!embeddingMaxTokens) {
+      // Default values if no max token limit is available
+      return { chunkSize: 256, chunkOverlap: 32, maxAllowed: 4096 };
+    }
+
+    // Allow up to 95% of max tokens (5% safety buffer)
+    const maxAllowedTotal = Math.floor(embeddingMaxTokens * 0.95);
+
+    // Split the 95% between chunk (82.5%) and overlap (12.5%)
+    // This ensures chunk + overlap = 95% of max tokens
+    const optimalChunkSize = Math.floor(embeddingMaxTokens * 0.825);  // 82.5%
+    const optimalOverlap = Math.floor(embeddingMaxTokens * 0.125);    // 12.5%
+
+    // Verify total doesn't exceed 95% limit
+    const totalTokens = optimalChunkSize + optimalOverlap;
+    let finalChunkSize = optimalChunkSize;
+    let finalOverlap = optimalOverlap;
+
+    if (totalTokens > maxAllowedTotal) {
+      // Adjust proportionally to fit within 95% limit
+      const ratio = maxAllowedTotal / totalTokens;
+      finalChunkSize = Math.floor(optimalChunkSize * ratio);
+      finalOverlap = Math.floor(optimalOverlap * ratio);
+    }
+
+    // Ensure values are within reasonable bounds
+    finalChunkSize = Math.max(64, Math.min(finalChunkSize, embeddingMaxTokens));
+    finalOverlap = Math.max(0, Math.min(finalOverlap, Math.floor(finalChunkSize / 2)));
+
+    return {
+      chunkSize: finalChunkSize,
+      chunkOverlap: finalOverlap,
+      maxTokens: embeddingMaxTokens,
+      maxAllowed: maxAllowedTotal
+    };
+  }, [embeddingMaxTokens]);
+
   // Step configurations with brand colors
   const stepConfigs: StepConfig[] = [
     {
@@ -202,20 +255,20 @@ export default function KnowledgeJobFormPage({ jobId }: KnowledgeJobFormProps) {
       gradientTo: '#9dd245'
     },
     {
-      label: 'Document Splitter',
-      description: 'Choose splitting strategy',
-      icon: <IconScissors size={20} strokeWidth={2} />,
-      color: '#ddde65',
-      gradientFrom: '#ddde65',
-      gradientTo: '#bbe773'
-    },
-    {
       label: 'Embedding Model',
       description: form.values.use_existing_collection ? 'Skip - Using existing' : 'Select embedding model',
       icon: <IconBrain size={20} strokeWidth={2} />,
       color: '#3bc57d',
       gradientFrom: '#3bc57d',
       gradientTo: '#45c9bb'
+    },
+    {
+      label: 'Document Splitter',
+      description: 'Choose splitting strategy',
+      icon: <IconScissors size={20} strokeWidth={2} />,
+      color: '#ddde65',
+      gradientFrom: '#ddde65',
+      gradientTo: '#bbe773'
     },
     {
       label: 'Processing',
@@ -342,14 +395,6 @@ export default function KnowledgeJobFormPage({ jobId }: KnowledgeJobFormProps) {
         }
         return !!form.values.collection_name;
       case 2:
-        // Document Splitter
-        if (form.values.splitter_type === 'text') {
-          const hasValidChunking = form.values.chunk_size >= 64 && form.values.chunk_size <= 4096 &&
-            form.values.chunk_overlap >= 0 && form.values.chunk_overlap <= 512;
-          return !!hasValidChunking;
-        }
-        return true; // Document splitting doesn't need validation
-      case 3:
         // Embedding Model
         if (form.values.use_existing_collection) {
           return true; // Skip embedding validation for existing collections
@@ -360,6 +405,68 @@ export default function KnowledgeJobFormPage({ jobId }: KnowledgeJobFormProps) {
           return selectedProvider ? selectedProvider.is_active : false;
         }
         return false;
+      case 3:
+        // Document Splitter
+        if (form.values.splitter_type === 'text' || form.values.splitter_type === 'document') {
+          const maxChunkSize = embeddingMaxTokens || 4096; // Use embedding model's max or default to 4096
+          const maxOverlap = Math.floor(maxChunkSize / 2); // Max overlap is 50% of chunk size
+          const maxTotal = Math.floor(maxChunkSize * 0.95); // Allow up to 95% of max tokens (5% buffer)
+
+          // Check individual constraints
+          if (form.values.chunk_size < 64) {
+            notifications.show({
+              title: 'Validation Error',
+              message: 'Chunk size must be at least 64 tokens',
+              color: 'red',
+              autoClose: 4000,
+            });
+            return false;
+          }
+
+          if (form.values.chunk_size > maxChunkSize) {
+            notifications.show({
+              title: 'Validation Error',
+              message: `Chunk size (${form.values.chunk_size}) exceeds embedding model's maximum of ${maxChunkSize} tokens`,
+              color: 'red',
+              autoClose: 4000,
+            });
+            return false;
+          }
+
+          if (form.values.chunk_overlap < 0) {
+            notifications.show({
+              title: 'Validation Error',
+              message: 'Chunk overlap cannot be negative',
+              color: 'red',
+              autoClose: 4000,
+            });
+            return false;
+          }
+
+          if (form.values.chunk_overlap > maxOverlap) {
+            notifications.show({
+              title: 'Validation Error',
+              message: `Chunk overlap (${form.values.chunk_overlap}) exceeds maximum of ${maxOverlap} tokens (50% of chunk size)`,
+              color: 'red',
+              autoClose: 4000,
+            });
+            return false;
+          }
+
+          const totalTokens = form.values.chunk_size + form.values.chunk_overlap;
+          if (totalTokens > maxTotal) {
+            notifications.show({
+              title: 'Validation Error',
+              message: `Total tokens (chunk ${form.values.chunk_size} + overlap ${form.values.chunk_overlap} = ${totalTokens}) exceeds 95% of model's max tokens (${maxTotal}). Please reduce chunk size or overlap.`,
+              color: 'red',
+              autoClose: 5000,
+            });
+            return false;
+          }
+
+          return true;
+        }
+        return true; // HTML splitting doesn't need chunking validation
       case 4:
         // Processing - batch size and output settings
         const hasValidBatchSize = form.values.batch_size >= 1 && form.values.batch_size <= 1000;
@@ -957,7 +1064,106 @@ export default function KnowledgeJobFormPage({ jobId }: KnowledgeJobFormProps) {
               <Stack gap="md">
                 <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
                   <Text size="sm">
-                    <strong>Step 3: Document Splitting Strategy</strong><br />
+                    <strong>Step 3: Embedding Model Configuration</strong><br />
+                    {form.values.use_existing_collection
+                      ? "Using an existing collection - embedding model settings are inherited from the selected collection."
+                      : "Select the embedding model that will convert your documents into vector representations. Choose an active provider and model that best fits your content type and language."
+                    }
+                    <br /><br />
+                    <strong>Vector Dimension Impact:</strong><br />
+                    • <strong>Higher dimensions (1536-3072)</strong>: Better semantic understanding, more nuanced representations, but requires more storage and computational resources<br />
+                    • <strong>Lower dimensions (384-768)</strong>: Faster processing, less storage, but may lose some semantic detail<br />
+                    • <strong>Model-specific dimensions</strong>: Each embedding model has a fixed dimension (e.g., OpenAI text-embedding-ada-002 = 1536, text-embedding-3-large = 3072)<br />
+                    • <strong>Consistency requirement</strong>: All documents in a collection must use the same dimension for proper similarity search
+                  </Text>
+                </Alert>
+
+                {form.values.use_existing_collection ? (
+                  <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+                    Using existing Vector DB Collection. All embedding model and collection settings are inherited from the selected collection and shown in the previous step.
+                  </Alert>
+                ) : (
+                  <>
+                    <Select
+                      key={`embedding-provider-${form.values.embedding_model_provider_id}`}
+                      label="Embedding Model Provider"
+                      placeholder="Select a provider"
+                      data={embeddingProviders.map(provider => ({
+                        value: provider.id,
+                        label: `${provider.name} ${provider.is_active ? '(Active)' : '(Inactive)'}`
+                      }))}
+                      required
+                      value={form.values.embedding_model_provider_id || ''}
+                      onChange={(value) => {
+                        console.log('Provider changed to:', value, 'Current activeStep:', activeStep);
+                        if (value) {
+                          form.setFieldValue('embedding_model_provider_id', value);
+                          form.setFieldValue('embedding_model_name', ''); // Reset model selection
+
+                          // Check if selected provider is inactive
+                          const selectedProvider = embeddingProviders.find(p => p.id === value);
+                          if (selectedProvider && !selectedProvider.is_active) {
+                            notifications.show({
+                              title: 'Inactive Provider Selected',
+                              message: 'This provider is inactive. Please enable it and set the API key in the Model Providers settings.',
+                              color: 'orange',
+                              autoClose: 5000,
+                            });
+                          }
+                        } else {
+                          form.setFieldValue('embedding_model_provider_id', '');
+                          form.setFieldValue('embedding_model_name', '');
+                        }
+                        console.log('After provider change, activeStep:', activeStep);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }
+                      }}
+                    />
+
+                    {/* Show warning for inactive provider */}
+                    {renderInactiveProviderWarning()}
+
+                    <Select
+                      label="Embedding Model"
+                      placeholder="Select a model"
+                      data={embeddingModels.map(model => ({
+                        value: model,
+                        label: model
+                      }))}
+                      required
+                      disabled={!form.values.embedding_model_provider_id}
+                      {...form.getInputProps('embedding_model_name')}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }
+                      }}
+                    />
+
+                    <NumberInput
+                      label="Vector Dimension"
+                      placeholder="1536"
+                      required
+                      description="Dimension of the vector embeddings (1-4096). Common values: OpenAI text-embedding-ada-002 (1536), text-embedding-3-small (1536), text-embedding-3-large (3072)"
+                      min={1}
+                      max={4096}
+                      {...form.getInputProps('vector_dimension')}
+                    />
+                  </>
+                )}
+              </Stack>
+            )}
+
+            {activeStep === 3 && (
+              <Stack gap="md">
+                <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+                  <Text size="sm">
+                    <strong>Step 4: Document Splitting Strategy</strong><br />
                     Choose how to split your documents into chunks. You can use text-based splitting with configurable chunk size and overlap, or document-structured splitting that respects markdown headers.
                   </Text>
                 </Alert>
@@ -1108,6 +1314,118 @@ export default function KnowledgeJobFormPage({ jobId }: KnowledgeJobFormProps) {
                   </SimpleGrid>
                 )}
 
+                {form.values.splitter_type === 'document' && (
+                  <Stack gap="md">
+                    <Alert color="blue" title="Chunk Size Configuration" icon={<IconInfoCircle />}>
+                      When using document structure splitting, each header section is split into chunks.
+                      The chunk size and overlap are automatically calculated to use 95% of your embedding model's capacity (leaving 5% safety buffer).
+                      {embeddingMaxTokens && (
+                        <>
+                          <br /><br />
+                          <strong>Embedding Model Max Tokens: {embeddingMaxTokens.toLocaleString()}</strong><br />
+                          <strong>Maximum Allowed Total: {recommendedChunkConfig.maxAllowed.toLocaleString()} tokens</strong> (95% of max, 5% safety buffer)<br />
+                          <strong>Recommended Chunk Size: {recommendedChunkConfig.chunkSize.toLocaleString()} tokens</strong> (82.5% of max)<br />
+                          <strong>Recommended Overlap: {recommendedChunkConfig.chunkOverlap.toLocaleString()} tokens</strong> (12.5% of max)<br />
+                          <strong>Total: {(recommendedChunkConfig.chunkSize + recommendedChunkConfig.chunkOverlap).toLocaleString()} tokens</strong> ≤ {recommendedChunkConfig.maxAllowed.toLocaleString()} tokens ✓
+                        </>
+                      )}
+                      {!embeddingMaxTokens && (
+                        <>
+                          <br /><br />
+                          <Text size="sm" c="orange">
+                            ⚠️ No embedding model selected yet. Please go back to the Embedding Model step to select a provider first.
+                            Using default values (256 chunk size, 32 overlap).
+                          </Text>
+                        </>
+                      )}
+                    </Alert>
+
+                    {embeddingMaxTokens && (
+                      <Button
+                        size="sm"
+                        variant="light"
+                        onClick={() => {
+                          form.setFieldValue('chunk_size', recommendedChunkConfig.chunkSize);
+                          form.setFieldValue('chunk_overlap', recommendedChunkConfig.chunkOverlap);
+                          notifications.show({
+                            title: 'Recommended Values Applied',
+                            message: `Chunk size set to ${recommendedChunkConfig.chunkSize} tokens, overlap set to ${recommendedChunkConfig.chunkOverlap} tokens (based on embedding model's ${embeddingMaxTokens} max tokens)`,
+                            color: 'green',
+                            autoClose: 4000,
+                          });
+                        }}
+                      >
+                        Apply Recommended Values
+                      </Button>
+                    )}
+
+                    <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+                      <NumberInput
+                        label="Chunk Size (Tokens)"
+                        placeholder={recommendedChunkConfig.chunkSize.toString()}
+                        required
+                        description={embeddingMaxTokens
+                          ? `Recommended: ${recommendedChunkConfig.chunkSize} tokens (based on ${embeddingMaxTokens} max tokens)`
+                          : "Maximum size of chunks within each section. Prevents exceeding embedding token limits."
+                        }
+                        min={64}
+                        max={embeddingMaxTokens ? embeddingMaxTokens : 4096}
+                        {...form.getInputProps('chunk_size')}
+                        onChange={(value) => {
+                          const numValue = typeof value === 'number' ? value : parseInt(value) || 0;
+                          form.setFieldValue('chunk_size', numValue);
+                          // Auto-calculate overlap as 12.5% of chunk size, but cap at 50%
+                          const calculatedOverlap = Math.min(Math.round(numValue * 0.125), Math.floor(numValue / 2));
+                          form.setFieldValue('chunk_overlap', calculatedOverlap);
+
+                          // Notify user about auto-calculation
+                          notifications.show({
+                            title: 'Overlap Auto-Calculated',
+                            message: `Chunk overlap automatically set to ${calculatedOverlap} tokens (${((calculatedOverlap / numValue) * 100).toFixed(1)}% of chunk size)`,
+                            color: 'blue',
+                            autoClose: 3000,
+                          });
+                        }}
+                      />
+
+                      <NumberInput
+                        label="Chunk Overlap (Tokens)"
+                        placeholder={recommendedChunkConfig.chunkOverlap.toString()}
+                        required
+                        description={`Recommended: ${recommendedChunkConfig.chunkOverlap} tokens (12.5% of chunk size)`}
+                        min={0}
+                        max={Math.floor(form.values.chunk_size / 2)}
+                        {...form.getInputProps('chunk_overlap')}
+                        onChange={(value) => {
+                          const numValue = typeof value === 'number' ? value : parseInt(value) || 0;
+                          form.setFieldValue('chunk_overlap', numValue);
+
+                          // Notify user about manual overlap change
+                          const percentage = ((numValue / form.values.chunk_size) * 100).toFixed(1);
+                          notifications.show({
+                            title: 'Overlap Updated',
+                            message: `Chunk overlap set to ${numValue} tokens (${percentage}% of chunk size)`,
+                            color: 'green',
+                            autoClose: 2000,
+                          });
+                        }}
+                      />
+                    </SimpleGrid>
+
+                    {/* Show warning if chunk size + overlap exceeds 95% of max tokens */}
+                    {embeddingMaxTokens && (form.values.chunk_size + form.values.chunk_overlap) > recommendedChunkConfig.maxAllowed && (
+                      <Alert color="red" icon={<IconAlertTriangle />}>
+                        <Text size="sm">
+                          <strong>Warning: Total tokens exceed recommended limit!</strong><br />
+                          Chunk size ({form.values.chunk_size.toLocaleString()}) + overlap ({form.values.chunk_overlap.toLocaleString()}) = {(form.values.chunk_size + form.values.chunk_overlap).toLocaleString()} tokens<br />
+                          This exceeds the recommended maximum of {recommendedChunkConfig.maxAllowed.toLocaleString()} tokens (95% of {embeddingMaxTokens.toLocaleString()}, leaving 5% safety buffer).<br />
+                          Please reduce chunk size or overlap to avoid potential embedding failures.
+                        </Text>
+                      </Alert>
+                    )}
+                  </Stack>
+                )}
+
                 {(form.values.splitter_type === 'document' || form.values.splitter_type === 'html') && (
                   <Stack gap="md">
                     <Group gap="xs" align="center">
@@ -1234,105 +1552,6 @@ export default function KnowledgeJobFormPage({ jobId }: KnowledgeJobFormProps) {
                   </Alert>
                 )}
 
-              </Stack>
-            )}
-
-            {activeStep === 3 && (
-              <Stack gap="md">
-                <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
-                  <Text size="sm">
-                    <strong>Step 3: Embedding Model Configuration</strong><br />
-                    {form.values.use_existing_collection
-                      ? "Using an existing collection - embedding model settings are inherited from the selected collection."
-                      : "Select the embedding model that will convert your documents into vector representations. Choose an active provider and model that best fits your content type and language."
-                    }
-                    <br /><br />
-                    <strong>Vector Dimension Impact:</strong><br />
-                    • <strong>Higher dimensions (1536-3072)</strong>: Better semantic understanding, more nuanced representations, but requires more storage and computational resources<br />
-                    • <strong>Lower dimensions (384-768)</strong>: Faster processing, less storage, but may lose some semantic detail<br />
-                    • <strong>Model-specific dimensions</strong>: Each embedding model has a fixed dimension (e.g., OpenAI text-embedding-ada-002 = 1536, text-embedding-3-large = 3072)<br />
-                    • <strong>Consistency requirement</strong>: All documents in a collection must use the same dimension for proper similarity search
-                  </Text>
-                </Alert>
-
-                {form.values.use_existing_collection ? (
-                  <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
-                    Using existing Vector DB Collection. All embedding model and collection settings are inherited from the selected collection and shown in the previous step.
-                  </Alert>
-                ) : (
-                  <>
-                    <Select
-                      key={`embedding-provider-${form.values.embedding_model_provider_id}`}
-                      label="Embedding Model Provider"
-                      placeholder="Select a provider"
-                      data={embeddingProviders.map(provider => ({
-                        value: provider.id,
-                        label: `${provider.name} ${provider.is_active ? '(Active)' : '(Inactive)'}`
-                      }))}
-                      required
-                      value={form.values.embedding_model_provider_id || ''}
-                      onChange={(value) => {
-                        console.log('Provider changed to:', value, 'Current activeStep:', activeStep);
-                        if (value) {
-                          form.setFieldValue('embedding_model_provider_id', value);
-                          form.setFieldValue('embedding_model_name', ''); // Reset model selection
-
-                          // Check if selected provider is inactive
-                          const selectedProvider = embeddingProviders.find(p => p.id === value);
-                          if (selectedProvider && !selectedProvider.is_active) {
-                            notifications.show({
-                              title: 'Inactive Provider Selected',
-                              message: 'This provider is inactive. Please enable it and set the API key in the Model Providers settings.',
-                              color: 'orange',
-                              autoClose: 5000,
-                            });
-                          }
-                        } else {
-                          form.setFieldValue('embedding_model_provider_id', '');
-                          form.setFieldValue('embedding_model_name', '');
-                        }
-                        console.log('After provider change, activeStep:', activeStep);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          e.stopPropagation();
-                        }
-                      }}
-                    />
-
-                    {/* Show warning for inactive provider */}
-                    {renderInactiveProviderWarning()}
-
-                    <Select
-                      label="Embedding Model"
-                      placeholder="Select a model"
-                      data={embeddingModels.map(model => ({
-                        value: model,
-                        label: model
-                      }))}
-                      required
-                      disabled={!form.values.embedding_model_provider_id}
-                      {...form.getInputProps('embedding_model_name')}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          e.stopPropagation();
-                        }
-                      }}
-                    />
-
-                    <NumberInput
-                      label="Vector Dimension"
-                      placeholder="1536"
-                      required
-                      description="Dimension of the vector embeddings (1-4096). Common values: OpenAI text-embedding-ada-002 (1536), text-embedding-3-small (1536), text-embedding-3-large (3072)"
-                      min={1}
-                      max={4096}
-                      {...form.getInputProps('vector_dimension')}
-                    />
-                  </>
-                )}
               </Stack>
             )}
 
