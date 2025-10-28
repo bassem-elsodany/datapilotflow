@@ -30,10 +30,14 @@ You will evaluate documents across six key dimensions:
 - Be as objective as possible in your assessment
 
 **Output Format:**
-After providing your explanation, output your final verdict by strictly following this format:
-- Output "1" if the document is highly relevant based upon the factors above
-- Output "0.5" if the document is moderately relevant based upon the factors above  
-- Output "0" if the document is not relevant based upon the factors above""",
+After providing your explanation, output ONLY your final verdict as a decimal number by strictly following this format:
+- Output "1.0" if the document is highly relevant and excels across all factors
+- Output "0.75" if the document is relevant with strong coverage in most factors
+- Output "0.5" if the document is moderately relevant with partial coverage
+- Output "0.25" if the document has minimal relevance with weak coverage
+- Output "0.0" if the document is not relevant or fails most criteria
+
+**IMPORTANT:** Your response must end with ONLY the numeric score (e.g., "0.75"), nothing else after the score.""",
 )
 
 JUDGE_USER_PROMPT = Prompt(
@@ -46,10 +50,14 @@ JUDGE_USER_PROMPT = Prompt(
 
 **Task:** Evaluate this document's relevance using the six-factor framework.
 
-**Scoring:**
-- **1.0**: Document excels across all factors
-- **0.5**: Document is useful in some areas but lacks in others  
-- **0.0**: Document fails most criteria or is unrelated
+**Scoring Guidelines:**
+- **1.0**: Highly relevant - excels across all factors
+- **0.75**: Relevant - strong coverage in most factors
+- **0.5**: Moderately relevant - partial coverage
+- **0.25**: Minimally relevant - weak coverage
+- **0.0**: Not relevant - fails most criteria
 
-**Your Score:**""",
+Provide your reasoning, then end with ONLY the numeric score.
+
+**Your Evaluation and Score:**""",
 )

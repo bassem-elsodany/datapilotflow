@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from loguru import logger
 
 from src.api.routers.auth.auth_router import get_current_user
@@ -123,7 +123,7 @@ def delete_knowledge_job(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Knowledge processing job not found",
             )
-        return JSONResponse(status_code=status.HTTP_204_NO_CONTENT, content=None)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     except HTTPException:
         raise
     except Exception as e:

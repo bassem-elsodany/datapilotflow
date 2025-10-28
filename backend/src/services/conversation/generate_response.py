@@ -30,6 +30,7 @@ async def get_response_stream(
     conversation_id: str,
     collection_name: str,
     selected_strategy: Optional[str] = None,
+    retrieval_strategy: str = "single_query",
     enhancement_config: Optional[Dict[str, Any]] = None,
     enable_reranking: bool = True,
     enable_llm_generation: bool = True,
@@ -94,6 +95,11 @@ async def get_response_stream(
             "enable_reranking": enable_reranking,
             "enable_llm_generation": enable_llm_generation,
             "top_k": top_k,
+            "retrieval_config": {
+                "retrieval_strategy": retrieval_strategy,
+                "top_k_per_query": 5,  # Retrieve 5 docs per query variant for RRF
+                "rrf_k": 60,  # RRF constant (from original paper)
+            },
         }
 
         logger.info(

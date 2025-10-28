@@ -235,14 +235,23 @@ export default function KnowledgeSourceJobDetails() {
 
         {/* Stats Cards */}
         <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="lg">
-          <StatCard
-            title="Configuration"
-            value={getConfigName(job.knowledge_source_config_id)}
-            icon={<IconSettings size={24} />}
-            color="#45c9bb"
-            gradientFrom="#45c9bb"
-            gradientTo="#87cbbc"
-          />
+          <Link
+            to={`/dashboard/management/knowledge-sources/configs/${job.knowledge_source_config_id}`}
+            style={{ textDecoration: 'none', display: 'block' }}
+          >
+            <Box style={{ cursor: 'pointer', transition: 'transform 0.2s' }}
+              sx={{ '&:hover': { transform: 'translateY(-2px)' } }}>
+              <StatCard
+                title="Configuration"
+                value={getConfigName(job.knowledge_source_config_id)}
+                icon={<IconSettings size={24} />}
+                color="#45c9bb"
+                gradientFrom="#45c9bb"
+                gradientTo="#87cbbc"
+                description="Click to view details"
+              />
+            </Box>
+          </Link>
           <StatCard
             title="Documents Processed"
             value={timelineEntries && timelineEntries.length > 0 ? timelineEntries[0].documents_processed : 0}
@@ -308,7 +317,7 @@ export default function KnowledgeSourceJobDetails() {
           >
             <Group gap="md" style={{ flexWrap: 'wrap' }}>
               <InfoItem label="Splitter Type" value={job.document_splitter?.splitter_type || 'text'} />
-              {job.document_splitter?.splitter_type === 'text' && (
+              {(job.document_splitter?.splitter_type === 'text' || job.document_splitter?.splitter_type === 'document') && (
                 <>
                   <InfoItem label="Chunk Size" value={`${job.document_splitter?.chunk_size || 256} tokens`} />
                   <InfoItem label="Chunk Overlap" value={`${job.document_splitter?.chunk_overlap || 32} tokens`} />

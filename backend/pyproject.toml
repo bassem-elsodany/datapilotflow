@@ -1,7 +1,7 @@
 [project]
 name = "datapilotflow"
 version = "1.0.0"
-description = "DataPilotFlow is an AI-augmented interview assistant designed to streamline and enhance technical assessments. Built on top of LangGraph, it orchestrates intelligent question selection, automated answer scoring, semantic retrieval, and personalized candidate feedback — all within a structured, explainable flow."
+description = "DataPilotFlow is an AI-powered RAG management and knowledge system designed to build, manage, and query sophisticated knowledge bases. Built on top of LangGraph, it orchestrates document ingestion, intelligent processing, vector storage, and semantic search — all within a comprehensive, scalable platform."
 # readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11"

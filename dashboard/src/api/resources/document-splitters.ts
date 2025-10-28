@@ -33,8 +33,8 @@ export const DocumentSplitterCreateSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   description: z.string().optional(),
   splitter_type: SplitterTypeSchema,
-  chunk_size: z.number().min(64).max(4096).optional(),
-  chunk_overlap: z.number().min(0).max(512).optional(),
+  chunk_size: z.number().min(64).optional(),
+  chunk_overlap: z.number().min(0).optional(),
   headers_to_split_on: z.array(z.tuple([z.string(), z.string()])).optional(),
   sections_to_split_on: z.array(z.tuple([z.string(), z.string()])).optional(),
 });
@@ -46,8 +46,8 @@ export const DocumentSplitterUpdateSchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().optional(),
   splitter_type: SplitterTypeSchema.optional(),
-  chunk_size: z.number().min(64).max(4096).optional(),
-  chunk_overlap: z.number().min(0).max(512).optional(),
+  chunk_size: z.number().min(64).optional(),
+  chunk_overlap: z.number().min(0).optional(),
   headers_to_split_on: z.array(z.tuple([z.string(), z.string()])).optional(),
   sections_to_split_on: z.array(z.tuple([z.string(), z.string()])).optional(),
 });
@@ -189,13 +189,13 @@ export const validateSplitterConfig = (splitter: DocumentSplitterCreate): string
   if (splitter.splitter_type === 'text') {
     if (!splitter.chunk_size) {
       errors.push('Chunk size is required for text splitters');
-    } else if (splitter.chunk_size < 64 || splitter.chunk_size > 4096) {
-      errors.push('Chunk size must be between 64 and 4096 tokens');
+    } else if (splitter.chunk_size < 64) {
+      errors.push('Chunk size must be at least 64 tokens');
     }
 
     if (splitter.chunk_overlap !== undefined) {
-      if (splitter.chunk_overlap < 0 || splitter.chunk_overlap > 512) {
-        errors.push('Chunk overlap must be between 0 and 512 tokens');
+      if (splitter.chunk_overlap < 0) {
+        errors.push('Chunk overlap cannot be negative');
       }
       if (splitter.chunk_size && splitter.chunk_overlap >= splitter.chunk_size) {
         errors.push('Chunk overlap must be less than chunk size');

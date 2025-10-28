@@ -91,45 +91,69 @@ class MilvusClientWrapper(Generic[T]):
             connection_alias = f"milvus_{id(self)}"
         self.connection_alias = connection_alias
 
-        try:
-            logger.info(
-                f"Connecting to Milvus: host={milvus_host}, port={milvus_port}, alias={connection_alias}"
-            )
+        # Retry connection with exponential backoff for long-running jobs
+        max_retries = 5
+        retry_delay = 5  # seconds
 
-            # Connect to Milvus
-            if milvus_user and milvus_password:
-                connections.connect(
-                    alias=connection_alias,
-                    host=milvus_host,
-                    port=milvus_port,
-                    user=milvus_user,
-                    password=milvus_password,
+        for attempt in range(max_retries):
+            try:
+                if attempt > 0:
+                    logger.warning(
+                        f"Milvus connection attempt {attempt + 1}/{max_retries} after {retry_delay}s delay"
+                    )
+                    import time
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff: 5s, 10s, 20s, 40s
+
+                logger.info(
+                    f"Connecting to Milvus: host={milvus_host}, port={milvus_port}, alias={connection_alias}"
                 )
-            else:
-                connections.connect(
-                    alias=connection_alias, host=milvus_host, port=milvus_port
+
+                # Connect to Milvus
+                if milvus_user and milvus_password:
+                    connections.connect(
+                        alias=connection_alias,
+                        host=milvus_host,
+                        port=milvus_port,
+                        user=milvus_user,
+                        password=milvus_password,
+                    )
+                else:
+                    connections.connect(
+                        alias=connection_alias, host=milvus_host, port=milvus_port
+                    )
+
+                # Test connection
+                if not connections.has_connection(connection_alias):
+                    raise Exception("Failed to establish connection to Milvus")
+
+                logger.info(
+                    f"Successfully connected to Milvus with alias: {connection_alias}"
                 )
 
-            # Test connection
-            if not connections.has_connection(connection_alias):
-                raise Exception("Failed to establish connection to Milvus")
+                # Initialize or get collection
+                self._initialize_collection()
 
-            logger.info(
-                f"Successfully connected to Milvus with alias: {connection_alias}"
-            )
+                logger.info(
+                    f"Connected to Milvus instance: Host: {milvus_host}:{milvus_port} | Collection: {collection_name}"
+                )
 
-            # Initialize or get collection
-            self._initialize_collection()
+                # Success - break retry loop
+                break
 
-            logger.info(
-                f"Connected to Milvus instance: Host: {milvus_host}:{milvus_port} | Collection: {collection_name}"
-            )
-
-        except Exception as e:
-            logger.error(f"Failed to initialize MilvusClientWrapper: {e}")
-            logger.error("Make sure Milvus is running and accessible")
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            raise
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    logger.warning(
+                        f"Milvus connection failed (attempt {attempt + 1}/{max_retries}): {e}. "
+                        f"Retrying in {retry_delay}s..."
+                    )
+                    continue
+                else:
+                    # Final attempt failed
+                    logger.error(f"Failed to initialize MilvusClientWrapper after {max_retries} attempts: {e}")
+                    logger.error("Make sure Milvus is running and accessible")
+                    logger.error(f"Traceback: {traceback.format_exc()}")
+                    raise
 
     def _get_default_index_params(self, index_type: str) -> Dict[str, Any]:
         """

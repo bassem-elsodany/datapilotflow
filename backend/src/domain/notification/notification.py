@@ -17,6 +17,14 @@ class NotificationType(str, Enum):
     JOB_ANALYSIS_COMPLETED = "job_analysis_completed"
     JOB_DELETED = "job_deleted"
     RESUME_DELETED = "resume_deleted"
+
+    # Knowledge Job Processing Notifications
+    KNOWLEDGE_JOB_STARTED = "knowledge_job_started"
+    KNOWLEDGE_JOB_PROGRESS = "knowledge_job_progress"
+    KNOWLEDGE_JOB_COMPLETED = "knowledge_job_completed"
+    KNOWLEDGE_JOB_FAILED = "knowledge_job_failed"
+    KNOWLEDGE_JOB_CANCELLED = "knowledge_job_cancelled"
+
     ERROR = "error"
     SUCCESS = "success"
     INFO = "info"

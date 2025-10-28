@@ -57,6 +57,10 @@ class CreateSessionRequest(BaseModel):
         None,
         description="Query enhancement strategy (none, step_back, multi_query, hyde, decomposition, rag_fusion, augmented)",
     )
+    retrieval_strategy: Optional[str] = Field(
+        "single_query",
+        description="Multi-query retrieval strategy: 'single_query' (fast, uses first variant) or 'reciprocal_rank_fusion' (slower, better quality with all variants)",
+    )
     collection_name: Optional[str] = Field(
         "LongTermMemory", description="Vector DB collection name"
     )
@@ -91,6 +95,9 @@ class UpdateSessionConfigRequest(BaseModel):
     llm_model_name: Optional[str] = Field(None, description="Specific model name")
     enhancement_strategy: Optional[str] = Field(
         None, description="Query enhancement strategy"
+    )
+    retrieval_strategy: Optional[str] = Field(
+        None, description="Multi-query retrieval strategy"
     )
     collection_name: Optional[str] = Field(
         None, description="Vector DB collection name"
@@ -135,6 +142,7 @@ async def create_conversation_session(
             llm_provider_id=create_request.llm_provider_id,
             llm_model_name=create_request.llm_model_name,
             enhancement_strategy=create_request.enhancement_strategy,
+            retrieval_strategy=create_request.retrieval_strategy or "single_query",
             collection_name=create_request.collection_name or "LongTermMemory",
             enable_reranking=create_request.enable_reranking,
             reranker_provider_id=create_request.reranker_provider_id,
@@ -150,6 +158,7 @@ async def create_conversation_session(
             "name": create_request.name or f"Session {session_id[:8]}",
             "llm_provider_id": create_request.llm_provider_id,
             "enhancement_strategy": create_request.enhancement_strategy,
+            "retrieval_strategy": create_request.retrieval_strategy or "single_query",
             "collection_name": create_request.collection_name or "LongTermMemory",
             "enable_reranking": create_request.enable_reranking,
             "reranker_provider_id": create_request.reranker_provider_id,
@@ -471,6 +480,7 @@ async def update_conversation_session(
             llm_provider_id=config_request.llm_provider_id,
             llm_model_name=config_request.llm_model_name,
             enhancement_strategy=config_request.enhancement_strategy,
+            retrieval_strategy=config_request.retrieval_strategy,
             collection_name=config_request.collection_name,
             enable_reranking=config_request.enable_reranking,
             reranker_provider_id=config_request.reranker_provider_id,

@@ -5,6 +5,13 @@ This service provides an abstraction for generating embeddings from text,
 decoupling the business logic from specific embedding providers (LiteLLM, OpenAI, etc.).
 """
 
+# CRITICAL: Monkey-patch json module BEFORE any imports that might use it
+import json as _json
+import functools
+
+_original_dumps = _json.dumps
+_json.dumps = functools.partial(_original_dumps, ensure_ascii=False)
+
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
@@ -88,7 +95,6 @@ class ModelProviderEmbeddingService(EmbeddingService):
         provider_id: str,
         model_name: str,
         user_id: str,
-        embedding_adapter: "EmbeddingAdapter" = None,
     ):
         """
         Initialize the embedding service.
@@ -97,12 +103,10 @@ class ModelProviderEmbeddingService(EmbeddingService):
             provider_id: ID of the model provider
             model_name: Name of the embedding model
             user_id: User ID who owns the provider
-            embedding_adapter: Optional embedding adapter (injected for testability)
         """
         self.provider_id = provider_id
         self.model_name = model_name
         self.user_id = user_id
-        self._embedding_adapter = embedding_adapter
         self._provider = None
         self._load_provider()
 
@@ -163,16 +167,6 @@ class ModelProviderEmbeddingService(EmbeddingService):
             logger.warning("No chunks provided for embedding generation")
             return []
 
-        # Get or create adapter
-        if not self._embedding_adapter:
-            from src.processors.knowledge_job.adapters.litellm_adapter import (
-                LiteLLMEmbeddingAdapter,
-            )
-
-            self._embedding_adapter = LiteLLMEmbeddingAdapter(
-                provider=self._provider, model_name=self.model_name
-            )
-
         try:
             # Filter valid content
             valid_chunks = []
@@ -188,14 +182,108 @@ class ModelProviderEmbeddingService(EmbeddingService):
                 logger.warning("No valid chunks found for embedding generation")
                 return []
 
-            # Generate embeddings via adapter
-            vectors = await self._embedding_adapter.generate_embeddings(valid_chunks)
+            # Generate embeddings directly with LiteLLM (no adapter)
+            import litellm
+            import os
+
+            # Force UTF-8 encoding at OS level
+            os.environ["PYTHONIOENCODING"] = "utf-8"
+            os.environ["LC_ALL"] = "en_US.UTF-8"
+            os.environ["LANG"] = "en_US.UTF-8"
 
             logger.info(
-                f"Generated {len(vectors)} embeddings using {self._provider.name}/{self.model_name}"
+                f"Generating embeddings for {len(valid_chunks)} chunks using {self._provider.provider_type}/{self.model_name}"
             )
 
-            return vectors
+            # Prepare texts - ensure they're UTF-8 strings
+            texts = []
+            for chunk in valid_chunks:
+                # Ensure text is proper UTF-8 string
+                text = chunk.page_content
+                if isinstance(text, bytes):
+                    text = text.decode('utf-8', errors='replace')
+                texts.append(text)
+
+            # Initialize token counter for batching
+            from src.processors.splitters.token_counter import TokenCounter
+            token_counter = TokenCounter(model_name=self.model_name)
+
+            # Get model's max context (default to 8191 for text-embedding-3-*)
+            max_context = TokenCounter.get_default_max_tokens(self.model_name)
+
+            # Use 80% of max context for safety margin (API overhead, etc.)
+            safe_batch_limit = int(max_context * 0.8)
+
+            # Sub-batch the texts to avoid exceeding context window
+            all_vectors = []
+            current_batch = []
+            current_batch_tokens = 0
+            total_batches = 0
+
+            for text in texts:
+                text_tokens = token_counter.count_tokens(text)
+
+                # If single text exceeds safe limit, we have a problem
+                if text_tokens > safe_batch_limit:
+                    logger.warning(
+                        f"Single chunk has {text_tokens} tokens, exceeds safe limit {safe_batch_limit}. "
+                        f"This should not happen if chunking is working correctly!"
+                    )
+
+                # Check if adding this text would exceed the batch limit
+                if current_batch and (current_batch_tokens + text_tokens > safe_batch_limit):
+                    # Process current batch
+                    total_batches += 1
+                    logger.debug(
+                        f"Processing embedding sub-batch {total_batches}: {len(current_batch)} texts, ~{current_batch_tokens} tokens"
+                    )
+
+                    response = litellm.embedding(
+                        model=f"{self._provider.provider_type}/{self.model_name}",
+                        input=current_batch,
+                        api_key=self._provider.api_key,
+                    )
+
+                    # Extract vectors
+                    for item in response.data:
+                        if hasattr(item, "embedding"):
+                            all_vectors.append(item.embedding)
+                        elif isinstance(item, dict) and "embedding" in item:
+                            all_vectors.append(item["embedding"])
+
+                    # Reset batch
+                    current_batch = []
+                    current_batch_tokens = 0
+
+                # Add text to current batch
+                current_batch.append(text)
+                current_batch_tokens += text_tokens
+
+            # Process final batch if any
+            if current_batch:
+                total_batches += 1
+                logger.debug(
+                    f"Processing final embedding sub-batch {total_batches}: {len(current_batch)} texts, ~{current_batch_tokens} tokens"
+                )
+
+                response = litellm.embedding(
+                    model=f"{self._provider.provider_type}/{self.model_name}",
+                    input=current_batch,
+                    api_key=self._provider.api_key,
+                )
+
+                # Extract vectors
+                for item in response.data:
+                    if hasattr(item, "embedding"):
+                        all_vectors.append(item.embedding)
+                    elif isinstance(item, dict) and "embedding" in item:
+                        all_vectors.append(item["embedding"])
+
+            logger.info(
+                f"Generated {len(all_vectors)} embeddings in {total_batches} sub-batches using {self._provider.name}/{self.model_name}"
+            )
+
+            return all_vectors
 
         except Exception as e:
             error_msg = f"Failed to generate embeddings: {e}"

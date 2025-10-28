@@ -14,6 +14,13 @@ import aio_pika
 
 from src.config import settings
 from src.domain.notification import NotificationType, NotificationPriority
+from src.services.events.constants import (
+    NOTIFICATION_EVENTS_EXCHANGE,
+    NOTIFICATION_EVENTS_QUEUE,
+    NOTIFICATION_EVENTS_ROUTING_KEY,
+    NOTIFICATION_EVENTS_DLQ_EXCHANGE,
+    NOTIFICATION_EVENTS_DLQ_QUEUE
+)
 
 # RabbitMQ Configuration for Notifications
 RABBITMQ_HOST = settings.RABBITMQ_HOST
@@ -22,12 +29,12 @@ RABBITMQ_USER = settings.RABBITMQ_USER
 RABBITMQ_PASS = settings.RABBITMQ_PASS
 RABBITMQ_VHOST = settings.RABBITMQ_VHOST
 
-# Notification Queues
-RABBITMQ_NOTIFICATION_EXCHANGE = "notification_exchange"
-RABBITMQ_NOTIFICATION_QUEUE = "notification_queue"
-RABBITMQ_NOTIFICATION_DLQ_EXCHANGE = "notification_dlq_exchange"
-RABBITMQ_NOTIFICATION_DLQ_QUEUE = "notification_dlq_queue"
-RABBITMQ_ROUTING_KEY = "notification_routing_key"
+# Use constants from shared constants file
+RABBITMQ_NOTIFICATION_EXCHANGE = NOTIFICATION_EVENTS_EXCHANGE
+RABBITMQ_NOTIFICATION_QUEUE = NOTIFICATION_EVENTS_QUEUE
+RABBITMQ_NOTIFICATION_DLQ_EXCHANGE = NOTIFICATION_EVENTS_DLQ_EXCHANGE
+RABBITMQ_NOTIFICATION_DLQ_QUEUE = NOTIFICATION_EVENTS_DLQ_QUEUE
+RABBITMQ_ROUTING_KEY = NOTIFICATION_EVENTS_ROUTING_KEY
 
 
 async def publish_notification_event(event_payload: dict):

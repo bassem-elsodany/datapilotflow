@@ -1,34 +1,44 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { ModelType, useGetModelProvider, useUpdateModelProvider } from '@/api/resources/model-providers';
 import { Page } from '@/components/page';
 import { PageHeader } from '@/components/page-header';
-import { 
-  Card, 
-  Button, 
-  Group, 
-  Stack,
-  TextInput,
-  Textarea,
-  Switch,
-  SimpleGrid,
-  TagsInput,
-  MultiSelect,
-  Alert,
-  Loader,
-  Center
-} from '@mantine/core';
 import { paths } from '@/routes/paths';
-import { useGetModelProvider, useUpdateModelProvider } from '@/api/resources/model-providers';
-import { ModelType } from '@/api/resources/model-providers';
-import { notifications } from '@mantine/notifications';
+import {
+  Alert,
+  Button,
+  Card,
+  Center,
+  Group,
+  Loader,
+  MultiSelect,
+  SimpleGrid,
+  Stack,
+  Switch,
+  TagsInput,
+  TextInput,
+  Textarea
+} from '@mantine/core';
 import { useForm } from '@mantine/form';
+import { notifications } from '@mantine/notifications';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+
+// Helper function to mask API key for display
+const maskApiKey = (key: string | undefined): string => {
+  if (!key) return '';
+  if (key.length <= 8) return key; // Too short to mask
+  // Show first 8 chars and mask the rest
+  return key.substring(0, 8) + '•'.repeat(Math.min(key.length - 8, 20));
+};
 
 export default function EditModelProvider() {
   const { providerId } = useParams<{ providerId: string }>();
   const navigate = useNavigate();
-  
+
   const { data: provider, isLoading, error } = useGetModelProvider(providerId || '');
   const updateProviderMutation = useUpdateModelProvider(providerId || '');
+
+  const [isEditingApiKey, setIsEditingApiKey] = useState(false);
+  const [originalApiKey, setOriginalApiKey] = useState<string>('');
 
   const form = useForm({
     initialValues: {
@@ -54,11 +64,12 @@ export default function EditModelProvider() {
   // Update form when provider data loads
   useEffect(() => {
     if (provider) {
+      setOriginalApiKey(provider.api_key || '');
       form.setValues({
         name: provider.name,
         provider_type: provider.provider_type,
         endpoint: provider.endpoint,
-        api_key: provider.api_key,
+        api_key: provider.api_key || '',
         description: provider.description || '',
         is_active: provider.is_active,
         supported_model_types: provider.supported_model_types,
@@ -118,7 +129,7 @@ export default function EditModelProvider() {
 
   return (
     <Page title="Edit Model Provider">
-      <PageHeader 
+      <PageHeader
         title={`Edit ${provider.name}`}
         breadcrumbs={breadcrumbs}
         action={
@@ -158,13 +169,47 @@ export default function EditModelProvider() {
               {...form.getInputProps('endpoint')}
             />
 
-            <TextInput
-              label="API Key"
-              type="password"
-              placeholder="Your API key"
-              required
-              {...form.getInputProps('api_key')}
-            />
+            <div>
+              <TextInput
+                label="API Key"
+                placeholder="Your API key"
+                required
+                value={isEditingApiKey ? form.values.api_key : maskApiKey(form.values.api_key)}
+                onChange={(e) => {
+                  if (!isEditingApiKey) {
+                    setIsEditingApiKey(true);
+                    form.setFieldValue('api_key', '');
+                  } else {
+                    form.setFieldValue('api_key', e.currentTarget.value);
+                  }
+                }}
+                onFocus={() => {
+                  if (!isEditingApiKey) {
+                    setIsEditingApiKey(true);
+                    form.setFieldValue('api_key', '');
+                  }
+                }}
+                rightSection={
+                  isEditingApiKey && (
+                    <Button
+                      size="xs"
+                      variant="subtle"
+                      onClick={() => {
+                        setIsEditingApiKey(false);
+                        form.setFieldValue('api_key', originalApiKey);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  )
+                }
+              />
+              {!isEditingApiKey && (
+                <Text size="xs" c="dimmed" mt={4}>
+                  Click to change API key
+                </Text>
+              )}
+            </div>
 
             <Textarea
               label="Description"
@@ -209,8 +254,8 @@ export default function EditModelProvider() {
               >
                 Cancel
               </Button>
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 loading={updateProviderMutation.isPending}
               >
                 Save Changes

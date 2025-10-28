@@ -48,10 +48,15 @@ def document_judger(state: WorkflowState) -> WorkflowState:
         chain = get_judger_chain(llm_client=llm_client, config=config)
 
         judged_docs = []
-        relevance_labels = []
+        relevance_scores = []
+
+        # Get reranking config
+        reranking_config = config.get("reranking_config", {})
+        relevance_threshold = reranking_config.get("relevance_threshold", 0.5)
+        use_score_based = reranking_config.get("use_score_based", True)
 
         # Judge each document
-        for doc in retrieved_docs:
+        for i, doc in enumerate(retrieved_docs):
             try:
                 # Invoke the chain
                 response = chain.invoke(
@@ -63,35 +68,66 @@ def document_judger(state: WorkflowState) -> WorkflowState:
                     response.content if hasattr(response, "content") else str(response)
                 )
 
-                # Parse judgment result
+                # Parse judgment result - extract last number from response
                 try:
-                    judgment = int(response_text.strip())
-                    if judgment not in [0, 1]:
-                        judgment = 0  # Default to not relevant
+                    # Try to find the last number in the response (the score)
+                    import re
+                    numbers = re.findall(r'\b[0-1]\.?[0-9]*\b', response_text)
+
+                    if numbers:
+                        # Take the last number found (should be the final score)
+                        score = float(numbers[-1])
+                        # Clamp to [0.0, 1.0]
+                        score = max(0.0, min(1.0, score))
+                    else:
+                        # Fallback: try parsing the entire response
+                        score = float(response_text.strip())
+                        score = max(0.0, min(1.0, score))
+
                 except (ValueError, AttributeError):
-                    judgment = 0  # Default to not relevant if parsing fails
+                    logger.warning(f"⚠️ Failed to parse score from: {response_text[:100]}")
+                    score = 0.0  # Default to not relevant if parsing fails
 
                 # Add judgment to document
                 judged_doc = doc.copy()
-                judged_doc["relevance_label"] = judgment
+                judged_doc["relevance_score"] = round(score, 2)
+                judged_doc["relevance_label"] = 1 if score >= relevance_threshold else 0
+                judged_doc["original_rank"] = i
                 judged_docs.append(judged_doc)
-                relevance_labels.append(judgment)
+                relevance_scores.append(score)
+
+                logger.debug(f"   Doc {i+1}: Score = {score:.2f}")
 
             except Exception as e:
                 logger.warning(f"⚠️ Failed to judge document: {e}")
                 # Default to not relevant
                 judged_doc = doc.copy()
+                judged_doc["relevance_score"] = 0.0
                 judged_doc["relevance_label"] = 0
+                judged_doc["original_rank"] = i
                 judged_docs.append(judged_doc)
-                relevance_labels.append(0)
+                relevance_scores.append(0.0)
+
+        # Sort documents by relevance score (highest first)
+        judged_docs_sorted = sorted(
+            judged_docs,
+            key=lambda x: x.get("relevance_score", 0.0),
+            reverse=True
+        )
 
         # Update state
-        state["judged_documents"] = judged_docs
-        state["relevance_labels"] = relevance_labels
+        state["judged_documents"] = judged_docs_sorted
+        state["relevance_scores"] = relevance_scores
+        state["document_scores"] = [doc["relevance_score"] for doc in judged_docs_sorted]
 
-        relevant_count = sum(relevance_labels)
+        # Stats
+        relevant_count = sum(1 for score in relevance_scores if score >= relevance_threshold)
+        avg_score = sum(relevance_scores) / len(relevance_scores) if relevance_scores else 0.0
+
         logger.info(
-            f"✅ Judged {len(judged_docs)} documents, {relevant_count} relevant"
+            f"✅ Judged {len(judged_docs)} documents: "
+            f"{relevant_count} relevant (threshold: {relevance_threshold}), "
+            f"avg score: {avg_score:.2f}"
         )
         logger.info("✅ [NODE FINISH] document_judger")
 

@@ -182,8 +182,8 @@ export const KnowledgeJobCreateSchema = z.object({
 
   // Document splitter configuration
   splitter_id: z.string(),
-  custom_chunk_size: z.number().min(64).max(4096).optional(),
-  custom_chunk_overlap: z.number().min(0).max(512).optional(),
+  custom_chunk_size: z.number().min(64).optional(),
+  custom_chunk_overlap: z.number().min(0).optional(),
 
   embedding_model_provider_id: z.string(),
   embedding_model_name: z.string(),

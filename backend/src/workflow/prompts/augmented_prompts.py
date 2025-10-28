@@ -1,32 +1,55 @@
 """
 Augmented query enhancement prompts.
 
-This strategy generates enhanced query variants while preserving the original query,
-ensuring no context is lost while benefiting from query improvements.
+This strategy generates enhanced query variants using multiple transformation types
+while preserving the original query, ensuring no context is lost while benefiting
+from query improvements.
 """
 
 from src.workflow.prompts.base_prompt import Prompt
 
 AUGMENTED_SYSTEM_PROMPT = Prompt(
     name="augmented_system_prompt",
-    prompt="""You are a query enhancement expert specializing in augmenting user queries for better retrieval.
+    prompt="""You are a query enhancement expert specializing in augmenting user queries for better retrieval using multiple transformation strategies.
 
-Your task is to generate 2-3 enhanced variants of the user's query that:
-1. Rephrase the query using different terminology
-2. Expand on implicit concepts
-3. Add relevant context or synonyms
-4. Maintain the original intent
+Your task is to generate 3-4 enhanced variants of the user's query using these transformation types:
 
-The original query will ALWAYS be preserved and used alongside your variants.
-Focus on generating complementary perspectives that fill gaps the original query might miss.
+**Transformation Types:**
 
-Return ONLY a JSON array of enhanced query strings, nothing else.
-Example: ["enhanced query 1", "enhanced query 2", "enhanced query 3"]""",
-    tags=["query_enhancement", "augmented", "retrieval"],
+1. **Synonym Expansion**: Replace key terms with synonyms and related terminology
+   - Example: "configure SSL" → "set up secure socket layer"
+
+2. **Query Expansion**: Add implicit concepts and domain-specific context
+   - Example: "SSL configuration" → "SSL certificate configuration and HTTPS setup"
+
+3. **Query Contraction**: Focus on core concepts by removing unnecessary words
+   - Example: "How do I configure SSL in production?" → "SSL production configuration"
+
+4. **Technical Reformulation**: Rephrase using technical jargon or layman terms (opposite of original)
+   - Example: "fix authentication" → "resolve identity verification issues"
+
+**Guidelines:**
+- Generate 3-4 variants using DIFFERENT transformation types
+- Each variant should use ONE primary transformation type
+- Maintain the original query intent
+- The original query will ALWAYS be preserved alongside your variants
+- Focus on complementary perspectives that fill retrieval gaps
+
+**Output Format:**
+Return ONLY a JSON object with transformation types and queries:
+{
+  "synonym_expansion": "variant using synonyms",
+  "query_expansion": "variant with expanded concepts",
+  "query_contraction": "focused core query",
+  "technical_reformulation": "rephrased technical/layman variant"
+}
+
+Note: You may omit a transformation type if it doesn't apply to the query.""",
+    tags=["query_enhancement", "augmented", "retrieval", "multi_transform"],
     metadata={
-        "purpose": "Generate enhanced query variants while preserving original query",
-        "output_format": "JSON array of strings",
-        "strategy": "augmented",
+        "purpose": "Generate enhanced query variants using multiple transformation types",
+        "output_format": "JSON object with transformation types",
+        "strategy": "augmented_multi_transform",
     },
 )
 
@@ -34,16 +57,25 @@ AUGMENTED_USER_PROMPT = Prompt(
     name="augmented_user_prompt",
     prompt="""Original query: "{{ query }}"
 
-Generate 2-3 enhanced variants that complement this query. Focus on:
-- Alternative terminology and synonyms
-- Expanded concepts
-- Different phrasings
-- Related aspects
+Apply multiple transformation types to enhance this query:
 
-Return as JSON array: ["variant 1", "variant 2", "variant 3"]""",
+1. **Synonym Expansion**: Use alternative terminology
+2. **Query Expansion**: Add implicit concepts and context
+3. **Query Contraction**: Extract core focus terms
+4. **Technical Reformulation**: Rephrase with different technical level
+
+Generate 3-4 variants using DIFFERENT transformation types.
+
+Return as JSON object:
+{
+  "synonym_expansion": "...",
+  "query_expansion": "...",
+  "query_contraction": "...",
+  "technical_reformulation": "..."
+}""",
     tags=["query_enhancement", "augmented", "user_input"],
     metadata={
         "input_variables": ["query"],
-        "output_format": "JSON array of strings",
+        "output_format": "JSON object with transformation types",
     },
 )

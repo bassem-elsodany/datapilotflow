@@ -115,36 +115,71 @@ class DocumentExtractionService:
             knowledge_job=knowledge_job,
         )
 
-        # Yield batches directly from crawler (NO CALLBACKS!)
+        # Yield batches directly from crawler with timeout protection
         try:
-            async for batch in documents_generator:
-                if not batch:
-                    logger.debug("[GENERATOR] Skipping empty batch")
-                    continue
+            import asyncio
 
-                # Filter out documents with empty content
-                valid_documents = [
-                    doc
-                    for doc in batch
-                    if doc.page_content and doc.page_content.strip()
-                ]
+            batch_timeout = 600  # 10 minutes timeout per batch
 
-                if not valid_documents:
-                    logger.warning(
-                        f"[GENERATOR] Batch {batch_count + 1}: All documents had empty content, skipping"
+            logger.info(
+                f"[GENERATOR] Starting batch extraction with {batch_timeout}s timeout per batch"
+            )
+
+            # Create the generator iterator once
+            generator_iter = documents_generator.__aiter__()
+
+            # Iterate with timeout protection
+            while True:
+                try:
+                    # Wait for next batch with timeout
+                    batch = await asyncio.wait_for(
+                        generator_iter.__anext__(),
+                        timeout=batch_timeout
                     )
-                    continue
 
-                batch_count += 1
-                total_documents += len(valid_documents)
+                    if not batch:
+                        logger.debug("[GENERATOR] Skipping empty batch")
+                        continue
 
-                logger.info(
-                    f"[GENERATOR] Yielding batch {batch_count}: {len(valid_documents)} documents "
-                    f"(total: {total_documents})"
-                )
+                    # Filter out documents with empty content
+                    valid_documents = [
+                        doc
+                        for doc in batch
+                        if doc.page_content and doc.page_content.strip()
+                    ]
 
-                # Yield the batch directly - NO CALLBACKS!
-                yield valid_documents
+                    if not valid_documents:
+                        logger.warning(
+                            f"[GENERATOR] Batch {batch_count + 1}: All documents had empty content, skipping"
+                        )
+                        continue
+
+                    batch_count += 1
+                    total_documents += len(valid_documents)
+
+                    logger.info(
+                        f"[GENERATOR] Yielding batch {batch_count}: {len(valid_documents)} documents "
+                        f"(total: {total_documents})"
+                    )
+
+                    # Yield the batch directly
+                    yield valid_documents
+
+                except StopAsyncIteration:
+                    # Generator exhausted normally
+                    logger.info(
+                        f"[GENERATOR] Extraction complete: {batch_count} batches, {total_documents} documents"
+                    )
+                    break
+
+                except asyncio.TimeoutError:
+                    # Timeout waiting for next batch - crawler is hung
+                    logger.error(
+                        f"[GENERATOR] TIMEOUT: No batch received for {batch_timeout}s. "
+                        f"Crawler appears hung. Stopping extraction gracefully. "
+                        f"Successfully yielded: {batch_count} batches, {total_documents} documents"
+                    )
+                    break
 
         except Exception as e:
             logger.error(f"[GENERATOR] Error during document extraction: {e}")

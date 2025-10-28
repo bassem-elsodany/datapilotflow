@@ -70,12 +70,12 @@ export const KnowledgeJobCreateSchema = z.object({
   splitter_type: SplitterTypeSchema.optional(),
 
   // Optional overrides for splitter configuration (for text splitters)
-  custom_chunk_size: z.number().min(64).max(4096).nullable().optional(),
-  custom_chunk_overlap: z.number().min(0).max(512).nullable().optional(),
+  custom_chunk_size: z.number().min(64).nullable().optional(),
+  custom_chunk_overlap: z.number().min(0).nullable().optional(),
 
   // Legacy document splitting configuration (deprecated, kept for backward compatibility)
-  chunk_size: z.number().min(64).max(4096).default(256).nullable(),
-  chunk_overlap: z.number().min(0).max(512).default(32).nullable(),
+  chunk_size: z.number().min(64).default(256).nullable(),
+  chunk_overlap: z.number().min(0).default(32).nullable(),
   headers_to_split_on: z.array(z.tuple([z.string(), z.string()])).optional(),
 
   // Existing collection option
@@ -107,8 +107,8 @@ export const KnowledgeJobUpdateSchema = z.object({
 
   // Document splitting configuration
   splitter_type: SplitterTypeSchema.optional(),
-  chunk_size: z.number().min(64).max(4096).nullable().optional(),
-  chunk_overlap: z.number().min(0).max(512).nullable().optional(),
+  chunk_size: z.number().min(64).nullable().optional(),
+  chunk_overlap: z.number().min(0).nullable().optional(),
   headers_to_split_on: z.array(z.tuple([z.string(), z.string()])).optional(),
 
   // Job processing configuration

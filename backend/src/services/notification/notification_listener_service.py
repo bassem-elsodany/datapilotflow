@@ -93,6 +93,7 @@ async def process_notification_event(event_payload: Dict[str, Any]) -> bool:
         title = event_payload.get("title")
         message = event_payload.get("message")
         metadata = event_payload.get("metadata", {})
+        progress = event_payload.get("progress")  # Extract progress for job notifications
         
         # Set expiration based on event type
         expires_at = None
@@ -108,6 +109,13 @@ async def process_notification_event(event_payload: Dict[str, Any]) -> bool:
             expires_at = datetime.now(timezone.utc) + timedelta(days=3)
         elif notification_type == NotificationType.ERROR:
             expires_at = datetime.now(timezone.utc) + timedelta(days=1)
+        # Knowledge Job Processing Notifications
+        elif notification_type in [NotificationType.KNOWLEDGE_JOB_STARTED, NotificationType.KNOWLEDGE_JOB_PROGRESS]:
+            # Progress notifications expire quickly (1 hour) since they're transient
+            expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+        elif notification_type in [NotificationType.KNOWLEDGE_JOB_COMPLETED, NotificationType.KNOWLEDGE_JOB_FAILED, NotificationType.KNOWLEDGE_JOB_CANCELLED]:
+            # Final status notifications kept for 7 days
+            expires_at = datetime.now(timezone.utc) + timedelta(days=7)
         else:
             expires_at = datetime.now(timezone.utc) + timedelta(days=7)
         
@@ -119,6 +127,7 @@ async def process_notification_event(event_payload: Dict[str, Any]) -> bool:
             priority=priority,
             title=title,
             message=message,
+            progress=progress,  # Include progress for job notifications
             metadata=metadata,
             expires_at=expires_at
         )
@@ -143,13 +152,15 @@ async def process_notification_event(event_payload: Dict[str, Any]) -> bool:
                     "priority": priority,
                     "title": title,
                     "message": message,
+                    "progress": progress,  # Include progress for job notifications
                     "metadata": metadata,
                     "created_at": datetime.now(timezone.utc).isoformat()
                 }
                 
-                # Call the broadcast endpoint
+                # Call the broadcast endpoint using configured API server settings
                 async with aiohttp.ClientSession() as session:
-                    api_url = f"http://localhost:8000/notifications/broadcast"
+                    # Use full API path with version prefix (/api/v1)
+                    api_url = f"http://{settings.API_SERVER_HOST}:{settings.API_SERVER_PORT}/api/v1/notifications/broadcast"
                     headers = {"Content-Type": "application/json"}
                     
                     async with session.post(api_url, json=broadcast_data, headers=headers) as response:

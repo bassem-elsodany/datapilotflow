@@ -5,7 +5,7 @@ This module provides a factory for creating splitter instances based on
 DocumentSplitter configuration, ensuring the correct splitter type is used.
 """
 
-from typing import Union
+from typing import Optional, Union
 
 from loguru import logger
 
@@ -17,7 +17,11 @@ from .markdown_splitter import MarkdownSplitter
 from .text_splitter import TextSplitter
 
 
-def create_splitter(splitter_config: DocumentSplitter) -> BaseSplitter:
+def create_splitter(
+    splitter_config: DocumentSplitter,
+    max_tokens: Optional[int] = None,
+    model_name: Optional[str] = None
+) -> BaseSplitter:
     """Create a splitter instance based on DocumentSplitter configuration.
 
     This factory function creates the appropriate splitter implementation
@@ -26,6 +30,8 @@ def create_splitter(splitter_config: DocumentSplitter) -> BaseSplitter:
     Args:
         splitter_config: DocumentSplitter configuration containing
             all necessary parameters for the specific splitter type
+        max_tokens: Maximum tokens per chunk (for DOCUMENT splitters with hybrid splitting)
+        model_name: Embedding model name for token counting (for DOCUMENT splitters)
 
     Returns:
         BaseSplitter: The appropriate splitter instance
@@ -40,15 +46,19 @@ def create_splitter(splitter_config: DocumentSplitter) -> BaseSplitter:
         return TextSplitter(splitter_config)
 
     elif splitter_config.splitter_type == SplitterType.DOCUMENT:
-        logger.debug("Creating MarkdownSplitter instance")
-        return MarkdownSplitter(splitter_config)
+        logger.debug(f"Creating MarkdownSplitter instance (max_tokens={max_tokens}, model={model_name})")
+        return MarkdownSplitter(
+            splitter_config,
+            max_tokens=max_tokens,
+            model_name=model_name
+        )
 
     elif splitter_config.splitter_type == SplitterType.HTML:
         logger.debug("Creating HTMLSplitter instance")
         return HTMLSplitter(splitter_config)
 
     else:
-        raise ValueError(f"Unsupported splitter type: {splitter_config.splitter_type}")
+        raise ValueError(f"Unsupported splitter_type: {splitter_config.splitter_type}")
 
 
 def create_splitter_by_type(

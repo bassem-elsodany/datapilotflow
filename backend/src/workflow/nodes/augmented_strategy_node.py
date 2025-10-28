@@ -52,16 +52,32 @@ async def augmented_strategy_node(state: WorkflowState) -> WorkflowState:
 
         # Parse the response
         enhanced_variants = []
+        transformation_types_used = []
         try:
             # Try to parse as JSON
             content = (
                 response.content if hasattr(response, "content") else str(response)
             )
-            enhanced_variants = json.loads(content)
+            parsed_content = json.loads(content)
 
-            if not isinstance(enhanced_variants, list):
+            # Handle both new object format and legacy list format for backward compatibility
+            if isinstance(parsed_content, dict):
+                # New format: JSON object with transformation types
+                for transform_type, variant in parsed_content.items():
+                    if variant and isinstance(variant, str) and variant.strip():
+                        enhanced_variants.append(variant.strip())
+                        transformation_types_used.append(transform_type)
+
+                logger.info(
+                    f"✅ Augmented Strategy: Applied transformation types: {', '.join(transformation_types_used)}"
+                )
+            elif isinstance(parsed_content, list):
+                # Legacy format: JSON array of strings
+                enhanced_variants = [v for v in parsed_content if v and isinstance(v, str)]
+                logger.info("✅ Augmented Strategy: Using legacy array format")
+            else:
                 logger.warning(
-                    f"⚠️ Augmented Strategy: Expected list, got {type(enhanced_variants)}"
+                    f"⚠️ Augmented Strategy: Unexpected format {type(parsed_content)}"
                 )
                 enhanced_variants = [content]
 
@@ -95,10 +111,11 @@ async def augmented_strategy_node(state: WorkflowState) -> WorkflowState:
         )
         logger.debug(f"   Original: {query}")
         for i, variant in enumerate(enhanced_variants, 1):
-            logger.debug(f"   Variant {i}: {variant}")
+            transform_label = f" ({transformation_types_used[i-1]})" if i-1 < len(transformation_types_used) else ""
+            logger.debug(f"   Variant {i}{transform_label}: {variant}")
 
         # Update state
-        state["enhanced_query"] = query  # Keep original as primary
+        state["enhanced_query"] = {"augmented_queries": augmented_queries}
         state["augmented_queries"] = augmented_queries  # Original + variants
         state["enhancement_strategies_applied"] = ["augmented"]
 
@@ -111,7 +128,7 @@ async def augmented_strategy_node(state: WorkflowState) -> WorkflowState:
         logger.error("❌ [NODE FINISH] augmented_strategy_node (with error)")
 
         # Fallback: use original query only
-        state["enhanced_query"] = query
+        state["enhanced_query"] = {}
         state["augmented_queries"] = [query]
         state["enhancement_strategies_applied"] = ["augmented_fallback"]
         return state

@@ -505,16 +505,18 @@ class KnowledgeJobService:
             raise ValueError("Chunk overlap must be less than chunk size")
 
         if chunk_size < 64:
-            raise ValueError("Chunk size must be at least 64 characters")
-
-        if chunk_size > 4096:
-            raise ValueError("Chunk size cannot exceed 4096 characters")
+            raise ValueError("Chunk size must be at least 64 tokens")
 
         if chunk_overlap < 0:
             raise ValueError("Chunk overlap cannot be negative")
 
-        if chunk_overlap > 512:
-            raise ValueError("Chunk overlap cannot exceed 512 characters")
+        if chunk_overlap > (chunk_size / 2):
+            raise ValueError(
+                f"Chunk overlap ({chunk_overlap}) cannot exceed 50% of chunk size ({chunk_size})"
+            )
+
+        # Note: Upper limit validation for chunk_size should be done against the embedding model's
+        # max_input_tokens, which is validated at the frontend and should be checked during job execution
 
         if batch_size < 1:
             raise ValueError("Batch size must be at least 1")

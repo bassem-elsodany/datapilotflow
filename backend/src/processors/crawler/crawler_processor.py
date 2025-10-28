@@ -221,18 +221,43 @@ async def get_knowledge_source_documents(
                 from src.application.data.storage.duplicate_detector import (
                     DuplicateDetector,
                 )
+                from src.domain.rag.knowledge_chunk import KnowledgeChunk
+                from src.infrastructure.milvus.client import MilvusClientWrapper
+                from src.services.knowledge.vectordb_collection_service import (
+                    get_vectordb_collection_service,
+                )
 
-                duplicate_detector = DuplicateDetector()
-                existing_urls = duplicate_detector.get_existing_urls()
-                logger.debug(
-                    f"Loaded {len(existing_urls)} existing URLs for duplicate checking from collection"
+                # Get collection config to initialize Milvus client for duplicate detection
+                vectordb_service = get_vectordb_collection_service()
+                collection_config = vectordb_service.get_collection(
+                    knowledge_job.vectordb_collection_id,
+                    knowledge_job.user_id
                 )
+
+                if collection_config:
+                    # Initialize Milvus client for duplicate detection
+                    milvus_client = MilvusClientWrapper(
+                        model=KnowledgeChunk,
+                        collection_name=collection_config.collection_name,
+                        vector_dimension=collection_config.vector_dimension
+                    )
+
+                    duplicate_detector = DuplicateDetector(milvus_client=milvus_client)
+                    existing_urls = duplicate_detector.get_existing_urls()
+                    logger.info(
+                        f"Loaded {len(existing_urls)} existing URLs for duplicate checking from collection {collection_config.collection_name}"
+                    )
+                else:
+                    logger.warning(
+                        f"Collection config not found for job {knowledge_job.id}, skipping duplicate detection"
+                    )
+
             except Exception as e:
-                logger.error(
-                    f"Failed to load existing URLs for duplicate checking: {e}"
+                logger.warning(
+                    f"Failed to initialize duplicate detection: {e}. Continuing without duplicate detection."
                 )
-                logger.error(f"Traceback: {traceback.format_exc()}")
-                raise e
+                logger.debug(f"Traceback: {traceback.format_exc()}")
+                # Don't raise - continue without duplicate detection
 
         async with AsyncWebCrawler(config=browser_config) as crawler:
             try:

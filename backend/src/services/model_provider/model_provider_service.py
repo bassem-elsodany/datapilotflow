@@ -60,6 +60,7 @@ class ModelProviderService:
             name=provider.name,
             provider_type=provider.provider_type,
             endpoint=provider.endpoint,
+            api_key=provider.api_key,  # Include full API key, UI will mask it
             description=provider.description,
             is_active=provider.is_active,
             timeout=provider.timeout,
@@ -86,13 +87,14 @@ class ModelProviderService:
             user_id, is_active, provider_type, supported_model_type, skip, limit
         )
 
-        # Convert to response models (excluding sensitive data)
+        # Convert to response models (including API key for editing)
         return [
             ModelProviderResponse(
                 id=provider.id,
                 name=provider.name,
                 provider_type=provider.provider_type,
                 endpoint=provider.endpoint,
+                api_key=provider.api_key,  # Include full API key, UI will mask it
                 description=provider.description,
                 is_active=provider.is_active,
                 timeout=provider.timeout,

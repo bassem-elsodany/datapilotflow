@@ -62,6 +62,7 @@ class PipelineStatus(str, Enum):
 
 # Node Configuration Models (matching frontend)
 
+
 class WebsiteNodeConfig(BaseModel):
     """Configuration for website data source node - SIMPLIFIED.
 
@@ -70,7 +71,9 @@ class WebsiteNodeConfig(BaseModel):
     """
 
     url: str = Field(description="Base URL of the website to crawl")
-    crawl_depth: int = Field(default=4, ge=0, le=10, description="Maximum crawling depth")
+    crawl_depth: int = Field(
+        default=4, ge=0, le=10, description="Maximum crawling depth"
+    )
 
 
 class MultiplePagesNodeConfig(BaseModel):
@@ -81,8 +84,14 @@ class MultiplePagesNodeConfig(BaseModel):
     """
 
     base_url: str = Field(description="Base URL for the pages")
-    urls: List[str] = Field(default_factory=list, description="List of specific URLs to process", max_items=50000)
-    file_name: Optional[str] = Field(default=None, description="Name of uploaded file with URLs")
+    urls: List[str] = Field(
+        default_factory=list,
+        description="List of specific URLs to process",
+        max_items=50000,
+    )
+    file_name: Optional[str] = Field(
+        default=None, description="Name of uploaded file with URLs"
+    )
 
 
 class SinglePageNodeConfig(BaseModel):
@@ -98,43 +107,71 @@ class SinglePageNodeConfig(BaseModel):
 class DomainFilterNodeConfig(BaseModel):
     """Configuration for domain filter node."""
 
-    allowed_subdomains: List[str] = Field(default_factory=list, description="List of allowed subdomains")
-    blocked_subdomains: List[str] = Field(default_factory=list, description="List of blocked subdomains")
+    allowed_subdomains: List[str] = Field(
+        default_factory=list, description="List of allowed subdomains"
+    )
+    blocked_subdomains: List[str] = Field(
+        default_factory=list, description="List of blocked subdomains"
+    )
 
 
 class ContentFilterNodeConfig(BaseModel):
     """Configuration for content filter node."""
 
-    target_elements: List[str] = Field(default_factory=list, description="CSS selectors for content to include")
-    exclude_elements: List[str] = Field(default_factory=list, description="CSS selectors for content to exclude")
+    target_elements: List[str] = Field(
+        default_factory=list, description="CSS selectors for content to include"
+    )
+    exclude_elements: List[str] = Field(
+        default_factory=list, description="CSS selectors for content to exclude"
+    )
 
 
 class HtmlExtractorNodeConfig(BaseModel):
     """Configuration for HTML extractor node."""
 
-    content_filter_threshold: float = Field(default=0.6, ge=0.0, le=1.0, description="Content filter threshold")
+    content_filter_threshold: float = Field(
+        default=0.6, ge=0.0, le=1.0, description="Content filter threshold"
+    )
 
 
 class MarkdownGeneratorNodeConfig(BaseModel):
     """Configuration for markdown generator node."""
 
-    content_filter_threshold: float = Field(default=0.6, ge=0.0, le=1.0, description="Content filter threshold")
+    content_filter_threshold: float = Field(
+        default=0.6, ge=0.0, le=1.0, description="Content filter threshold"
+    )
 
 
 class LlmMarkdownGeneratorNodeConfig(BaseModel):
     """Configuration for LLM markdown generator node."""
 
-    llm_content_filter_id: Optional[str] = Field(default=None, description="LLM content filter configuration ID")
+    llm_content_filter_id: Optional[str] = Field(
+        default=None, description="LLM content filter configuration ID"
+    )
 
 
 class TextSplitterNodeConfig(BaseModel):
     """Configuration for text splitter node."""
 
-    splitter_id: Optional[str] = Field(default=None, description="Reference to existing splitter configuration")
-    splitter_type: str = Field(default="TEXT", description="Splitter type (TEXT or DOCUMENT)")
-    chunk_size: int = Field(default=512, ge=64, le=4096, description="Size of text chunks")
-    chunk_overlap: int = Field(default=50, ge=0, le=512, description="Overlap between chunks")
-    separators: List[str] = Field(default_factory=lambda: ["\n\n", "\n", " ", ""], description="Text separators")
+    splitter_id: Optional[str] = Field(
+        default=None, description="Reference to existing splitter configuration"
+    )
+    splitter_type: str = Field(
+        default="TEXT", description="Splitter type (TEXT or DOCUMENT)"
+    )
+    chunk_size: int = Field(
+        default=512,
+        ge=64,
+        description="Size of text chunks (validated against embedding model's max tokens)",
+    )
+    chunk_overlap: int = Field(
+        default=50,
+        ge=0,
+        description="Overlap between chunks (validated against chunk_size and embedding model limits)",
+    )
+    separators: List[str] = Field(
+        default_factory=lambda: ["\n\n", "\n", " ", ""], description="Text separators"
+    )
 
 
 class EmbeddingGeneratorNodeConfig(BaseModel):
@@ -142,8 +179,12 @@ class EmbeddingGeneratorNodeConfig(BaseModel):
 
     model_provider_id: str = Field(description="ID of the model provider")
     model_name: str = Field(description="Name of the embedding model")
-    vector_dimension: int = Field(ge=1, le=4096, description="Dimension of embedding vectors")
-    batch_size: int = Field(default=100, ge=1, le=1000, description="Batch size for processing")
+    vector_dimension: int = Field(
+        ge=1, le=4096, description="Dimension of embedding vectors"
+    )
+    batch_size: int = Field(
+        default=100, ge=1, le=1000, description="Batch size for processing"
+    )
 
 
 class TextSummarizerNodeConfig(BaseModel):
@@ -151,9 +192,15 @@ class TextSummarizerNodeConfig(BaseModel):
 
     model_provider_id: str = Field(description="ID of the LLM provider")
     model_name: str = Field(description="Name of the LLM model")
-    summary_type: str = Field(default="extractive", description="Type of summary (extractive, abstractive)")
-    max_length: int = Field(default=500, ge=50, le=2000, description="Maximum summary length")
-    temperature: float = Field(default=0.3, ge=0.0, le=2.0, description="Model temperature")
+    summary_type: str = Field(
+        default="extractive", description="Type of summary (extractive, abstractive)"
+    )
+    max_length: int = Field(
+        default=500, ge=50, le=2000, description="Maximum summary length"
+    )
+    temperature: float = Field(
+        default=0.3, ge=0.0, le=2.0, description="Model temperature"
+    )
 
 
 class ContentClassifierNodeConfig(BaseModel):
@@ -161,8 +208,12 @@ class ContentClassifierNodeConfig(BaseModel):
 
     model_provider_id: str = Field(description="ID of the LLM provider")
     model_name: str = Field(description="Name of the LLM model")
-    categories: List[str] = Field(default_factory=list, description="Classification categories")
-    confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0, description="Minimum confidence threshold")
+    categories: List[str] = Field(
+        default_factory=list, description="Classification categories"
+    )
+    confidence_threshold: float = Field(
+        default=0.7, ge=0.0, le=1.0, description="Minimum confidence threshold"
+    )
 
 
 class ContentEnricherNodeConfig(BaseModel):
@@ -170,8 +221,13 @@ class ContentEnricherNodeConfig(BaseModel):
 
     model_provider_id: str = Field(description="ID of the LLM provider")
     model_name: str = Field(description="Name of the LLM model")
-    enrichment_fields: List[str] = Field(default_factory=list, description="Fields to enrich (keywords, entities, topics)")
-    temperature: float = Field(default=0.3, ge=0.0, le=2.0, description="Model temperature")
+    enrichment_fields: List[str] = Field(
+        default_factory=list,
+        description="Fields to enrich (keywords, entities, topics)",
+    )
+    temperature: float = Field(
+        default=0.3, ge=0.0, le=2.0, description="Model temperature"
+    )
 
 
 class TranslationNodeConfig(BaseModel):
@@ -180,51 +236,83 @@ class TranslationNodeConfig(BaseModel):
     model_provider_id: str = Field(description="ID of the LLM provider")
     model_name: str = Field(description="Name of the LLM model")
     target_language: str = Field(description="Target language code")
-    preserve_formatting: bool = Field(default=True, description="Preserve original formatting")
+    preserve_formatting: bool = Field(
+        default=True, description="Preserve original formatting"
+    )
 
 
 class VectorDatabaseNodeConfig(BaseModel):
     """Configuration for vector database storage node."""
 
-    collection_id: Optional[str] = Field(default=None, description="ID of existing collection")
-    collection_name: Optional[str] = Field(default=None, description="Name for new collection")
-    collection_description: Optional[str] = Field(default=None, description="Collection description")
-    clear_collection_before_start: bool = Field(default=False, description="Clear collection before storing")
-    check_duplicates_before_insert: bool = Field(default=False, description="Check for duplicates")
+    collection_id: Optional[str] = Field(
+        default=None, description="ID of existing collection"
+    )
+    collection_name: Optional[str] = Field(
+        default=None, description="Name for new collection"
+    )
+    collection_description: Optional[str] = Field(
+        default=None, description="Collection description"
+    )
+    clear_collection_before_start: bool = Field(
+        default=False, description="Clear collection before storing"
+    )
+    check_duplicates_before_insert: bool = Field(
+        default=False, description="Check for duplicates"
+    )
 
 
 class FileExportNodeConfig(BaseModel):
     """Configuration for file export node."""
 
     output_path: str = Field(description="Path to save exported files")
-    file_format: str = Field(default="json", description="Export format (json, csv, txt, markdown)")
-    consolidated_file: bool = Field(default=False, description="Save as single consolidated file")
-    include_metadata: bool = Field(default=True, description="Include metadata in export")
+    file_format: str = Field(
+        default="json", description="Export format (json, csv, txt, markdown)"
+    )
+    consolidated_file: bool = Field(
+        default=False, description="Save as single consolidated file"
+    )
+    include_metadata: bool = Field(
+        default=True, description="Include metadata in export"
+    )
 
 
 class ReportGeneratorNodeConfig(BaseModel):
     """Configuration for report generator node."""
 
-    report_type: str = Field(default="summary", description="Type of report (summary, detailed, custom)")
-    output_format: str = Field(default="pdf", description="Report format (pdf, html, markdown)")
+    report_type: str = Field(
+        default="summary", description="Type of report (summary, detailed, custom)"
+    )
+    output_format: str = Field(
+        default="pdf", description="Report format (pdf, html, markdown)"
+    )
     include_charts: bool = Field(default=True, description="Include visualizations")
-    sections: List[str] = Field(default_factory=list, description="Report sections to include")
+    sections: List[str] = Field(
+        default_factory=list, description="Report sections to include"
+    )
 
 
 class AnalyticsNodeConfig(BaseModel):
     """Configuration for analytics node."""
 
     metrics: List[str] = Field(default_factory=list, description="Metrics to calculate")
-    aggregation_level: str = Field(default="document", description="Aggregation level (document, batch, pipeline)")
+    aggregation_level: str = Field(
+        default="document", description="Aggregation level (document, batch, pipeline)"
+    )
     save_results: bool = Field(default=True, description="Save analytics results")
 
 
 class NotificationNodeConfig(BaseModel):
     """Configuration for notification node."""
 
-    notification_type: str = Field(default="email", description="Notification type (email, webhook, slack)")
-    recipients: List[str] = Field(default_factory=list, description="Notification recipients")
-    trigger_on: str = Field(default="completion", description="When to trigger (completion, failure, both)")
+    notification_type: str = Field(
+        default="email", description="Notification type (email, webhook, slack)"
+    )
+    recipients: List[str] = Field(
+        default_factory=list, description="Notification recipients"
+    )
+    trigger_on: str = Field(
+        default="completion", description="When to trigger (completion, failure, both)"
+    )
     include_summary: bool = Field(default=True, description="Include execution summary")
 
 
@@ -235,14 +323,26 @@ class PipelineNode(BaseModel):
     type: NodeType = Field(description="Type of the node")
     name: str = Field(description="Display name of the node")
     position: Dict[str, float] = Field(description="Position on the canvas (x, y)")
-    status: NodeStatus = Field(default=NodeStatus.PENDING, description="Execution status of the node")
-    configured: bool = Field(default=False, description="Whether the node has been configured")
-    config: Dict[str, Any] = Field(default_factory=dict, description="Node-specific configuration")
+    status: NodeStatus = Field(
+        default=NodeStatus.PENDING, description="Execution status of the node"
+    )
+    configured: bool = Field(
+        default=False, description="Whether the node has been configured"
+    )
+    config: Dict[str, Any] = Field(
+        default_factory=dict, description="Node-specific configuration"
+    )
 
     # Execution metadata
-    started_at: Optional[datetime] = Field(default=None, description="When node execution started")
-    completed_at: Optional[datetime] = Field(default=None, description="When node execution completed")
-    error_message: Optional[str] = Field(default=None, description="Error message if failed")
+    started_at: Optional[datetime] = Field(
+        default=None, description="When node execution started"
+    )
+    completed_at: Optional[datetime] = Field(
+        default=None, description="When node execution completed"
+    )
+    error_message: Optional[str] = Field(
+        default=None, description="Error message if failed"
+    )
 
     class Config:
         json_encoders = {datetime: lambda v: v.isoformat()}
@@ -267,22 +367,39 @@ class Pipeline(BaseModel):
     id: str = Field(description="Unique identifier for the pipeline")
     user_id: str = Field(description="ID of the user who owns this pipeline")
     name: str = Field(description="Name of the pipeline")
-    description: Optional[str] = Field(default=None, description="Description of the pipeline")
+    description: Optional[str] = Field(
+        default=None, description="Description of the pipeline"
+    )
 
     # Pipeline graph structure
-    nodes: List[PipelineNode] = Field(default_factory=list, description="Nodes in the pipeline")
-    edges: List[PipelineEdge] = Field(default_factory=list, description="Edges connecting nodes")
+    nodes: List[PipelineNode] = Field(
+        default_factory=list, description="Nodes in the pipeline"
+    )
+    edges: List[PipelineEdge] = Field(
+        default_factory=list, description="Edges connecting nodes"
+    )
 
     # Pipeline state
-    status: PipelineStatus = Field(default=PipelineStatus.DRAFT, description="Overall pipeline status")
+    status: PipelineStatus = Field(
+        default=PipelineStatus.DRAFT, description="Overall pipeline status"
+    )
 
     # Execution tracking
-    last_executed_at: Optional[datetime] = Field(default=None, description="Last execution timestamp")
-    execution_count: int = Field(default=0, description="Number of times this pipeline has been executed")
+    last_executed_at: Optional[datetime] = Field(
+        default=None, description="Last execution timestamp"
+    )
+    execution_count: int = Field(
+        default=0, description="Number of times this pipeline has been executed"
+    )
 
     # Metadata
-    created_at: datetime = Field(default_factory=datetime.utcnow, description="When the pipeline was created")
-    updated_at: datetime = Field(default_factory=datetime.utcnow, description="When the pipeline was last updated")
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow, description="When the pipeline was created"
+    )
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="When the pipeline was last updated",
+    )
     created_by: str = Field(description="User ID who created this pipeline")
     updated_by: str = Field(description="User ID who last updated this pipeline")
 
@@ -294,26 +411,42 @@ class PipelineCreate(BaseModel):
     """Model for creating a new pipeline."""
 
     name: str = Field(description="Name of the pipeline")
-    description: Optional[str] = Field(default=None, description="Description of the pipeline")
-    nodes: List[PipelineNode] = Field(default_factory=list, description="Nodes in the pipeline")
-    edges: List[PipelineEdge] = Field(default_factory=list, description="Edges connecting nodes")
+    description: Optional[str] = Field(
+        default=None, description="Description of the pipeline"
+    )
+    nodes: List[PipelineNode] = Field(
+        default_factory=list, description="Nodes in the pipeline"
+    )
+    edges: List[PipelineEdge] = Field(
+        default_factory=list, description="Edges connecting nodes"
+    )
 
 
 class PipelineUpdate(BaseModel):
     """Model for updating an existing pipeline."""
 
     name: Optional[str] = Field(default=None, description="Name of the pipeline")
-    description: Optional[str] = Field(default=None, description="Description of the pipeline")
-    nodes: Optional[List[PipelineNode]] = Field(default=None, description="Nodes in the pipeline")
-    edges: Optional[List[PipelineEdge]] = Field(default=None, description="Edges connecting nodes")
-    status: Optional[PipelineStatus] = Field(default=None, description="Pipeline status")
+    description: Optional[str] = Field(
+        default=None, description="Description of the pipeline"
+    )
+    nodes: Optional[List[PipelineNode]] = Field(
+        default=None, description="Nodes in the pipeline"
+    )
+    edges: Optional[List[PipelineEdge]] = Field(
+        default=None, description="Edges connecting nodes"
+    )
+    status: Optional[PipelineStatus] = Field(
+        default=None, description="Pipeline status"
+    )
 
 
 class PipelineExecutionRequest(BaseModel):
     """Request model for executing a pipeline."""
 
     pipeline_id: str = Field(description="ID of the pipeline to execute")
-    async_execution: bool = Field(default=True, description="Execute asynchronously via RabbitMQ")
+    async_execution: bool = Field(
+        default=True, description="Execute asynchronously via RabbitMQ"
+    )
 
 
 class PipelineExecutionStatus(BaseModel):
@@ -321,12 +454,24 @@ class PipelineExecutionStatus(BaseModel):
 
     pipeline_id: str = Field(description="ID of the pipeline")
     status: PipelineStatus = Field(description="Current pipeline status")
-    current_node: Optional[str] = Field(default=None, description="Currently executing node ID")
-    progress: float = Field(default=0.0, ge=0.0, le=100.0, description="Execution progress percentage")
-    nodes_status: List[PipelineNode] = Field(default_factory=list, description="Status of all nodes")
-    started_at: Optional[datetime] = Field(default=None, description="Execution start time")
-    estimated_completion: Optional[datetime] = Field(default=None, description="Estimated completion time")
-    error_message: Optional[str] = Field(default=None, description="Error message if failed")
+    current_node: Optional[str] = Field(
+        default=None, description="Currently executing node ID"
+    )
+    progress: float = Field(
+        default=0.0, ge=0.0, le=100.0, description="Execution progress percentage"
+    )
+    nodes_status: List[PipelineNode] = Field(
+        default_factory=list, description="Status of all nodes"
+    )
+    started_at: Optional[datetime] = Field(
+        default=None, description="Execution start time"
+    )
+    estimated_completion: Optional[datetime] = Field(
+        default=None, description="Estimated completion time"
+    )
+    error_message: Optional[str] = Field(
+        default=None, description="Error message if failed"
+    )
 
     class Config:
         json_encoders = {datetime: lambda v: v.isoformat()}

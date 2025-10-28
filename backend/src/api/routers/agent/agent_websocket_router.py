@@ -155,6 +155,11 @@ async def agent_query_websocket(websocket: WebSocket, token: str = Query(None)):
                                     conversation.enhancement_config.strategy
                                 )
 
+                            # Load retrieval strategy
+                            retrieval_strategy = getattr(
+                                conversation, "retrieval_strategy", "single_query"
+                            )
+
                             # Load reranking settings - DEBUG
                             logger.debug(
                                 f"🔍 Conversation object type: {type(conversation)}"
@@ -365,6 +370,7 @@ async def agent_query_websocket(websocket: WebSocket, token: str = Query(None)):
                         conversation_id=conversation_id,
                         collection_name=collection_name,
                         selected_strategy=selected_strategy,
+                        retrieval_strategy=retrieval_strategy,
                         enhancement_config=enhancement_config,
                         enable_reranking=enable_reranking,
                         enable_llm_generation=enable_llm_generation,

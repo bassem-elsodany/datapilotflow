@@ -52,6 +52,9 @@ class JobContext:
     # Metadata
     metadata: Dict[str, Any] = field(default_factory=dict)
 
+    # Flags for tracking one-time operations
+    _collection_cleared: bool = field(default=False, init=False)
+
     def __post_init__(self):
         """Initialize default stats if not provided."""
         if not self.stats:
@@ -123,8 +126,23 @@ class JobContext:
         return self.user_id
 
     def is_collection_clear_requested(self) -> bool:
-        """Check if collection should be cleared before processing."""
-        return getattr(self.job, "clear_collection_before_start", False)
+        """Check if collection should be cleared before processing.
+
+        Returns True only if:
+        1. Job has clear_collection_before_start flag set to True
+        2. Collection has not been cleared yet in this execution
+        """
+        should_clear = getattr(self.job, "clear_collection_before_start", False)
+        # Only return True if requested AND not already cleared
+        return should_clear and not self._collection_cleared
+
+    def mark_collection_cleared(self) -> None:
+        """Mark that the collection has been cleared.
+
+        This ensures collection is only cleared once during job execution,
+        not after every batch.
+        """
+        self._collection_cleared = True
 
     def should_check_duplicates(self) -> bool:
         """Check if duplicate checking is enabled."""

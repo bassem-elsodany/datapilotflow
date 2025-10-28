@@ -54,13 +54,11 @@ class KnowledgeJob(BaseModel):
         default=None,
         description="Override chunk size for text splitters (if different from splitter config)",
         ge=64,
-        le=4096,
     )
     custom_chunk_overlap: Optional[int] = Field(
         default=None,
         description="Override chunk overlap for text splitters (if different from splitter config)",
         ge=0,
-        le=512,
     )
 
     # Job processing configuration
@@ -133,13 +131,11 @@ class KnowledgeJobCreate(BaseModel):
         default=None,
         description="Chunk size for text splitters (tokens)",
         ge=64,
-        le=4096,
     )
     custom_chunk_overlap: Optional[int] = Field(
         default=None,
         description="Chunk overlap for text splitters (tokens)",
         ge=0,
-        le=512,
     )
 
     # Vector DB Collection Configuration (embedded in job creation)

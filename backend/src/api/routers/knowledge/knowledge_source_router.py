@@ -19,7 +19,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from loguru import logger
 
 from src.api.routers.auth.auth_router import get_current_user
@@ -133,7 +133,11 @@ async def create_knowledge_source_config(
                 # Keep original filename (sanitized for filesystem)
                 original_filename = file.filename
                 # Sanitize filename: replace unsafe chars but keep original name
-                safe_filename = original_filename.replace("/", "_").replace("\\", "_").replace("..", "_")
+                safe_filename = (
+                    original_filename.replace("/", "_")
+                    .replace("\\", "_")
+                    .replace("..", "_")
+                )
                 file_path = inbound_dir / safe_filename
 
                 # Save file asynchronously
@@ -317,7 +321,11 @@ async def update_knowledge_source_config(
                 # Keep original filename (sanitized for filesystem)
                 original_filename = file.filename
                 # Sanitize filename: replace unsafe chars but keep original name
-                safe_filename = original_filename.replace("/", "_").replace("\\", "_").replace("..", "_")
+                safe_filename = (
+                    original_filename.replace("/", "_")
+                    .replace("\\", "_")
+                    .replace("..", "_")
+                )
                 file_path = inbound_dir / safe_filename
 
                 # Save file asynchronously
@@ -404,7 +412,7 @@ def delete_knowledge_source_config(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Knowledge source configuration not found",
             )
-        return JSONResponse(status_code=status.HTTP_204_NO_CONTENT, content=None)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     except ValueError as e:
         # Dependency conflict (existing jobs)
         raise HTTPException(

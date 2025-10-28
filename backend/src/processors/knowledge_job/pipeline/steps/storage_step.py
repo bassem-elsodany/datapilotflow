@@ -77,7 +77,7 @@ class VectorStorageStep(PipelineStep):
             else:
                 storage_service = self.storage_service
 
-            # Clear collection if requested
+            # Clear collection if requested (only once per job execution)
             if context.is_collection_clear_requested():
                 logger.info(
                     f"Clearing collection before storage (job: {context.get_job_id()})"
@@ -92,6 +92,10 @@ class VectorStorageStep(PipelineStep):
                 stats_after = storage_service.get_statistics()
                 logger.info(f"Collection stats after clearing: {stats_after}")
                 logger.info("Collection cleared successfully")
+
+                # Mark collection as cleared so it won't be cleared again in subsequent batches
+                context.mark_collection_cleared()
+                logger.debug("Collection clear flag marked - will not clear again in this job")
 
             # Store vectors
             context.emit_status(

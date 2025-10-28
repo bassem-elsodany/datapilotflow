@@ -21,12 +21,20 @@ class QueryEnhancementStrategy(str, Enum):
     """Available query enhancement strategies."""
 
     NONE = "none"
+    AUGMENTED = "augmented"
     STEP_BACK = "step_back"
     MULTI_QUERY = "multi_query"
     HYDE = "hyde"
     DECOMPOSITION = "decomposition"
     RAG_FUSION = "rag_fusion"
     QUERY_FUSION = "query_fusion"
+
+
+class RetrievalStrategy(str, Enum):
+    """Available multi-query retrieval strategies."""
+
+    SINGLE_QUERY = "single_query"  # Use only first query variant (fast, less coverage)
+    RECIPROCAL_RANK_FUSION = "reciprocal_rank_fusion"  # Use all variants with RRF (slower, better quality)
 
 
 @dataclass
@@ -76,6 +84,8 @@ class ConversationSession:
     llm_model_name: Optional[str] = None
     # Query Enhancement configuration
     enhancement_config: Optional[EnhancementConfiguration] = None
+    # Retrieval Strategy configuration (for multi-query scenarios)
+    retrieval_strategy: str = "single_query"  # Options: "single_query" or "reciprocal_rank_fusion"
     # Collection configuration
     collection_name: str = "LongTermMemory"
     # Reranking configuration
@@ -155,6 +165,7 @@ class ConversationHistoryService:
         llm_provider_id: Optional[str] = None,
         llm_model_name: Optional[str] = None,
         enhancement_strategy: Optional[str] = None,
+        retrieval_strategy: str = "single_query",
         collection_name: str = "LongTermMemory",
         enable_reranking: bool = False,
         reranker_provider_id: Optional[str] = None,
@@ -250,6 +261,7 @@ class ConversationHistoryService:
             "llm_provider_id": llm_provider_id,
             "llm_model_name": llm_model_name,
             "enhancement_config": enhancement_config,
+            "retrieval_strategy": retrieval_strategy,
             "collection_name": collection_name,
             "enable_reranking": enable_reranking,
             "reranker_provider_id": reranker_provider_id,
@@ -330,6 +342,7 @@ class ConversationHistoryService:
                     llm_provider_id=doc.get("llm_provider_id"),
                     llm_model_name=doc.get("llm_model_name"),
                     enhancement_config=enhancement_config,
+                    retrieval_strategy=doc.get("retrieval_strategy", "single_query"),
                     collection_name=doc.get("collection_name", "LongTermMemory"),
                     enable_reranking=doc.get("enable_reranking", False),
                     reranker_provider_id=doc.get("reranker_provider_id"),
@@ -681,6 +694,7 @@ class ConversationHistoryService:
         llm_provider_id: Optional[str] = None,
         llm_model_name: Optional[str] = None,
         enhancement_strategy: Optional[str] = None,
+        retrieval_strategy: Optional[str] = None,
         collection_name: Optional[str] = None,
         enable_reranking: Optional[bool] = None,
         reranker_provider_id: Optional[str] = None,
@@ -729,6 +743,10 @@ class ConversationHistoryService:
                     "config": None,
                     "configured_at": datetime.utcnow(),
                 }
+
+            # Update retrieval strategy
+            if retrieval_strategy is not None:
+                update_data["$set"]["retrieval_strategy"] = retrieval_strategy
 
             # Update collection name
             if collection_name is not None:

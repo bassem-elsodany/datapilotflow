@@ -70,8 +70,69 @@ class DocumentChunkingStep(PipelineStep):
                     f"Splitter configuration not found: {context.get_splitter_id()}"
                 )
 
-            # Create splitter
-            splitter = create_splitter(splitter_config)
+            # Get embedding model configuration for token limits
+            max_tokens = None
+            model_name = None
+
+            try:
+                from src.services.knowledge.vectordb_collection_service import (
+                    get_vectordb_collection_service,
+                )
+                from src.services.model_provider.model_provider_service import (
+                    get_model_provider_service,
+                )
+
+                # Get vectordb collection configuration
+                vectordb_service = get_vectordb_collection_service()
+                collection_config = vectordb_service.get_collection(
+                    context.job.vectordb_collection_id,
+                    context.user_id
+                )
+
+                if collection_config:
+                    model_name = collection_config.embedding_model_name
+
+                    # Get model provider to check for max_input_tokens
+                    provider_service = get_model_provider_service()
+                    provider = provider_service.get_model_provider(
+                        provider_id=collection_config.embedding_model_provider_id,
+                        user_id=context.user_id
+                    )
+
+                    if provider and provider.embedding and provider.embedding.config:
+                        # Check if max_input_tokens is configured in the provider
+                        max_tokens_config = provider.embedding.config.get('max_input_tokens')
+                        if max_tokens_config:
+                            # Ensure it's an integer (might be stored as string)
+                            try:
+                                max_tokens = int(max_tokens_config)
+                            except (ValueError, TypeError):
+                                logger.warning(
+                                    f"Invalid max_input_tokens value: {max_tokens_config}, using default"
+                                )
+                                max_tokens = None
+
+                    if not max_tokens:
+                        # Use default from token counter
+                        from src.processors.splitters.token_counter import TokenCounter
+                        max_tokens = TokenCounter.get_default_max_tokens(model_name)
+
+                    logger.info(
+                        f"Embedding model: {model_name}, max_tokens: {max_tokens}"
+                    )
+
+            except Exception as e:
+                logger.warning(
+                    f"Could not retrieve embedding model configuration: {e}. "
+                    f"Using default token limits for splitter."
+                )
+
+            # Create splitter with embedding model constraints
+            splitter = create_splitter(
+                splitter_config,
+                max_tokens=max_tokens,
+                model_name=model_name
+            )
 
             logger.info(
                 f"Using splitter: {splitter_config.name} "

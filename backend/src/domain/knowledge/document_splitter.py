@@ -44,13 +44,11 @@ class DocumentSplitter(BaseModel):
         default=None,
         description="Size of text chunks for document splitting (tokens)",
         ge=64,
-        le=4096,
     )
     chunk_overlap: Optional[int] = Field(
         default=None,
         description="Overlap between consecutive chunks (tokens)",
         ge=0,
-        le=512,
     )
 
     # Document splitter configuration (when splitter_type = DOCUMENT)
@@ -148,13 +146,11 @@ class DocumentSplitterCreate(BaseModel):
         default=None,
         description="Size of text chunks for document splitting (tokens) - required for TEXT type",
         ge=64,
-        le=4096,
     )
     chunk_overlap: Optional[int] = Field(
         default=None,
         description="Overlap between consecutive chunks (tokens). If None, uses 15% of chunk_size",
         ge=0,
-        le=512,
     )
 
     # Document splitter configuration (when splitter_type = DOCUMENT)
@@ -183,13 +179,11 @@ class DocumentSplitterUpdate(BaseModel):
         default=None,
         description="Size of text chunks for document splitting (tokens)",
         ge=64,
-        le=4096,
     )
     chunk_overlap: Optional[int] = Field(
         default=None,
         description="Overlap between consecutive chunks (tokens)",
         ge=0,
-        le=512,
     )
     headers_to_split_on: Optional[List[tuple[str, str]]] = Field(
         default=None, description="Header patterns for document structure splitting"

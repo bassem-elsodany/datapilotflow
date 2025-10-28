@@ -137,7 +137,12 @@ def answer_generator(state: WorkflowState) -> WorkflowState:
 
         if enhanced_query_data:
             # Get the enhanced query that was actually used for search
-            if enhanced_query_data.get("multi_query_variants"):
+            if enhanced_query_data.get("augmented_queries"):
+                # For augmented strategy, show first variant (after original)
+                augmented = enhanced_query_data["augmented_queries"]
+                query_info["enhanced_query"] = augmented[1] if len(augmented) > 1 else augmented[0]
+                query_info["strategy_used"] = "Augmented"
+            elif enhanced_query_data.get("multi_query_variants"):
                 query_info["enhanced_query"] = enhanced_query_data[
                     "multi_query_variants"
                 ][0]

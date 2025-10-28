@@ -156,7 +156,7 @@ def get_collection_stats(
 @router.get("/collections/{collection_id}/records", response_model=RecordResponse)
 def get_collection_records(
     collection_id: str,
-    limit: int = Query(50, ge=1, le=100, description="Number of records per page"),
+    limit: int = Query(50, ge=1, le=1000, description="Number of records per page"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     job_id: Optional[str] = Query(None, description="Filter by job ID"),
     source_url: Optional[str] = Query(None, description="Filter by source URL"),
@@ -176,7 +176,7 @@ def get_collection_records(
 
     Args:
         collection_id: ID (name) of the collection
-        limit: Number of records to return (max 100)
+        limit: Number of records to return (max 1000)
         offset: Offset for pagination
         job_id: Optional filter by job ID
         source_url: Optional filter by source URL (partial match)

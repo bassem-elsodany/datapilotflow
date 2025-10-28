@@ -79,7 +79,7 @@ class ModelProviderInitializationService:
                     ],
                     "config": {
                         "endpoint_suffix": "/embeddings",
-                        "max_input_tokens": 200000,
+                        "max_input_tokens": 8192,
                         "batch_size": 50,
                     },
                 },
@@ -299,7 +299,7 @@ class ModelProviderInitializationService:
                     ],
                     "config": {
                         "endpoint_suffix": "/embeddings",
-                        "max_input_tokens": 16000,
+                        "max_input_tokens": 8000,
                         "batch_size": 128,
                     },
                 },

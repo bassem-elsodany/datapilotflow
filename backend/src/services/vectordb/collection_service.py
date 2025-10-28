@@ -52,7 +52,9 @@ class VectorDBCollectionService:
             logger.error(f"Traceback: {traceback.format_exc()}")
             raise
 
-    def _resolve_collection_name(self, collection_id: str, user_id: str) -> Optional[str]:
+    def _resolve_collection_name(
+        self, collection_id: str, user_id: str
+    ) -> Optional[str]:
         """
         Resolve MongoDB collection ID to actual Milvus collection name.
 
@@ -69,7 +71,9 @@ class VectorDBCollectionService:
         """
         try:
             # Check if this looks like a MongoDB ObjectId (24 hex characters)
-            is_mongodb_id = len(collection_id) == 24 and all(c in '0123456789abcdefABCDEF' for c in collection_id)
+            is_mongodb_id = len(collection_id) == 24 and all(
+                c in "0123456789abcdefABCDEF" for c in collection_id
+            )
 
             if is_mongodb_id:
                 # Try to resolve as MongoDB ID
@@ -78,7 +82,9 @@ class VectorDBCollectionService:
                 )
 
                 config_service = get_vectordb_collection_service()
-                collection_config = config_service.get_collection(collection_id, user_id)
+                collection_config = config_service.get_collection(
+                    collection_id, user_id
+                )
 
                 if collection_config:
                     logger.debug(
@@ -122,9 +128,19 @@ class VectorDBCollectionService:
             for coll_name in collection_names:
                 try:
                     collection = Collection(name=coll_name, using=self.connection_alias)
-                    collection.load()  # Load collection to get stats
 
-                    # Get collection stats
+                    # Flush collection to ensure all data is persisted
+                    try:
+                        collection.flush()
+                    except Exception as flush_error:
+                        logger.warning(
+                            f"Could not flush collection {coll_name}: {flush_error}"
+                        )
+
+                    # Load collection to get stats
+                    collection.load()
+
+                    # Get collection stats (force refresh)
                     num_entities = collection.num_entities
 
                     # Get schema to find vector dimension
@@ -186,8 +202,11 @@ class VectorDBCollectionService:
                 from src.services.knowledge.vectordb_collection_service import (
                     get_vectordb_collection_service,
                 )
+
                 config_service = get_vectordb_collection_service()
-                collection_config = config_service.get_collection(collection_id, user_id)
+                collection_config = config_service.get_collection(
+                    collection_id, user_id
+                )
             except Exception as e:
                 logger.debug(f"Could not get config for {collection_id}: {e}")
                 # Continue without config - we'll use Milvus data only
@@ -230,8 +249,13 @@ class VectorDBCollectionService:
             return CollectionInfo(
                 id=collection_id,
                 name=collection_name,
-                description=collection_config.description if collection_config else schema.description,
-                dimension=vector_dim or (collection_config.vector_dimension if collection_config else 0),
+                description=(
+                    collection_config.description
+                    if collection_config
+                    else schema.description
+                ),
+                dimension=vector_dim
+                or (collection_config.vector_dimension if collection_config else 0),
                 record_count=num_entities,
                 metric_type=None,
                 index_type=None,
@@ -411,6 +435,15 @@ class VectorDBCollectionService:
                 return None
 
             collection = Collection(name=collection_name, using=self.connection_alias)
+
+            # Flush collection to ensure all data is persisted and counts are accurate
+            try:
+                collection.flush()
+            except Exception as flush_error:
+                logger.warning(
+                    f"Could not flush collection {collection_name}: {flush_error}"
+                )
+
             collection.load()
 
             # Get schema to determine available fields

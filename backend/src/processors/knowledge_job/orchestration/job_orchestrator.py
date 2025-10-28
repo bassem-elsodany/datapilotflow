@@ -76,14 +76,19 @@ class JobOrchestrator:
         """
         from src.domain.knowledge.knowledge_source_config import ContentSourceType
 
-        # Check if this is local files - use batch-wise execution
-        if knowledge_source_config.content_source_type == ContentSourceType.LOCAL_FILES:
-            logger.info(f"Using batch-wise execution for local files job {knowledge_job.id}")
+        # Check if batch_size is configured - use batch-wise execution
+        # This allows for memory-efficient processing and progress tracking
+        if knowledge_job.batch_size and knowledge_job.batch_size > 0:
+            logger.info(
+                f"Using batch-wise execution for job {knowledge_job.id} "
+                f"(batch_size: {knowledge_job.batch_size}, source: {knowledge_source_config.content_source_type})"
+            )
             return await self._execute_job_batch_wise(
                 knowledge_job, knowledge_source_config, status_callback
             )
 
-        # Otherwise use traditional pipeline execution
+        # Otherwise use traditional pipeline execution (all docs at once)
+        logger.info(f"Using traditional execution for job {knowledge_job.id}")
         return await self._execute_job_traditional(
             knowledge_job, knowledge_source_config, status_callback
         )
@@ -105,8 +110,16 @@ class JobOrchestrator:
         Returns:
             Dictionary containing execution results and statistics
         """
+        from src.services.notification.job_notification_helper import (
+            emit_job_started_notification,
+            emit_job_completed_notification,
+            emit_job_failed_notification,
+            emit_job_cancelled_notification
+        )
+
         job_id = knowledge_job.id
         user_id = knowledge_job.user_id
+        job_name = knowledge_source_config.name
 
         logger.info(f"Starting traditional pipeline orchestration for job {job_id}")
 
@@ -124,6 +137,14 @@ class JobOrchestrator:
         start_time = time.time()
 
         try:
+            # Emit job started notification
+            await emit_job_started_notification(
+                job_id=job_id,
+                user_id=user_id,
+                job_name=job_name,
+                content_source_type=knowledge_source_config.content_source_type.value
+            )
+
             # Execute the pipeline
             result = await self.pipeline.execute(context)
 
@@ -138,10 +159,31 @@ class JobOrchestrator:
                     f"{context.stats.get('total_documents', 0)} docs, "
                     f"{context.stats.get('total_chunks', 0)} chunks"
                 )
+
+                # Emit job completed notification
+                await emit_job_completed_notification(
+                    job_id=job_id,
+                    user_id=user_id,
+                    job_name=job_name,
+                    total_documents=context.stats.get('total_documents', 0),
+                    total_chunks=context.stats.get('total_chunks', 0),
+                    total_vectors=context.stats.get('total_vectors', 0),
+                    execution_time=total_time
+                )
             else:
                 logger.error(
                     f"Job {job_id} failed at step '{result.failed_step}' "
                     f"after {total_time:.2f}s"
+                )
+
+                # Emit failure notification
+                await emit_job_failed_notification(
+                    job_id=job_id,
+                    user_id=user_id,
+                    job_name=job_name,
+                    error_message=result.failed_step or "Unknown error",
+                    documents_processed=context.stats.get('total_documents', 0),
+                    chunks_created=context.stats.get('total_chunks', 0)
                 )
 
                 # Handle failure timeline recording if not already handled
@@ -152,6 +194,16 @@ class JobOrchestrator:
         except JobCancelledException as e:
             logger.warning(f"Job {job_id} was cancelled: {e}")
 
+            # Emit cancellation notification
+            await emit_job_cancelled_notification(
+                job_id=job_id,
+                user_id=user_id,
+                job_name=job_name,
+                cancellation_reason=str(e),
+                documents_processed=context.stats.get('total_documents', 0) if context.stats else None,
+                chunks_created=context.stats.get('total_chunks', 0) if context.stats else None
+            )
+
             # Record cancellation in timeline
             await self._handle_job_cancellation(context, str(e))
 
@@ -161,6 +213,16 @@ class JobOrchestrator:
         except Exception as e:
             logger.error(f"Unexpected error during job orchestration: {e}")
             logger.error(f"Traceback: {traceback.format_exc()}")
+
+            # Emit failure notification
+            await emit_job_failed_notification(
+                job_id=job_id,
+                user_id=user_id,
+                job_name=job_name,
+                error_message=str(e),
+                documents_processed=context.stats.get('total_documents', 0) if context.stats else None,
+                chunks_created=context.stats.get('total_chunks', 0) if context.stats else None
+            )
 
             # Record failure in timeline
             await self._handle_job_error(context, e)
@@ -370,8 +432,17 @@ class JobOrchestrator:
         Returns:
             Dictionary containing execution results and statistics
         """
+        from src.services.notification.job_notification_helper import (
+            emit_job_started_notification,
+            emit_job_progress_notification,
+            emit_job_completed_notification,
+            emit_job_failed_notification,
+            emit_job_cancelled_notification
+        )
+
         job_id = knowledge_job.id
         user_id = knowledge_job.user_id
+        job_name = knowledge_source_config.name
 
         logger.info(f"Starting batch-wise pipeline orchestration for job {job_id}")
 
@@ -388,6 +459,9 @@ class JobOrchestrator:
 
         # Timeline ID for tracking
         timeline_id = None
+
+        # Flag to track if collection has been cleared (once per job)
+        collection_cleared = False
 
         try:
             # Get the extraction step (should be FileExtractionStep)
@@ -415,8 +489,33 @@ class JobOrchestrator:
             # Get batch_size from job
             batch_size = knowledge_job.batch_size
 
-            # Get document batches from extraction step
-            async for doc_batch in extraction_step._extract_files(extraction_context, batch_size):
+            # Calculate total files and batches for progress tracking
+            total_files = len(knowledge_source_config.local_files) if knowledge_source_config.local_files else None
+            total_batches = None
+            if total_files and batch_size:
+                total_batches = (total_files + batch_size - 1) // batch_size
+
+            # Emit job started notification
+            await emit_job_started_notification(
+                job_id=job_id,
+                user_id=user_id,
+                job_name=job_name,
+                total_files=total_files,
+                content_source_type=knowledge_source_config.content_source_type.value
+            )
+
+            # Get document batches from extraction service
+            # This works for both LOCAL_FILES (FileExtractionStep) and WEB_SCRAPING (DocumentExtractionStep)
+            from src.processors.knowledge_job.services.document_extraction_service import (
+                get_document_extraction_service,
+            )
+            extraction_service = get_document_extraction_service()
+
+            async for doc_batch in extraction_service.extract_documents(
+                knowledge_job=knowledge_job,
+                knowledge_source_config=knowledge_source_config,
+                batch_size=batch_size,
+            ):
                 batch_count += 1
 
                 # Check for cancellation
@@ -437,6 +536,11 @@ class JobOrchestrator:
                 batch_context.timeline_id = timeline_id
                 batch_context.documents = doc_batch  # Set batch documents
 
+                # CRITICAL: Carry over the collection_cleared flag from orchestrator
+                # This prevents clearing the collection on every batch
+                if collection_cleared:
+                    batch_context._collection_cleared = True
+
                 # Step 2: Chunk the documents in this batch
                 chunk_result = await chunking_step.execute(batch_context)
                 if not chunk_result.success:
@@ -452,6 +556,11 @@ class JobOrchestrator:
                 if not storage_result.success:
                     raise Exception(f"Storage failed for batch {batch_count}: {storage_result.error}")
 
+                # CRITICAL: Sync the collection_cleared flag back from context
+                # After first batch, this will be True and prevent clearing in subsequent batches
+                if batch_context._collection_cleared:
+                    collection_cleared = True
+
                 # Accumulate stats
                 total_documents += len(doc_batch)
                 total_chunks += len(batch_context.chunks)
@@ -460,6 +569,18 @@ class JobOrchestrator:
                 logger.info(
                     f"Batch {batch_count} completed: {len(doc_batch)} docs, "
                     f"{len(batch_context.chunks)} chunks, {len(batch_context.vectors)} vectors"
+                )
+
+                # Emit progress notification after each batch
+                await emit_job_progress_notification(
+                    job_id=job_id,
+                    user_id=user_id,
+                    job_name=job_name,
+                    batch_number=batch_count,
+                    total_batches=total_batches,
+                    documents_processed=total_documents,
+                    chunks_created=total_chunks,
+                    current_stage="processing"
                 )
 
                 # Emit progress
@@ -502,6 +623,18 @@ class JobOrchestrator:
                 f"{total_documents} docs, {total_chunks} chunks across {batch_count} batches"
             )
 
+            # Emit job completed notification
+            await emit_job_completed_notification(
+                job_id=job_id,
+                user_id=user_id,
+                job_name=job_name,
+                total_documents=total_documents,
+                total_chunks=total_chunks,
+                total_vectors=total_vectors,
+                execution_time=total_time,
+                batch_count=batch_count
+            )
+
             return {
                 "success": True,
                 "total_documents": total_documents,
@@ -516,12 +649,35 @@ class JobOrchestrator:
 
         except JobCancelledException as e:
             logger.warning(f"Batch-wise job {job_id} was cancelled: {e}")
+
+            # Emit cancellation notification
+            await emit_job_cancelled_notification(
+                job_id=job_id,
+                user_id=user_id,
+                job_name=job_name,
+                cancellation_reason=str(e),
+                batch_number=batch_count if batch_count > 0 else None,
+                documents_processed=total_documents if total_documents > 0 else None,
+                chunks_created=total_chunks if total_chunks > 0 else None
+            )
+
             await self._handle_job_cancellation(extraction_context, str(e))
             raise
 
         except Exception as e:
             logger.error(f"Batch-wise job {job_id} failed: {e}")
             logger.error(f"Traceback: {traceback.format_exc()}")
+
+            # Emit failure notification
+            await emit_job_failed_notification(
+                job_id=job_id,
+                user_id=user_id,
+                job_name=job_name,
+                error_message=str(e),
+                batch_number=batch_count if batch_count > 0 else None,
+                documents_processed=total_documents if total_documents > 0 else None,
+                chunks_created=total_chunks if total_chunks > 0 else None
+            )
 
             # Mark timeline as failed
             if timeline_id:

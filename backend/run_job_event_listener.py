@@ -5,9 +5,20 @@ Job Event Listener Runner.
 This script starts the job event listener service to process job execution events.
 """
 
-import asyncio
-import os
+# CRITICAL: Set UTF-8 encoding BEFORE any imports
 import sys
+import os
+os.environ['PYTHONIOENCODING'] = 'utf-8'
+os.environ['LC_ALL'] = 'en_US.UTF-8'
+os.environ['LANG'] = 'en_US.UTF-8'
+
+# Force UTF-8 for all I/O
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
+
+import asyncio
 from pathlib import Path
 
 # Add the src directory to the Python path

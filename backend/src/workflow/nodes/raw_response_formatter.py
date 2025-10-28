@@ -61,7 +61,13 @@ def raw_response_formatter(state: WorkflowState) -> WorkflowState:
         response_parts.append(f"**Found {len(relevant_docs)} relevant document(s):**\n")
 
         for i, doc in enumerate(relevant_docs, 1):
-            doc_text = doc.get("text", "")
+            # Handle both dict and string document formats
+            if isinstance(doc, dict):
+                doc_text = doc.get("text", "")
+            elif isinstance(doc, str):
+                doc_text = doc
+            else:
+                doc_text = str(doc)
 
             # Format document section
             response_parts.append(f"\n---\n\n### Document {i}\n")
@@ -82,7 +88,14 @@ def raw_response_formatter(state: WorkflowState) -> WorkflowState:
         # Build context (same as documents, for compatibility)
         context_parts = []
         for i, doc in enumerate(relevant_docs, 1):
-            doc_text = doc.get("text", "")
+            # Handle both dict and string document formats
+            if isinstance(doc, dict):
+                doc_text = doc.get("text", "")
+            elif isinstance(doc, str):
+                doc_text = doc
+            else:
+                doc_text = str(doc)
+
             if doc_text:
                 context_parts.append(f"{i}. {doc_text}")
 
@@ -104,7 +117,12 @@ def raw_response_formatter(state: WorkflowState) -> WorkflowState:
 
         if enhanced_query_data:
             # Get the enhanced query that was actually used for search
-            if enhanced_query_data.get("multi_query_variants"):
+            if enhanced_query_data.get("augmented_queries"):
+                # For augmented strategy, show first variant (after original)
+                augmented = enhanced_query_data["augmented_queries"]
+                query_info["enhanced_query"] = augmented[1] if len(augmented) > 1 else augmented[0]
+                query_info["strategy_used"] = "Augmented"
+            elif enhanced_query_data.get("multi_query_variants"):
                 query_info["enhanced_query"] = enhanced_query_data[
                     "multi_query_variants"
                 ][0]

@@ -51,9 +51,13 @@ class NotificationEventListener(BaseEventListener):
             notification_type = event_payload.get("notification_type")
             
             logger.info(f"Handling notification event: {event_type} for user {user_id}")
-            
+
             # Handle different event types
             if event_type in ["notification_created", "notification_updated", "notification_deleted"]:
+                return await self.notification_processor.process_notification_event(event_payload)
+            elif event_type == "knowledge_job_notification":
+                # Handle knowledge job notifications (started, progress, completed, failed, cancelled)
+                logger.debug(f"Processing knowledge job notification: type={notification_type}, user={user_id}")
                 return await self.notification_processor.process_notification_event(event_payload)
             else:
                 logger.warning(f"Unknown notification event type: {event_type}")

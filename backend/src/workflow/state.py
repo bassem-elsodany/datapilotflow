@@ -48,7 +48,8 @@ class WorkflowState(TypedDict):
 
     # === Document Judging ===
     judged_documents: Optional[List[Dict[str, Any]]]
-    relevance_labels: Optional[List[int]]
+    relevance_labels: Optional[List[int]]  # Legacy: Binary 0/1 labels for backward compatibility
+    relevance_scores: Optional[List[float]]  # New: Continuous 0.0-1.0 scores for score-based reranking
 
     # Answer Generation
     context: Optional[str]

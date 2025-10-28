@@ -178,6 +178,10 @@ class ModelProviderResponse(BaseModel):
     name: str = Field(description="Name of the model provider")
     provider_type: str = Field(description="Type of provider")
     endpoint: str = Field(description="Base API endpoint for the provider")
+    api_key: Optional[str] = Field(
+        default=None,
+        description="API key for authentication (full key, UI will mask it for display)",
+    )
     api_key_env_var: Optional[str] = Field(
         default=None,
         description="Environment variable name for API key (e.g., 'OPENAI_API_KEY')",

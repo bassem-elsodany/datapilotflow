@@ -118,6 +118,10 @@ export const useGetCollections = () =>
     responseSchema: z.array(CollectionInfoSchema),
     rQueryParams: {
       queryKey: ['vectordb-collections'],
+      staleTime: 0,
+      gcTime: 0,
+      refetchOnMount: true,
+      refetchOnWindowFocus: true,
     },
   })({});
 
@@ -154,6 +158,10 @@ export const useGetCollectionStats = (collectionId: string, enabled = true) =>
     responseSchema: CollectionStatsSchema,
     rQueryParams: {
       queryKey: ['vectordb-collection-stats', { collectionId }],
+      staleTime: 0,
+      gcTime: 0,
+      refetchOnMount: true,
+      refetchOnWindowFocus: true,
     },
   })({ enabled: enabled && !!collectionId });
 
@@ -191,6 +199,10 @@ export const useGetCollectionRecords = (
     responseSchema: RecordResponseSchema,
     rQueryParams: {
       queryKey: ['vectordb-collection-records', { collectionId, ...params }],
+      staleTime: 0,
+      gcTime: 0,
+      refetchOnMount: true,
+      refetchOnWindowFocus: true,
     },
   })({ enabled: enabled && !!collectionId });
 };
