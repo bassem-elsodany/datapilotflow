@@ -32,6 +32,7 @@ async def step_back_strategy_node(state: WorkflowState) -> WorkflowState:
 
     try:
         query = state["query"]
+        conversation_description = state.get("conversation_description")
         llm_client = state.get("config", {}).get("llm_client")
 
         if not llm_client:
@@ -43,10 +44,20 @@ async def step_back_strategy_node(state: WorkflowState) -> WorkflowState:
         config.setdefault("max_tokens", 100)
 
         logger.debug(f"Generating step-back question for: '{query[:50]}...'")
+        if conversation_description:
+            logger.debug(
+                f"📝 Using conversation description for context: '{conversation_description[:50]}...'"
+            )
 
         # Create and execute chain (with Opik tracing if enabled)
         chain = get_step_back_chain(llm_client=llm_client, config=config)
-        response = await chain.ainvoke({"query": query})
+
+        # Invoke with query and optional description
+        chain_input = {"query": query}
+        if conversation_description:
+            chain_input["conversation_description"] = conversation_description
+
+        response = await chain.ainvoke(chain_input)
 
         step_back_query = response.content.strip()
 

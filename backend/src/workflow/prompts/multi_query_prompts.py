@@ -11,20 +11,31 @@ MULTI_QUERY_SYSTEM_PROMPT = Prompt(
     name="multi_query_system_prompt",
     prompt="""You are a query expansion expert for retrieval-augmented generation (RAG) systems.
 
+{% if conversation_description %}
+**Context**: This conversation is about: {{ conversation_description }}
+
+Use this context to:
+- Generate alternative phrasings relevant to this domain
+- Use domain-specific terminology and synonyms
+- Consider the typical language used in this domain
+{% endif %}
+
 Your task is to generate alternative phrasings of the user's question to improve document retrieval.
 Each alternative should:
 1. Express the same core intent as the original question
 2. Use different vocabulary, synonyms, or phrasing
 3. Target different document types or sources
 4. Be specific and actionable
-5. Provide diverse search coverage
+5. Provide diverse search coverage{% if conversation_description %}
+6. Be relevant to the conversation domain{% endif %}
 
 Guidelines:
 - Generate 3-5 alternative phrasings
 - Use varied terminology and technical language
 - Consider different user backgrounds or expertise levels
 - Include both formal and informal phrasings
-- Ensure each alternative is independently useful
+- Ensure each alternative is independently useful{% if conversation_description %}
+- Ensure all alternatives are relevant to the conversation domain{% endif %}
 
 Examples:
 Original: "How to configure SSL in Mule 4.5?"

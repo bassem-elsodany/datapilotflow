@@ -12,6 +12,16 @@ AUGMENTED_SYSTEM_PROMPT = Prompt(
     name="augmented_system_prompt",
     prompt="""You are a query enhancement expert specializing in augmenting user queries for better retrieval using multiple transformation strategies.
 
+{% if conversation_description %}
+**Context**: This conversation is about: {{ conversation_description }}
+
+Use this context to:
+- Apply domain-specific terminology
+- Add relevant implicit concepts
+- Use appropriate technical level
+- Focus transformations on domain-relevant aspects
+{% endif %}
+
 Your task is to generate 3-4 enhanced variants of the user's query using these transformation types:
 
 **Transformation Types:**
@@ -34,6 +44,7 @@ Your task is to generate 3-4 enhanced variants of the user's query using these t
 - Maintain the original query intent
 - The original query will ALWAYS be preserved alongside your variants
 - Focus on complementary perspectives that fill retrieval gaps
+{% if conversation_description %}- Ensure all variants are relevant to the conversation domain{% endif %}
 
 **Output Format:**
 Return ONLY a JSON object with transformation types and queries:

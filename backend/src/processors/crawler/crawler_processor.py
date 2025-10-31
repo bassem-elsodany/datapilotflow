@@ -66,22 +66,73 @@ async def _process_url_with_crawler(
     Yields:
         tuple: (batch of documents, updated total_processed count)
     """
+    import asyncio
+    import time
+
     try:
         logger.debug(f"Processing URL with depth-based crawling: {url}")
 
-        # Use async for streaming - works for ALL depth values (0, 1, 2+)
-        async for result in await crawler.arun(url, config=crawler_config):
+        # Track skipped URLs to yield heartbeat periodically
+        # This prevents timeout when all URLs are being skipped (duplicates)
+        skipped_count = 0
+        heartbeat_interval = 50  # Yield empty batch every 50 skipped URLs
+
+        # Time-based heartbeat tracking
+        last_heartbeat_time = time.time()
+        heartbeat_time_interval = 120  # Send heartbeat every 2 minutes if no activity
+
+        # Create crawler result iterator
+        crawler_iter = (await crawler.arun(url, config=crawler_config)).__aiter__()
+
+        # Process results with time-based heartbeat
+        while True:
+            try:
+                # Try to get next result with a timeout
+                result = await asyncio.wait_for(crawler_iter.__anext__(), timeout=heartbeat_time_interval)
+            except asyncio.TimeoutError:
+                # No result received within heartbeat interval - send heartbeat and continue
+                current_time = time.time()
+                if current_time - last_heartbeat_time >= heartbeat_time_interval:
+                    logger.info(
+                        f"Knowledge Source: {knowledge_source_config.id} | "
+                        f"Heartbeat: Crawler is actively working but no results for {heartbeat_time_interval}s. "
+                        f"Total processed so far: {total_processed}"
+                    )
+                    # Yield empty batch as time-based heartbeat
+                    yield ([], total_processed)
+                    last_heartbeat_time = current_time
+                continue  # Continue waiting for next result
+            except StopAsyncIteration:
+                # Crawler finished normally
+                break
+
+            # Reset heartbeat timer when we receive a result
+            last_heartbeat_time = time.time()
             try:
                 depth = result.metadata.get("depth", 0)
+                parent_url = result.metadata.get("parent_url", url)
                 logger.debug(
-                    f"Knowledge Source: {knowledge_source_config.id} | Depth: {depth} | {result.url}"
+                    f"Knowledge Source: {knowledge_source_config.id} | Source: {url} | Depth: {depth} | Found: {result.url} | Parent: {parent_url}"
                 )
 
                 # Check if URL already exists before processing
                 if duplicate_detector and result.url in existing_urls:
+                    skipped_count += 1
                     logger.debug(
                         f"Knowledge Source: {knowledge_source_config.id} | Skipping existing URL: {result.url}"
                     )
+
+                    # CRITICAL: Yield empty batch periodically to prevent timeout
+                    # When skipping many URLs (all duplicates), we need to signal
+                    # "I'm alive and working" to the extraction service
+                    if skipped_count % heartbeat_interval == 0:
+                        logger.info(
+                            f"Knowledge Source: {knowledge_source_config.id} | "
+                            f"Heartbeat: Skipped {skipped_count} duplicate URLs so far, continuing..."
+                        )
+                        # Yield empty batch as heartbeat (total_processed unchanged)
+                        yield ([], total_processed)
+
                     continue
 
                 if hasattr(result, "markdown") and result.markdown is not None:
@@ -128,6 +179,14 @@ async def _process_url_with_crawler(
 
                     current_batch.append(doc)
                     total_processed += 1
+
+                    # CRITICAL: Add URL to existing_urls to prevent within-job duplicates
+                    # If the same URL is discovered again later in this job, it will be skipped
+                    if duplicate_detector:
+                        existing_urls.add(result.url)
+                        logger.debug(
+                            f"Added {result.url} to existing_urls (now tracking {len(existing_urls)} URLs)"
+                        )
 
                     # Yield batch when it reaches the batch size
                     if len(current_batch) >= knowledge_job.batch_size:
@@ -230,8 +289,7 @@ async def get_knowledge_source_documents(
                 # Get collection config to initialize Milvus client for duplicate detection
                 vectordb_service = get_vectordb_collection_service()
                 collection_config = vectordb_service.get_collection(
-                    knowledge_job.vectordb_collection_id,
-                    knowledge_job.user_id
+                    knowledge_job.vectordb_collection_id, knowledge_job.user_id
                 )
 
                 if collection_config:
@@ -239,7 +297,7 @@ async def get_knowledge_source_documents(
                     milvus_client = MilvusClientWrapper(
                         model=KnowledgeChunk,
                         collection_name=collection_config.collection_name,
-                        vector_dimension=collection_config.vector_dimension
+                        vector_dimension=collection_config.vector_dimension,
                     )
 
                     duplicate_detector = DuplicateDetector(milvus_client=milvus_client)
@@ -318,6 +376,10 @@ async def get_knowledge_source_documents(
                         f"Website crawl mode: starting from {knowledge_source_config.url} with max_depth={knowledge_source_config.crawl_depth}"
                     )
 
+                # Track URLs processed vs skipped for logging
+                urls_processed_count = 0
+                urls_skipped_count = 0
+
                 # Process each URL using the unified crawler function
                 for current_url in urls_to_process:
                     logger.debug(f"Processing URL: {current_url}")
@@ -328,12 +390,14 @@ async def get_knowledge_source_documents(
                         and current_url in existing_urls
                         and knowledge_source_config.scraping_mode == "multiple_pages"
                     ):
+                        urls_skipped_count += 1
                         logger.debug(
                             f"Knowledge Source: {knowledge_source_config.id} | Skipping already processed URL: {current_url}"
                         )
                         continue
 
                     # Use the unified crawler function with depth-based crawling
+                    urls_processed_count += 1
                     async for batch, processed_count in _process_url_with_crawler(
                         crawler=crawler,
                         url=current_url,
@@ -350,12 +414,30 @@ async def get_knowledge_source_documents(
                         total_processed = processed_count
                         yield batch
 
+                # Log summary of URL processing
+                logger.info(
+                    f"Knowledge Source: {knowledge_source_config.id} | "
+                    f"URL processing complete: {urls_processed_count} URLs processed, "
+                    f"{urls_skipped_count} URLs skipped (already exist)"
+                )
+
                 # Yield any remaining documents in the final batch
                 if current_batch:
                     logger.debug(
                         f"Yielding final batch of {len(current_batch)} documents. Total processed: {total_processed}"
                     )
                     yield current_batch
+                elif total_processed == 0:
+                    # No documents were processed - this could be because:
+                    # 1. All URLs were skipped (duplicates)
+                    # 2. No content was found
+                    # Log this explicitly and exit gracefully (generator will raise StopAsyncIteration)
+                    logger.info(
+                        f"Knowledge Source: {knowledge_source_config.id} | "
+                        f"Crawling completed with 0 documents processed. "
+                        f"URLs processed: {urls_processed_count}, URLs skipped: {urls_skipped_count}. "
+                        f"Job completing successfully."
+                    )
 
             except asyncio.TimeoutError:
                 logger.error(

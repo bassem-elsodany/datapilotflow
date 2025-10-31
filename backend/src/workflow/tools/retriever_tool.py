@@ -43,7 +43,9 @@ class MilvusRetriever(BaseRetriever):
             List of relevant documents
         """
         try:
-            logger.debug(f"🔍 Retrieving documents for query: '{query[:100]}...'")
+            logger.info("   " + "▼" * 50)
+            logger.info(f"   🔎 MILVUS RETRIEVER: Starting vector search")
+            logger.info(f"   📝 Query: '{query[:150]}...'")
 
             # Get collection configuration
             vectordb_service = get_vectordb_collection_service()
@@ -58,6 +60,11 @@ class MilvusRetriever(BaseRetriever):
             embedding_provider_id = collection_config.embedding_model_provider_id
             embedding_model_name = collection_config.embedding_model_name
             vector_dimension = collection_config.vector_dimension
+
+            logger.info(f"   ⚙️  Collection: {self.collection_name}")
+            logger.info(f"   ⚙️  Embedding model: {embedding_model_name}")
+            logger.info(f"   ⚙️  Vector dimension: {vector_dimension}")
+            logger.info(f"   ⚙️  Top K: {self.top_k}")
 
             model_provider_service = get_model_provider_service()
             provider = model_provider_service.get_model_provider(
@@ -87,20 +94,31 @@ class MilvusRetriever(BaseRetriever):
             import litellm
 
             litellm_model = f"{provider.provider_type}/{embedding_model_name}"
+            logger.info(f"   🧮 Generating embedding vector using {litellm_model}...")
+
             embedding_response = litellm.embedding(
                 model=litellm_model,
                 input=[query],
                 api_key=provider.api_key,
                 api_base=provider.endpoint if provider.endpoint else None,
+                dimensions=vector_dimension,
             )
 
             query_vector = embedding_response.data[0]["embedding"]
+            logger.info(
+                f"   ✅ Embedding vector generated: {len(query_vector)} dimensions"
+            )
+            logger.info(f"   ✅ First 5 dimensions: {query_vector[:5]}")
 
             # Search Milvus
+            logger.info(
+                f"   🔍 Searching Milvus collection '{self.collection_name}' with top_k={self.top_k}..."
+            )
             results = milvus_client.search_with_vector(
                 query_vector=query_vector,
                 limit=self.top_k,
             )
+            logger.info(f"   ✅ Milvus search complete: Found {len(results)} results")
 
             # Convert to LangChain Documents
             documents = []
@@ -110,15 +128,12 @@ class MilvusRetriever(BaseRetriever):
                 properties = result.get("properties", {})
                 content = properties.get("page_content", properties.get("text", ""))
 
-                # Debug logging
+                # Debug logging for first result
                 if i == 0:
-                    logger.debug(f"🔍 First Milvus result keys: {list(result.keys())}")
-                    logger.debug(f"🔍 Properties keys: {list(properties.keys())}")
-                    logger.debug(
-                        f"🔍 page_content value: '{content[:100]}...'"
-                        if content
-                        else f"🔍 page_content is EMPTY or None: {repr(content)}"
-                    )
+                    logger.info(f"   📊 First result structure:")
+                    logger.info(f"      Result keys: {list(result.keys())}")
+                    logger.info(f"      Properties keys: {list(properties.keys())}")
+                    logger.info(f"      Distance: {result.get('distance', 'N/A')}")
 
                 doc = Document(
                     page_content=content,
@@ -131,13 +146,17 @@ class MilvusRetriever(BaseRetriever):
                 documents.append(doc)
 
             logger.info(
-                f"✅ Retrieved {len(documents)} documents from {self.collection_name}"
+                f"   ✅✅ MILVUS SEARCH COMPLETE: Retrieved {len(documents)} documents from {self.collection_name}"
             )
+            logger.info("   " + "▲" * 50)
 
             return documents
 
         except Exception as e:
-            logger.error(f"❌ Retrieval failed: {e}")
+            logger.error(f"   ❌❌ MILVUS RETRIEVAL FAILED: {e}")
+            import traceback
+
+            logger.error(traceback.format_exc())
             return []
 
 

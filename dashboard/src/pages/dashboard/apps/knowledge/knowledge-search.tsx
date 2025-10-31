@@ -68,9 +68,7 @@ export default function KnowledgeSearch() {
   const loadConversationHistory = async () => {
     try {
       setIsLoading(true);
-      console.log('🔄 Loading conversation history...');
       const token = localStorage.getItem('jwt_token');
-      console.log('🔑 Token available:', !!token);
 
       const response = await fetch(buildApiUrl('/conversations'), {
         headers: {
@@ -78,11 +76,8 @@ export default function KnowledgeSearch() {
         },
       });
 
-      console.log('📡 Response status:', response.status);
-
       if (response.ok) {
         const data = await response.json();
-        console.log('📦 API Response:', data);
 
         // Map backend response to frontend interface
         const mappedSessions = (data.sessions || []).map((session: any) => ({
@@ -93,7 +88,6 @@ export default function KnowledgeSearch() {
           updatedAt: session.created_at, // Backend doesn't provide updated_at, use created_at
         }));
 
-        console.log('🗺️ Mapped sessions:', mappedSessions);
         setConversationHistory(mappedSessions);
       } else {
         console.error('❌ Failed to load conversation history:', response.status);

@@ -131,7 +131,29 @@ class RefactoredKnowledgeJobEventProcessor:
                 )
                 return False
 
-            # 5. Create orchestrator with dynamic pipeline based on source config
+            # 5. CRITICAL: Create timeline with RUNNING status IMMEDIATELY
+            # This prevents race condition where user can start same job multiple times
+            # If this timeline creation fails, we should NOT proceed with execution
+            logger.info(f"Creating RUNNING timeline entry for job {event.job_id}")
+            try:
+                timeline_entry = self.timeline_service.start_job_execution(
+                    job_id=event.job_id,
+                    user_id=event.user_id,
+                    execution_context=event.execution_context,
+                    triggered_by="job_execution"
+                )
+                if not timeline_entry:
+                    logger.error(f"Failed to create RUNNING timeline entry for job {event.job_id}")
+                    return False
+
+                logger.info(
+                    f"Created timeline entry {timeline_entry.id} with status RUNNING for job {event.job_id}"
+                )
+            except Exception as timeline_error:
+                logger.error(f"Error creating timeline for job {event.job_id}: {timeline_error}")
+                return False
+
+            # 6. Create orchestrator with dynamic pipeline based on source config
             # This allows different pipelines for web scraping vs local files
             logger.info(
                 f"Creating orchestrator for job {event.job_id} with "
@@ -143,7 +165,7 @@ class RefactoredKnowledgeJobEventProcessor:
                 knowledge_source_config=knowledge_source_config,
             )
 
-            # 6. Execute the job through the orchestrator
+            # 7. Execute the job through the orchestrator
             # The orchestrator handles:
             # - Pipeline execution (with correct steps for the source type)
             # - Timeline management
@@ -201,7 +223,29 @@ class RefactoredKnowledgeJobEventProcessor:
                 job_id, reason=cancellation_reason
             )
 
-            logger.info(f"Cancellation requested for job {job_id}")
+            # Create CANCELLED timeline entry (status is tracked in timeline, not job object)
+            from datetime import datetime
+            from src.domain.knowledge.job_timeline import JobTimelineCreate
+
+            logger.info(f"Creating CANCELLED timeline entry for job {job_id}")
+
+            timeline_data = JobTimelineCreate(
+                job_id=job_id,
+                user_id=user_id,
+                status=JobStatus.CANCELLED,
+                completed_at=datetime.utcnow().isoformat(),
+                error_message=cancellation_reason,
+                triggered_by="user_cancellation",
+            )
+
+            # Create timeline entry
+            timeline_id = self.timeline_service.create_timeline_entry(timeline_data, user_id)
+            if timeline_id:
+                logger.info(f"Job {job_id} cancelled successfully - timeline entry {timeline_id} created")
+            else:
+                logger.error(f"Failed to create cancellation timeline entry for job {job_id}")
+
+            logger.info(f"Cancellation completed for job {job_id}")
             return True
 
         except Exception as e:

@@ -119,7 +119,10 @@ class DocumentExtractionService:
         try:
             import asyncio
 
-            batch_timeout = 600  # 10 minutes timeout per batch
+            # Timeout for receiving batches from crawler
+            # This timeout applies to receiving ANY batch (including empty heartbeat batches)
+            # If crawler yields empty batches as heartbeat, timeout is reset
+            batch_timeout = 900  # 15 minutes - crawler should yield heartbeat if skipping many URLs
 
             logger.info(
                 f"[GENERATOR] Starting batch extraction with {batch_timeout}s timeout per batch"
@@ -137,8 +140,15 @@ class DocumentExtractionService:
                         timeout=batch_timeout
                     )
 
+                    # Empty batch = heartbeat signal from crawler (e.g., skipping duplicates)
+                    # This resets the timeout counter, distinguishing between:
+                    # - Real timeout: Crawler hung, no batches (including empty) for 600s
+                    # - Normal operation: Crawler actively skipping, yields empty batches periodically
                     if not batch:
-                        logger.debug("[GENERATOR] Skipping empty batch")
+                        logger.debug(
+                            "[GENERATOR] Received heartbeat batch (empty) - crawler is alive, "
+                            "likely skipping duplicate URLs. Continuing..."
+                        )
                         continue
 
                     # Filter out documents with empty content
@@ -174,12 +184,15 @@ class DocumentExtractionService:
 
                 except asyncio.TimeoutError:
                     # Timeout waiting for next batch - crawler is hung
+                    # This is a REAL ERROR (not a heartbeat), so we need to raise it
+                    # to let the orchestrator know the job failed
                     logger.error(
                         f"[GENERATOR] TIMEOUT: No batch received for {batch_timeout}s. "
-                        f"Crawler appears hung. Stopping extraction gracefully. "
-                        f"Successfully yielded: {batch_count} batches, {total_documents} documents"
+                        f"Crawler appears hung or no heartbeat received. "
+                        f"Successfully yielded: {batch_count} batches, {total_documents} documents before timeout."
                     )
-                    break
+                    # Re-raise to propagate error to orchestrator
+                    raise
 
         except Exception as e:
             logger.error(f"[GENERATOR] Error during document extraction: {e}")

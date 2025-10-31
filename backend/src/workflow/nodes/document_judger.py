@@ -11,7 +11,6 @@ from src.workflow.chains import get_judger_chain
 from src.workflow.state import WorkflowState
 
 
-@opik.track(name="document_judger", tags=["document_judging", "reranking"])
 def document_judger(state: WorkflowState) -> WorkflowState:
     """
     Judge the relevance of retrieved documents.
@@ -72,7 +71,8 @@ def document_judger(state: WorkflowState) -> WorkflowState:
                 try:
                     # Try to find the last number in the response (the score)
                     import re
-                    numbers = re.findall(r'\b[0-1]\.?[0-9]*\b', response_text)
+
+                    numbers = re.findall(r"\b[0-1]\.?[0-9]*\b", response_text)
 
                     if numbers:
                         # Take the last number found (should be the final score)
@@ -85,7 +85,9 @@ def document_judger(state: WorkflowState) -> WorkflowState:
                         score = max(0.0, min(1.0, score))
 
                 except (ValueError, AttributeError):
-                    logger.warning(f"⚠️ Failed to parse score from: {response_text[:100]}")
+                    logger.warning(
+                        f"⚠️ Failed to parse score from: {response_text[:100]}"
+                    )
                     score = 0.0  # Default to not relevant if parsing fails
 
                 # Add judgment to document
@@ -110,19 +112,23 @@ def document_judger(state: WorkflowState) -> WorkflowState:
 
         # Sort documents by relevance score (highest first)
         judged_docs_sorted = sorted(
-            judged_docs,
-            key=lambda x: x.get("relevance_score", 0.0),
-            reverse=True
+            judged_docs, key=lambda x: x.get("relevance_score", 0.0), reverse=True
         )
 
         # Update state
         state["judged_documents"] = judged_docs_sorted
         state["relevance_scores"] = relevance_scores
-        state["document_scores"] = [doc["relevance_score"] for doc in judged_docs_sorted]
+        state["document_scores"] = [
+            doc["relevance_score"] for doc in judged_docs_sorted
+        ]
 
         # Stats
-        relevant_count = sum(1 for score in relevance_scores if score >= relevance_threshold)
-        avg_score = sum(relevance_scores) / len(relevance_scores) if relevance_scores else 0.0
+        relevant_count = sum(
+            1 for score in relevance_scores if score >= relevance_threshold
+        )
+        avg_score = (
+            sum(relevance_scores) / len(relevance_scores) if relevance_scores else 0.0
+        )
 
         logger.info(
             f"✅ Judged {len(judged_docs)} documents: "

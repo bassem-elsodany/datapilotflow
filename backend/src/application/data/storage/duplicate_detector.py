@@ -73,9 +73,10 @@ class DuplicateDetector:
             return set()
 
     def _get_existing_urls_from_milvus(self) -> Set[str]:
-        """Get existing URLs from Milvus collection.
+        """Get ALL existing URLs from Milvus collection using pagination.
 
-        Fetches all URLs without filtering.
+        Uses query_iterator to fetch all URLs without memory issues,
+        regardless of collection size (works with millions of chunks).
 
         Returns:
             Set of existing URLs
@@ -86,22 +87,77 @@ class DuplicateDetector:
             return set()
 
         try:
-            # Fetch all documents from the collection (no filter needed - collection is job-specific)
-            results = self.milvus_client.fetch_documents(
-                limit=10000,  # Large limit to get all documents
-                return_fields=["source_url"],
-            )
+            # Load collection into memory for querying
+            self.milvus_client.collection.load()
 
-            # Extract URLs from Milvus results
+            # Use query_iterator for paginated fetching (handles large collections)
+            # This fetches ALL entities without hard-coded limits
             urls = set()
-            for result in results:
-                properties = result.get("properties", {})
-                source_url = properties.get("source_url")
-                if source_url:
-                    urls.add(source_url)
+            batch_count = 0
+            total_entities = 0
 
             logger.info(
-                f"Retrieved {len(urls)} unique URLs from collection {self.milvus_client.collection_name}"
+                f"Loading existing URLs from collection {self.milvus_client.collection_name} using pagination..."
+            )
+
+            # Create iterator with batch size for efficient memory usage
+            # Determine which primary key to use for the query expression
+            # New collections: correlation_id (primary key)
+            # Old collections: id (primary key)
+            try:
+                # Try to get schema to determine primary key
+                schema = self.milvus_client.collection.schema
+                primary_field = None
+                for field in schema.fields:
+                    if field.is_primary:
+                        primary_field = field.name
+                        break
+
+                if primary_field:
+                    expr = f"{primary_field} != ''" if primary_field in ["id", "correlation_id"] else None
+                    logger.debug(f"Using primary key '{primary_field}' for query expression")
+                else:
+                    # Fallback: try correlation_id first, then id
+                    expr = "correlation_id != ''"
+                    logger.debug("No primary key detected, using correlation_id as default")
+            except Exception as e:
+                # If schema inspection fails, use correlation_id as default
+                expr = "correlation_id != ''"
+                logger.debug(f"Could not inspect schema ({e}), using correlation_id as default")
+
+            iterator = self.milvus_client.collection.query_iterator(
+                batch_size=5000,  # Process 5000 entities per batch
+                expr=expr,  # Get all entities using primary key check
+                output_fields=["source_url"],
+                # limit=-1 means fetch ALL matching entities (default behavior)
+            )
+
+            # Iterate through all batches using the iterator pattern
+            while True:
+                result = iterator.next()
+                if not result:
+                    # No more results - close iterator and break
+                    iterator.close()
+                    break
+
+                batch_count += 1
+                total_entities += len(result)
+
+                # Extract URLs from batch
+                # result is a list of dictionaries with entity data
+                for entity in result:
+                    source_url = entity.get("source_url")
+                    if source_url:
+                        urls.add(source_url)
+
+                logger.debug(
+                    f"Batch {batch_count}: Processed {len(result)} entities, "
+                    f"found {len(urls)} unique URLs so far (total entities: {total_entities})"
+                )
+
+            logger.info(
+                f"✅ Retrieved {len(urls)} unique URLs from {total_entities} total entities "
+                f"in collection {self.milvus_client.collection_name} (processed in {batch_count} batches)"
             )
             return urls
 

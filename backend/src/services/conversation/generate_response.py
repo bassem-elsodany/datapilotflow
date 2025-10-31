@@ -13,6 +13,7 @@ from typing import Any, AsyncGenerator, Dict, Optional
 from langchain_community.chat_models import ChatLiteLLM
 from loguru import logger
 from opik.integrations.langchain import OpikTracer
+from opik.integrations.litellm import track_litellm
 
 from src.config import settings
 from src.services.model_provider.model_provider_service import (
@@ -30,11 +31,14 @@ async def get_response_stream(
     conversation_id: str,
     collection_name: str,
     selected_strategy: Optional[str] = None,
-    retrieval_strategy: str = "single_query",
+    retrieval_strategy: Optional[
+        str
+    ] = None,  # None = auto-detect based on query variants
     enhancement_config: Optional[Dict[str, Any]] = None,
     enable_reranking: bool = True,
     enable_llm_generation: bool = True,
     top_k: int = 5,
+    conversation_description: Optional[str] = None,
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
     Generate AI response using LangGraph workflow with query enhancement (streaming).
@@ -73,7 +77,24 @@ async def get_response_stream(
             logger.debug(
                 f"Agent tracing enabled: Workflow config: strategy={selected_strategy}, collection={collection_name}, llm_provider_id={llm_provider_id}, llm_model_name={llm_model_name}"
             )
-            opik_tracer = OpikTracer(graph=workflow.get_graph(xray=True))
+            # Enable LiteLLM tracking for cost and token usage
+            track_litellm()
+            logger.debug("✅ LiteLLM tracking enabled for cost and token usage")
+
+            # Build tags for Opik trace
+            trace_tags = [
+                f"strategy:{selected_strategy or 'native'}",
+                f"provider:{llm_provider_id}",
+                f"model:{llm_model_name}",
+                f"collection:{collection_name}",
+            ]
+            if conversation_description:
+                trace_tags.append(f"domain:{conversation_description[:50]}")
+
+            opik_tracer = OpikTracer(
+                graph=workflow.get_graph(xray=True),
+                tags=trace_tags,
+            )
             thread_id = conversation_id
             config = {
                 "configurable": {"thread_id": thread_id},
@@ -135,6 +156,7 @@ async def get_response_stream(
             query=query,
             selected_strategy=selected_strategy,
             config=workflow_config,
+            conversation_description=conversation_description,
         )
 
         logger.debug(f"Initial state created with strategy: {selected_strategy}")
@@ -152,17 +174,23 @@ async def get_response_stream(
         stream_iterator = workflow.astream(
             input=WorkflowState(**initial_state),
             config=config,
-            stream_mode="values",  # Stream workflow state values
+            stream_mode="updates",  # Stream node updates to track which node is running
         )
 
         # Track the last complete state for final result
-        last_state = None
+        last_state = {}
         chunk_count = 0
 
         # Iterate over the stream and yield chunks to the frontend
         async for chunk in stream_iterator:
             chunk_count += 1
-            last_state = chunk
+
+            # With stream_mode="updates", chunk is {node_name: state_update}
+            # Extract the node name and state
+            node_name = list(chunk.keys())[0] if chunk else "unknown"
+            state_update = chunk.get(node_name, {}) if chunk else {}
+            # Merge state updates to accumulate all fields
+            last_state = {**last_state, **state_update}
 
             # Calculate current execution time
             execution_time_ms = (time.time() - start_time) * 1000
@@ -172,11 +200,11 @@ async def get_response_stream(
                 "type": "workflow_progress",
                 "chunk_number": chunk_count,
                 "execution_time_ms": execution_time_ms,
-                "current_node": chunk.get("current_node", "unknown"),
-                "query": chunk.get("query", query),
-                "enhanced_query": chunk.get("enhanced_query"),
-                "retrieved_documents": chunk.get("retrieved_documents") or [],
-                "final_answer": chunk.get("final_answer") or "",
+                "current_node": node_name,
+                "query": state_update.get("query", query),
+                "enhanced_query": state_update.get("enhanced_query"),
+                "retrieved_documents": state_update.get("retrieved_documents") or [],
+                "final_answer": state_update.get("final_answer") or "",
                 "workflow_completed": False,
             }
 
@@ -201,6 +229,9 @@ async def get_response_stream(
                 "response": last_state.get("final_answer", ""),
                 "documents": last_state.get("retrieved_documents", []),
                 "enhanced_query": last_state.get("enhanced_query"),
+                "query_info": last_state.get(
+                    "query_info"
+                ),  # Contains enhanced_queries array
                 "total_chunks": chunk_count,
             }
 

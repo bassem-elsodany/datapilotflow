@@ -10,10 +10,12 @@ import { PageHeader } from '@/components/page-header';
 import { Button, Container, Group, Paper, Stack, Title } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconDeviceFloppy, IconGripVertical, IconHierarchy, IconPlayerPlay, IconRefresh, IconSettings } from '@tabler/icons-react';
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { Node } from 'reactflow';
-import { useCreatePipeline, useExecutePipeline, useUpdatePipeline } from '@/api/resources/pipelines';
+import { useCreatePipeline, useExecutePipeline, useUpdatePipeline, useGetJobAsPipeline } from '@/api/resources/pipelines';
+import { useGetKnowledgeJob } from '@/api/resources/knowledge-jobs';
 import { CanvasWrapper } from './components/Canvas';
 import { NodeConfigPanel } from './components/NodeConfigPanel';
 import { PipelineRunner } from './components/PipelineRunner';
@@ -120,6 +122,9 @@ const breadcrumbs = [
 ];
 
 export default function PipelineBuilderPage() {
+  const [searchParams] = useSearchParams();
+  const fromJobId = searchParams.get('fromJobId');
+
   const {
     nodes,
     edges,
@@ -132,17 +137,100 @@ export default function PipelineBuilderPage() {
     setSelectedNode,
     handleNodeSelect,
     validateCurrentPipeline,
-    clearCanvas
+    clearCanvas,
+    loadPipeline
   } = usePipelineBuilder();
 
   const [isRunning, setIsRunning] = useState(false);
   const [configModalOpened, setConfigModalOpened] = useState(false);
   const [currentPipelineId, setCurrentPipelineId] = useState<string | null>(null);
+  const [pipelineLoaded, setPipelineLoaded] = useState(false);
 
   // API Hooks
   const createPipeline = useCreatePipeline();
   const updatePipeline = useUpdatePipeline();
   const executePipeline = useExecutePipeline();
+
+  // Load job data if fromJobId is present
+  const { data: jobData } = useGetKnowledgeJob(fromJobId || '', {
+    enabled: !!fromJobId,
+  });
+
+  // Fetch pipeline from job if fromJobId is present
+  const { data: jobPipeline, isLoading: isLoadingPipeline, error: pipelineError } = useGetJobAsPipeline(fromJobId || '', {
+    enabled: !!fromJobId,
+  });
+
+  // Show error if pipeline fetch fails
+  useEffect(() => {
+    if (pipelineError) {
+      console.error('Failed to fetch pipeline from job:', pipelineError);
+      notifications.show({
+        title: 'Error Loading Pipeline',
+        message: `Failed to load pipeline: ${pipelineError.message || 'Unknown error'}`,
+        color: 'red',
+      });
+    }
+  }, [pipelineError]);
+
+  // Load pipeline when job pipeline data is available
+  useEffect(() => {
+    if (fromJobId && jobPipeline && !pipelineLoaded) {
+      console.log('Loading pipeline from job:', fromJobId);
+      console.log('Pipeline data:', jobPipeline);
+
+      try {
+        // Convert pipeline nodes to ReactFlow format
+        const reactFlowNodes = jobPipeline.nodes.map((node: any) => ({
+          id: node.id,
+          type: 'pipelineNode',
+          position: node.position,
+          data: {
+            id: node.id,
+            name: node.name,
+            type: node.type,
+            status: node.status,
+            configured: node.configured,
+            ...node.config,
+          },
+        }));
+
+        // Convert pipeline edges to ReactFlow format
+        const reactFlowEdges = jobPipeline.edges.map((edge: any) => ({
+          id: edge.id,
+          source: edge.source,
+          target: edge.target,
+          type: edge.type || 'arrow',
+          animated: true,
+          style: { stroke: '#228be6', strokeWidth: 2 }
+        }));
+
+        console.log('Converted nodes:', reactFlowNodes);
+        console.log('Converted edges:', reactFlowEdges);
+
+        // Load the pipeline
+        loadPipeline({
+          nodes: reactFlowNodes,
+          edges: reactFlowEdges,
+        });
+
+        setPipelineLoaded(true);
+
+        notifications.show({
+          title: 'Pipeline Loaded',
+          message: `Successfully loaded pipeline with ${reactFlowNodes.length} nodes`,
+          color: 'green',
+        });
+      } catch (error) {
+        console.error('Error converting pipeline:', error);
+        notifications.show({
+          title: 'Error',
+          message: `Failed to convert pipeline: ${error}`,
+          color: 'red',
+        });
+      }
+    }
+  }, [fromJobId, jobPipeline, pipelineLoaded, loadPipeline]);
 
   const handleSavePipeline = useCallback(async () => {
     try {

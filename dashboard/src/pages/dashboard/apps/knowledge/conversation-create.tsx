@@ -275,9 +275,9 @@ const ENHANCEMENT_STRATEGIES = [
     value: 'augmented',
     label: 'Augmented (Best Coverage)',
     description: 'Combines original query with LLM-enhanced variants',
-    details: 'Preserves your original query while also generating 2-3 enhanced variants. This ensures you never lose important context while benefiting from query improvements. Best of both worlds!',
+    details: 'Preserves your original query while also generating 2-3 enhanced variants. This ensures you never lose important context while benefiting from query improvements. Uses Reciprocal Rank Fusion (RRF) to merge results from all query variants.',
     useCases: ['Important queries', 'When context matters', 'Balanced approach', 'Maximum coverage'],
-    pros: ['Context preservation', 'Improved coverage', 'Safest option', 'Combines benefits'],
+    pros: ['Context preservation', 'Improved coverage', 'RRF merges all variants', 'Combines benefits'],
     cons: ['Slightly slower than Native', 'Uses more tokens'],
     color: 'green',
   },
@@ -295,9 +295,9 @@ const ENHANCEMENT_STRATEGIES = [
     value: 'multi_query',
     label: 'Multi-Query',
     description: 'Generate alternative phrasings',
-    details: 'Creates multiple alternative ways to phrase your question. Helps overcome vocabulary mismatches between your query and documents.',
+    details: 'Creates multiple alternative ways to phrase your question. Helps overcome vocabulary mismatches between your query and documents. Uses RRF to merge results from all query variants.',
     useCases: ['Complex queries', 'When exact terms are unknown', 'Broad coverage needed'],
-    pros: ['Better coverage', 'Handles synonyms', 'Vocabulary flexibility'],
+    pros: ['Better coverage', 'Handles synonyms', 'RRF merges variants', 'Vocabulary flexibility'],
     cons: ['More processing time', 'May introduce noise'],
     color: 'teal',
   },
@@ -315,9 +315,9 @@ const ENHANCEMENT_STRATEGIES = [
     value: 'decomposition',
     label: 'Decomposition',
     description: 'Break complex queries into sub-questions',
-    details: 'Splits your complex question into simpler sub-questions. Each sub-question is processed separately for comprehensive coverage.',
+    details: 'Splits your complex question into simpler sub-questions. Each sub-question is processed separately for comprehensive coverage. Uses RRF to merge results from all sub-queries.',
     useCases: ['Complex multi-part questions', 'Research tasks', 'Thorough analysis needed'],
-    pros: ['Handles complexity', 'Comprehensive results', 'Systematic approach'],
+    pros: ['Handles complexity', 'RRF merges sub-queries', 'Comprehensive results', 'Systematic approach'],
     cons: ['Slowest option', 'Most expensive', 'May over-complicate simple queries'],
     color: 'orange',
   },
@@ -325,9 +325,9 @@ const ENHANCEMENT_STRATEGIES = [
     value: 'rag_fusion',
     label: 'RAG Fusion',
     description: 'Generate multiple query perspectives',
-    details: 'Creates multiple diverse perspectives of your query and fuses the results using reciprocal rank fusion. Excellent for comprehensive retrieval.',
+    details: 'Creates multiple diverse perspectives of your query and fuses the results using Reciprocal Rank Fusion (RRF). Excellent for comprehensive retrieval with diverse viewpoints.',
     useCases: ['Research queries', 'When you need diverse perspectives', 'Critical decisions'],
-    pros: ['Most comprehensive', 'Diverse perspectives', 'Robust results'],
+    pros: ['Most comprehensive', 'RRF ranks by consensus', 'Diverse perspectives', 'Robust results'],
     cons: ['Expensive', 'Slower', 'May be overkill for simple queries'],
     color: 'pink',
   },
@@ -399,6 +399,16 @@ export default function ConversationCreate() {
       setIsCreating(true);
 
       // Validate required fields
+      if (selectedStrategy !== 'native' && !conversationDescription.trim()) {
+        notifications.show({
+          title: 'Error',
+          message: 'Description is required when using query enhancement strategies',
+          color: 'red',
+          icon: <IconAlertCircle size={16} />,
+        });
+        return;
+      }
+
       if (enableLLMGeneration && !selectedProviderId) {
         notifications.show({
           title: 'Error',
@@ -548,13 +558,17 @@ export default function ConversationCreate() {
 
                   <Grid.Col span={6}>
                     <Textarea
-                      label="Description (Optional)"
-                      placeholder="Brief description of what this conversation is about..."
+                      label={selectedStrategy !== 'native' ? "Description (Required for Query Enhancement)" : "Description (Optional)"}
+                      placeholder={selectedStrategy !== 'native'
+                        ? "Describe the domain/topic to help enhance queries (e.g., 'MuleSoft API documentation and integration guides')"
+                        : "Brief description of what this conversation is about..."}
                       value={conversationDescription}
                       onChange={(e) => setConversationDescription(e.target.value)}
                       minRows={2}
                       maxRows={4}
-                      description="Optional description for context"
+                      required={selectedStrategy !== 'native'}
+                      error={selectedStrategy !== 'native' && !conversationDescription.trim() ? 'Description is required when using query enhancement' : undefined}
+                      description={selectedStrategy !== 'native' ? "This helps the AI understand the domain and provide better query enhancements" : "Optional description for context"}
                     />
                   </Grid.Col>
                 </Grid>
@@ -629,6 +643,26 @@ export default function ConversationCreate() {
                   onChange={(value) => setSelectedStrategy(value || 'none')}
                   description="Select how your queries will be enhanced for better retrieval"
                 />
+
+                {/* RRF Info Alert for multi-variant strategies */}
+                {selectedStrategy !== 'native' && selectedStrategy !== 'step_back' && selectedStrategy !== 'hyde' && (
+                  <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+                    <Text size="xs">
+                      <strong>Reciprocal Rank Fusion (RRF) Auto-Enabled:</strong> This strategy generates multiple query variants.
+                      The system will automatically search with all variants in parallel and merge results using RRF to rank documents that appear across multiple searches higher.
+                    </Text>
+                  </Alert>
+                )}
+
+                {/* Single query info for Native, Step-Back, HyDE */}
+                {(selectedStrategy === 'step_back' || selectedStrategy === 'hyde') && (
+                  <Alert icon={<IconInfoCircle size={16} />} color="gray" variant="light">
+                    <Text size="xs">
+                      <strong>Single Enhanced Query:</strong> This strategy generates one enhanced query variant.
+                      The system will search using this single enhanced query (no RRF merging needed).
+                    </Text>
+                  </Alert>
+                )}
               </Stack>
             </Card>
 

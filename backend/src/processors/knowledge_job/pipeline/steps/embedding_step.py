@@ -116,9 +116,7 @@ class EmbeddingGenerationStep(PipelineStep):
         except Exception as e:
             logger.error(f"Embedding generation failed: {e}")
             context.add_error(f"Embedding error: {e}")
-            return StepResult.failure_result(
-                error=f"Embedding generation failed: {e}"
-            )
+            return StepResult.failure_result(error=f"Embedding generation failed: {e}")
 
     def _create_embedding_service(self, context: JobContext) -> EmbeddingService:
         """
@@ -150,4 +148,5 @@ class EmbeddingGenerationStep(PipelineStep):
             provider_id=vectordb_collection.embedding_model_provider_id,
             model_name=vectordb_collection.embedding_model_name,
             user_id=context.get_user_id(),
+            vector_collection=vectordb_collection,
         )

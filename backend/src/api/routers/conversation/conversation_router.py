@@ -356,6 +356,10 @@ async def get_conversation_session(
             "top_k": getattr(session, "top_k", None),
         }
 
+        logger.info(
+            f"  session_data['enable_llm_generation']: {session_data['enable_llm_generation']}"
+        )
+
         # Add enhancement config
         if session.enhancement_config:
             session_data["enhancement_config"] = {

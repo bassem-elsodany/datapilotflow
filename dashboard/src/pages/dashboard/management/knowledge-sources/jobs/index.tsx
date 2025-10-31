@@ -366,6 +366,9 @@ export default function KnowledgeSourceJobs() {
         message: 'Job execution has been requested successfully',
         color: 'green',
       });
+      // Refresh data to show updated status
+      refetch();
+      setRefreshTrigger(prev => prev + 1);
     } catch (error) {
       console.error('Error executing job:', error);
       notifications.show({

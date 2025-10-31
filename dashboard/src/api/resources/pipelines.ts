@@ -12,13 +12,16 @@ export const NodeTypeSchema = z.enum([
   'website',
   'multiple_pages',
   'single_page',
+  'local_files',
   // Filters & Transforms
   'domainFilter',
   'contentFilter',
+  'urlPatternFilter',
   // Output Formats
   'htmlExtractor',
   'markdownGenerator',
   'llmMarkdownGenerator',
+  'llmContentFilter',
   // Processing
   'textSplitter',
   // AI Tools
@@ -214,5 +217,17 @@ export const useGetPipelineStatus = (pipelineId: string, options?: { enabled?: b
       enabled: options?.enabled !== false && !!pipelineId,
       refetchInterval: options?.refetchInterval || 5000, // Default: poll every 5 seconds
       staleTime: 0, // Always fetch fresh data
+    },
+  })();
+
+// Get job as pipeline (for job-to-pipeline visualization conversion)
+export const useGetJobAsPipeline = (jobId: string, options?: { enabled?: boolean }) =>
+  createGetQueryHook({
+    endpoint: `/knowledge/jobs/${jobId}/pipeline`,
+    responseSchema: PipelineSchema,
+    rQueryParams: {
+      queryKey: ['job-pipeline', { jobId }],
+      enabled: options?.enabled !== false && !!jobId,
+      staleTime: 1000 * 60 * 5, // 5 minutes
     },
   })();

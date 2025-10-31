@@ -175,7 +175,6 @@ export function createGetQueryHook<
     return client
       .get(url)
       .then((response) => {
-        console.log(`[API] GET ${url} - Response type:`, Array.isArray(response.data) ? 'array' : typeof response.data);
         return responseSchema.parse(response.data);
       })
       .catch((error) => {

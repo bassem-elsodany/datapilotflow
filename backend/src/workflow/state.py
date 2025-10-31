@@ -22,6 +22,9 @@ class WorkflowState(TypedDict):
     # === Input ===
     query: str
     top_k: int
+    conversation_description: Optional[
+        str
+    ]  # Domain/topic description for query enhancement
 
     # === Query Enhancement ===
     enhanced_query: Optional[Dict[str, Any]]  # EnhancedQuery object as dict
@@ -48,8 +51,12 @@ class WorkflowState(TypedDict):
 
     # === Document Judging ===
     judged_documents: Optional[List[Dict[str, Any]]]
-    relevance_labels: Optional[List[int]]  # Legacy: Binary 0/1 labels for backward compatibility
-    relevance_scores: Optional[List[float]]  # New: Continuous 0.0-1.0 scores for score-based reranking
+    relevance_labels: Optional[
+        List[int]
+    ]  # Legacy: Binary 0/1 labels for backward compatibility
+    relevance_scores: Optional[
+        List[float]
+    ]  # New: Continuous 0.0-1.0 scores for score-based reranking
 
     # Answer Generation
     context: Optional[str]
@@ -69,6 +76,7 @@ def create_initial_state(
     top_k: int = 5,
     config: Optional[Dict[str, Any]] = None,
     selected_strategy: Optional[str] = None,
+    conversation_description: Optional[str] = None,
 ) -> WorkflowState:
     """
     Create initial state for the RAG pipeline.
@@ -109,6 +117,7 @@ def create_initial_state(
     return WorkflowState(
         query=query,
         top_k=top_k,
+        conversation_description=conversation_description,
         enhanced_query=None,
         enhancement_strategies_applied=None,
         selected_strategy=selected_strategy,
@@ -122,6 +131,7 @@ def create_initial_state(
         document_scores=None,
         judged_documents=None,
         relevance_labels=None,
+        relevance_scores=None,
         context=None,
         final_answer=None,
         query_info=None,

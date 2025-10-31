@@ -34,6 +34,7 @@ async def rag_fusion_strategy_node(state: WorkflowState) -> WorkflowState:
 
     try:
         query = state["query"]
+        conversation_description = state.get("conversation_description")
         llm_client = state.get("config", {}).get("llm_client")
 
         if not llm_client:
@@ -50,10 +51,20 @@ async def rag_fusion_strategy_node(state: WorkflowState) -> WorkflowState:
             f"Generating {config['num_perspectives']} query perspectives "
             f"for: '{query[:50]}...'"
         )
+        if conversation_description:
+            logger.debug(
+                f"📝 Using conversation description for context: '{conversation_description[:50]}...'"
+            )
 
         # Create and execute chain (with Opik tracing if enabled)
         chain = get_rag_fusion_chain(llm_client=llm_client, config=config)
-        response = await chain.ainvoke({"query": query})
+
+        # Invoke with query and optional description
+        chain_input = {"query": query}
+        if conversation_description:
+            chain_input["conversation_description"] = conversation_description
+
+        response = await chain.ainvoke(chain_input)
 
         # Parse perspectives from response
         perspectives = _parse_perspectives(response.content)

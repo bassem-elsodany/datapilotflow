@@ -11,7 +11,7 @@ from typing import Any, Dict, Optional
 
 from loguru import logger
 
-from src.domain.knowledge.knowledge_job import KnowledgeJob
+from src.domain.knowledge.knowledge_job import KnowledgeJob, JobStatus
 from src.domain.knowledge.knowledge_source_config import KnowledgeSourceConfig
 from src.processors.knowledge_job.orchestration.cancellation_manager import (
     CancellationManager,
@@ -481,10 +481,26 @@ class JobOrchestrator:
                 status_callback=status_callback,
             )
 
-            # Start timeline
-            timeline_result = await timeline_step.execute(extraction_context)
-            if timeline_result.success:
-                timeline_id = extraction_context.timeline_id
+            # Get the latest timeline entry (should already exist from event processor)
+            # The event processor creates a RUNNING timeline immediately to prevent race conditions
+            from src.services.knowledge.job_timeline_service import get_job_timeline_service
+            timeline_service = get_job_timeline_service()
+            latest_timeline = timeline_service.get_latest_timeline_entry(job_id, user_id)
+
+            if latest_timeline and latest_timeline.status == JobStatus.RUNNING:
+                # Use existing timeline created by event processor
+                logger.info(f"Using existing timeline {latest_timeline.id} for job {job_id}")
+                extraction_context.timeline_id = latest_timeline.id
+                timeline_id = latest_timeline.id
+            else:
+                # Fallback: create timeline if it doesn't exist (shouldn't happen normally)
+                logger.warning(f"No RUNNING timeline found for job {job_id}, creating one")
+                timeline_result = await timeline_step.execute(extraction_context)
+                if timeline_result.success:
+                    timeline_id = extraction_context.timeline_id
+                else:
+                    logger.error(f"Failed to create timeline for job {job_id}")
+                    timeline_id = None
 
             # Get batch_size from job
             batch_size = knowledge_job.batch_size
@@ -582,6 +598,32 @@ class JobOrchestrator:
                     chunks_created=total_chunks,
                     current_stage="processing"
                 )
+
+                # Update timeline with progress after each batch
+                # This allows the UI to show real-time progress (documents/chunks processed so far)
+                if timeline_id:
+                    from src.domain.knowledge.job_timeline import JobTimelineUpdate
+
+                    elapsed_time = time.time() - start_time
+                    timeline_update = JobTimelineUpdate(
+                        documents_processed=total_documents,
+                        chunks_created=total_chunks,
+                        processing_time_seconds=elapsed_time
+                    )
+
+                    updated_timeline = timeline_service.update_timeline_entry(
+                        timeline_id=timeline_id,
+                        user_id=user_id,
+                        update_data=timeline_update
+                    )
+
+                    if updated_timeline:
+                        logger.debug(
+                            f"Updated timeline {timeline_id} with progress: "
+                            f"{total_documents} docs, {total_chunks} chunks, {elapsed_time:.2f}s"
+                        )
+                    else:
+                        logger.warning(f"Failed to update timeline {timeline_id} with progress")
 
                 # Emit progress
                 if status_callback:

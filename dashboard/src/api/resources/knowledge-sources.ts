@@ -209,7 +209,13 @@ export const useGetKnowledgeSourceConfigs = createGetQueryHook({
 export const useGetKnowledgeSourceConfig = (configId: string) => createGetQueryHook({
   endpoint: apiEndpoints.knowledgeSources.config(configId),
   responseSchema: KnowledgeSourceConfigSchema,
-  rQueryParams: { queryKey: ['knowledge-source-config', { configId }] },
+  rQueryParams: {
+    queryKey: ['knowledge-source-config', { configId }],
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+  },
 })();
 
 // Get specific knowledge source configuration with expanded data
@@ -222,7 +228,11 @@ export const useGetKnowledgeSourceConfigExpanded = (configId: string, expand?: s
     endpoint,
     responseSchema: KnowledgeSourceConfigExpandedSchema,
     rQueryParams: {
-      queryKey: ['knowledge-source-config-expanded', { configId, expand }]
+      queryKey: ['knowledge-source-config-expanded', { configId, expand }],
+      staleTime: 0,
+      gcTime: 0,
+      refetchOnMount: true,
+      refetchOnWindowFocus: true,
     },
   })();
 };

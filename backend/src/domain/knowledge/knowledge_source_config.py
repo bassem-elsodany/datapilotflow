@@ -122,7 +122,11 @@ class KnowledgeSourceConfig(BaseModel):
     )
     target_elements: List[str] = Field(
         default_factory=list,
-        description="List of target elements for content extraction (preserves page context)",
+        description="List of CSS selectors for content to include (preserves page context)",
+    )
+    exclude_elements: List[str] = Field(
+        default_factory=list,
+        description="List of CSS selectors for content to exclude (removes from extraction)",
     )
     content_filter_threshold: float = Field(
         default=0.6, description="Threshold for content filtering"
@@ -284,7 +288,7 @@ class KnowledgeSourceConfigUpdate(BaseModel):
     crawl_depth: Optional[int] = Field(
         default=None,
         description="Maximum depth for recursive crawling (web scraping only)",
-        ge=1,
+        ge=0,
         le=5,
     )
     target_elements: Optional[List[str]] = Field(

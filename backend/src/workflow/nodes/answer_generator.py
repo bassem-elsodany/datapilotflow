@@ -11,7 +11,6 @@ from src.workflow.chains import get_answer_generation_chain
 from src.workflow.state import WorkflowState
 
 
-@opik.track(name="answer_generator", tags=["answer_generation", "response_synthesis"])
 def answer_generator(state: WorkflowState) -> WorkflowState:
     """
     Generate final answer based on relevant documents.
@@ -124,41 +123,69 @@ def answer_generator(state: WorkflowState) -> WorkflowState:
             response.content if hasattr(response, "content") else str(response)
         )
 
+        logger.info("📝 Answer Generator: Starting query_info extraction")
+
         # Get query information to show user the difference
         original_query = state["query"]
         enhanced_query_data = state.get("enhanced_query", {})
+
+        logger.info(f"📝 Answer Generator: Got enhanced_query_data from state")
+
+        logger.info(
+            f"📝 Answer Generator: enhanced_query_data type: {type(enhanced_query_data)}"
+        )
+        logger.info(
+            f"📝 Answer Generator: enhanced_query_data keys: {list(enhanced_query_data.keys()) if isinstance(enhanced_query_data, dict) else 'Not a dict'}"
+        )
+        logger.info(f"📝 Answer Generator: enhanced_query_data: {enhanced_query_data}")
 
         # Build query comparison info
         query_info = {
             "original_query": original_query,
             "enhanced_query": None,
+            "enhanced_queries": None,  # Array of all enhanced queries
             "strategy_used": None,
         }
 
         if enhanced_query_data:
-            # Get the enhanced query that was actually used for search
+            # Get all enhanced queries that were actually used for search
             if enhanced_query_data.get("augmented_queries"):
-                # For augmented strategy, show first variant (after original)
+                # For augmented strategy, show all variants (including original)
                 augmented = enhanced_query_data["augmented_queries"]
-                query_info["enhanced_query"] = augmented[1] if len(augmented) > 1 else augmented[0]
+                query_info["enhanced_queries"] = augmented
+                # For backward compatibility, keep single enhanced_query (first variant after original)
+                query_info["enhanced_query"] = (
+                    augmented[1] if len(augmented) > 1 else augmented[0]
+                )
                 query_info["strategy_used"] = "Augmented"
+                logger.info(
+                    f"📝 Answer Generator: Extracted {len(augmented)} augmented queries for query_info"
+                )
+                logger.info(f"📝 Augmented queries: {augmented}")
             elif enhanced_query_data.get("multi_query_variants"):
-                query_info["enhanced_query"] = enhanced_query_data[
-                    "multi_query_variants"
-                ][0]
+                variants = enhanced_query_data["multi_query_variants"]
+                query_info["enhanced_queries"] = variants
+                query_info["enhanced_query"] = variants[0]
                 query_info["strategy_used"] = "Multi-Query"
             elif enhanced_query_data.get("fusion_perspectives"):
-                query_info["enhanced_query"] = enhanced_query_data[
-                    "fusion_perspectives"
-                ][0]
+                perspectives = enhanced_query_data["fusion_perspectives"]
+                query_info["enhanced_queries"] = perspectives
+                query_info["enhanced_query"] = perspectives[0]
                 query_info["strategy_used"] = "Query Fusion"
+            elif enhanced_query_data.get("sub_queries"):
+                sub_queries = enhanced_query_data["sub_queries"]
+                query_info["enhanced_queries"] = sub_queries
+                query_info["enhanced_query"] = sub_queries[0] if sub_queries else None
+                query_info["strategy_used"] = "Decomposition"
             elif enhanced_query_data.get("step_back_query"):
-                query_info["enhanced_query"] = enhanced_query_data["step_back_query"]
+                step_back = enhanced_query_data["step_back_query"]
+                query_info["enhanced_queries"] = [step_back]
+                query_info["enhanced_query"] = step_back
                 query_info["strategy_used"] = "Step-Back"
             elif enhanced_query_data.get("hypothetical_answer"):
-                query_info["enhanced_query"] = enhanced_query_data[
-                    "hypothetical_answer"
-                ]
+                hyde = enhanced_query_data["hypothetical_answer"]
+                query_info["enhanced_queries"] = [hyde]
+                query_info["enhanced_query"] = hyde
                 query_info["strategy_used"] = "HyDE"
 
         # Update state

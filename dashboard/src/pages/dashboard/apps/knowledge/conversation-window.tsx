@@ -1,4 +1,4 @@
-import { useResetConversationMessages } from '@/api/resources/conversations';
+import { useDeleteConversation, useResetConversationMessages } from '@/api/resources/conversations';
 import { useGetActiveModelProviders } from '@/api/resources/model-providers';
 import { useGetCollections } from '@/api/resources/vectordb';
 import { StreamingMessage } from '@/components/streaming-message';
@@ -36,7 +36,6 @@ import {
   IconCheck,
   IconChevronDown,
   IconEdit,
-  IconExternalLink,
   IconInfoCircle,
   IconLoader,
   IconMessageCircle,
@@ -60,6 +59,7 @@ interface Message {
     document_count?: number;
     enhancement_strategy?: string;
     enhanced_query?: string;
+    enhanced_queries?: string[];  // Array of all enhanced query variants
   };
 }
 
@@ -74,7 +74,64 @@ const ENHANCEMENT_STRATEGIES = [
   { value: 'rag_fusion', label: 'RAG Fusion' },
 ];
 
+// Helper function to generate RAG configuration description
+const generateRagDescription = (
+  strategy: string,
+  enableReranking: boolean,
+  enableLLMGeneration: boolean,
+  topK?: number,
+  collectionName?: string
+): string => {
+  const parts: string[] = [];
+
+  // Strategy description with RRF info
+  const strategyLabel = ENHANCEMENT_STRATEGIES.find(s => s.value === strategy)?.label || 'Unknown';
+
+  if (strategy === 'native') {
+    parts.push(`Using ${strategyLabel} (direct search)`);
+  } else if (strategy === 'augmented' || strategy === 'multi_query' || strategy === 'decomposition' || strategy === 'rag_fusion') {
+    parts.push(`Using ${strategyLabel} with RRF fusion`);
+  } else if (strategy === 'step_back' || strategy === 'hyde') {
+    parts.push(`Using ${strategyLabel} (single enhanced query)`);
+  } else {
+    parts.push(`Using ${strategyLabel}`);
+  }
+
+  // Collection and top-k
+  if (collectionName && topK) {
+    parts.push(`searching ${collectionName} (top ${topK})`);
+  }
+
+  // Reranking
+  if (enableReranking) {
+    parts.push(`with LLM reranking`);
+  }
+
+  // Generation mode
+  if (enableLLMGeneration) {
+    parts.push(`generating natural language answers`);
+  } else {
+    parts.push(`returning raw results`);
+  }
+
+  return parts.join(', ') + '.';
+};
+
 export default function ConversationWindow() {
+  const deleteConversationMutation = useDeleteConversation();
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+
+  const handleDeleteSession = async () => {
+    if (!sessionId) return;
+    try {
+      await deleteConversationMutation.mutateAsync({ route: { conversationId: sessionId } });
+      notifications.show({ title: 'Deleted', message: 'Conversation deleted', color: 'green' });
+      setDeleteModalOpen(false);
+      navigate(paths.dashboard.apps.knowledgeSearch);
+    } catch (err: any) {
+      notifications.show({ title: 'Error', message: 'Failed to delete conversation', color: 'red' });
+    }
+  };
   // CSS animations for smooth chat experience
   const chatAnimations = `
     @keyframes fadeIn {
@@ -124,8 +181,9 @@ export default function ConversationWindow() {
   // Update reranker defaults when LLM provider or model changes
   useEffect(() => {
     if (enableReranking && selectedProviderId && selectedModel) {
-      setSelectedRerankerId(selectedProviderId);
-      setSelectedRerankerModel(selectedModel);
+      // Only update if values are different to prevent infinite loops
+      setSelectedRerankerId(prev => prev !== selectedProviderId ? selectedProviderId : prev);
+      setSelectedRerankerModel(prev => prev !== selectedModel ? selectedModel : prev);
     }
   }, [selectedProviderId, selectedModel, enableReranking]);
 
@@ -135,12 +193,13 @@ export default function ConversationWindow() {
     completedStages: string[];
     originalQuery: string | null;
     enhancedQuery: string | null;
+    enhancedQueries: string[] | null;  // Array of all enhanced query variants
     strategy: string | null;
     documentCount: number;
     relevantCount: number;
     rerankingEnabled: boolean;
     indexType: string;
-    vectorDimension: number;
+    vectorDimension: number | undefined;
     searchTime: number;
     isActive: boolean;
   }>({
@@ -148,12 +207,13 @@ export default function ConversationWindow() {
     completedStages: [],
     originalQuery: null,
     enhancedQuery: null,
+    enhancedQueries: null,
     strategy: null,
     documentCount: 0,
     relevantCount: 0,
     rerankingEnabled: enableReranking,
     indexType: 'HNSW',
-    vectorDimension: 1536,
+    vectorDimension: undefined,
     searchTime: 0,
     isActive: false,
   });
@@ -165,12 +225,15 @@ export default function ConversationWindow() {
   // Helper function to finalize streaming messages
   const finalizeStreamingMessages = () => {
     setMessages(prev => {
-      const updatedMessages = [...prev];
-      const lastMessage = updatedMessages[updatedMessages.length - 1];
+      const lastMessage = prev[prev.length - 1];
       if (lastMessage && lastMessage.isStreaming) {
-        lastMessage.isStreaming = false;
+        // Create a new array with a new last message object (immutable update)
+        return [
+          ...prev.slice(0, -1),
+          { ...lastMessage, isStreaming: false }
+        ];
       }
-      return updatedMessages;
+      return prev;
     });
   };
 
@@ -198,6 +261,17 @@ export default function ConversationWindow() {
       loadConversationHistory();
     }
   }, [sessionId]);
+
+  // Reload settings when modal opens to ensure fresh data
+  const isLoadingRef = useRef(false);
+  useEffect(() => {
+    if (settingsModalOpen && sessionId && !isLoadingRef.current) {
+      isLoadingRef.current = true;
+      loadConversationHistory().finally(() => {
+        isLoadingRef.current = false;
+      });
+    }
+  }, [settingsModalOpen, sessionId]);
 
   // Cleanup WebSocket on unmount
   useEffect(() => {
@@ -234,6 +308,7 @@ export default function ConversationWindow() {
 
       if (response.ok) {
         const data = await response.json();
+
         setSessionName(data.session?.name || 'Conversation');
 
         // Load conversation settings - NO FALLBACKS, USE EXACT DB VALUES
@@ -256,13 +331,6 @@ export default function ConversationWindow() {
 
           // Load top_k - exact value from DB
           setTopK(data.session.top_k);
-
-          console.log('✅ Loaded conversation settings:', {
-            enableReranking: newEnableReranking,
-            enableLLMGeneration: newEnableLLMGeneration,
-            topK: data.session.top_k,
-            strategy: data.session.enhancement_config?.strategy
-          });
         }
 
         // Optimize timestamp conversion - only process if messages exist
@@ -438,27 +506,25 @@ export default function ConversationWindow() {
     const { stage, message, error, chunk } = data;
     const response = data.response || data.data?.response;
 
+
     switch (stage) {
       case 'starting':
       case 'workflow_started':
         // Initialize enhanced workflow visualization
-        console.log('🔍 Initializing workflow state:', {
-          strategy: data?.data?.strategy || data?.strategy || selectedStrategy,
-          rerankingEnabled: enableReranking,
-          enableLLMGeneration: enableLLMGeneration
-        });
+        const initialStrategy = data?.data?.strategy || data?.strategy || selectedStrategy;
 
         setWorkflowState({
           currentStage: null,
           completedStages: [],
           originalQuery: inputMessage,
           enhancedQuery: null,
-          strategy: data?.data?.strategy || data?.strategy || selectedStrategy,
+          enhancedQueries: null,
+          strategy: initialStrategy,
           documentCount: 0,
           relevantCount: 0,
           rerankingEnabled: enableReranking,
           indexType: 'HNSW',
-          vectorDimension: 1536,
+          vectorDimension: undefined,
           searchTime: 0,
           isActive: true,
         });
@@ -498,20 +564,32 @@ export default function ConversationWindow() {
         });
 
         // Update workflow state for query enhancement
-        setWorkflowState(prev => ({
-          ...prev,
-          currentStage: 'query_enhancement',
-          enhancedQuery: data?.data?.enhanced_query || data?.enhanced_query || null,
-        }));
+        const newEnhancedQuery = data?.data?.enhanced_query || data?.enhanced_query || null;
+        const newEnhancedQueries = data?.data?.enhanced_queries || null;
+        const newStrategy = data?.data?.strategy || data?.strategy;
+        setWorkflowState(prev => {
+          // Only update if something actually changed
+          if (prev.currentStage === 'query_enhancement' &&
+            prev.enhancedQuery === newEnhancedQuery &&
+            JSON.stringify(prev.enhancedQueries) === JSON.stringify(newEnhancedQueries) &&
+            (!newStrategy || prev.strategy === newStrategy)) {
+            return prev;
+          }
+          return {
+            ...prev,
+            currentStage: 'query_enhancement',
+            enhancedQuery: newEnhancedQuery,
+            enhancedQueries: newEnhancedQueries || (newEnhancedQuery ? [newEnhancedQuery] : null),
+            strategy: newStrategy || prev.strategy, // Update strategy if provided
+          };
+        });
         break;
 
       case 'document_retrieval':
       case 'document_retrieval_complete':
-        console.log('🔄 DOCUMENT RETRIEVAL - Current messages count:', messages.length);
         // Create or update the streaming message with document retrieval status
         setMessages(prev => {
           const lastMessage = prev[prev.length - 1];
-          console.log('🔄 Last message:', lastMessage?.content, 'isStreaming:', lastMessage?.isStreaming);
 
           // If no assistant message exists, create one
           if (!lastMessage || lastMessage.role !== 'assistant') {
@@ -663,6 +741,15 @@ export default function ConversationWindow() {
 
       case 'completed':
         // Handle completion from agent WebSocket
+        console.log('🔍 COMPLETED MESSAGE RECEIVED:', {
+          has_data: !!data.data,
+          enhanced_query: data.data?.enhanced_query,
+          enhanced_queries: data.data?.enhanced_queries,
+          enhanced_queries_type: typeof data.data?.enhanced_queries,
+          enhanced_queries_is_array: Array.isArray(data.data?.enhanced_queries),
+          enhanced_queries_length: data.data?.enhanced_queries?.length,
+        });
+
         const metadata = data.data ? {
           source_urls: data.data.source_urls || [],
           correlation_ids: data.data.correlation_ids || [],
@@ -670,7 +757,35 @@ export default function ConversationWindow() {
           document_count: data.data.document_count || 0,
           enhancement_strategy: data.data.enhancement_strategy,
           enhanced_query: data.data.enhanced_query,
+          // Use enhanced_queries from backend, or fallback to workflowState if not provided
+          enhanced_queries: data.data.enhanced_queries || workflowState.enhancedQueries || (data.data.enhanced_query ? [data.data.enhanced_query] : undefined),
         } : undefined;
+
+        console.log('📦 Final metadata being stored in message:', metadata);
+        console.log('📦 enhanced_queries from data:', data.data?.enhanced_queries);
+        console.log('📦 enhanced_queries from workflowState:', workflowState.enhancedQueries);
+        console.log('📦 enhanced_query from data:', data.data?.enhanced_query);
+
+        // Update workflow state with final enhanced queries if available
+        if (metadata?.enhanced_queries) {
+          setWorkflowState(prev => {
+            const queriesChanged = JSON.stringify(prev.enhancedQueries) !== JSON.stringify(metadata.enhanced_queries);
+            return queriesChanged ? {
+              ...prev,
+              enhancedQuery: metadata.enhanced_query,
+              enhancedQueries: metadata.enhanced_queries
+            } : prev;
+          });
+        } else if (metadata?.enhanced_query) {
+          // Fallback: if we only have single enhanced_query, convert it to array
+          setWorkflowState(prev => {
+            return prev.enhancedQuery !== metadata.enhanced_query ? {
+              ...prev,
+              enhancedQuery: metadata.enhanced_query,
+              enhancedQueries: [metadata.enhanced_query]
+            } : prev;
+          });
+        }
 
         setMessages(prev => {
           const lastMessage = prev[prev.length - 1];
@@ -705,12 +820,18 @@ export default function ConversationWindow() {
         finalizeStreamingMessages();
 
         // Mark workflow as complete
-        setWorkflowState(prev => ({
-          ...prev,
-          currentStage: null,
-          completedStages: [...prev.completedStages, 'response_generation'],
-          isActive: false,
-        }));
+        setWorkflowState(prev => {
+          const newCompleted = prev.completedStages.includes('response_generation')
+            ? prev.completedStages
+            : [...prev.completedStages, 'response_generation'];
+
+          return {
+            ...prev,
+            currentStage: null,
+            completedStages: newCompleted,
+            isActive: false,
+          };
+        });
         break;
 
       case 'error':
@@ -727,7 +848,7 @@ export default function ConversationWindow() {
 
       default:
         // Log unknown stages for debugging
-        console.log('Unknown stage:', stage, data);
+        // Unknown stage
         break;
     }
   };
@@ -813,7 +934,6 @@ export default function ConversationWindow() {
         top_k: topK,
       };
 
-      console.log('💾 Saving conversation settings:', payload);
 
       const response = await fetch(apiUtils.buildApiUrl(`/conversations/${sessionId}`), {
         method: 'PUT',
@@ -827,16 +947,17 @@ export default function ConversationWindow() {
       if (response.ok) {
         const responseData = await response.json();
 
+        // Reload conversation data FIRST to reflect new settings
+        await loadConversationHistory();
+
         notifications.show({
           title: 'Success',
           message: 'Conversation settings updated successfully',
           color: 'green',
           icon: <IconCheck size={16} />,
         });
-        setSettingsModalOpen(false);
 
-        // Reload conversation data to reflect new settings
-        await loadConversationHistory();
+        setSettingsModalOpen(false);
       } else {
         const errorData = await response.json().catch(() => ({}));
         notifications.show({
@@ -867,8 +988,8 @@ export default function ConversationWindow() {
     <Box style={{
       display: 'flex',
       flexDirection: 'column',
-      height: 'calc(100vh - 80px)',
-      maxHeight: 'calc(100vh - 80px)',
+      height: 'calc(98vh - 80px)',
+      maxHeight: 'calc(98vh - 80px)',
       overflow: 'hidden'
     }}>
       {/* CSS Animations */}
@@ -921,9 +1042,18 @@ export default function ConversationWindow() {
                     Ready
                   </Badge>
                 </Tooltip>
-                <Text size="xs" c="dimmed">•</Text>
-                <Text size="xs" c="dimmed">Endpoint: {apiEndpoints.agent.websocket.query}</Text>
               </Group>
+              {/* RAG Configuration Description */}
+              <Tooltip
+                label="This describes your RAG agent configuration: query enhancement strategy, search settings, reranking, and answer generation mode"
+                multiline
+                w={400}
+              >
+                <Text size="xs" c="blue.6" style={{ fontStyle: 'italic' }}>
+                  <IconInfoCircle size={12} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
+                  {generateRagDescription(selectedStrategy, enableReranking, enableLLMGeneration, topK, collectionName)}
+                </Text>
+              </Tooltip>
             </div>
           </Group>
           <Group>
@@ -943,13 +1073,40 @@ export default function ConversationWindow() {
               </ActionIcon>
             </Tooltip>
             <Tooltip label="Delete session">
-              <ActionIcon variant="subtle" color="red">
+              <ActionIcon variant="subtle" color="red" onClick={() => setDeleteModalOpen(true)}>
                 <IconTrash size={16} />
               </ActionIcon>
             </Tooltip>
           </Group>
         </Group>
       </Paper>
+      {/* Delete Confirmation Modal */}
+      <Modal
+        opened={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        title="Delete Conversation"
+        size="md"
+        centered
+      >
+        <Stack gap="md">
+          <Alert icon={<IconTrash size={16} />} title="Warning" color="red">
+            <Text size="sm">
+              Are you sure you want to delete this conversation?
+            </Text>
+            <Text size="sm" mt="xs">
+              This action cannot be undone. All messages and conversation history will be permanently deleted.
+            </Text>
+          </Alert>
+          <Group justify="flex-end" gap="xs">
+            <Button variant="subtle" onClick={() => setDeleteModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button color="red" onClick={handleDeleteSession} loading={deleteConversationMutation.isPending}>
+              Delete Conversation
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       {/* Messages Area - Full Width */}
       <Box
@@ -959,7 +1116,7 @@ export default function ConversationWindow() {
           flexShrink: 1,
           flexBasis: 0,
           overflowY: 'scroll',
-          padding: 'var(--mantine-spacing-md)'
+          padding: '16px 0' // No horizontal padding - let messages control their own margins
         }}
       >
         <Stack gap="md">
@@ -990,7 +1147,9 @@ export default function ConversationWindow() {
                       display: 'flex',
                       alignItems: 'flex-start',
                       gap: '12px',
-                      maxWidth: '85%',
+                      width: '92%',
+                      marginLeft: '16px',
+                      marginRight: 'auto',
                     }}
                   >
                     {/* Assistant Avatar */}
@@ -1020,10 +1179,11 @@ export default function ConversationWindow() {
                         timestamp={message.timestamp}
                         showSender={false}
                         senderName="Assistant"
+                        metadata={message.metadata}
                       />
 
-                      {/* Metadata Section */}
-                      {message.metadata && !message.isStreaming && (
+                      {/* Old Metadata Section - Now handled by EnhancedMessageRenderer */}
+                      {false && message.metadata && !message.isStreaming && (
                         <Box mt="sm">
                           <Paper
                             p="sm"
@@ -1078,55 +1238,48 @@ export default function ConversationWindow() {
                               </Group>
 
                               <Collapse in={expandedMetadata.has(index)}>
+                                {/* Query Variants Used */}
+                                {(() => {
+                                  console.log(`📋 Message ${index} metadata:`, message.metadata);
+                                  console.log(`📋 enhanced_queries:`, message.metadata?.enhanced_queries);
+                                  return null;
+                                })()}
+                                {message.metadata?.enhanced_queries && message.metadata.enhanced_queries.length > 0 && (
+                                  <Box mb="sm">
+                                    <Group gap="xs" mb={4}>
+                                      <Text size="xs" fw={500} c="dimmed">
+                                        Query Variants ({message.metadata!.enhanced_queries!.length}):
+                                      </Text>
+                                      {message.metadata!.enhancement_strategy &&
+                                        (message.metadata!.enhancement_strategy === 'augmented' ||
+                                          message.metadata!.enhancement_strategy === 'multi_query' ||
+                                          message.metadata!.enhancement_strategy === 'decomposition' ||
+                                          message.metadata!.enhancement_strategy === 'rag_fusion') && (
+                                          <Badge size="xs" color="blue" variant="light">RRF Fusion</Badge>
+                                        )}
+                                    </Group>
+                                    <Text size="xs" c="dimmed" p="xs" style={{ backgroundColor: 'var(--mantine-color-gray-0)', borderRadius: '4px', border: '1px solid var(--mantine-color-gray-2)', lineHeight: 1.4 }}>
+                                      {message.metadata!.enhanced_queries!.map((query: string, qIdx: number) => (
+                                        <span key={qIdx}>
+                                          <Badge size="xs" color="grape" variant="dot" style={{ marginRight: '4px' }}>
+                                            {qIdx + 1}
+                                          </Badge>
+                                          {query}
+                                          {qIdx < message.metadata!.enhanced_queries!.length - 1 && ' • '}
+                                        </span>
+                                      ))}
+                                    </Text>
+                                  </Box>
+                                )}
+
                                 {/* Source URLs with Correlation IDs */}
-                                {message.metadata.source_urls && message.metadata.source_urls.length > 0 && (
+                                {message.metadata?.source_urls && message.metadata.source_urls.length > 0 && (
                                   <Box>
                                     <Text size="xs" fw={500} c="dimmed" mb="xs">
-                                      Sources ({message.metadata.source_urls.length}):
+                                      Sources ({message.metadata!.source_urls!.length}):
                                     </Text>
                                     <Stack gap="xs">
                                       {(() => {
-                                        // Group sources by URL and collect chunk IDs
-                                        const urlGroups: { [url: string]: string[] } = {};
-
-                                        console.log('🔍 Frontend source_urls:', message.metadata.source_urls);
-                                        console.log('🔍 Frontend chunk_ids:', message.metadata.chunk_ids);
-
-                                        message.metadata.source_urls.forEach((url, urlIndex) => {
-                                          const chunkId = message.metadata?.chunk_ids?.[urlIndex];
-                                          if (!urlGroups[url]) {
-                                            urlGroups[url] = [];
-                                          }
-                                          if (chunkId) {
-                                            urlGroups[url].push(chunkId);
-                                          }
-                                        });
-
-                                        console.log('🔍 Frontend urlGroups:', urlGroups);
-
-                                        return Object.entries(urlGroups).map(([url, chunkIds], groupIndex) => (
-                                          <Group key={groupIndex} gap="xs" align="flex-start">
-                                            <ThemeIcon size="xs" variant="light" color="green">
-                                              <IconExternalLink size={12} />
-                                            </ThemeIcon>
-                                            <Box style={{ flex: 1 }}>
-                                              <Anchor
-                                                href={url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                size="xs"
-                                                style={{ wordBreak: 'break-all' }}
-                                              >
-                                                {url}
-                                              </Anchor>
-                                              {chunkIds.length > 0 && (
-                                                <Text size="xs" c="dimmed" style={{ fontFamily: 'monospace', marginTop: '2px' }}>
-                                                  ({chunkIds.join(', ')})
-                                                </Text>
-                                              )}
-                                            </Box>
-                                          </Group>
-                                        ));
                                       })()}
                                     </Stack>
                                   </Box>
@@ -1154,7 +1307,9 @@ export default function ConversationWindow() {
                       display: 'flex',
                       alignItems: 'flex-start',
                       gap: '12px',
-                      maxWidth: '85%',
+                      width: '92%',
+                      marginLeft: 'auto',
+                      marginRight: '16px',
                       flexDirection: 'row-reverse',
                     }}
                   >
@@ -1220,7 +1375,9 @@ export default function ConversationWindow() {
                   display: 'flex',
                   alignItems: 'flex-start',
                   gap: '12px',
-                  maxWidth: '85%',
+                  width: '92%',
+                  marginLeft: '16px',
+                  marginRight: 'auto',
                 }}
               >
                 {/* Assistant Avatar */}
@@ -1361,6 +1518,7 @@ export default function ConversationWindow() {
         metadata={{
           originalQuery: workflowState.originalQuery || undefined,
           enhancedQuery: workflowState.enhancedQuery || undefined,
+          enhancedQueries: workflowState.enhancedQueries || undefined,
           strategy: workflowState.strategy || undefined,
           documentCount: workflowState.documentCount,
           relevantCount: workflowState.relevantCount,
@@ -1435,7 +1593,6 @@ export default function ConversationWindow() {
                 placeholder="Number of documents to retrieve"
                 value={topK || undefined}
                 onChange={(value) => {
-                  console.log('🔍 NumberInput onChange:', value, 'current topK state:', topK);
                   setTopK(typeof value === 'number' ? value : undefined);
                 }}
                 min={3}

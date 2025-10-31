@@ -5,9 +5,10 @@ This service provides an abstraction for generating embeddings from text,
 decoupling the business logic from specific embedding providers (LiteLLM, OpenAI, etc.).
 """
 
+import functools
+
 # CRITICAL: Monkey-patch json module BEFORE any imports that might use it
 import json as _json
-import functools
 
 _original_dumps = _json.dumps
 _json.dumps = functools.partial(_original_dumps, ensure_ascii=False)
@@ -17,6 +18,7 @@ from typing import List, Optional
 
 from loguru import logger
 
+from src.domain.knowledge.vectordb_collection import VectorDBCollection
 from src.domain.rag.knowledge_chunk import KnowledgeChunk
 
 
@@ -95,6 +97,7 @@ class ModelProviderEmbeddingService(EmbeddingService):
         provider_id: str,
         model_name: str,
         user_id: str,
+        vector_collection: VectorDBCollection,
     ):
         """
         Initialize the embedding service.
@@ -103,10 +106,12 @@ class ModelProviderEmbeddingService(EmbeddingService):
             provider_id: ID of the model provider
             model_name: Name of the embedding model
             user_id: User ID who owns the provider
+            vector_collection: Vector database collection configuration with dimension
         """
         self.provider_id = provider_id
         self.model_name = model_name
         self.user_id = user_id
+        self.vector_collection = vector_collection
         self._provider = None
         self._load_provider()
 
@@ -183,8 +188,9 @@ class ModelProviderEmbeddingService(EmbeddingService):
                 return []
 
             # Generate embeddings directly with LiteLLM (no adapter)
-            import litellm
             import os
+
+            import litellm
 
             # Force UTF-8 encoding at OS level
             os.environ["PYTHONIOENCODING"] = "utf-8"
@@ -192,7 +198,7 @@ class ModelProviderEmbeddingService(EmbeddingService):
             os.environ["LANG"] = "en_US.UTF-8"
 
             logger.info(
-                f"Generating embeddings for {len(valid_chunks)} chunks using {self._provider.provider_type}/{self.model_name}"
+                f"Generating embeddings for {len(valid_chunks)} chunks using {self._provider.provider_type}/{self.model_name} and dimension {self.vector_collection.vector_dimension}"
             )
 
             # Prepare texts - ensure they're UTF-8 strings
@@ -201,11 +207,12 @@ class ModelProviderEmbeddingService(EmbeddingService):
                 # Ensure text is proper UTF-8 string
                 text = chunk.page_content
                 if isinstance(text, bytes):
-                    text = text.decode('utf-8', errors='replace')
+                    text = text.decode("utf-8", errors="replace")
                 texts.append(text)
 
             # Initialize token counter for batching
             from src.processors.splitters.token_counter import TokenCounter
+
             token_counter = TokenCounter(model_name=self.model_name)
 
             # Get model's max context (default to 8191 for text-embedding-3-*)
@@ -231,7 +238,9 @@ class ModelProviderEmbeddingService(EmbeddingService):
                     )
 
                 # Check if adding this text would exceed the batch limit
-                if current_batch and (current_batch_tokens + text_tokens > safe_batch_limit):
+                if current_batch and (
+                    current_batch_tokens + text_tokens > safe_batch_limit
+                ):
                     # Process current batch
                     total_batches += 1
                     logger.debug(
@@ -242,6 +251,7 @@ class ModelProviderEmbeddingService(EmbeddingService):
                         model=f"{self._provider.provider_type}/{self.model_name}",
                         input=current_batch,
                         api_key=self._provider.api_key,
+                        dimensions=self.vector_collection.vector_dimension,
                     )
 
                     # Extract vectors
@@ -270,6 +280,7 @@ class ModelProviderEmbeddingService(EmbeddingService):
                     model=f"{self._provider.provider_type}/{self.model_name}",
                     input=current_batch,
                     api_key=self._provider.api_key,
+                    dimensions=self.vector_collection.vector_dimension,
                 )
 
                 # Extract vectors
@@ -280,7 +291,7 @@ class ModelProviderEmbeddingService(EmbeddingService):
                         all_vectors.append(item["embedding"])
 
             logger.info(
-                f"Generated {len(all_vectors)} embeddings in {total_batches} sub-batches using {self._provider.name}/{self.model_name}"
+                f"Generated {len(all_vectors)} embeddings in {total_batches} sub-batches using {self._provider.name}/{self.model_name} and dimension {self.vector_collection.vector_dimension}"
             )
 
             return all_vectors
@@ -291,16 +302,16 @@ class ModelProviderEmbeddingService(EmbeddingService):
             raise EmbeddingGenerationError(error_msg, original_error=e)
 
     def get_embedding_dimension(self) -> int:
-        """Get the embedding dimension from the provider."""
-        # This would ideally come from provider config or be detected from first embedding
-        # For now, return a placeholder
-        return getattr(self._provider.embedding, "dimension", 1536)
+        """Get the embedding dimension from the vector collection configuration."""
+        return self.vector_collection.vector_dimension
 
     def get_provider_info(self) -> dict:
         """Get provider information."""
         return {
             "provider_id": self.provider_id,
             "provider_name": self._provider.name if self._provider else "unknown",
-            "provider_type": self._provider.provider_type if self._provider else "unknown",
+            "provider_type": (
+                self._provider.provider_type if self._provider else "unknown"
+            ),
             "model_name": self.model_name,
         }

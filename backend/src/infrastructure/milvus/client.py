@@ -281,10 +281,13 @@ class MilvusClientWrapper(Generic[T]):
     def _create_collection(self) -> None:
         """Create a new Milvus collection with appropriate schema."""
         try:
-            # Define collection schema to match Weaviate structure
+            # Define collection schema with correlation_id as primary key
+            # CRITICAL: correlation_id = {source_url}_{chunk_index}_{content_hash}
+            # This ensures automatic deduplication via upsert operations
             fields = [
+                # Primary key: correlation_id for chunk-level deduplication
                 FieldSchema(
-                    name="id", dtype=DataType.VARCHAR, is_primary=True, max_length=100
+                    name="correlation_id", dtype=DataType.VARCHAR, is_primary=True, max_length=512
                 ),
                 FieldSchema(
                     name="vector",
@@ -305,12 +308,10 @@ class MilvusClientWrapper(Generic[T]):
                 FieldSchema(name="job_id", dtype=DataType.VARCHAR, max_length=512),
                 FieldSchema(name="title", dtype=DataType.VARCHAR, max_length=1024),
                 # Cross-reference properties
+                FieldSchema(name="id", dtype=DataType.VARCHAR, max_length=100),  # Keep for backward compatibility
                 FieldSchema(name="chunk_id", dtype=DataType.VARCHAR, max_length=100),
                 FieldSchema(name="chunk_index", dtype=DataType.INT64),
                 FieldSchema(name="total_chunks", dtype=DataType.INT64),
-                FieldSchema(
-                    name="correlation_id", dtype=DataType.VARCHAR, max_length=512
-                ),
                 FieldSchema(name="created_at", dtype=DataType.VARCHAR, max_length=50),
             ]
 
@@ -491,15 +492,21 @@ class MilvusClientWrapper(Generic[T]):
             raise
 
     def ingest_documents(self, documents: List[T], vectors: List[List[float]]) -> None:
-        """Insert multiple documents into the Milvus collection.
+        """Upsert documents into the Milvus collection using correlation_id as primary key.
+
+        This method uses UPSERT operation which:
+        - Inserts new chunks if correlation_id doesn't exist
+        - Updates existing chunks if correlation_id already exists
+
+        This ensures automatic deduplication at the chunk level.
 
         Args:
-            documents: List of Pydantic model instances to insert.
+            documents: List of Pydantic model instances to upsert.
             vectors: List of vector embeddings corresponding to each document.
 
         Raises:
             ValueError: If documents is empty or vectors don't match documents.
-            Exception: If the insertion operation fails.
+            Exception: If the upsert operation fails.
         """
         try:
             if not documents:
@@ -521,12 +528,12 @@ class MilvusClientWrapper(Generic[T]):
                     f"No active connection to Milvus with alias '{self.connection_alias}'"
                 )
 
-            # Prepare data for insertion to match Weaviate schema structure
+            # Prepare data for upsert
             data = []
             for i, (doc, vector) in enumerate(zip(documents, vectors)):
                 doc_dict = doc.model_dump()
 
-                # Generate correlation_id for unique chunk identification
+                # Generate correlation_id for unique chunk identification (PRIMARY KEY)
                 source_url = doc_dict.get("source_url", "")
                 chunk_index = doc_dict.get("chunk_index", 0)
                 page_content = doc_dict.get("page_content", "")
@@ -535,28 +542,30 @@ class MilvusClientWrapper(Generic[T]):
 
                 data.append(
                     {
-                        "id": str(uuid.uuid4()),  # Use proper UUID for Milvus
+                        "correlation_id": correlation_id,  # PRIMARY KEY - must be first
                         "vector": vector,
                         "page_content": page_content,
                         "source_url": source_url,
                         "job_id": doc_dict.get("job_id", ""),
                         "title": doc_dict.get("title", ""),
+                        "id": str(uuid.uuid4()),  # Keep for backward compatibility
                         "chunk_id": doc_dict.get("chunk_id", ""),
                         "chunk_index": chunk_index,
                         "total_chunks": doc_dict.get("total_chunks", 1),
-                        "correlation_id": correlation_id,
                         "created_at": datetime.utcnow().isoformat(),
                     }
                 )
 
-            # Insert data
-            self.collection.insert(data)
+            # Use UPSERT instead of INSERT for automatic deduplication
+            # If correlation_id exists: UPDATE the chunk
+            # If correlation_id is new: INSERT the chunk
+            self.collection.upsert(data)
             self.collection.flush()
 
-            logger.debug(f"Inserted {len(documents)} documents into Milvus")
+            logger.info(f"✅ Upserted {len(documents)} documents into Milvus (automatic deduplication enabled)")
 
         except Exception as e:
-            logger.error(f"Error inserting documents into Milvus: {e}")
+            logger.error(f"Error upserting documents into Milvus: {e}")
             logger.error(
                 f"Connection status: {connections.has_connection(self.connection_alias)}"
             )
@@ -645,8 +654,9 @@ class MilvusClientWrapper(Generic[T]):
                     if distance_threshold and hit.distance > distance_threshold:
                         continue
 
+                    # hit.id returns the primary key (now correlation_id)
                     result = {
-                        "id": hit.id,
+                        "id": hit.id,  # This is correlation_id now
                         "distance": hit.distance,
                         "score": 1
                         - hit.distance,  # Convert distance to similarity score
@@ -761,8 +771,9 @@ class MilvusClientWrapper(Generic[T]):
                 ]
 
             # Query documents
+            # Note: correlation_id is now the primary key
             results = self.collection.query(
-                expr=filter_expr or "id != ''",  # Default filter to get all documents
+                expr=filter_expr or "correlation_id != ''",  # Default filter to get all documents
                 output_fields=return_fields,
                 limit=limit,
             )
@@ -770,7 +781,8 @@ class MilvusClientWrapper(Generic[T]):
             # Format results
             formatted_results = []
             for result in results:
-                formatted_result = {"id": result.get("id"), "properties": {}}
+                # Use correlation_id as the id (it's the primary key now)
+                formatted_result = {"id": result.get("correlation_id"), "properties": {}}
 
                 # Extract properties
                 for field in return_fields:

@@ -153,7 +153,8 @@ class DocumentChunkingStep(PipelineStep):
 
                 # Split the document using splitter.split(text) method
                 # Note: splitter.split() takes text and returns List[Document]
-                split_docs = splitter.split(doc.page_content)
+                source_url = doc.metadata.get("source_url", "unknown")
+                split_docs = splitter.split(doc.page_content, source_url=source_url)
                 # Convert to KnowledgeChunk objects
                 # Preserve metadata from original document
                 for chunk_index, chunk_doc in enumerate(split_docs):

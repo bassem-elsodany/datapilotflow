@@ -30,6 +30,7 @@ async def augmented_strategy_node(state: WorkflowState) -> WorkflowState:
     """
     logger.info("🚀 [NODE START] augmented_strategy_node")
     query = state["query"]
+    conversation_description = state.get("conversation_description")
     config = state.get("config", {})
 
     llm_config = config.get("llm_config", {})
@@ -37,6 +38,10 @@ async def augmented_strategy_node(state: WorkflowState) -> WorkflowState:
     llm_model_name = llm_config.get("model_name")
 
     logger.info(f"🔄 Augmented Strategy: Enhancing query '{query[:50]}...'")
+    if conversation_description:
+        logger.debug(
+            f"📝 Using conversation description for context: '{conversation_description[:50]}...'"
+        )
 
     try:
         # Get LLM client from config
@@ -47,8 +52,12 @@ async def augmented_strategy_node(state: WorkflowState) -> WorkflowState:
         # Get the chain
         chain = get_augmented_chain(llm_client=llm_client, config=config)
 
-        # Invoke the chain
-        response = await chain.ainvoke({"query": query})
+        # Invoke the chain with query and optional description
+        chain_input = {"query": query}
+        if conversation_description:
+            chain_input["conversation_description"] = conversation_description
+
+        response = await chain.ainvoke(chain_input)
 
         # Parse the response
         enhanced_variants = []
@@ -73,7 +82,9 @@ async def augmented_strategy_node(state: WorkflowState) -> WorkflowState:
                 )
             elif isinstance(parsed_content, list):
                 # Legacy format: JSON array of strings
-                enhanced_variants = [v for v in parsed_content if v and isinstance(v, str)]
+                enhanced_variants = [
+                    v for v in parsed_content if v and isinstance(v, str)
+                ]
                 logger.info("✅ Augmented Strategy: Using legacy array format")
             else:
                 logger.warning(
@@ -111,7 +122,11 @@ async def augmented_strategy_node(state: WorkflowState) -> WorkflowState:
         )
         logger.debug(f"   Original: {query}")
         for i, variant in enumerate(enhanced_variants, 1):
-            transform_label = f" ({transformation_types_used[i-1]})" if i-1 < len(transformation_types_used) else ""
+            transform_label = (
+                f" ({transformation_types_used[i-1]})"
+                if i - 1 < len(transformation_types_used)
+                else ""
+            )
             logger.debug(f"   Variant {i}{transform_label}: {variant}")
 
         # Update state
@@ -119,7 +134,10 @@ async def augmented_strategy_node(state: WorkflowState) -> WorkflowState:
         state["augmented_queries"] = augmented_queries  # Original + variants
         state["enhancement_strategies_applied"] = ["augmented"]
 
-        logger.info("✅ [NODE FINISH] augmented_strategy_node")
+        logger.info(
+            f"✅ [NODE FINISH] augmented_strategy_node - Stored {len(augmented_queries)} queries in state"
+        )
+        logger.info(f"📝 Augmented queries stored: {augmented_queries}")
         return state
 
     except Exception as e:

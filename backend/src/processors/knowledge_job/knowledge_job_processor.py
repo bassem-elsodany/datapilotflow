@@ -168,6 +168,7 @@ class KnowledgeJobProcessor:
         provider_id: str,
         model_name: str,
         user_id: str,
+        vector_dimension: int = None,
     ) -> list[list[float]]:
         """
         Generate embeddings for knowledge chunks using the specified model provider (synchronous version).
@@ -177,6 +178,7 @@ class KnowledgeJobProcessor:
             provider_id: ID of the model provider to use
             model_name: Name of the embedding model to use
             user_id: ID of the user who owns the model provider
+            vector_dimension: Optional dimension for the embeddings
 
         Returns:
             List of embedding vectors for each chunk
@@ -229,7 +231,11 @@ class KnowledgeJobProcessor:
             raise ValueError(f"Critical error: Failed to generate embeddings: {e}")
 
     def _generate_embeddings_with_litellm(
-        self, knowledge_chunks: list[KnowledgeChunk], provider, model_name: str
+        self,
+        knowledge_chunks: list[KnowledgeChunk],
+        provider,
+        model_name: str,
+        vector_dimension: int = None,
     ) -> list[list[float]]:
         """
         Generate embeddings using LiteLLM with the specified model provider.
@@ -238,6 +244,7 @@ class KnowledgeJobProcessor:
             knowledge_chunks: List of knowledge chunks to generate embeddings for
             provider: Model provider configuration
             model_name: Name of the embedding model to use
+            vector_dimension: Optional dimension for the embeddings
 
         Returns:
             List of embedding vectors for each chunk
@@ -296,6 +303,10 @@ class KnowledgeJobProcessor:
             # Add any additional configuration from provider
             if provider.embedding.config:
                 litellm_params.update(provider.embedding.config)
+
+            # Add dimensions parameter if provided
+            if vector_dimension:
+                litellm_params["dimensions"] = vector_dimension
 
             # Generate embeddings using LiteLLM
             response = litellm.embedding(**litellm_params)
@@ -591,6 +602,7 @@ class KnowledgeJobProcessor:
                         vectordb_collection.embedding_model_provider_id,
                         vectordb_collection.embedding_model_name,
                         knowledge_job.user_id,
+                        vectordb_collection.vector_dimension,
                     )
 
                     # Only store chunks in Milvus if we have valid content and vectors

@@ -117,14 +117,20 @@ export const useGetModelProvider = (providerId: string) =>
   createGetQueryHook({
     endpoint: apiEndpoints.modelProviders.get(providerId),
     responseSchema: ModelProviderResponseSchema,
-    rQueryParams: { queryKey: ['model-providers', providerId] },
+    rQueryParams: { queryKey: ['model-providers', { providerId }] },
   })();
 
 // Get active model providers
 export const useGetActiveModelProviders = createGetQueryHook({
   endpoint: apiEndpoints.modelProviders.active,
   responseSchema: z.array(ModelProviderResponseSchema),
-  rQueryParams: { queryKey: ['model-providers', 'active'] },
+  rQueryParams: {
+    queryKey: ['model-providers', { status: 'active' }],
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+  },
 });
 
 // Get providers by model type
@@ -132,7 +138,7 @@ export const useGetProvidersByType = (modelType: ModelType) =>
   createGetQueryHook({
     endpoint: apiEndpoints.modelProviders.byType(modelType),
     responseSchema: z.array(ModelProviderResponseSchema),
-    rQueryParams: { queryKey: ['model-providers', 'by-type', modelType] },
+    rQueryParams: { queryKey: ['model-providers', { type: 'by-type', modelType }] },
   })();
 
 // Create model provider

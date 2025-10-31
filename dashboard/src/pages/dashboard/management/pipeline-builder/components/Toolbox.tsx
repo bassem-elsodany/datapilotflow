@@ -78,6 +78,7 @@ const toolCategories: ToolCategory[] = [
       { type: 'website', label: 'Website Crawling', icon: <IconWorldWww size={16} /> },
       { type: 'multiple_pages', label: 'Links File', icon: <BsCardList size={16} /> },
       { type: 'single_page', label: 'Single Page', icon: <GrDocumentText size={16} /> },
+      { type: 'local_files', label: 'Local Files', icon: <IconFileUpload size={16} /> },
     ],
   },
   {
@@ -86,6 +87,8 @@ const toolCategories: ToolCategory[] = [
     tools: [
       { type: 'domainFilter', label: 'Domain Filter', icon: <IconFilter size={16} /> },
       { type: 'contentFilter', label: 'Content Filter', icon: <IconTag size={16} /> },
+      { type: 'urlPatternFilter', label: 'URL Pattern Filter', icon: <IconLink size={16} /> },
+      { type: 'llmContentFilter', label: 'LLM Content Filter', icon: <IconSparkles size={16} /> },
     ],
   },
   {

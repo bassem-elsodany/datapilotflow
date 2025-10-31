@@ -19,10 +19,12 @@ class NodeType(str, Enum):
     WEBSITE = "website"
     MULTIPLE_PAGES = "multiple_pages"
     SINGLE_PAGE = "single_page"
+    LOCAL_FILES = "local_files"  # NEW: Local file uploads
 
     # Filters & Transforms
     DOMAIN_FILTER = "domainFilter"
     CONTENT_FILTER = "contentFilter"
+    URL_PATTERN_FILTER = "urlPatternFilter"  # NEW: URL pattern filtering
 
     # Output Formats
     HTML_EXTRACTOR = "htmlExtractor"
@@ -104,6 +106,30 @@ class SinglePageNodeConfig(BaseModel):
     url: str = Field(description="URL of the single page to process")
 
 
+class LocalFilesNodeConfig(BaseModel):
+    """Configuration for local files data source node.
+
+    This node handles uploaded files (HTML, Markdown, PDF, DOCX, TXT).
+    """
+
+    local_files: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="List of uploaded files with metadata: [{file_path, original_filename, file_type, file_size, upload_date}]",
+    )
+    file_types: List[str] = Field(
+        default_factory=lambda: ["html", "markdown", "pdf", "docx", "txt"],
+        description="Supported file types to process",
+    )
+    scraping_mode: Optional[str] = Field(
+        default="markdown_files",
+        description="Primary file type mode: html_files, markdown_files, pdf_files, docx_files, or txt_files",
+    )
+    output_format: str = Field(
+        default="markdown",
+        description="Convert files to this format: html, markdown, or llm_markdown",
+    )
+
+
 class DomainFilterNodeConfig(BaseModel):
     """Configuration for domain filter node."""
 
@@ -123,6 +149,15 @@ class ContentFilterNodeConfig(BaseModel):
     )
     exclude_elements: List[str] = Field(
         default_factory=list, description="CSS selectors for content to exclude"
+    )
+
+
+class UrlPatternFilterNodeConfig(BaseModel):
+    """Configuration for URL pattern filter node."""
+
+    url_patterns: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="List of URL patterns: [{pattern, match_type, include}]",
     )
 
 
@@ -157,7 +192,7 @@ class TextSplitterNodeConfig(BaseModel):
         default=None, description="Reference to existing splitter configuration"
     )
     splitter_type: str = Field(
-        default="TEXT", description="Splitter type (TEXT or DOCUMENT)"
+        default="text", description="Splitter type (text, document, or html)"
     )
     chunk_size: int = Field(
         default=512,

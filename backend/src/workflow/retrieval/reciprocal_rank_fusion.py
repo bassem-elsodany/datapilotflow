@@ -37,24 +37,54 @@ def reciprocal_rank_fusion(
         >>> fused = reciprocal_rank_fusion([results_1, results_2], k=60, final_top_k=3)
         >>> # doc2 appears in both result sets, so it gets highest score
     """
+    logger.info("")
+    logger.info("=" * 100)
+    logger.info("🔥🔥🔥 RECIPROCAL RANK FUSION (RRF) - STARTING NOW! 🔥🔥🔥")
+    logger.info("=" * 100)
+
     if not results_list:
         logger.warning("⚠️ RRF: No result sets provided")
         return []
 
+    logger.info(f"📊 RRF INPUT:")
+    logger.info(f"   - Number of result sets (query variants): {len(results_list)}")
+    logger.info(f"   - RRF constant k: {k}")
+    logger.info(f"   - Final top_k to return: {final_top_k}")
+
+    total_input_docs = sum(len(r) for r in results_list)
+    logger.info(f"   - Total input documents: {total_input_docs}")
+    logger.info("")
+
+    for idx, results in enumerate(results_list, 1):
+        logger.info(f"   Result Set [{idx}]: {len(results)} documents")
+
     # Track scores for each document by ID
     doc_scores: Dict[str, float] = {}
     doc_data: Dict[str, Dict[str, Any]] = {}
-    doc_appearances: Dict[str, int] = {}  # Count how many result sets each doc appears in
+    doc_appearances: Dict[str, int] = (
+        {}
+    )  # Count how many result sets each doc appears in
+
+    logger.info("")
+    logger.info("🔄 PROCESSING EACH RESULT SET AND CALCULATING RRF SCORES...")
+    logger.info("-" * 100)
 
     # Process each result set
     for result_set_idx, results in enumerate(results_list):
         if not results:
-            logger.debug(f"⏭️ Result set {result_set_idx + 1}: empty, skipping")
+            logger.info(f"⏭️  Result set [{result_set_idx + 1}]: EMPTY, skipping")
             continue
 
-        logger.debug(
-            f"📊 Processing result set {result_set_idx + 1}: {len(results)} documents"
+        query_variant = (
+            results[0].get("query_variant", "unknown") if results else "unknown"
         )
+        logger.info("")
+        logger.info(
+            f"📊 PROCESSING RESULT SET [{result_set_idx + 1}/{len(results_list)}]"
+        )
+        logger.info(f"   Query Variant: '{query_variant}'")
+        logger.info(f"   Documents in this set: {len(results)}")
+        logger.info("   " + "-" * 80)
 
         for rank, doc in enumerate(results, start=1):
             # Generate unique doc ID
@@ -69,26 +99,45 @@ def reciprocal_rank_fusion(
             rrf_score = 1.0 / (k + rank)
 
             # Accumulate scores across result sets
-            if doc_id not in doc_scores:
+            is_new_doc = doc_id not in doc_scores
+            if is_new_doc:
                 doc_scores[doc_id] = 0.0
                 doc_data[doc_id] = doc
                 doc_appearances[doc_id] = 0
 
+            old_score = doc_scores[doc_id]
             doc_scores[doc_id] += rrf_score
             doc_appearances[doc_id] += 1
+            new_score = doc_scores[doc_id]
 
-            logger.debug(
-                f"  Doc {doc_id[:30]}... in set {result_set_idx + 1}: "
-                f"rank={rank}, rrf_contribution={rrf_score:.4f}, "
-                f"total_score={doc_scores[doc_id]:.4f}"
+            logger.info(f"   📄 Doc (rank={rank}): chunk_id={doc_id[:40]}...")
+            logger.info(
+                f"      RRF formula: 1/(k+rank) = 1/({k}+{rank}) = {rrf_score:.6f}"
             )
+            logger.info(
+                f"      Score update: {old_score:.6f} + {rrf_score:.6f} = {new_score:.6f}"
+            )
+            logger.info(
+                f"      Appeared in {doc_appearances[doc_id]} result set(s) so far"
+            )
+            if is_new_doc:
+                logger.info(f"      [NEW DOCUMENT]")
 
     if not doc_scores:
         logger.warning("⚠️ RRF: No documents found in any result set")
         return []
 
+    logger.info("")
+    logger.info("=" * 100)
+    logger.info("🎯 SORTING DOCUMENTS BY RRF SCORE (HIGHEST FIRST)...")
+    logger.info("=" * 100)
+
     # Sort documents by RRF score (highest first)
     sorted_docs = sorted(doc_scores.items(), key=lambda x: x[1], reverse=True)
+
+    logger.info(f"📊 Total unique documents after fusion: {len(sorted_docs)}")
+    logger.info(f"📊 Returning top {final_top_k} documents")
+    logger.info("")
 
     # Return top_k documents with their RRF scores
     fused_results = []
@@ -99,18 +148,25 @@ def reciprocal_rank_fusion(
         doc["appeared_in_n_results"] = doc_appearances[doc_id]
         fused_results.append(doc)
 
-        logger.debug(
-            f"✅ Fused rank {doc['fusion_rank']}: "
-            f"doc_id={doc_id[:30]}..., "
-            f"rrf_score={score:.4f}, "
-            f"appeared_in={doc_appearances[doc_id]} result sets"
-        )
+        logger.info(f"🏆 FUSED RANK #{doc['fusion_rank']}:")
+        logger.info(f"   chunk_id: {doc_id}")
+        logger.info(f"   RRF score: {score:.6f}")
+        logger.info(f"   Appeared in: {doc_appearances[doc_id]} result set(s)")
+        logger.info(f"   Source: {doc.get('source_url', 'N/A')}")
+        text_preview = doc.get("text", "")[:150] if doc.get("text") else "NO TEXT"
+        logger.info(f"   Preview: '{text_preview}...'")
+        logger.info("")
 
-    total_docs = sum(len(r) for r in results_list)
+    logger.info("=" * 100)
+    logger.info("✅✅✅ RRF FUSION COMPLETE! ✅✅✅")
     logger.info(
-        f"✅ RRF Fusion Complete: Combined {len(results_list)} result sets "
-        f"({total_docs} total docs) → {len(fused_results)} fused results"
+        f"✅ INPUT: {len(results_list)} result sets with {total_input_docs} total documents"
     )
+    logger.info(
+        f"✅ OUTPUT: {len(fused_results)} fused documents (ranked by RRF score)"
+    )
+    logger.info("=" * 100)
+    logger.info("")
 
     return fused_results
 
@@ -136,15 +192,32 @@ async def parallel_retrieval(
         >>> # results[1] contains top 5 docs for "secure socket layer setup"
         >>> # results[2] contains top 5 docs for "TLS config"
     """
-    logger.info(f"🔄 Starting parallel retrieval for {len(queries)} queries")
+    logger.info("=" * 100)
+    logger.info("🚨 PARALLEL RETRIEVAL PROOF - STARTING 🚨")
+    logger.info("=" * 100)
+    logger.info(f"📋 TOTAL QUERY VARIANTS TO SEARCH: {len(queries)}")
+    logger.info(f"📊 DOCUMENTS PER QUERY: {top_k_per_query}")
+    logger.info("-" * 100)
+    logger.info("📝 ALL QUERY VARIANTS THAT WILL BE SEARCHED:")
+    for idx, q in enumerate(queries, 1):
+        logger.info(f"   🔍 VARIANT [{idx}/{len(queries)}]: '{q}'")
+    logger.info("=" * 100)
 
     async def retrieve_single(query: str, query_idx: int) -> List[Dict[str, Any]]:
         """Retrieve documents for a single query."""
         try:
-            logger.debug(f"Query {query_idx + 1}/{len(queries)}: '{query[:60]}...'")
+            logger.info("")
+            logger.info("🔥" * 40)
+            logger.info(
+                f"🚀 VECTOR SEARCH [{query_idx + 1}/{len(queries)}] - STARTING NOW!"
+            )
+            logger.info(f"📝 QUERY VARIANT: '{query}'")
+            logger.info("🔥" * 40)
 
             # Use synchronous retriever in async context
+            logger.info(f"⚙️  Calling Milvus retriever.get_relevant_documents()...")
             docs = await asyncio.to_thread(retriever.get_relevant_documents, query)
+            logger.info(f"✅ Milvus returned {len(docs)} documents")
 
             # Format results
             results = []
@@ -167,27 +240,62 @@ async def parallel_retrieval(
                     }
                 )
 
-            logger.debug(
-                f"✅ Query {query_idx + 1}/{len(queries)}: Retrieved {len(results)} documents"
+            logger.info("")
+            logger.info(
+                f"✅✅✅ VARIANT [{query_idx + 1}/{len(queries)}] SEARCH COMPLETE! ✅✅✅"
             )
+            logger.info(f"📊 QUERY: '{query[:100]}...'")
+            logger.info(f"📊 RETRIEVED: {len(results)} documents")
+            logger.info("-" * 80)
+            logger.info("📄 RETRIEVED DOCUMENTS FOR THIS VARIANT:")
+            for idx, res in enumerate(results, 1):
+                chunk_id = res.get("chunk_id", "N/A")
+                distance = res.get("distance", 0.0)
+                source = res.get("source_url", "N/A")
+                text_preview = (
+                    res.get("text", "")[:100] if res.get("text") else "NO TEXT"
+                )
+                logger.info(
+                    f"   Doc [{idx}]: chunk={chunk_id}, distance={distance:.4f}"
+                )
+                logger.info(f"           source={source}")
+                logger.info(f"           preview='{text_preview}...'")
+            logger.info("-" * 80)
             return results
 
         except Exception as e:
-            logger.error(f"❌ Query {query_idx + 1}/{len(queries)} failed: {e}")
+            logger.error(
+                f"❌❌❌ VARIANT [{query_idx + 1}/{len(queries)}] SEARCH FAILED: {e}"
+            )
+            import traceback
+
+            logger.error(traceback.format_exc())
             return []
 
     # Execute all queries in parallel
+    logger.info("")
+    logger.info("⚡" * 40)
+    logger.info(f"⚡ EXECUTING {len(queries)} PARALLEL VECTOR SEARCHES...")
+    logger.info("⚡" * 40)
+
     tasks = [retrieve_single(query, idx) for idx, query in enumerate(queries)]
     results_list = await asyncio.gather(*tasks)
 
     # Log summary
+    logger.info("")
+    logger.info("=" * 100)
+    logger.info("🎯 PARALLEL RETRIEVAL COMPLETE - SUMMARY 🎯")
+    logger.info("=" * 100)
+
     total_retrieved = sum(len(results) for results in results_list)
     successful_queries = sum(1 for results in results_list if results)
 
-    logger.info(
-        f"✅ Parallel retrieval complete: "
-        f"{successful_queries}/{len(queries)} queries successful, "
-        f"{total_retrieved} total documents retrieved"
-    )
+    logger.info(f"✅ SUCCESSFUL SEARCHES: {successful_queries}/{len(queries)}")
+    logger.info(f"✅ TOTAL DOCUMENTS RETRIEVED: {total_retrieved}")
+    logger.info("")
+    logger.info("📊 DOCUMENTS PER VARIANT:")
+    for idx, results in enumerate(results_list, 1):
+        logger.info(f"   Variant [{idx}]: {len(results)} documents")
+    logger.info("=" * 100)
 
     return results_list

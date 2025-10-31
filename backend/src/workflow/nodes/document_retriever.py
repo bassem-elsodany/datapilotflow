@@ -40,9 +40,8 @@ async def document_retriever(state: WorkflowState) -> WorkflowState:
 
         logger.info(f"📦 Using collection '{collection_name}' with top_k={top_k}")
 
-        # Get retrieval strategy configuration
+        # Get retrieval configuration
         retrieval_config = config.get("retrieval_config", {})
-        retrieval_strategy = retrieval_config.get("retrieval_strategy", "single_query")
 
         # Collect all query variants
         query_variants = []
@@ -52,9 +51,7 @@ async def document_retriever(state: WorkflowState) -> WorkflowState:
         augmented_queries = state.get("augmented_queries")
         if augmented_queries and isinstance(augmented_queries, list):
             query_variants = augmented_queries
-            logger.info(
-                f"🔍 Found {len(query_variants)} augmented query variants"
-            )
+            logger.info(f"🔍 Found {len(query_variants)} augmented query variants")
 
         elif enhanced_query and isinstance(enhanced_query, dict):
             # Try to get enhanced query variants in order of preference
@@ -77,6 +74,17 @@ async def document_retriever(state: WorkflowState) -> WorkflowState:
         if not query_variants:
             query_variants = [state["query"]]
 
+        logger.info("")
+        logger.info("🔥" * 50)
+        logger.info("📋 QUERY VARIANTS COLLECTED")
+        logger.info("🔥" * 50)
+        logger.info(f"📊 TOTAL QUERY VARIANTS: {len(query_variants)}")
+        logger.info("-" * 100)
+        for idx, variant in enumerate(query_variants, 1):
+            logger.info(f"   🔍 VARIANT [{idx}/{len(query_variants)}]: '{variant}'")
+        logger.info("🔥" * 50)
+        logger.info("")
+
         # Get the retriever
         from src.workflow.tools.retriever_tool import MilvusRetriever
 
@@ -87,21 +95,62 @@ async def document_retriever(state: WorkflowState) -> WorkflowState:
         )
 
         # Decide: Single query or RRF?
+        # Smart default: Auto-enable RRF when multiple variants exist (unless explicitly disabled)
+        retrieval_strategy = retrieval_config.get("retrieval_strategy")
+
+        logger.info("=" * 100)
+        logger.info("⚙️  RETRIEVAL STRATEGY DECISION")
+        logger.info("=" * 100)
+        logger.info(f"📊 Number of query variants: {len(query_variants)}")
+        logger.info(f"📊 Configured retrieval_strategy: {retrieval_strategy}")
+
+        # If not explicitly set, use smart default
+        if retrieval_strategy is None:
+            retrieval_strategy = (
+                "reciprocal_rank_fusion" if len(query_variants) > 1 else "single_query"
+            )
+            logger.info(f"📊 Auto-selected strategy: {retrieval_strategy}")
+            if len(query_variants) > 1:
+                logger.info(
+                    f"✅ Auto-enabling RRF because we have {len(query_variants)} query variants"
+                )
+
+        logger.info(f"🎯 FINAL DECISION: Using '{retrieval_strategy}' strategy")
+        logger.info("=" * 100)
+        logger.info("")
+
         if len(query_variants) > 1 and retrieval_strategy == "reciprocal_rank_fusion":
             # === RECIPROCAL RANK FUSION (RRF) ===
+            logger.info("")
+            logger.info("🚨" * 50)
+            logger.info("🚨 USING RECIPROCAL RANK FUSION (RRF) STRATEGY 🚨")
+            logger.info("🚨" * 50)
+            logger.info(f"📊 Number of query variants: {len(query_variants)}")
             logger.info(
-                f"🔀 Using Reciprocal Rank Fusion with {len(query_variants)} query variants"
+                f"📊 Documents per query: {retrieval_config.get('top_k_per_query', 5)}"
             )
+            logger.info(f"📊 RRF constant k: {retrieval_config.get('rrf_k', 60)}")
+            logger.info(f"📊 Final top_k: {top_k}")
+            logger.info("🚨" * 50)
+            logger.info("")
 
             top_k_per_query = retrieval_config.get("top_k_per_query", 5)
             rrf_k = retrieval_config.get("rrf_k", 60)
 
             # Execute parallel retrieval
+            logger.info("🚀 STEP 1: Execute parallel retrieval for all variants...")
             results_list = await parallel_retrieval(
-                queries=query_variants, retriever=retriever, top_k_per_query=top_k_per_query
+                queries=query_variants,
+                retriever=retriever,
+                top_k_per_query=top_k_per_query,
+            )
+            logger.info(
+                f"✅ Parallel retrieval returned {len(results_list)} result sets"
             )
 
             # Apply RRF fusion
+            logger.info("")
+            logger.info("🚀 STEP 2: Apply RRF to fuse results from all variants...")
             fused_docs = reciprocal_rank_fusion(
                 results_list=results_list, k=rrf_k, final_top_k=top_k
             )
@@ -110,14 +159,19 @@ async def document_retriever(state: WorkflowState) -> WorkflowState:
             retrieved_docs = fused_docs
             scores = [doc.get("rrf_score", 0.0) for doc in fused_docs]
 
-            logger.info(f"✅ RRF: Retrieved {len(fused_docs)} fused documents")
+            logger.info("")
+            logger.info("=" * 100)
+            logger.info("✅✅✅ RRF STRATEGY COMPLETE! ✅✅✅")
+            logger.info(
+                f"✅ Retrieved {len(fused_docs)} fused documents from {len(query_variants)} variants"
+            )
+            logger.info("=" * 100)
+            logger.info("")
 
         else:
             # === SINGLE QUERY (DEFAULT/LEGACY BEHAVIOR) ===
             search_query = query_variants[0]
-            logger.info(
-                f"🔍 Using single query strategy: '{search_query[:100]}...'"
-            )
+            logger.info(f"🔍 Using single query strategy: '{search_query[:100]}...'")
 
             # Use the retriever to get documents
             documents = retriever.get_relevant_documents(search_query)
