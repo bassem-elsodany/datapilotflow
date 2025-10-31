@@ -15,7 +15,6 @@ import {
   useMantineTheme
 } from '@mantine/core';
 import {
-  IconArrowRight,
   IconBrain,
   IconCheck,
   IconChevronDown,
@@ -29,7 +28,7 @@ import {
   IconSearch,
   IconSparkles
 } from '@tabler/icons-react';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 interface WorkflowStage {
   id: string;
@@ -62,6 +61,7 @@ interface WorkflowProgressModalProps {
   metadata: {
     originalQuery?: string;
     enhancedQuery?: string;
+    enhancedQueries?: string[];  // Array of all enhanced query variants
     strategy?: string;
     documentCount?: number;
     relevantCount?: number;
@@ -105,9 +105,7 @@ export function WorkflowProgressModal({
       description: metadata.strategy && metadata.strategy !== 'native'
         ? `Using ${getStrategyLabel(metadata.strategy)} strategy`
         : 'Native query (no enhancement needed)',
-      status: metadata.strategy && metadata.strategy !== 'native'
-        ? getStageStatus('query_enhancement')
-        : 'skipped',
+      status: getStageStatus('query_enhancement'), // Let getStageStatus handle all the logic
       icon: <IconSparkles size={20} />,
       color: 'violet',
       metadata: {
@@ -118,11 +116,13 @@ export function WorkflowProgressModal({
       substages: metadata.strategy && metadata.strategy !== 'native' ? [
         {
           name: 'Analyzing query intent',
-          status: completedStages.includes('query_enhancement') ? 'completed' : 'active'
+          // Always completed once we've started query enhancement
+          status: 'completed'
         },
         {
           name: getStrategySubstage(metadata.strategy),
-          status: completedStages.includes('query_enhancement') ? 'completed' : 'active'
+          // Completed if stage is done, or if we've moved past this stage
+          status: completedStages.includes('query_enhancement') || currentStage !== 'query_enhancement' ? 'completed' : 'active'
         }
       ] : undefined
     },
@@ -138,29 +138,32 @@ export function WorkflowProgressModal({
       metadata: {
         documentCount: metadata.documentCount,
         indexType: metadata.indexType || 'HNSW',
-        vectorDimension: metadata.vectorDimension || 1536,
+        vectorDimension: metadata.vectorDimension,
         searchTime: metadata.searchTime
       },
       substages: [
         {
           name: 'Converting query to embedding',
-          status: completedStages.includes('document_retrieval') ? 'completed' :
-            currentStage === 'document_retrieval' ? 'active' : 'completed',
+          // Always completed once we've started retrieval
+          status: 'completed',
           metric: metadata.vectorDimension ? `${metadata.vectorDimension}D vector` : undefined
         },
         {
           name: 'Performing vector similarity search',
-          status: completedStages.includes('document_retrieval') ? 'completed' : 'active',
+          // Always completed once we've started retrieval
+          status: 'completed',
           metric: metadata.indexType ? `${metadata.indexType} index` : undefined
         },
         {
           name: 'Applying distance threshold filter',
-          status: completedStages.includes('document_retrieval') ? 'completed' : 'active',
+          // Always completed once we've started retrieval
+          status: 'completed',
           metric: 'COSINE < 0.5'
         },
         {
           name: 'Retrieved documents',
-          status: 'completed',
+          // Completed if stage is done, or if we've moved past this stage
+          status: completedStages.includes('document_retrieval') || currentStage !== 'document_retrieval' ? 'completed' : 'active',
           metric: metadata.documentCount ? `${metadata.documentCount} docs` : undefined
         }
       ]
@@ -185,11 +188,13 @@ export function WorkflowProgressModal({
       substages: rerankingEnabled ? [
         {
           name: 'LLM-based relevance judgment',
-          status: completedStages.includes('document_judging') ? 'completed' : 'active'
+          // Always completed once we've started reranking
+          status: 'completed'
         },
         {
           name: 'Filtering relevant documents',
-          status: completedStages.includes('document_judging') ? 'completed' : 'active',
+          // Completed if stage is done, or if we've moved past this stage
+          status: completedStages.includes('document_judging') || currentStage !== 'document_judging' ? 'completed' : 'active',
           metric: metadata.relevantCount ? `${metadata.relevantCount} relevant` : undefined
         }
       ] : undefined
@@ -278,17 +283,6 @@ export function WorkflowProgressModal({
   const completedCount = activeStages.filter(s => s.status === 'completed').length;
   const totalStages = activeStages.length;
   const progress = totalStages > 0 ? (completedCount / totalStages) * 100 : 0;
-
-  // Debug logging
-  console.log('🔍 Workflow Modal - Config:', {
-    rerankingEnabled,
-    enableLLMGeneration,
-    strategy: metadata.strategy
-  });
-  console.log('🔍 Workflow Modal - currentStage:', currentStage);
-  console.log('🔍 Workflow Modal - completedStages:', completedStages);
-  console.log('🔍 Workflow Modal - stages:', stages.map(s => ({ id: s.id, status: s.status })));
-  console.log('🔍 Workflow Modal - completedCount:', completedCount, 'totalStages:', totalStages);
 
   const formatTime = (ms: number) => {
     return `${(ms / 1000).toFixed(1)}s`;
@@ -388,49 +382,176 @@ export function WorkflowProgressModal({
 
         {/* Query Comparison */}
         {metadata.originalQuery && (
-          <Card withBorder p="sm" radius="md" style={{ backgroundColor: theme.colors.gray[0] }}>
+          <Card
+            withBorder
+            p="sm"
+            radius="md"
+            style={{
+              backgroundColor: metadata.enhancedQuery && metadata.enhancedQuery !== metadata.originalQuery
+                ? theme.colors.violet[0]
+                : theme.colors.gray[0],
+              borderColor: metadata.enhancedQuery && metadata.enhancedQuery !== metadata.originalQuery
+                ? theme.colors.violet[3]
+                : theme.colors.gray[3]
+            }}
+          >
             <Stack gap="xs">
               <Group gap="xs">
                 <ThemeIcon size="sm" color="indigo" variant="light">
                   <IconMessageCircle size={14} />
                 </ThemeIcon>
-                <Text size="xs" fw={600} c="dimmed">USER QUERY</Text>
+                <Text size="xs" fw={600} c="dimmed">ORIGINAL QUERY</Text>
               </Group>
               <Text size="sm" style={{ wordBreak: 'break-word' }}>
                 {metadata.originalQuery}
               </Text>
 
-              {metadata.enhancedQuery && metadata.enhancedQuery !== metadata.originalQuery && (
-                <>
-                  <Divider my={4} />
-                  <Group gap="xs">
-                    <ThemeIcon size="sm" color="violet" variant="light">
-                      <IconSparkles size={14} />
-                    </ThemeIcon>
-                    <Text size="xs" fw={600} c="violet">ENHANCED QUERY</Text>
-                    <Badge size="xs" variant="light" color="violet">
-                      {getStrategyLabel(metadata.strategy || 'unknown')}
-                    </Badge>
-                  </Group>
-                  <Text size="sm" style={{ wordBreak: 'break-word' }} c="dimmed">
-                    {metadata.enhancedQuery}
-                  </Text>
-                </>
-              )}
+              {((metadata.enhancedQueries && metadata.enhancedQueries.length > 0) ||
+                (metadata.enhancedQuery && metadata.enhancedQuery !== metadata.originalQuery)) && (
+                  <>
+                    <Divider my={6} label={
+                      <Badge size="sm" variant="filled" color="violet">
+                        {metadata.enhancedQueries && metadata.enhancedQueries.length > 1
+                          ? `${metadata.enhancedQueries.length} Query Variants`
+                          : 'Query Enhanced'}
+                      </Badge>
+                    } labelPosition="center" />
+                    <Group gap="xs">
+                      <ThemeIcon size="sm" color="violet" variant="filled">
+                        <IconSparkles size={14} />
+                      </ThemeIcon>
+                      <Text size="xs" fw={700} c="violet.9">
+                        {metadata.enhancedQueries && metadata.enhancedQueries.length > 1
+                          ? 'ENHANCED QUERIES'
+                          : 'ENHANCED QUERY'}
+                      </Text>
+                      <Badge size="xs" variant="dot" color="violet">
+                        {getStrategyLabel(metadata.strategy || 'unknown')}
+                      </Badge>
+                    </Group>
+                    <Text size="xs" c="violet.8" style={{ lineHeight: 1.5 }}>
+                      {metadata.enhancedQueries && metadata.enhancedQueries.length > 0 ? (
+                        // Show all enhanced queries inline with bullets
+                        metadata.enhancedQueries.map((query, index) => (
+                          <span key={index}>
+                            <Text component="span" size="xs" fw={600} c="violet.6" style={{ marginRight: '4px' }}>
+                              [{index + 1}]
+                            </Text>
+                            {query}
+                            {index < metadata.enhancedQueries!.length - 1 && ' • '}
+                          </span>
+                        ))
+                      ) : (
+                        // Fallback to single enhanced query
+                        metadata.enhancedQuery && (
+                          <span>{metadata.enhancedQuery}</span>
+                        )
+                      )}
+                    </Text>
+                  </>
+                )}
             </Stack>
           </Card>
         )}
 
-        <Divider label="Pipeline Stages" labelPosition="center" />
+        {/* Circular Node Flow - Visual Pipeline */}
+        <Box style={{ overflowX: 'auto', padding: '12px 0' }}>
+          <Group gap={4} wrap="nowrap" justify="center" style={{ minWidth: 'fit-content' }}>
+            {activeStages.map((stage, index) => (
+              <React.Fragment key={stage.id}>
+                {/* Node */}
+                <Stack gap={6} align="center" style={{ minWidth: '100px' }}>
+                  {/* Circular Icon */}
+                  <Box
+                    style={{
+                      width: '48px',
+                      height: '48px',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: stage.status === 'completed'
+                        ? 'linear-gradient(135deg, #51cf66 0%, #37b24d 100%)'
+                        : stage.status === 'active'
+                          ? 'linear-gradient(135deg, #339af0 0%, #1c7ed6 100%)'
+                          : '#e9ecef',
+                      boxShadow: stage.status === 'active' || stage.status === 'completed'
+                        ? '0 2px 8px rgba(0, 0, 0, 0.12)'
+                        : 'none',
+                      border: stage.status === 'pending' ? '2px dashed #adb5bd' : 'none',
+                      transition: 'all 0.3s ease'
+                    }}
+                  >
+                    {stage.status === 'completed' ? (
+                      <IconCheck size={24} style={{ color: 'white' }} />
+                    ) : stage.status === 'active' ? (
+                      <IconLoader size={24} className="animate-spin" style={{ color: 'white' }} />
+                    ) : (
+                      React.cloneElement(stage.icon as React.ReactElement, {
+                        size: 20,
+                        style: { color: '#868e96' }
+                      })
+                    )}
+                  </Box>
 
-        {/* Timeline of Stages */}
+                  {/* Node Label */}
+                  <Text
+                    size="xs"
+                    fw={500}
+                    ta="center"
+                    style={{
+                      color: stage.status === 'pending' ? '#868e96' : '#212529',
+                      maxWidth: '90px',
+                      lineHeight: 1.3
+                    }}
+                  >
+                    {stage.name}
+                  </Text>
+                </Stack>
+
+                {/* Connecting Arrow */}
+                {index < activeStages.length - 1 && (
+                  <Box
+                    style={{
+                      width: '24px',
+                      height: '2px',
+                      backgroundColor: stage.status === 'completed' ? '#51cf66' : '#dee2e6',
+                      transition: 'background-color 0.3s ease',
+                      marginBottom: '30px',
+                      position: 'relative'
+                    }}
+                  >
+                    <Box
+                      style={{
+                        position: 'absolute',
+                        right: '-4px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        width: 0,
+                        height: 0,
+                        borderTop: '4px solid transparent',
+                        borderBottom: '4px solid transparent',
+                        borderLeft: `6px solid ${stage.status === 'completed' ? '#51cf66' : '#dee2e6'}`,
+                        transition: 'border-color 0.3s ease'
+                      }}
+                    />
+                  </Box>
+                )}
+              </React.Fragment>
+            ))}
+          </Group>
+        </Box>
+
+        <Divider label="Detailed Progress" labelPosition="center" />
+
+        {/* Timeline of Stages (kept for detailed view) */}
         <Timeline
-          active={stages.findIndex(s => s.status === 'active')}
+          active={activeStages.findIndex(s => s.status === 'active')}
           bulletSize={32}
           lineWidth={2}
           color="blue"
         >
-          {stages.map((stage, index) => (
+          {activeStages.map((stage) => (
             <Timeline.Item
               key={stage.id}
               bullet={
@@ -438,8 +559,6 @@ export function WorkflowProgressModal({
                   <IconCheck size={18} />
                 ) : stage.status === 'active' ? (
                   <IconLoader size={18} className="animate-spin" />
-                ) : stage.status === 'skipped' ? (
-                  <IconArrowRight size={18} />
                 ) : (
                   <IconCircleDot size={18} />
                 )
@@ -522,30 +641,6 @@ export function WorkflowProgressModal({
                   </Card>
                 </Collapse>
               )}
-
-              {/* Skipped indicator */}
-              {stage.status === 'skipped' && (
-                <Card
-                  withBorder
-                  p="xs"
-                  radius="md"
-                  mt="xs"
-                  style={{
-                    backgroundColor: theme.colors.gray[0],
-                    borderColor: theme.colors.gray[3]
-                  }}
-                >
-                  <Group gap="xs">
-                    <ThemeIcon size="xs" variant="light" color="gray">
-                      <IconArrowRight size={12} />
-                    </ThemeIcon>
-                    <Text size="xs" c="dimmed">
-                      {stage.id === 'query_enhancement' && 'Stage skipped (native query - no enhancement)'}
-                      {stage.id === 'document_judging' && 'Stage skipped (reranking disabled)'}
-                    </Text>
-                  </Group>
-                </Card>
-              )}
             </Timeline.Item>
           ))}
         </Timeline>
@@ -574,12 +669,14 @@ export function WorkflowProgressModal({
                   {metadata.indexType || 'HNSW'}
                 </Badge>
               </Group>
-              <Group gap="xs">
-                <Text size="xs" c="dimmed" style={{ width: '140px' }}>Vector Dimension:</Text>
-                <Badge size="xs" variant="light" color="cyan">
-                  {metadata.vectorDimension || 1536}D
-                </Badge>
-              </Group>
+              {metadata.vectorDimension && (
+                <Group gap="xs">
+                  <Text size="xs" c="dimmed" style={{ width: '140px' }}>Vector Dimension:</Text>
+                  <Badge size="xs" variant="light" color="cyan">
+                    {metadata.vectorDimension}D
+                  </Badge>
+                </Group>
+              )}
               <Group gap="xs">
                 <Text size="xs" c="dimmed" style={{ width: '140px' }}>Documents Retrieved:</Text>
                 <Badge size="xs" variant="light" color="green">

@@ -36,6 +36,7 @@ import {
   IconRefresh,
   IconScissors,
   IconSettings,
+  IconNetwork,
   IconX
 } from '@tabler/icons-react';
 import { Link, useParams } from 'react-router-dom';
@@ -171,6 +172,14 @@ export default function KnowledgeSourceJobDetails() {
           Back to Jobs
         </Button>
         <Group>
+          <Button
+            variant="light"
+            leftSection={<IconNetwork size={16} />}
+            component={Link}
+            to={`${paths.dashboard.management.pipelineBuilder.root}?fromJobId=${jobId}`}
+          >
+            Show Pipeline
+          </Button>
           <Button
             variant="filled"
             leftSection={<IconEdit size={16} />}

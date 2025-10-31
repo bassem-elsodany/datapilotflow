@@ -206,7 +206,7 @@ export default function EditKnowledgeSourceConfig() {
         allowed_subdomains: config.allowed_subdomains || [],
         blocked_subdomains: config.blocked_subdomains || [],
         url_patterns: (config.url_patterns || []) as Array<{ pattern: string; reverse: boolean }>,
-        crawl_depth: config.crawl_depth || 4,
+        crawl_depth: config.crawl_depth ?? 4,
         target_elements: config.target_elements || [],
         content_filter_threshold: config.content_filter_threshold || 0.6,
         output_format: config.output_format === 'llm_markdown' ? 'markdown' : (config.output_format || 'html'),

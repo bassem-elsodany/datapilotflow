@@ -107,12 +107,13 @@ export function usePipelineBuilder() {
   const addNode = useCallback((type: string, position: { x: number; y: number }) => {
     setNodes((currentNodes) => {
       // Only check for duplicate data sources if we're adding a data source
-      const isDataSource = ['website', 'multiple_pages', 'single_page', 'confluence'].includes(type);
+      const isDataSource = ['website', 'multiple_pages', 'single_page', 'local_files', 'confluence'].includes(type);
       if (isDataSource) {
-        const existingDataSource = currentNodes.find(node => 
-          node.data.type === 'website' || 
-          node.data.type === 'multiple_pages' || 
+        const existingDataSource = currentNodes.find(node =>
+          node.data.type === 'website' ||
+          node.data.type === 'multiple_pages' ||
           node.data.type === 'single_page' ||
+          node.data.type === 'local_files' ||
           node.data.type === 'confluence'
         );
         if (existingDataSource) {
@@ -191,6 +192,15 @@ export function usePipelineBuilder() {
             { type: 'article', selector: '' }
           ],
           content_filter_threshold: 0.6,
+        };
+      } else if (type === 'local_files') {
+        nodeName = 'Local Files';
+        nodeDescription = 'Upload and process local files (PDF, Markdown, HTML, etc.)';
+        defaultConfig = {
+          scraping_mode: 'markdown_files',
+          local_files: [],
+          file_types: ['html', 'markdown', 'pdf', 'docx', 'txt'],
+          output_format: 'markdown',
         };
       } else if (type === 'textSplitter') {
         nodeName = 'Document Splitter';
