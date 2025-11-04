@@ -629,7 +629,7 @@ export default function ConversationWindow() {
           console.log('🚀 Workflow starting with query:', originalUserQuery);
 
           setWorkflowState({
-            currentStage: null,
+            currentStage: 'query_enhancement',  // ← Start with first stage immediately, don't wait for backend
             completedStages: [],
             originalQuery: originalUserQuery,
             enhancedQueries: null,
