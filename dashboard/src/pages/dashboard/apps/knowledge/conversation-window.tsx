@@ -910,16 +910,19 @@ export default function ConversationWindow() {
             });
 
             // Mark response_generation as completed when first streaming chunk arrives
+            // Use a ref to prevent multiple updates
             setWorkflowState(prev => {
-              const newCompleted = [...prev.completedStages];
-              if (!newCompleted.includes('response_generation')) {
-                newCompleted.push('response_generation');
+              // Only update if response_generation is not already in completed stages
+              if (!prev.completedStages.includes('response_generation')) {
+                const newCompleted = [...prev.completedStages, 'response_generation'];
+                return {
+                  ...prev,
+                  completedStages: newCompleted,
+                  currentStage: 'response_generation' // Keep showing as current while streaming
+                };
               }
-              return {
-                ...prev,
-                completedStages: newCompleted,
-                currentStage: 'response_generation' // Keep showing as current while streaming
-              };
+              // Don't update if already completed - return same reference
+              return prev;
             });
           }
           break;
@@ -961,33 +964,34 @@ export default function ConversationWindow() {
           }
 
           setWorkflowState(prev => {
+            // Check if we actually need to update state
             const newCompleted = [...prev.completedStages];
             const newRagSubstages = [...(prev.ragSubstages || [])];
             const newStageDetails = { ...prev.stageDetails };
 
+            let hasChanges = false;
+
             // Add this substage to ragSubstages if it's a RAG-related stage (only once per stage)
             if (mappedStage === 'query_enhancement' && !newRagSubstages.includes('query_enhancement')) {
               newRagSubstages.push('query_enhancement');
+              hasChanges = true;
             } else if (mappedStage === 'document_retrieval' && !newRagSubstages.includes('document_retrieval')) {
               newRagSubstages.push('document_retrieval');
+              hasChanges = true;
             } else if (mappedStage === 'document_judging' && !newRagSubstages.includes('document_judging')) {
               newRagSubstages.push('document_judging');
+              hasChanges = true;
             } else if (mappedStage === 'answer_generation' && !newRagSubstages.includes('answer_generation')) {
               newRagSubstages.push('answer_generation');
+              hasChanges = true;
             }
 
-            // Build updated state
-            const newState: any = {
-              ...prev,
-              ragSubstages: newRagSubstages,
-            };
-
-            // If this is a COMPLETE event, mark stage as completed and store data
+            // Build updated state only if there are changes
             if (isCompleteEvent) {
               if (!newCompleted.includes(mappedStage)) {
                 newCompleted.push(mappedStage);
+                hasChanges = true;
               }
-              newState.completedStages = newCompleted;
 
               // Store detailed data for the completed stage
               newStageDetails[mappedStage] = {
@@ -996,9 +1000,16 @@ export default function ConversationWindow() {
                 timestamp: new Date().toISOString(),
                 execution_time_ms: data?.execution_time_ms || 0,
               };
-              newState.stageDetails = newStageDetails;
+              hasChanges = true;
 
               // Extract and capture data based on stage
+              const newState: any = {
+                ...prev,
+                ragSubstages: newRagSubstages,
+                completedStages: newCompleted,
+                stageDetails: newStageDetails,
+              };
+
               if (mappedStage === 'query_enhancement' && queryVariants.length > 0) {
                 newState.enhancedQueries = queryVariants;
                 newState.strategy = strategyFromData || prev.strategy;
@@ -1010,13 +1021,22 @@ export default function ConversationWindow() {
                 newState.relevantCount = relevantCount;
                 console.log(`⚖️ Relevant count captured:`, relevantCount);
               }
+
+              return hasChanges ? newState : prev;
             } else {
-              // START event - just mark as current stage
-              newState.currentStage = mappedStage;
-              console.log(`▶️ Starting stage:`, mappedStage);
+              // START event - check if stage actually changed
+              if (prev.currentStage !== mappedStage) {
+                console.log(`▶️ Starting stage:`, mappedStage);
+                return {
+                  ...prev,
+                  currentStage: mappedStage,
+                  ragSubstages: newRagSubstages,
+                };
+              }
             }
 
-            return newState;
+            // Return prev if no changes (don't call setState)
+            return prev;
           });
           break;
         }
@@ -1163,11 +1183,29 @@ export default function ConversationWindow() {
 
           // Update workflow state - CONSOLIDATED single call
           setWorkflowState(prev => {
+            // Check if state actually needs to change
+            const needsCompletionMarking = !prev.completedStages.includes('response_generation');
+            const currentStageAlreadyNull = prev.currentStage === null;
+            const alreadyInactive = !prev.isActive;
+
+            // Check if enhanced queries would actually change
+            let queriesChanged = false;
+            if (metadata?.enhanced_queries && Array.isArray(metadata.enhanced_queries) && metadata.enhanced_queries.length > 0) {
+              const queriesStr = JSON.stringify(metadata.enhanced_queries);
+              queriesChanged = JSON.stringify(prev.enhancedQueries) !== queriesStr;
+            }
+
+            // Only update if something actually changed
+            if (!needsCompletionMarking && currentStageAlreadyNull && alreadyInactive && !queriesChanged) {
+              // Nothing changed, return prev to avoid unnecessary re-render
+              return prev;
+            }
+
+            // Build updated state
             const newCompleted = prev.completedStages.includes('response_generation')
               ? prev.completedStages
               : [...prev.completedStages, 'response_generation'];
 
-            // Update enhanced queries only if they came from this completion event
             let updatedState: any = {
               ...prev,
               currentStage: null,
@@ -1176,12 +1214,8 @@ export default function ConversationWindow() {
             };
 
             // Add enhanced_queries if available and different from current state
-            if (metadata?.enhanced_queries && Array.isArray(metadata.enhanced_queries) && metadata.enhanced_queries.length > 0) {
-              const queriesStr = JSON.stringify(metadata.enhanced_queries);
-              const queriesMatch = JSON.stringify(prev.enhancedQueries) === queriesStr;
-              if (!queriesMatch) {
-                updatedState.enhancedQueries = metadata.enhanced_queries;
-              }
+            if (queriesChanged) {
+              updatedState.enhancedQueries = metadata?.enhanced_queries || [];
             }
 
             return updatedState;
