@@ -31,7 +31,8 @@ from src.services.model_provider.model_provider_service import (
 litellm.drop_params = True
 
 
-async def get_response_stream(
+
+async def get_response_stream_supervisor(
     query: str,
     user_id: str,
     llm_provider_id: str,
@@ -39,155 +40,26 @@ async def get_response_stream(
     conversation_id: str,
     collection_name: str,
     selected_strategy: Optional[str] = None,
-    retrieval_strategy: Optional[
-        str
-    ] = None,  # None = auto-detect based on query variants
+    retrieval_strategy: Optional[str] = None,
     enhancement_config: Optional[Dict[str, Any]] = None,
     enable_reranking: bool = True,
     relevance_threshold: float = 0.5,
     enable_llm_generation: bool = True,
     top_k: int = 5,
     conversation_description: Optional[str] = None,
-    enable_knowledge_assistant: bool = True,  # NEW: Use supervisor for intent routing
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
     Generate AI response using Supervisor Agent for intent routing (streaming).
 
-    The flow:
-    1. Supervisor detects user intent: rag_only or rag_then_task
-    2. Routes to RAG Agent (+ Task Agent if needed)
-    3. Streams results back to frontend
-
-    This function yields chunks as the workflow progresses, allowing real-time
-    updates to the frontend for better interactivity.
-
-    Args:
-        query: User's question/query
-        user_id: User ID for authentication and context
-        llm_provider_id: LLM provider ID
-        llm_model_name: LLM model name
-        conversation_id: Conversation ID for context and tracing
-        collection_name: Vector database collection name
-        selected_strategy: Query enhancement strategy to use
-        enhancement_config: Additional enhancement configuration
-        enable_reranking: Whether to enable document reranking
-        enable_llm_generation: Whether to enable LLM answer generation (True = generated, False = raw)
-        enable_knowledge_assistant: Use supervisor for intent routing (default=True)
+    **SUPERVISOR MODE ONLY** - This endpoint uses the multi-agent supervisor architecture
+    with intent detection and routing to RAG and/or Task agents.
 
     Yields:
         Dict containing workflow state chunks with progress updates
-
-    Raises:
-        Exception: If workflow execution fails
     """
     start_time = time.time()
 
     try:
-        logger.info(f"🚀 Starting LangGraph workflow for query: '{query[:50]}...'")
-        logger.debug(
-            f"Workflow config: strategy={selected_strategy}, collection={collection_name}"
-        )
-
-        config = {}
-        if settings.AGENT_TRACING_ENABLED:
-            logger.debug(
-                f"Agent tracing enabled: Workflow config: strategy={selected_strategy}, collection={collection_name}, llm_provider_id={llm_provider_id}, llm_model_name={llm_model_name}"
-            )
-            # Enable LiteLLM tracking for cost and token usage
-            track_litellm()
-            logger.debug("✅ LiteLLM tracking enabled for cost and token usage")
-
-            # Build tags for Opik trace
-            trace_tags = [
-                f"strategy:{selected_strategy or 'native'}",
-                f"provider:{llm_provider_id}",
-                f"model:{llm_model_name}",
-                f"collection:{collection_name}",
-                f"conversation:{conversation_id}",
-            ]
-            if conversation_description:
-                trace_tags.append(f"domain:{conversation_description[:50]}")
-
-            opik_tracer = OpikTracer(
-                graph=workflow.get_graph(xray=True),
-                tags=trace_tags,
-            )
-            # Note: No thread_id needed - each query is independent (stateless RAG)
-            config = {
-                "callbacks": [opik_tracer],
-            }
-        else:
-            logger.debug(
-                f"Agent tracing disabled: Workflow config: strategy={selected_strategy}, collection={collection_name}"
-            )
-
-        # Build workflow configuration
-        # Calculate top_k_per_query: For RRF, we retrieve more docs per query to account for fusion
-        # Smart default: retrieve at least 5 per query, or scale with top_k if user requests more
-        top_k_per_query = max(
-            5, int(top_k * 1.5)
-        )  # 50% more to account for RRF deduplication
-
-        workflow_config = {
-            "collection_name": collection_name,
-            "user_id": user_id,
-            "llm_provider_id": llm_provider_id,
-            "llm_model_name": llm_model_name,
-            "enhancement_config": enhancement_config or {},
-            "conversation_id": conversation_id,
-            "enable_reranking": enable_reranking,
-            "reranking_config": {
-                "relevance_threshold": relevance_threshold,
-                "use_score_based": True,  # Use continuous scores instead of binary labels
-            },
-            "enable_llm_generation": enable_llm_generation,
-            "top_k": top_k,
-            "retrieval_config": {
-                "top_k_per_query": top_k_per_query,  # Dynamically scale based on user's top_k
-                "rrf_k": 60,  # RRF constant (from original paper)
-            },
-        }
-
-        logger.info(
-            f"🔧 Workflow config: enable_reranking={enable_reranking}, enable_llm_generation={enable_llm_generation}, collection={collection_name}, strategy={selected_strategy}"
-        )
-
-        # Get provider configuration to create LLM client
-        provider_service = get_model_provider_service()
-        provider = provider_service.get_model_provider(llm_provider_id, user_id)
-
-        if not provider:
-            raise ValueError(f"Provider not found: {llm_provider_id}")
-
-        if not provider.is_active:
-            raise ValueError(f"Provider is not active: {provider.name}")
-
-        # Get temperature and max_tokens from provider's generative config
-        generative_config = provider.generative.config if provider.generative else {}
-        temperature = generative_config.get("temperature", 0.7)
-        max_tokens = generative_config.get("max_tokens", 4096)
-
-        # Create LLM client using ChatLiteLLM with provider's config
-        model_string = f"{provider.provider_type}/{llm_model_name}"
-        llm_client = ChatLiteLLM(
-            model=model_string,
-            api_key=provider.api_key,
-            api_base=provider.endpoint if provider.endpoint else None,
-            timeout=provider.timeout if provider.timeout else 60,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-
-        logger.info(
-            f"✅ Created LLM client: {model_string} (temperature={temperature}, max_tokens={max_tokens})"
-        )
-
-        # Add LLM client to workflow config
-        workflow_config["llm_client"] = llm_client
-
-        # If using supervisor, we route through it instead of direct RAG
-        if enable_knowledge_assistant:
-            logger.info("🎯 Using Supervisor Agent for intent routing")
 
             # Yield supervisor initialization START event
             yield {
@@ -597,8 +469,53 @@ async def get_response_stream(
             yield final_result
             return
 
-        # Original RAG-only workflow (fallback if enable_knowledge_assistant=False)
-        logger.info("📚 Using direct RAG workflow (no supervisor)")
+    except Exception as e:
+        execution_time_ms = (time.time() - start_time) * 1000
+        logger.error(
+            f"❌ Supervisor orchestration failed after {execution_time_ms:.2f}ms: {e}"
+        )
+        logger.error(f"Traceback: {traceback.format_exc()}")
+
+        # Yield error result
+        yield {
+            "type": "supervisor_error",
+            "error": str(e),
+            "execution_time_ms": execution_time_ms,
+            "workflow_completed": False,
+            "query": query,
+            "response": f"I encountered an error while processing your query: {str(e)}",
+            "documents": [],
+        }
+
+
+
+async def get_response_stream_rag(
+    query: str,
+    user_id: str,
+    llm_provider_id: str,
+    llm_model_name: str,
+    conversation_id: str,
+    collection_name: str,
+    selected_strategy: Optional[str] = None,
+    retrieval_strategy: Optional[str] = None,
+    enhancement_config: Optional[Dict[str, Any]] = None,
+    enable_reranking: bool = True,
+    relevance_threshold: float = 0.5,
+    enable_llm_generation: bool = True,
+    top_k: int = 5,
+    conversation_description: Optional[str] = None,
+) -> AsyncGenerator[Dict[str, Any], None]:
+    """
+    Generate AI response using direct RAG-only pipeline (streaming).
+
+    **RAG-ONLY MODE** - This endpoint uses ONLY the RAG pipeline without any supervisor/agent routing.
+
+    Yields:
+        Dict containing workflow state chunks with progress updates
+    """
+    start_time = time.time()
+
+    try:
 
         # Create initial state
         initial_state = create_initial_state(
@@ -866,6 +783,26 @@ async def get_response_stream(
                 "error": "No workflow state captured",
                 "total_chunks": chunk_count,
             }
+
+    except Exception as e:
+        execution_time_ms = (time.time() - start_time) * 1000
+        logger.error(
+            f"❌ LangGraph workflow failed after {execution_time_ms:.2f}ms: {e}"
+        )
+        logger.error(f"Traceback: {traceback.format_exc()}")
+
+        # Yield error result
+        yield {
+            "type": "workflow_error",
+            "error": str(e),
+            "execution_time_ms": execution_time_ms,
+            "workflow_completed": False,
+            "query": query,
+            "response": f"I encountered an error while processing your query: {str(e)}",
+            "documents": [],
+            "enhanced_query": None,
+        }
+
 
     except Exception as e:
         execution_time_ms = (time.time() - start_time) * 1000
