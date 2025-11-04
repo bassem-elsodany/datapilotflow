@@ -562,9 +562,10 @@ export default function ConversationWindow() {
       wsRef.current.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          console.log(`📥 [WS MESSAGE RECEIVED] type=${data.type}, stage=${data.stage}, message=${data.message}`);
           handleWebSocketMessage(data);
         } catch (error) {
-          // Silently handle parsing errors
+          console.error('❌ [WS MESSAGE ERROR] Failed to parse WebSocket message:', error);
         }
       };
 
