@@ -667,12 +667,15 @@ async def get_response_stream_rag(
         stages_completed = set()
 
         async for chunk in stream_iterator:
+            logger.critical(f"🔴 [RAG CHUNK] Received chunk with keys: {list(chunk.keys())}")
             chunk_count += 1
 
             # With stream_mode="updates", chunk is {node_name: state_update}
             # Extract the node name and state
             node_name = list(chunk.keys())[0] if chunk else "unknown"
             state_update = chunk.get(node_name, {}) if chunk else {}
+            logger.critical(f"🔴 [RAG NODE] node_name={node_name}, state_keys={list(state_update.keys())[:5]}")
+
             # Merge state updates to accumulate all fields
             last_state = {**last_state, **state_update}
 
@@ -681,9 +684,11 @@ async def get_response_stream_rag(
 
             # Map node to stage for consistency with supervisor path
             current_stage = stage_mapping.get(node_name, node_name)
+            logger.critical(f"🔴 [RAG MAPPING] node_name={node_name} -> current_stage={current_stage}, last_stage={last_stage}")
 
             # Skip special nodes
             if node_name in ["__start__", "__end__"]:
+                logger.critical(f"🔴 [RAG SKIP] Skipping special node: {node_name}")
                 continue
 
             # Emit START event when we transition to a new stage
@@ -695,9 +700,9 @@ async def get_response_stream_rag(
                     "message": f"Processing {current_stage}...",
                     "execution_time_ms": execution_time_ms,
                 }
-                logger.critical(f"🚀 [RAG START EVENT] Emitting START event for stage: {current_stage} (node: {node_name})")
-                logger.critical(f"🚀 [RAG START EVENT] Event data: {start_event}")
+                logger.critical(f"🚀 [RAG START EVENT] EMITTING START: stage={current_stage}, node={node_name}")
                 yield start_event
+                logger.critical(f"✅ [RAG START EVENT] YIELDED START event for {current_stage}")
 
             # Emit COMPLETE events with detailed data based on stage
             # Only emit completion event once per node (not repeatedly)
