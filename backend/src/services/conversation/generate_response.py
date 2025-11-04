@@ -665,6 +665,7 @@ async def get_response_stream_rag(
 
         # Track stage completion to emit COMPLETE events
         stages_completed = set()
+        query_enhancement_emitted = False  # Track if we've emitted query_enhancement START event
 
         async for chunk in stream_iterator:
             logger.critical(f"🔴 [RAG CHUNK] Received chunk with keys: {list(chunk.keys())}")
@@ -681,6 +682,26 @@ async def get_response_stream_rag(
 
             # Calculate current execution time
             execution_time_ms = (time.time() - start_time) * 1000
+
+            # CRITICAL FIX: Some strategy nodes may not emit chunks to the stream
+            # But their output appears in subsequent nodes' state
+            # Check if enhanced_query exists and query_enhancement hasn't been emitted yet
+            if (not query_enhancement_emitted and
+                state_update.get("enhanced_query") and
+                last_stage is None):  # Haven't emitted any stage yet
+                logger.critical(f"🔴 [RAG HIDDEN NODE] Detected enhanced_query in state but no strategy node chunk received!")
+                logger.critical(f"🔴 [RAG HIDDEN NODE] Emitting query_enhancement START event for missing/silent strategy node")
+
+                # Emit START event for query_enhancement
+                start_event = {
+                    "type": "workflow_progress",
+                    "stage": "query_enhancement",
+                    "message": "Processing query_enhancement...",
+                    "execution_time_ms": execution_time_ms,
+                }
+                yield start_event
+                query_enhancement_emitted = True
+                last_stage = "query_enhancement"
 
             # Map node to stage for consistency with supervisor path
             current_stage = stage_mapping.get(node_name, node_name)

@@ -965,8 +965,6 @@ export default function ConversationWindow() {
             mappedStage = nodeToStageMap[currentNode] || currentNode;
           }
 
-          console.log(`🔍 [WORKFLOW PROGRESS DEBUG] mappedStage=${mappedStage}, isComplete=${isCompleteEvent}, ragSubstages=${metadata?.ragSubstages}`);
-
           setWorkflowState(prev => {
             // Check if we actually need to update state
             const newCompleted = [...prev.completedStages];
@@ -978,19 +976,15 @@ export default function ConversationWindow() {
             // Add this substage to ragSubstages if it's a RAG-related stage (only once per stage)
             if (mappedStage === 'query_enhancement' && !newRagSubstages.includes('query_enhancement')) {
               newRagSubstages.push('query_enhancement');
-              console.log('✅ Added query_enhancement to ragSubstages');
               hasChanges = true;
             } else if (mappedStage === 'document_retrieval' && !newRagSubstages.includes('document_retrieval')) {
               newRagSubstages.push('document_retrieval');
-              console.log('✅ Added document_retrieval to ragSubstages');
               hasChanges = true;
             } else if (mappedStage === 'document_judging' && !newRagSubstages.includes('document_judging')) {
               newRagSubstages.push('document_judging');
-              console.log('✅ Added document_judging to ragSubstages');
               hasChanges = true;
             } else if (mappedStage === 'answer_generation' && !newRagSubstages.includes('answer_generation')) {
               newRagSubstages.push('answer_generation');
-              console.log('✅ Added answer_generation to ragSubstages');
               hasChanges = true;
             }
 
