@@ -22,6 +22,7 @@ logger.add(
 )
 logger.add(
     "logs/datapilotflow.log",
+    format="{time:MMMM D, YYYY > HH:mm:ss!UTC} | {level} | {name} | {file}:{line} | {message} | {extra}",
     level="DEBUG",
     rotation="00:00",
     retention="30 days",
@@ -45,7 +46,7 @@ class Settings(BaseSettings):
     )
     # API Configuration
     API_SERVER_PORT: int = Field(
-        default=8800, description="API server port", ge=1, le=65535
+        default=65500, description="API server port", ge=1, le=65535
     )
 
     # WebSocket timeout configuration

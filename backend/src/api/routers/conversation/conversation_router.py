@@ -55,17 +55,19 @@ class CreateSessionRequest(BaseModel):
     )
     enhancement_strategy: Optional[str] = Field(
         None,
-        description="Query enhancement strategy (none, step_back, multi_query, hyde, decomposition, rag_fusion, augmented)",
-    )
-    retrieval_strategy: Optional[str] = Field(
-        "single_query",
-        description="Multi-query retrieval strategy: 'single_query' (fast, uses first variant) or 'reciprocal_rank_fusion' (slower, better quality with all variants)",
+        description="Query enhancement strategy (none, multi_query, hyde, decomposition, augmented)",
     )
     collection_name: Optional[str] = Field(
         "LongTermMemory", description="Vector DB collection name"
     )
     enable_reranking: bool = Field(
         True, description="Enable document reranking/judging for better relevance"
+    )
+    relevance_threshold: float = Field(
+        0.5,
+        ge=0.0,
+        le=1.0,
+        description="Relevance score threshold for filtering documents (0.0-1.0). Documents below this threshold are filtered out.",
     )
     reranker_provider_id: Optional[str] = Field(
         None, description="Dedicated reranker provider ID (Cohere/Voyage AI)"
@@ -77,9 +79,13 @@ class CreateSessionRequest(BaseModel):
     )
     top_k: int = Field(
         5,
-        ge=3,
-        le=10,
+        ge=5,
+        le=30,
         description="Number of documents to retrieve from vector database",
+    )
+    enable_knowledge_assistant: bool = Field(
+        True,
+        description="Enable Knowledge Assistant for RAG→Task workflow (True = orchestration, False = RAG only)",
     )
     tags: Optional[str] = Field(None, description="Tags for organizing conversations")
 
@@ -96,14 +102,17 @@ class UpdateSessionConfigRequest(BaseModel):
     enhancement_strategy: Optional[str] = Field(
         None, description="Query enhancement strategy"
     )
-    retrieval_strategy: Optional[str] = Field(
-        None, description="Multi-query retrieval strategy"
-    )
     collection_name: Optional[str] = Field(
         None, description="Vector DB collection name"
     )
     enable_reranking: Optional[bool] = Field(
         None, description="Enable document reranking"
+    )
+    relevance_threshold: Optional[float] = Field(
+        None,
+        ge=0.0,
+        le=1.0,
+        description="Relevance score threshold for filtering documents (0.0-1.0)",
     )
     reranker_provider_id: Optional[str] = Field(
         None, description="Dedicated reranker provider ID"
@@ -114,11 +123,14 @@ class UpdateSessionConfigRequest(BaseModel):
     )
     top_k: Optional[int] = Field(
         None,
-        ge=3,
-        le=10,
+        ge=5,
+        le=30,
         description="Number of documents to retrieve from vector database",
     )
     tags: Optional[List[str]] = Field(None, description="Tags for organizing")
+    enable_knowledge_assistant: Optional[bool] = Field(
+        None, description="Enable Knowledge Assistant (multi-agent supervisor with intent routing)"
+    )
 
 
 # ============================================================================
@@ -142,13 +154,14 @@ async def create_conversation_session(
             llm_provider_id=create_request.llm_provider_id,
             llm_model_name=create_request.llm_model_name,
             enhancement_strategy=create_request.enhancement_strategy,
-            retrieval_strategy=create_request.retrieval_strategy or "single_query",
             collection_name=create_request.collection_name or "LongTermMemory",
             enable_reranking=create_request.enable_reranking,
+            relevance_threshold=create_request.relevance_threshold,
             reranker_provider_id=create_request.reranker_provider_id,
             reranker_model_name=create_request.reranker_model_name,
             enable_llm_generation=create_request.enable_llm_generation,
             top_k=create_request.top_k,
+            enable_knowledge_assistant=create_request.enable_knowledge_assistant,
             tags=create_request.tags,
         )
 
@@ -158,7 +171,6 @@ async def create_conversation_session(
             "name": create_request.name or f"Session {session_id[:8]}",
             "llm_provider_id": create_request.llm_provider_id,
             "enhancement_strategy": create_request.enhancement_strategy,
-            "retrieval_strategy": create_request.retrieval_strategy or "single_query",
             "collection_name": create_request.collection_name or "LongTermMemory",
             "enable_reranking": create_request.enable_reranking,
             "reranker_provider_id": create_request.reranker_provider_id,
@@ -354,10 +366,14 @@ async def get_conversation_session(
             "reranker_model_name": getattr(session, "reranker_model_name", None),
             "enable_llm_generation": getattr(session, "enable_llm_generation", True),
             "top_k": getattr(session, "top_k", None),
+            "enable_knowledge_assistant": getattr(session, "enable_knowledge_assistant", True),
         }
 
         logger.info(
             f"  session_data['enable_llm_generation']: {session_data['enable_llm_generation']}"
+        )
+        logger.info(
+            f"  session_data['enable_knowledge_assistant']: {session_data['enable_knowledge_assistant']}"
         )
 
         # Add enhancement config
@@ -484,14 +500,15 @@ async def update_conversation_session(
             llm_provider_id=config_request.llm_provider_id,
             llm_model_name=config_request.llm_model_name,
             enhancement_strategy=config_request.enhancement_strategy,
-            retrieval_strategy=config_request.retrieval_strategy,
             collection_name=config_request.collection_name,
             enable_reranking=config_request.enable_reranking,
+            relevance_threshold=config_request.relevance_threshold,
             reranker_provider_id=config_request.reranker_provider_id,
             reranker_model_name=config_request.reranker_model_name,
             enable_llm_generation=config_request.enable_llm_generation,
             top_k=config_request.top_k,
             tags=config_request.tags,
+            enable_knowledge_assistant=config_request.enable_knowledge_assistant,
         )
 
         if not success:

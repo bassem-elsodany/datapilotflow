@@ -168,14 +168,13 @@ export function Welcome() {
                 </div>
               </Group>
               <Text size="sm" c="dimmed" mb="md">
-                Advanced query enhancement strategies including Step-back, HyDE, Decomposition,
-                RAG-Fusion, Multi-Query, and Query-Fusion for improved retrieval accuracy.
+                Advanced query enhancement strategies including HyDE, Decomposition,
+                Multi-Query, and Augmented for improved retrieval accuracy.
               </Text>
               <Stack gap="xs">
-                <Text size="xs" fw={500}>✓ Step-back Reasoning</Text>
                 <Text size="xs" fw={500}>✓ Hypothetical Document Embeddings</Text>
                 <Text size="xs" fw={500}>✓ Query Decomposition</Text>
-                <Text size="xs" fw={500}>✓ RAG-Fusion Strategies</Text>
+                <Text size="xs" fw={500}>✓ Multi-Query Variants</Text>
               </Stack>
             </Card>
           </Grid.Col>

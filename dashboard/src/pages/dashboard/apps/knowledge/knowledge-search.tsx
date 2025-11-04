@@ -16,8 +16,9 @@ import {
   IconTrash
 } from '@tabler/icons-react';
 import { DataTableColumn } from 'mantine-datatable';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ConversationCreationModal } from './components/ConversationCreationModal';
 
 interface Conversation {
   id: string; // MongoDB _id
@@ -52,8 +53,7 @@ export default function KnowledgeSearch() {
   const [isLoading, setIsLoading] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<Conversation | null>(null);
-
-  const wsRef = useRef<WebSocket | null>(null);
+  const [creationModalOpen, setCreationModalOpen] = useState(false);
 
   // API functions using centralized config
   const buildApiUrl = (endpoint: string) => {
@@ -102,7 +102,18 @@ export default function KnowledgeSearch() {
   };
 
   const navigateToCreateConversation = () => {
+    setCreationModalOpen(true);
+  };
+
+  const handleSelectWizard = () => {
+    setCreationModalOpen(false);
     navigate(paths.dashboard.apps.conversationCreate);
+  };
+
+  const handleSelectPipeline = () => {
+    setCreationModalOpen(false);
+    // Navigate to pipeline builder for conversations
+    navigate(`${paths.dashboard.apps.conversationCreate}?mode=pipeline`);
   };
 
   const selectConversation = async (sessionId: string) => {
@@ -355,8 +366,8 @@ export default function KnowledgeSearch() {
         <Grid.Col span={12}>
           <DataTable.Container>
             <DataTable.Title
-              title="Conversation Sessions"
-              description="Manage your conversation sessions and search knowledge base"
+              title="Conversation Agents"
+              description="Manage your conversation agents and search knowledge base"
               actions={
                 <Button
                   variant="default"
@@ -365,7 +376,7 @@ export default function KnowledgeSearch() {
                   onClick={navigateToCreateConversation}
                   loading={isLoading}
                 >
-                  New Session
+                  New Conversation Agent
                 </Button>
               }
             />
@@ -376,17 +387,17 @@ export default function KnowledgeSearch() {
                 <Box ta="center" py="xl">
                   <IconMessageCircle size={48} color="var(--mantine-color-gray-4)" />
                   <Text size="lg" c="dimmed" mt="md">
-                    No conversation sessions found
+                    No conversation agents found
                   </Text>
                   <Text size="sm" c="dimmed" mb="lg">
-                    Start your first conversation to search and interact with the knowledge base.
+                    Start your first conversation agent to search and interact with the knowledge base.
                   </Text>
                   <Button
                     leftSection={<IconPlus size={16} />}
                     onClick={navigateToCreateConversation}
                     size="md"
                   >
-                    Start New Conversation
+                    Start New Conversation Agent
                   </Button>
                 </Box>
               ) : (
@@ -503,6 +514,14 @@ export default function KnowledgeSearch() {
           </Group>
         </Stack>
       </Modal>
+
+      {/* Conversation Creation Choice Modal */}
+      <ConversationCreationModal
+        opened={creationModalOpen}
+        onClose={() => setCreationModalOpen(false)}
+        onSelectWizard={handleSelectWizard}
+        onSelectPipeline={handleSelectPipeline}
+      />
     </Page>
   );
 }

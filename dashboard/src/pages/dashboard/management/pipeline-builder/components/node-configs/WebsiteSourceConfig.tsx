@@ -14,8 +14,10 @@ import {
   Stack,
   Text,
   Alert,
+  Textarea,
+  Tabs,
 } from '@mantine/core';
-import { IconInfoCircle, IconCheck } from '@tabler/icons-react';
+import { IconInfoCircle, IconCheck, IconAlertCircle } from '@tabler/icons-react';
 import { PipelineNode } from '@/api/resources/pipelines';
 
 interface WebsiteSourceConfigProps {
@@ -30,6 +32,8 @@ export function WebsiteSourceConfig({ node, onSave, onClose }: WebsiteSourceConf
       name: node.name || 'Website Source',
       url: node.config?.url || '',
       crawl_depth: node.config?.crawl_depth || 4,
+      target_elements: node.config?.target_elements || '',
+      exclude_elements: node.config?.exclude_elements || '',
     },
 
     validate: {
@@ -56,53 +60,100 @@ export function WebsiteSourceConfig({ node, onSave, onClose }: WebsiteSourceConf
   return (
     <div style={{ padding: '1rem' }}>
       <Stack gap="md">
-        <Text size="xs" c="dimmed">
-          Configure the website to crawl. Use additional filter nodes for advanced options.
-        </Text>
+        <Tabs defaultValue="basic" orientation="vertical">
+          <Tabs.List style={{ minWidth: '150px' }}>
+            <Tabs.Tab value="basic">Basic</Tabs.Tab>
+            <Tabs.Tab value="selectors">CSS Selectors (Optional)</Tabs.Tab>
+          </Tabs.List>
 
-        <TextInput
-          label="Node Name"
-          placeholder="Company Documentation"
-          description="A descriptive name for this source"
-          {...form.getInputProps('name')}
-        />
+          <Tabs.Panel value="basic">
+            <Stack gap="md">
+              <Text size="xs" c="dimmed">
+                Configure the website to crawl. Use additional filter nodes for advanced options.
+              </Text>
 
-        <TextInput
-          label="Website URL"
-          placeholder="https://docs.company.com"
-          description="The base URL to start crawling from"
-          required
-          {...form.getInputProps('url')}
-        />
+              <TextInput
+                label="Node Name"
+                placeholder="Company Documentation"
+                description="A descriptive name for this source"
+                {...form.getInputProps('name')}
+              />
 
-        <div>
-          <Text size="sm" fw={500} mb="xs">
-            Crawl Depth
-          </Text>
-          <Text size="xs" c="dimmed" mb="md">
-            How many levels of links to follow (0 = only the starting URL)
-          </Text>
-          <Slider
-            min={0}
-            max={10}
-            step={1}
-            marks={[
-              { value: 0, label: '0' },
-              { value: 2, label: '2' },
-              { value: 4, label: '4' },
-              { value: 6, label: '6' },
-              { value: 8, label: '8' },
-              { value: 10, label: '10' },
-            ]}
-            label={(value) => `${value} levels`}
-            {...form.getInputProps('crawl_depth')}
-          />
-        </div>
+              <TextInput
+                label="Website URL"
+                placeholder="https://docs.company.com"
+                description="The base URL to start crawling from"
+                required
+                {...form.getInputProps('url')}
+              />
 
-        <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
-          💡 <strong>Tip:</strong> Start with depth 2-4 for documentation sites. Add{' '}
-          <strong>Domain Filter</strong> and <strong>Content Filter</strong> nodes for more control.
-        </Alert>
+              <div>
+                <Text size="sm" fw={500} mb="xs">
+                  Crawl Depth
+                </Text>
+                <Text size="xs" c="dimmed" mb="md">
+                  How many levels of links to follow (0 = only the starting URL)
+                </Text>
+                <Slider
+                  min={0}
+                  max={10}
+                  step={1}
+                  marks={[
+                    { value: 0, label: '0' },
+                    { value: 2, label: '2' },
+                    { value: 4, label: '4' },
+                    { value: 6, label: '6' },
+                    { value: 8, label: '8' },
+                    { value: 10, label: '10' },
+                  ]}
+                  label={(value) => `${value} levels`}
+                  {...form.getInputProps('crawl_depth')}
+                />
+              </div>
+
+              <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+                💡 <strong>Tip:</strong> Start with depth 2-4 for documentation sites. Use the CSS Selectors tab for precise element selection.
+              </Alert>
+            </Stack>
+          </Tabs.Panel>
+
+          <Tabs.Panel value="selectors">
+            <Stack gap="md">
+              <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+                <Text size="xs">
+                  <strong>CSS Selectors for Content Extraction</strong>
+                  <br />
+                  Specify CSS selectors to include or exclude content. Separate multiple selectors with commas.
+                  <br />
+                  Example: <code>.article, main &gt; p</code>
+                </Text>
+              </Alert>
+
+              <Textarea
+                label="Target Elements (Include)"
+                placeholder=".content, main, article"
+                description="CSS selectors for content to include. Leave empty to include all content."
+                rows={3}
+                {...form.getInputProps('target_elements')}
+              />
+
+              <Textarea
+                label="Exclude Elements"
+                placeholder=".nav, footer, .sidebar, script"
+                description="CSS selectors for content to exclude. This takes priority over target elements."
+                rows={3}
+                {...form.getInputProps('exclude_elements')}
+              />
+
+              <Alert icon={<IconAlertCircle size={16} />} color="orange" variant="light">
+                <Text size="xs">
+                  <strong>Note:</strong> If you specify target elements, only those will be extracted.
+                  If you specify exclude elements, they will be removed from extraction.
+                </Text>
+              </Alert>
+            </Stack>
+          </Tabs.Panel>
+        </Tabs>
 
         <Group justify="flex-end" mt="md">
           <Button variant="default" onClick={onClose}>

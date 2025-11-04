@@ -12,6 +12,7 @@ import { PipelineNode } from '@/api/resources/pipelines';
 import { WebsiteSourceConfig } from './node-configs/WebsiteSourceConfig';
 import { DomainFilterConfig } from './node-configs/DomainFilterConfig';
 import { ContentFilterConfig } from './node-configs/ContentFilterConfig';
+import { LlmContentFilterConfig } from './node-configs/LlmContentFilterConfig';
 import { OutputFormatConfig } from './node-configs/OutputFormatConfig';
 import { TextSplitterConfig } from './node-configs/TextSplitterConfig';
 import { EmbeddingGeneratorConfig } from './node-configs/EmbeddingGeneratorConfig';
@@ -36,6 +37,7 @@ export function NodeConfigModal({ node, opened, onClose, onSave }: NodeConfigMod
       single_page: 'Single Page Source',
       domainFilter: 'Domain Filter',
       contentFilter: 'Content Filter',
+      llmContentFilter: 'LLM Content Filter',
       outputFormat: 'Output Format',
       textSplitter: 'Text Splitter',
       embeddingGenerator: 'Embedding Generator',
@@ -60,6 +62,9 @@ export function NodeConfigModal({ node, opened, onClose, onSave }: NodeConfigMod
 
       case 'contentFilter':
         return <ContentFilterConfig node={node} onSave={onSave} onClose={onClose} />;
+
+      case 'llmContentFilter':
+        return <LlmContentFilterConfig node={node} onSave={onSave} onClose={onClose} />;
 
       case 'outputFormat':
         return <OutputFormatConfig node={node} onSave={onSave} onClose={onClose} />;

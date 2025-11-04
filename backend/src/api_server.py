@@ -14,12 +14,10 @@ from fastapi import FastAPI, HTTPException, Query, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
-from langgraph.checkpoint.mongodb.aio import (
-    AsyncMongoDBSaver,  # pyright: ignore[reportMissingImports]
-)
 from loguru import logger
 from opik.integrations.langchain import OpikTracer
 
+# CRITICAL: Import config FIRST to configure loguru with custom format
 from src.config import settings
 from src.infrastructure.opik_utils import configure
 
@@ -53,8 +51,6 @@ from src.api.routers.knowledge.knowledge_source_preview_router import (
 
 # Job timeline endpoints are now part of the knowledge job router
 from src.api.routers.users import roles_router, users_router
-
-agent_mongo_uri = f"mongodb://{settings.MONGO_USER}:{settings.MONGO_PASS}@{settings.MONGO_HOST}:{settings.MONGO_PORT}/{settings.MONGO_AGENT_STATE_CHECKPOINT_DB_NAME}?authSource=admin"
 
 
 async def initialize_system_if_needed():
@@ -110,41 +106,20 @@ async def lifespan(app: FastAPI):
     # Initialize system (admin user and roles) if needed
     await initialize_system_if_needed()
 
-    async with AsyncMongoDBSaver.from_conn_string(
-        conn_string=agent_mongo_uri,
-        db_name=settings.MONGO_AGENT_STATE_CHECKPOINT_DB_NAME,
-        checkpoint_collection_name=settings.MONGO_AGENT_STATE_CHECKPOINT_COLLECTION,
-        writes_collection_name=settings.MONGO_AGENT_STATE_WRITES_COLLECTION,
-    ) as checkpointer:
-        # Store checkpointer in app state and global variable
-        app.state.checkpointer = checkpointer
+    logger.info("DataPilotFlow API ready and running")
+    logger.info("✅ RAG Agent configured for independent stateless query processing")
 
-        # Also set it in the global variable for the graph module
-        from src.workflow.graph import set_checkpointer
+    yield  # Application is running
 
-        set_checkpointer(checkpointer)
-
-        logger.info("DataPilotFlow API ready and running")
-        logger.info(f"Checkpointer stored in app.state and global: {checkpointer}")
-        yield {"checkpointer": checkpointer}  # Application is running
-
-        if settings.AGENT_TRACING_ENABLED:
-            logger.info("Flushing Opik tracer")
+    # Handle graceful shutdown
+    if settings.AGENT_TRACING_ENABLED:
+        logger.info("Flushing Opik tracer...")
+        try:
             opik_tracer = OpikTracer()
             opik_tracer.flush()
-            logger.info("✅ Opik tracer flushed")
-        else:
-            logger.info("❌ Opik tracer not flushed")
-
-    # Setup signal handlers for graceful shutdown
-    def signal_handler(signum, frame):
-        logger.info(f"Received signal {signum}, initiating graceful shutdown...")
-        sys.exit(0)
-
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
-    yield
+            logger.info("✅ Opik tracer flushed successfully")
+        except Exception as e:
+            logger.error(f"Error flushing Opik tracer: {e}")
 
     # Shutdown
     logger.info("Shutting down DataPilotFlow API Server...")

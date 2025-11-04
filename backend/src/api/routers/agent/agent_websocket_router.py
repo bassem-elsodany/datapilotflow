@@ -49,13 +49,7 @@ def extract_enhanced_query_text(enhanced_query_dict: dict, strategy: str = None)
     )
 
     # Try to extract based on known keys
-    if "step_back_query" in enhanced_query_dict:
-        result = enhanced_query_dict["step_back_query"]
-        logger.debug(
-            f"✅ Extracted step_back_query: {result[:100] if result else None}..."
-        )
-        return result
-    elif "hypothetical_answer" in enhanced_query_dict:
+    if "hypothetical_answer" in enhanced_query_dict:
         result = enhanced_query_dict["hypothetical_answer"]
         logger.debug(
             f"✅ Extracted hypothetical_answer: {result[:100] if result else None}..."
@@ -101,13 +95,14 @@ def extract_enhanced_query_text(enhanced_query_dict: dict, strategy: str = None)
     return None
 
 
-@router.websocket("/ws/agent/query")
-async def agent_query_websocket(websocket: WebSocket, token: str = Query(None)):
+@router.websocket("/ws/agent/query/rag")
+async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(None)):
     """
-    WebSocket endpoint for AI agent query processing with LangGraph workflow.
+    WebSocket endpoint for RAG-only query processing (no supervisor/agent routing).
 
-    This endpoint processes user queries through the complete LangGraph workflow,
-    including query enhancement, document retrieval, and response generation.
+    This endpoint processes user queries using ONLY the RAG pipeline without any intent detection
+    or task agent routing. It provides direct access to the knowledge base retrieval and answer
+    generation pipeline.
 
     **Authentication**: Requires JWT token
 
@@ -115,7 +110,94 @@ async def agent_query_websocket(websocket: WebSocket, token: str = Query(None)):
     ```json
     {
         "query": "User's question",
-        "selected_strategy": "step_back|multi_query|hyde|decomposition|rag_fusion|query_fusion",
+        "conversation_id": "conversation_id_from_database"
+    }
+    ```
+
+    **Response Format** (to client - RAG events):
+    ```json
+    {
+        "type": "workflow_progress",
+        "stage": "query_enhancement|query_enhancement_complete|document_retrieval|document_retrieval_complete|document_judging|document_judging_complete|answer_generation|answer_generation_complete",
+        "message": "Status message",
+        "data": {},
+        "execution_time_ms": 123.45
+    }
+    ```
+
+    **Stages**:
+    1. `query_enhancement` (START) - Beginning query enhancement
+    2. `query_enhancement_complete` (COMPLETE) - Query enhanced with variants
+    3. `document_retrieval` (START) - Beginning document retrieval
+    4. `document_retrieval_complete` (COMPLETE) - Documents retrieved
+    5. `document_judging` (START) - Beginning document ranking (if enabled)
+    6. `document_judging_complete` (COMPLETE) - Documents ranked
+    7. `answer_generation` (START) - Beginning answer generation
+    8. `answer_generation_complete` (COMPLETE) - Response generated
+    9. `workflow_complete` - Final result with complete response
+
+    RAG-only mode is ideal for:
+    - Pure knowledge base retrieval without task execution
+    - Consistent, deterministic retrieval pipelines
+    - Lower latency compared to supervisor with multiple agents
+    """
+    # Delegate to main handler with force_rag_only=True to force direct RAG mode
+    await agent_query_websocket(websocket, token, force_rag_only=True)
+
+
+@router.websocket("/ws/agent/query/supervisor")
+async def agent_query_supervisor_websocket(websocket: WebSocket, token: str = Query(None)):
+    """
+    WebSocket endpoint for AI agent query processing with SUPERVISOR MODE.
+
+    This endpoint processes user queries through the multi-agent supervisor architecture,
+    with intent detection and routing to RAG and/or Task agents.
+
+    **Authentication**: Requires JWT token
+
+    **Message Format** (from client):
+    ```json
+    {
+        "query": "User's question",
+        "conversation_id": "conversation_id_from_database",
+        "llm_provider_id": "provider_id_from_database",
+        "llm_model_name": "model-name",
+        "collection_name": "LongTermMemory"
+    }
+    ```
+
+    **Response Format** (to client - supervisor events):
+    ```json
+    {
+        "type": "supervisor_progress",
+        "stage": "supervisor_init|intent_detection|rag_agent_executing|task_agent_executing|response_generation|completed",
+        "message": "Status message",
+        "data": {},
+        "timestamp": "ISO timestamp"
+    }
+    ```
+    """
+    # Use the same handler but ensure enable_knowledge_assistant is True
+    await agent_query_websocket(websocket, token, force_supervisor=True)
+
+
+@router.websocket("/ws/agent/query")
+async def agent_query_websocket(websocket: WebSocket, token: str = Query(None), force_supervisor: bool = False, force_rag_only: bool = False):
+    """
+    WebSocket endpoint for AI agent query processing.
+
+    - If `enable_knowledge_assistant=True` in conversation settings: Routes to supervisor architecture (RAG + Task agents)
+    - If `enable_knowledge_assistant=False` in conversation settings: Uses legacy RAG-only LangGraph workflow
+
+    Recommended: Use `/ws/agent/query/supervisor` for supervisor mode (cleaner separation)
+
+    **Authentication**: Requires JWT token
+
+    **Message Format** (from client):
+    ```json
+    {
+        "query": "User's question",
+        "selected_strategy": "multi_query|hyde|decomposition|query_fusion",
         "llm_provider_id": "provider_id_from_database",
         "llm_model_name": "model-name",
         "collection_name": "LongTermMemory",
@@ -198,6 +280,7 @@ async def agent_query_websocket(websocket: WebSocket, token: str = Query(None)):
                 enable_reranking = True
                 enable_llm_generation = True
                 top_k = 5
+                enable_knowledge_assistant = True
                 conversation_description = None
 
                 # Load ALL settings from conversation (UI should NOT send these)
@@ -243,6 +326,11 @@ async def agent_query_websocket(websocket: WebSocket, token: str = Query(None)):
                                 conversation, "enable_reranking", True
                             )
 
+                            # Load relevance threshold for reranking
+                            relevance_threshold = getattr(
+                                conversation, "relevance_threshold", 0.5
+                            )
+
                             # Load LLM generation setting
                             enable_llm_generation = getattr(
                                 conversation, "enable_llm_generation", True
@@ -255,6 +343,22 @@ async def agent_query_websocket(websocket: WebSocket, token: str = Query(None)):
                                     f"⚠️ Conversation {conversation_id} has no top_k setting, using default 5"
                                 )
                                 top_k = 5
+
+                            # Load supervisor setting
+                            enable_knowledge_assistant = getattr(
+                                conversation, "enable_knowledge_assistant", True
+                            )
+
+                            # Override if force_rag_only is set (from /ws/agent/query/rag endpoint)
+                            if force_rag_only:
+                                enable_knowledge_assistant = False
+                                logger.info(
+                                    f"🔄 Force RAG-only mode: overriding enable_knowledge_assistant=False"
+                                )
+
+                            logger.debug(
+                                f"🤖 Supervisor setting: enable_knowledge_assistant={enable_knowledge_assistant}"
+                            )
 
                             # Load conversation description for query enhancement context
                             conversation_description = getattr(
@@ -453,8 +557,10 @@ async def agent_query_websocket(websocket: WebSocket, token: str = Query(None)):
                         retrieval_strategy=retrieval_strategy,
                         enhancement_config=enhancement_config,
                         enable_reranking=enable_reranking,
+                        relevance_threshold=relevance_threshold,
                         enable_llm_generation=enable_llm_generation,
                         top_k=top_k,
+                        enable_knowledge_assistant=enable_knowledge_assistant,
                         conversation_description=conversation_description,
                     )
 
@@ -470,6 +576,18 @@ async def agent_query_websocket(websocket: WebSocket, token: str = Query(None)):
                         chunk_type = chunk.get("type", "unknown")
                         current_node = chunk.get("current_node", "unknown")
 
+                        # Handle supervisor and workflow progress events
+                        if chunk_type in [
+                            "supervisor_started",
+                            "supervisor_progress",
+                            "workflow_progress",
+                        ]:
+                            logger.info(
+                                f"📡 Forwarding event: {chunk_type}, stage={chunk.get('stage')}"
+                            )
+                            await websocket.send_text(json.dumps(chunk))
+                            continue
+
                         # Track the state changes
                         if current_node != last_node and current_node != "unknown":
                             last_node = current_node
@@ -477,11 +595,6 @@ async def agent_query_websocket(websocket: WebSocket, token: str = Query(None)):
 
                             # Map node names to user-friendly stage names and messages
                             node_info = {
-                                "step_back_strategy_node": {
-                                    "stage": "query_enhancement",
-                                    "message": "🔍 Enhancing query (Step-Back strategy)...",
-                                    "description": "Generating broader conceptual questions",
-                                },
                                 "multi_query_strategy_node": {
                                     "stage": "query_enhancement",
                                     "message": "🔍 Enhancing query (Multi-Query strategy)...",
@@ -497,11 +610,6 @@ async def agent_query_websocket(websocket: WebSocket, token: str = Query(None)):
                                     "message": "🔍 Enhancing query (Decomposition strategy)...",
                                     "description": "Breaking down into sub-questions",
                                 },
-                                "rag_fusion_strategy_node": {
-                                    "stage": "query_enhancement",
-                                    "message": "🔍 Enhancing query (RAG Fusion strategy)...",
-                                    "description": "Creating multiple perspectives",
-                                },
                                 "augmented_strategy_node": {
                                     "stage": "query_enhancement",
                                     "message": "🔍 Enhancing query (Augmented strategy)...",
@@ -513,9 +621,9 @@ async def agent_query_websocket(websocket: WebSocket, token: str = Query(None)):
                                     "description": "Retrieving relevant documents",
                                 },
                                 "document_judger": {
-                                    "stage": "document_reranking",
+                                    "stage": "document_judging",
                                     "message": "⚖️ Evaluating document relevance...",
-                                    "description": "Reranking retrieved documents",
+                                    "description": "Judging and ranking retrieved documents",
                                 },
                                 "answer_generator": {
                                     "stage": "response_generation",
@@ -549,40 +657,48 @@ async def agent_query_websocket(websocket: WebSocket, token: str = Query(None)):
                             if selected_strategy:
                                 stage_data["strategy"] = selected_strategy
 
-                            # Include enhanced query if available
-                            if chunk.get("enhanced_query"):
-                                enhanced_query_dict = chunk["enhanced_query"]
-                                enhanced_query_text = extract_enhanced_query_text(
-                                    enhanced_query_dict, selected_strategy
-                                )
-                                if enhanced_query_text:
-                                    stage_data["enhanced_query"] = enhanced_query_text
+                            # ALWAYS extract enhanced_queries as ARRAY (never single string)
+                            enhanced_query_dict = chunk.get("enhanced_query")
+                            if enhanced_query_dict and isinstance(
+                                enhanced_query_dict, dict
+                            ):
+                                # Extract array based on strategy
+                                if enhanced_query_dict.get("augmented_queries"):
+                                    stage_data["enhanced_queries"] = (
+                                        enhanced_query_dict["augmented_queries"]
+                                    )
+                                elif enhanced_query_dict.get("multi_query_variants"):
+                                    stage_data["enhanced_queries"] = (
+                                        enhanced_query_dict["multi_query_variants"]
+                                    )
+                                elif enhanced_query_dict.get("fusion_perspectives"):
+                                    stage_data["enhanced_queries"] = (
+                                        enhanced_query_dict["fusion_perspectives"]
+                                    )
+                                elif enhanced_query_dict.get("sub_queries"):
+                                    stage_data["enhanced_queries"] = (
+                                        enhanced_query_dict["sub_queries"]
+                                    )
+                                elif enhanced_query_dict.get("hypothetical_answer"):
+                                    # Single answer → array
+                                    stage_data["enhanced_queries"] = [
+                                        enhanced_query_dict["hypothetical_answer"]
+                                    ]
 
-                                # Also extract the enhanced_queries array from the dict
-                                if isinstance(enhanced_query_dict, dict):
-                                    if enhanced_query_dict.get("augmented_queries"):
-                                        stage_data["enhanced_queries"] = (
-                                            enhanced_query_dict["augmented_queries"]
-                                        )
-                                    elif enhanced_query_dict.get(
-                                        "multi_query_variants"
-                                    ):
-                                        stage_data["enhanced_queries"] = (
-                                            enhanced_query_dict["multi_query_variants"]
-                                        )
-                                    elif enhanced_query_dict.get("fusion_perspectives"):
-                                        stage_data["enhanced_queries"] = (
-                                            enhanced_query_dict["fusion_perspectives"]
-                                        )
-                                    elif enhanced_query_dict.get("sub_queries"):
-                                        stage_data["enhanced_queries"] = (
-                                            enhanced_query_dict["sub_queries"]
-                                        )
+                                logger.info(
+                                    f"📤 Sending enhanced_queries for {info['stage']}: {stage_data.get('enhanced_queries')}"
+                                )
 
                             # Include document count if available
                             if chunk.get("retrieved_documents"):
                                 stage_data["document_count"] = len(
                                     chunk["retrieved_documents"]
+                                )
+
+                            # Log enhanced queries being sent
+                            if stage_data.get("enhanced_queries"):
+                                logger.info(
+                                    f"📤 Sending enhanced_queries during {info['stage']}: {stage_data['enhanced_queries']}"
                                 )
 
                             await websocket.send_text(
@@ -618,6 +734,43 @@ async def agent_query_websocket(websocket: WebSocket, token: str = Query(None)):
                                             "data": {
                                                 "document_count": len(documents),
                                                 "documents": documents[
+                                                    :5
+                                                ],  # First 5 for preview
+                                            },
+                                            "timestamp": time.time(),
+                                        }
+                                    )
+                                )
+
+                            # Handle judged documents from judge ranker
+                            if chunk.get("judged_documents"):
+                                judged_docs = chunk["judged_documents"]
+                                relevance_scores = chunk.get("relevance_scores", [])
+                                relevance_threshold = chunk.get(
+                                    "relevance_threshold", 0.5
+                                )
+
+                                # Count relevant documents (those above threshold)
+                                relevant_count = sum(
+                                    1
+                                    for score in relevance_scores
+                                    if score >= relevance_threshold
+                                )
+
+                                logger.info(
+                                    f"📊 Judge Ranker complete: {len(judged_docs)} evaluated, {relevant_count} relevant (threshold: {relevance_threshold})"
+                                )
+
+                                # Send judge ranker update
+                                await websocket.send_text(
+                                    json.dumps(
+                                        {
+                                            "stage": "judge_ranker_complete",
+                                            "message": f"Evaluated {len(judged_docs)} documents, {relevant_count} ranked as relevant",
+                                            "data": {
+                                                "document_count": len(judged_docs),
+                                                "relevant_count": relevant_count,
+                                                "documents": judged_docs[
                                                     :5
                                                 ],  # First 5 for preview
                                             },
@@ -665,32 +818,32 @@ async def agent_query_websocket(websocket: WebSocket, token: str = Query(None)):
 
                             # Extract query_info if available (contains enhanced_query and enhanced_queries)
                             query_info = chunk.get("query_info", {})
+                            logger.info(f"🔍 DEBUG: chunk keys: {list(chunk.keys())}")
+                            logger.info(
+                                f"🔍 DEBUG: query_info keys: {list(query_info.keys()) if query_info else 'None'}"
+                            )
+                            logger.info(f"🔍 DEBUG: query_info content: {query_info}")
+
+                            # Get enhanced_queries array from query_info - ALWAYS as array
                             enhanced_queries = (
                                 query_info.get("enhanced_queries")
                                 if query_info
                                 else None
                             )
 
-                            # Extract enhanced query text from dictionary (for backward compatibility)
-                            enhanced_query_dict = chunk.get("enhanced_query")
-                            if enhanced_query_dict and isinstance(
-                                enhanced_query_dict, dict
+                            # ALWAYS ensure we have enhanced_queries as an array
+                            if not enhanced_queries or not isinstance(
+                                enhanced_queries, list
                             ):
-                                enhanced_query = extract_enhanced_query_text(
-                                    enhanced_query_dict, selected_strategy
+                                # Fallback to original query (native strategy or missing data)
+                                enhanced_queries = [query]
+                                logger.info(
+                                    f"⚠️ No enhanced_queries found, using original query as array: {enhanced_queries}"
                                 )
                             else:
-                                enhanced_query = (
-                                    enhanced_query_dict  # Already a string or None
+                                logger.info(
+                                    f"✅ enhanced_queries from query_info: {enhanced_queries}"
                                 )
-
-                            # If we have enhanced_queries but not enhanced_query, use the first one
-                            if (
-                                not enhanced_query
-                                and enhanced_queries
-                                and len(enhanced_queries) > 0
-                            ):
-                                enhanced_query = enhanced_queries[0]
 
                             # Stream final response if not already streamed
                             if final_response and not chunk.get("already_streamed"):
@@ -778,28 +931,21 @@ async def agent_query_websocket(websocket: WebSocket, token: str = Query(None)):
                             if hasattr(doc, "chunk_id") and doc.chunk_id:
                                 chunk_ids.append(doc.chunk_id)
 
-                    # Send completion message
+                    # Send completion message with ONLY enhanced_queries (array)
                     completion_data = {
                         "query": query,
                         "response": final_response,
                         "document_count": len(documents),
                         "enhancement_strategy": selected_strategy,
-                        "enhanced_query": enhanced_query,
+                        "enhanced_queries": enhanced_queries,  # ALWAYS array, never single string
                         "source_urls": source_urls,
                         "correlation_ids": correlation_ids,
                         "chunk_ids": chunk_ids,
                     }
 
-                    # Add enhanced_queries array if available
-                    if enhanced_queries:
-                        completion_data["enhanced_queries"] = enhanced_queries
-                        logger.info(
-                            f"🔍 SENDING enhanced_queries to frontend: {enhanced_queries}"
-                        )
-                    else:
-                        logger.warning(
-                            f"⚠️ NO enhanced_queries available to send! enhanced_query={enhanced_query}"
-                        )
+                    logger.info(
+                        f"📤 SENDING enhanced_queries (array): {enhanced_queries}"
+                    )
 
                     logger.info(
                         f"📦 COMPLETION DATA KEYS: {list(completion_data.keys())}"

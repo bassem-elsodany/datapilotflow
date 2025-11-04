@@ -1,0 +1,234 @@
+"""
+Document judger node for DataPilotFlow LangGraph implementation.
+
+This node judges the relevance of retrieved documents to the user's question.
+Uses concurrent processing to judge multiple documents in parallel.
+"""
+
+import re
+from concurrent.futures import ThreadPoolExecutor
+
+import opik
+from loguru import logger
+
+from ..chains import get_judger_chain
+from ..state import RAGWorkflowState as WorkflowState
+
+
+def _judge_single_document(
+    doc: dict, query: str, chain, relevance_threshold: float, doc_index: int
+) -> tuple:
+    """
+    Judge a single document's relevance.
+
+    Args:
+        doc: Document to judge
+        query: User query
+        chain: Judger chain
+        relevance_threshold: Threshold for relevance label
+        doc_index: Document index for tracking
+
+    Returns:
+        Tuple of (judged_doc, score)
+    """
+    try:
+        # Invoke the chain
+        response = chain.invoke({"query": query, "document": doc["text"]})
+
+        # Extract content from response
+        response_text = response.content if hasattr(response, "content") else str(response)
+
+        # Parse judgment result - extract last number from response
+        try:
+            numbers = re.findall(r"\b[0-1]\.?[0-9]*\b", response_text)
+
+            if numbers:
+                # Take the last number found (should be the final score)
+                score = float(numbers[-1])
+                # Clamp to [0.0, 1.0]
+                score = max(0.0, min(1.0, score))
+            else:
+                # Fallback: try parsing the entire response
+                score = float(response_text.strip())
+                score = max(0.0, min(1.0, score))
+
+        except (ValueError, AttributeError):
+            logger.warning(
+                f"⚠️ Failed to parse score from Doc {doc_index + 1}: {response_text[:100]}"
+            )
+            score = 0.0  # Default to not relevant if parsing fails
+
+        # Add judgment to document
+        judged_doc = doc.copy()
+        judged_doc["relevance_score"] = round(score, 2)
+        judged_doc["relevance_label"] = 1 if score >= relevance_threshold else 0
+        judged_doc["original_rank"] = doc_index
+
+        logger.debug(f"   Doc {doc_index + 1}: Score = {score:.2f} (parallel)")
+
+        return judged_doc, score
+
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to judge document {doc_index + 1}: {e}")
+        # Default to not relevant
+        judged_doc = doc.copy()
+        judged_doc["relevance_score"] = 0.0
+        judged_doc["relevance_label"] = 0
+        judged_doc["original_rank"] = doc_index
+
+        return judged_doc, 0.0
+
+
+def document_judger(state: WorkflowState) -> WorkflowState:
+    """
+    Judge the relevance of retrieved documents using parallel processing.
+
+    Args:
+        state: Current workflow state containing retrieved documents
+
+    Returns:
+        Updated state with judged documents and relevance labels
+    """
+    logger.info("🚀 [NODE START] document_judger")
+    try:
+        # Add processing step
+        state["processing_steps"].append("document_judging")
+
+        # Get LLM client from config
+        config = state.get("config", {})
+        llm_client = config.get("llm_client")
+
+        if not llm_client:
+            raise ValueError("llm_client not found in config")
+
+        logger.info(f"🔍 Judging documents using LLM client (PARALLEL MODE)")
+
+        retrieved_docs = state.get("retrieved_documents", [])
+        if not retrieved_docs:
+            logger.warning("⚠️ No documents to judge")
+            state["judged_documents"] = []
+            state["relevance_labels"] = []
+            logger.info("✅ [NODE FINISH] document_judger (no documents)")
+            return state
+
+        # Get the judger chain
+        chain = get_judger_chain(llm_client=llm_client, config=config)
+
+        # Get reranking config
+        reranking_config = config.get("reranking_config", {})
+        relevance_threshold = reranking_config.get("relevance_threshold", 0.5)
+
+        # Parallel processing with ThreadPoolExecutor
+        # Set max_workers to min(len(docs), 5) to avoid overwhelming the API
+        max_workers = min(len(retrieved_docs), 5)
+        logger.info(f"⚙️  Using {max_workers} parallel workers for {len(retrieved_docs)} documents")
+
+        # Timeout per document (in seconds) - adjust based on your LLM response time
+        JUDGE_TIMEOUT_SECONDS = 60  # 60 seconds per document
+        logger.info(f"⏱️  Timeout per document: {JUDGE_TIMEOUT_SECONDS} seconds")
+
+        judged_docs_dict = {}
+        relevance_scores = [0.0] * len(retrieved_docs)
+        timed_out_count = 0
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            from concurrent.futures import as_completed, TimeoutError
+
+            # Submit all tasks
+            future_to_index = {
+                executor.submit(
+                    _judge_single_document,
+                    retrieved_docs[i],
+                    state["query"],
+                    chain,
+                    relevance_threshold,
+                    i,
+                ): i
+                for i in range(len(retrieved_docs))
+            }
+
+            # Collect results as they complete with timeout
+            completed_count = 0
+            for future in as_completed(future_to_index, timeout=JUDGE_TIMEOUT_SECONDS):
+                doc_index = future_to_index[future]
+                try:
+                    judged_doc, score = future.result(timeout=JUDGE_TIMEOUT_SECONDS)
+                    judged_docs_dict[doc_index] = judged_doc
+                    relevance_scores[doc_index] = score
+                    completed_count += 1
+                    logger.info(
+                        f"✅ Judge progress: {completed_count}/{len(retrieved_docs)} docs scored"
+                    )
+                except TimeoutError:
+                    timed_out_count += 1
+                    logger.warning(
+                        f"⏰ TIMEOUT: Document {doc_index + 1} judging exceeded {JUDGE_TIMEOUT_SECONDS}s - using default score (0.0)"
+                    )
+                    # Create default document with timeout score
+                    judged_doc = retrieved_docs[doc_index].copy()
+                    judged_doc["relevance_score"] = 0.0
+                    judged_doc["relevance_label"] = 0
+                    judged_doc["original_rank"] = doc_index
+                    judged_doc["timed_out"] = True
+                    judged_docs_dict[doc_index] = judged_doc
+                    relevance_scores[doc_index] = 0.0
+                except Exception as e:
+                    logger.error(f"❌ Error judging document {doc_index + 1}: {e}")
+                    # Create fallback document on error
+                    judged_doc = retrieved_docs[doc_index].copy()
+                    judged_doc["relevance_score"] = 0.0
+                    judged_doc["relevance_label"] = 0
+                    judged_doc["original_rank"] = doc_index
+                    judged_docs_dict[doc_index] = judged_doc
+                    relevance_scores[doc_index] = 0.0
+
+            # Log timeout summary
+            if timed_out_count > 0:
+                logger.warning(
+                    f"⚠️  {timed_out_count}/{len(retrieved_docs)} documents timed out during judging"
+                )
+
+        # Reconstruct judged_docs in original order, then sort
+        judged_docs = [
+            judged_docs_dict[i] for i in range(len(retrieved_docs)) if i in judged_docs_dict
+        ]
+
+        # Sort documents by relevance score (highest first)
+        judged_docs_sorted = sorted(
+            judged_docs, key=lambda x: x.get("relevance_score", 0.0), reverse=True
+        )
+
+        # Update state
+        state["judged_documents"] = judged_docs_sorted
+        state["relevance_scores"] = relevance_scores
+        state["document_scores"] = [
+            doc["relevance_score"] for doc in judged_docs_sorted
+        ]
+
+        # Stats
+        relevant_count = sum(
+            1 for score in relevance_scores if score >= relevance_threshold
+        )
+        avg_score = (
+            sum(relevance_scores) / len(relevance_scores) if relevance_scores else 0.0
+        )
+
+        logger.info(
+            f"✅ Judged {len(judged_docs)} documents: "
+            f"{relevant_count} relevant (threshold: {relevance_threshold}), "
+            f"avg score: {avg_score:.2f}"
+        )
+        logger.info("✅ [NODE FINISH] document_judger")
+
+    except Exception as e:
+        error_msg = f"Document judging failed: {str(e)}"
+        state["errors"].append(error_msg)
+        logger.error(f"❌ {error_msg}")
+        logger.error("❌ [NODE FINISH] document_judger (with error)")
+
+        # Set empty results
+        state["judged_documents"] = []
+        state["relevance_labels"] = []
+        state["relevance_scores"] = []  # FIX: Set to empty list instead of leaving as None
+
+    return state

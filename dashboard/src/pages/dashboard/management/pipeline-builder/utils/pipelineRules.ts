@@ -30,53 +30,118 @@ export interface PipelineValidationResult {
 
 // Define valid connections between node types
 export const PIPELINE_CONNECTION_RULES: PipelineRule[] = [
-  // DATA SOURCES can connect to FILTERS (optional)
+  // ============================================================================
+  // DATA SOURCES → FILTERS (optional filtering)
+  // ============================================================================
   { fromNodeType: 'website', toNodeType: 'domainFilter', allowed: true },
   { fromNodeType: 'website', toNodeType: 'contentFilter', allowed: true },
+  { fromNodeType: 'website', toNodeType: 'llmContentFilter', allowed: true },
+  { fromNodeType: 'multiple_pages', toNodeType: 'domainFilter', allowed: true },
   { fromNodeType: 'multiple_pages', toNodeType: 'contentFilter', allowed: true },
+  { fromNodeType: 'multiple_pages', toNodeType: 'llmContentFilter', allowed: true },
+  { fromNodeType: 'single_page', toNodeType: 'domainFilter', allowed: true },
   { fromNodeType: 'single_page', toNodeType: 'contentFilter', allowed: true },
+  { fromNodeType: 'single_page', toNodeType: 'llmContentFilter', allowed: true },
+  { fromNodeType: 'local_files', toNodeType: 'domainFilter', allowed: true },
+  { fromNodeType: 'local_files', toNodeType: 'contentFilter', allowed: true },
+  { fromNodeType: 'local_files', toNodeType: 'llmContentFilter', allowed: true },
 
-  // DATA SOURCES can connect to OUTPUT FORMATS (optional)
+  // ============================================================================
+  // DATA SOURCES → OUTPUT FORMATS (optional format conversion)
+  // ============================================================================
+  { fromNodeType: 'website', toNodeType: 'outputFormat', allowed: true },
   { fromNodeType: 'website', toNodeType: 'htmlExtractor', allowed: true },
   { fromNodeType: 'website', toNodeType: 'markdownGenerator', allowed: true },
   { fromNodeType: 'website', toNodeType: 'llmMarkdownGenerator', allowed: true },
+  { fromNodeType: 'multiple_pages', toNodeType: 'outputFormat', allowed: true },
   { fromNodeType: 'multiple_pages', toNodeType: 'htmlExtractor', allowed: true },
   { fromNodeType: 'multiple_pages', toNodeType: 'markdownGenerator', allowed: true },
   { fromNodeType: 'multiple_pages', toNodeType: 'llmMarkdownGenerator', allowed: true },
+  { fromNodeType: 'single_page', toNodeType: 'outputFormat', allowed: true },
   { fromNodeType: 'single_page', toNodeType: 'htmlExtractor', allowed: true },
   { fromNodeType: 'single_page', toNodeType: 'markdownGenerator', allowed: true },
   { fromNodeType: 'single_page', toNodeType: 'llmMarkdownGenerator', allowed: true },
+  { fromNodeType: 'local_files', toNodeType: 'outputFormat', allowed: true },
+  { fromNodeType: 'local_files', toNodeType: 'htmlExtractor', allowed: true },
+  { fromNodeType: 'local_files', toNodeType: 'markdownGenerator', allowed: true },
+  { fromNodeType: 'local_files', toNodeType: 'llmMarkdownGenerator', allowed: true },
 
-  // DATA SOURCES can connect directly to PROCESSING TOOLS (filters/formats are optional)
+  // ============================================================================
+  // DATA SOURCES → PROCESSING TOOLS (direct to processing, bypass filters/formats)
+  // ============================================================================
   { fromNodeType: 'website', toNodeType: 'textSplitter', allowed: true },
   { fromNodeType: 'multiple_pages', toNodeType: 'textSplitter', allowed: true },
   { fromNodeType: 'single_page', toNodeType: 'textSplitter', allowed: true },
+  { fromNodeType: 'local_files', toNodeType: 'textSplitter', allowed: true },
 
-  // FILTERS can connect to each other (for chaining)
+  // ============================================================================
+  // FILTERS ↔ FILTERS (chaining filters for complex processing)
+  // ============================================================================
+  // domainFilter can connect to other filters
   { fromNodeType: 'domainFilter', toNodeType: 'contentFilter', allowed: true },
+  { fromNodeType: 'domainFilter', toNodeType: 'llmContentFilter', allowed: true },
+  // contentFilter can connect to other filters
   { fromNodeType: 'contentFilter', toNodeType: 'domainFilter', allowed: true },
+  { fromNodeType: 'contentFilter', toNodeType: 'llmContentFilter', allowed: true },
+  // llmContentFilter can connect to other filters
+  { fromNodeType: 'llmContentFilter', toNodeType: 'domainFilter', allowed: true },
+  { fromNodeType: 'llmContentFilter', toNodeType: 'contentFilter', allowed: true },
 
-  // FILTERS can connect to OUTPUT FORMATS
+  // ============================================================================
+  // FILTERS → OUTPUT FORMATS (after filtering, format the output)
+  // ============================================================================
+  { fromNodeType: 'domainFilter', toNodeType: 'outputFormat', allowed: true },
   { fromNodeType: 'domainFilter', toNodeType: 'htmlExtractor', allowed: true },
   { fromNodeType: 'domainFilter', toNodeType: 'markdownGenerator', allowed: true },
   { fromNodeType: 'domainFilter', toNodeType: 'llmMarkdownGenerator', allowed: true },
+  { fromNodeType: 'contentFilter', toNodeType: 'outputFormat', allowed: true },
   { fromNodeType: 'contentFilter', toNodeType: 'htmlExtractor', allowed: true },
   { fromNodeType: 'contentFilter', toNodeType: 'markdownGenerator', allowed: true },
   { fromNodeType: 'contentFilter', toNodeType: 'llmMarkdownGenerator', allowed: true },
+  { fromNodeType: 'llmContentFilter', toNodeType: 'outputFormat', allowed: true },
+  { fromNodeType: 'llmContentFilter', toNodeType: 'htmlExtractor', allowed: true },
+  { fromNodeType: 'llmContentFilter', toNodeType: 'markdownGenerator', allowed: true },
+  { fromNodeType: 'llmContentFilter', toNodeType: 'llmMarkdownGenerator', allowed: true },
 
-  // FILTERS can connect to PROCESSING TOOLS
+  // ============================================================================
+  // FILTERS → PROCESSING TOOLS (bypass output format, go directly to processing)
+  // ============================================================================
   { fromNodeType: 'domainFilter', toNodeType: 'textSplitter', allowed: true },
   { fromNodeType: 'contentFilter', toNodeType: 'textSplitter', allowed: true },
+  { fromNodeType: 'llmContentFilter', toNodeType: 'textSplitter', allowed: true },
 
-  // OUTPUT FORMATS can connect to PROCESSING TOOLS
+  // ============================================================================
+  // OUTPUT FORMATS ↔ OUTPUT FORMATS (switch between different output formats)
+  // ============================================================================
+  { fromNodeType: 'outputFormat', toNodeType: 'htmlExtractor', allowed: true },
+  { fromNodeType: 'outputFormat', toNodeType: 'markdownGenerator', allowed: true },
+  { fromNodeType: 'outputFormat', toNodeType: 'llmMarkdownGenerator', allowed: true },
+  { fromNodeType: 'htmlExtractor', toNodeType: 'outputFormat', allowed: true },
+  { fromNodeType: 'htmlExtractor', toNodeType: 'markdownGenerator', allowed: true },
+  { fromNodeType: 'htmlExtractor', toNodeType: 'llmMarkdownGenerator', allowed: true },
+  { fromNodeType: 'markdownGenerator', toNodeType: 'outputFormat', allowed: true },
+  { fromNodeType: 'markdownGenerator', toNodeType: 'htmlExtractor', allowed: true },
+  { fromNodeType: 'markdownGenerator', toNodeType: 'llmMarkdownGenerator', allowed: true },
+  { fromNodeType: 'llmMarkdownGenerator', toNodeType: 'outputFormat', allowed: true },
+  { fromNodeType: 'llmMarkdownGenerator', toNodeType: 'htmlExtractor', allowed: true },
+  { fromNodeType: 'llmMarkdownGenerator', toNodeType: 'markdownGenerator', allowed: true },
+
+  // ============================================================================
+  // OUTPUT FORMATS → PROCESSING TOOLS (after formatting, split the content)
+  // ============================================================================
+  { fromNodeType: 'outputFormat', toNodeType: 'textSplitter', allowed: true },
   { fromNodeType: 'htmlExtractor', toNodeType: 'textSplitter', allowed: true },
   { fromNodeType: 'markdownGenerator', toNodeType: 'textSplitter', allowed: true },
   { fromNodeType: 'llmMarkdownGenerator', toNodeType: 'textSplitter', allowed: true },
 
-  // PROCESSING TOOLS can connect to AI TOOLS
+  // ============================================================================
+  // PROCESSING TOOLS → AI TOOLS (split content, then embed)
+  // ============================================================================
   { fromNodeType: 'textSplitter', toNodeType: 'embeddingGenerator', allowed: true },
 
-  // AI TOOLS can connect to STORAGE & OUTPUT
+  // ============================================================================
+  // AI TOOLS → STORAGE & OUTPUT (embed vectors, then store/export)
+  // ============================================================================
   { fromNodeType: 'embeddingGenerator', toNodeType: 'vectorDatabase', allowed: true },
   { fromNodeType: 'embeddingGenerator', toNodeType: 'fileExport', allowed: true },
 ];
@@ -96,11 +161,15 @@ export const NODE_REQUIREMENTS: Record<string, NodeRequirements> = {
     maxInstances: 1,
     requiredAfter: ['textSplitter']
   },
+  local_files: {
+    maxInstances: 1,
+    requiredAfter: ['textSplitter']
+  },
 
   // PROCESSING TOOLS
   textSplitter: {
     minInstances: 1,
-    requiredBefore: ['website', 'multiple_pages', 'single_page'],
+    requiredBefore: ['website', 'multiple_pages', 'single_page', 'local_files'],
     requiredAfter: ['embeddingGenerator']
   },
 
@@ -123,9 +192,9 @@ export const NODE_REQUIREMENTS: Record<string, NodeRequirements> = {
 
 // Pipeline flow categories
 export const PIPELINE_CATEGORIES = {
-  DATA_SOURCES: ['website', 'multiple_pages', 'single_page'],
-  FILTERS_TRANSFORMS: ['domainFilter', 'contentFilter'],
-  OUTPUT_FORMATS: ['htmlExtractor', 'markdownGenerator', 'llmMarkdownGenerator'],
+  DATA_SOURCES: ['website', 'multiple_pages', 'single_page', 'local_files'],
+  FILTERS_TRANSFORMS: ['domainFilter', 'contentFilter', 'llmContentFilter'],
+  OUTPUT_FORMATS: ['outputFormat', 'htmlExtractor', 'markdownGenerator', 'llmMarkdownGenerator'],
   PROCESSING_TOOLS: ['textSplitter'],
   AI_TOOLS: ['embeddingGenerator'],
   STORAGE_OUTPUT: ['vectorDatabase', 'fileExport']
@@ -160,10 +229,10 @@ export function validatePipeline(nodes: any[], edges: any[]): PipelineValidation
   const suggestions: string[] = [];
 
   // Check for required data source
-  const dataSources = nodes.filter(node => 
+  const dataSources = nodes.filter(node =>
     PIPELINE_CATEGORIES.DATA_SOURCES.includes(node.data.type)
   );
-  
+
   if (dataSources.length === 0) {
     errors.push('Pipeline must have at least one data source');
   }
@@ -186,11 +255,18 @@ export function validatePipeline(nodes: any[], edges: any[]): PipelineValidation
     errors.push('Pipeline must have a Vector Database for storing embeddings');
   }
 
+  // Check if all nodes are configured (have required fields filled)
+  const unconfiguredNodes = nodes.filter(node => !node.data?.configured);
+  if (unconfiguredNodes.length > 0) {
+    const unconfiguredTypes = unconfiguredNodes.map(n => `${n.data?.type || 'Unknown'}`).join(', ');
+    errors.push(`All nodes must be configured. Please configure: ${unconfiguredTypes}`);
+  }
+
   // Validate connections
   edges.forEach(edge => {
     const sourceNode = nodes.find(node => node.id === edge.source);
     const targetNode = nodes.find(node => node.id === edge.target);
-    
+
     if (sourceNode && targetNode) {
       const isValidConnection = validateConnection(sourceNode.data.type, targetNode.data.type);
       if (!isValidConnection) {
@@ -204,7 +280,7 @@ export function validatePipeline(nodes: any[], edges: any[]): PipelineValidation
     ...edges.map(edge => edge.source),
     ...edges.map(edge => edge.target)
   ]);
-  
+
   const orphanedNodes = nodes.filter(node => !connectedNodeIds.has(node.id));
   if (orphanedNodes.length > 0) {
     warnings.push(`Found ${orphanedNodes.length} disconnected node(s)`);
@@ -214,11 +290,11 @@ export function validatePipeline(nodes: any[], edges: any[]): PipelineValidation
   if (dataSources.length > 0 && textSplitters.length === 0) {
     suggestions.push('Add a Document Splitter after your data source');
   }
-  
+
   if (textSplitters.length > 0 && embeddingGenerators.length === 0) {
     suggestions.push('Add an Embedding Generator after the Document Splitter');
   }
-  
+
   if (embeddingGenerators.length > 0 && vectorDatabases.length === 0) {
     suggestions.push('Add a Vector Database to store the embeddings');
   }

@@ -87,14 +87,14 @@ const toolCategories: ToolCategory[] = [
     tools: [
       { type: 'domainFilter', label: 'Domain Filter', icon: <IconFilter size={16} /> },
       { type: 'contentFilter', label: 'Content Filter', icon: <IconTag size={16} /> },
-      { type: 'urlPatternFilter', label: 'URL Pattern Filter', icon: <IconLink size={16} /> },
-      { type: 'llmContentFilter', label: 'LLM Content Filter', icon: <IconSparkles size={16} /> },
+      { type: 'llmContentFilter', label: 'LLM Content Filter', icon: <IconBrain size={16} /> },
     ],
   },
   {
     name: 'OUTPUT FORMATS',
     icon: <IconTransform size={16} />,
     tools: [
+      { type: 'outputFormat', label: 'Output Format Selector', icon: <IconFileText size={16} /> },
       { type: 'htmlExtractor', label: 'HTML Extractor', icon: <IconCode size={16} /> },
       { type: 'markdownGenerator', label: 'Markdown Generator', icon: <IconFileText size={16} /> },
       { type: 'llmMarkdownGenerator', label: 'LLM Markdown Generator', icon: <IconSparkles size={16} /> },

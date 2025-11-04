@@ -22,11 +22,9 @@ class QueryEnhancementStrategy(str, Enum):
 
     NONE = "none"
     AUGMENTED = "augmented"
-    STEP_BACK = "step_back"
     MULTI_QUERY = "multi_query"
     HYDE = "hyde"
     DECOMPOSITION = "decomposition"
-    RAG_FUSION = "rag_fusion"
     QUERY_FUSION = "query_fusion"
 
 
@@ -90,6 +88,7 @@ class ConversationSession:
     collection_name: str = "LongTermMemory"
     # Reranking configuration
     enable_reranking: bool = False  # Enable document judging/reranking by default
+    relevance_threshold: float = 0.5  # Relevance score threshold for filtering documents
     reranker_provider_id: Optional[str] = (
         None  # Dedicated reranker provider (Cohere/Voyage)
     )
@@ -100,6 +99,10 @@ class ConversationSession:
     )
     # Vector search configuration
     top_k: int = 5  # Number of documents to retrieve from vector database
+    # Multi-agent orchestration configuration
+    enable_knowledge_assistant: bool = (
+        True  # Enable Knowledge Assistant for RAG→Task workflow (True = multi-agent orchestration, False = RAG only)
+    )
     # Session statistics
     total_queries: int = 0
     total_documents_retrieved: int = 0
@@ -167,10 +170,12 @@ class ConversationHistoryService:
         enhancement_strategy: Optional[str] = None,
         collection_name: str = "LongTermMemory",
         enable_reranking: bool = False,
+        relevance_threshold: float = 0.5,
         reranker_provider_id: Optional[str] = None,
         reranker_model_name: Optional[str] = None,
         enable_llm_generation: bool = False,
         top_k: int = 5,
+        enable_knowledge_assistant: bool = True,
         tags: Optional[List[str]] = None,
         description: Optional[str] = None,
     ) -> str:
@@ -262,10 +267,12 @@ class ConversationHistoryService:
             "enhancement_config": enhancement_config,
             "collection_name": collection_name,
             "enable_reranking": enable_reranking,
+            "relevance_threshold": relevance_threshold,
             "reranker_provider_id": reranker_provider_id,
             "reranker_model_name": reranker_model_name,
             "enable_llm_generation": enable_llm_generation,
             "top_k": top_k,
+            "enable_knowledge_assistant": enable_knowledge_assistant,
             "total_queries": 0,
             "total_documents_retrieved": 0,
             "average_response_time_ms": None,
@@ -350,6 +357,7 @@ class ConversationHistoryService:
                     average_response_time_ms=doc.get("average_response_time_ms"),
                     tags=doc.get("tags", []),
                     top_k=doc.get("top_k", 5),
+                    enable_knowledge_assistant=doc.get("enable_knowledge_assistant", True),
                 )
                 return session
             return None
@@ -694,11 +702,13 @@ class ConversationHistoryService:
         enhancement_strategy: Optional[str] = None,
         collection_name: Optional[str] = None,
         enable_reranking: Optional[bool] = None,
+        relevance_threshold: Optional[float] = None,
         reranker_provider_id: Optional[str] = None,
         reranker_model_name: Optional[str] = None,
         enable_llm_generation: Optional[bool] = None,
         top_k: Optional[int] = None,
         tags: Optional[List[str]] = None,
+        enable_knowledge_assistant: Optional[bool] = None,
     ) -> bool:
         """Update conversation configuration."""
         from bson import ObjectId
@@ -748,6 +758,10 @@ class ConversationHistoryService:
             # Update reranking settings
             if enable_reranking is not None:
                 update_data["$set"]["enable_reranking"] = enable_reranking
+
+            # Update relevance threshold
+            if relevance_threshold is not None:
+                update_data["$set"]["relevance_threshold"] = relevance_threshold
 
             # Update reranker provider
             if reranker_provider_id is not None:
@@ -800,6 +814,10 @@ class ConversationHistoryService:
             # Update tags
             if tags is not None:
                 update_data["$set"]["tags"] = tags
+
+            # Update enable_knowledge_assistant (Enable Knowledge Assistant)
+            if enable_knowledge_assistant is not None:
+                update_data["$set"]["enable_knowledge_assistant"] = enable_knowledge_assistant
 
             result = self.collection.update_one(
                 {"_id": ObjectId(conversation_id), "user_id": user_id}, update_data

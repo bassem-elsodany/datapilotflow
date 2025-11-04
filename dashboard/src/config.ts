@@ -70,7 +70,11 @@ export const apiEndpoints = {
   // Agent (LangGraph Workflow)
   agent: {
     websocket: {
-      // Real-time AI agent with LangGraph workflow
+      // RAG-only mode - direct retrieval without intent detection or task routing
+      rag: '/ws/agent/query/rag',
+      // Multi-agent supervisor mode with intent routing (RAG + optional Task execution)
+      supervisor: '/ws/agent/query/supervisor',
+      // Legacy mixed-mode endpoint (deprecated - use rag or supervisor instead)
       query: '/ws/agent/query',
     },
   },

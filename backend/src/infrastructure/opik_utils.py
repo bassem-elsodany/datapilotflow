@@ -23,11 +23,11 @@ def configure() -> None:
 
         try:
             opik.configure(
-                api_key=settings.COMET_API_KEY,
-                workspace=default_workspace,
+                # api_key=settings.COMET_API_KEY,
+                # workspace=default_workspace,
                 use_local=True,
-                url=settings.OPIK_URL_OVERRIDE,
-                force=True,
+                # url=settings.OPIK_URL_OVERRIDE,
+                # force=True,
             )
             logger.info(
                 f"Opik configured successfully using workspace '{default_workspace}'"

@@ -5,17 +5,24 @@ import { PageHeader } from '@/components/page-header';
 import { apiUtils } from '@/config';
 import { paths } from '@/routes/paths';
 import {
+  Accordion,
   Alert,
   Badge,
   Box,
   Button,
   Card,
+  Checkbox,
+  Divider,
   Grid,
   Group,
+  List,
+  Modal,
   NumberInput,
+  Paper,
   Select,
   Stack,
   Switch,
+  Table,
   Text,
   Textarea,
   TextInput,
@@ -27,18 +34,23 @@ import {
   IconAlertCircle,
   IconArrowLeft,
   IconArrowRight,
+  IconArrowsLeftRight,
   IconBrain,
   IconCheck,
   IconDatabase,
   IconFilter,
+  IconHelp,
   IconInfoCircle,
   IconMessageCircle,
   IconPlus,
+  IconRobot,
   IconSettings,
-  IconWand
+  IconWand,
+  IconX
 } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ConversationCanvasBuilder } from './components/ConversationCanvasBuilder';
 
 // Pipeline Visualization Component
 interface PipelineStep {
@@ -125,15 +137,15 @@ function PipelineVisualization({
       isVisible: true
     });
 
-    // Step 4: Document Reranking (if enabled)
+    // Step 4: Judge Ranker (if enabled)
     if (enableReranking) {
-      const rerankerProvider = getProviderName(selectedRerankerId);
-      const rerankerModel = getModelDisplay(selectedRerankerId, selectedRerankerModel);
+      const rankerProvider = getProviderName(selectedRerankerId);
+      const rankerModel = getModelDisplay(selectedRerankerId, selectedRerankerModel);
 
       steps.push({
-        id: 'document_reranking',
-        title: 'Document Reranking',
-        description: `${rerankerProvider} (${rerankerModel})`,
+        id: 'judge_ranker',
+        title: 'Judge Ranker',
+        description: `${rankerProvider} (${rankerModel})`,
         icon: IconFilter,
         color: 'orange',
         isActive: true,
@@ -270,36 +282,38 @@ const ENHANCEMENT_STRATEGIES = [
     pros: ['Fastest performance', 'Most straightforward', 'No added complexity', 'Lowest cost'],
     cons: ['May miss relevant documents', 'Limited coverage', 'Depends on exact wording'],
     color: 'blue',
+    example: {
+      original: 'How to configure SSL certificates in Apache?',
+      output: 'Searches directly with: "How to configure SSL certificates in Apache?"'
+    }
   },
   {
     value: 'augmented',
     label: 'Augmented (Best Coverage)',
-    description: 'Combines original query with LLM-enhanced variants',
-    details: 'Preserves your original query while also generating 2-3 enhanced variants. This ensures you never lose important context while benefiting from query improvements. Uses Reciprocal Rank Fusion (RRF) to merge results from all query variants.',
-    useCases: ['Important queries', 'When context matters', 'Balanced approach', 'Maximum coverage'],
-    pros: ['Context preservation', 'Improved coverage', 'RRF merges all variants', 'Combines benefits'],
-    cons: ['Slightly slower than Native', 'Uses more tokens'],
+    description: 'Systematic transformations for maximum coverage',
+    details: 'Applies 4 specific transformation techniques to your query: (1) Synonym Expansion, (2) Query Expansion (add implicit concepts), (3) Query Contraction (focus on core), (4) Technical Reformulation. Each variant explores a different semantic space (broad/narrow/technical/simple). Preserves original query. Uses RRF to merge all variants.',
+    useCases: ['Maximum coverage needed', 'Comprehensive search', 'Documents use varied styles', 'Critical queries'],
+    pros: ['Systematic coverage', 'Fills retrieval gaps', 'Explores all angles', 'Context preserved'],
+    cons: ['Slightly slower than Native', 'Uses more tokens', 'May be overkill for simple queries'],
     color: 'green',
-  },
-  {
-    value: 'step_back',
-    label: 'Step-Back',
-    description: 'Generate broader conceptual questions',
-    details: 'Creates higher-level, conceptual questions from your specific query. Helps find foundational knowledge and principles.',
-    useCases: ['Technical deep-dives', 'Learning new concepts', 'Understanding fundamentals'],
-    pros: ['Better conceptual understanding', 'Finds foundational docs', 'Good for research'],
-    cons: ['May be too broad', 'Could miss specific details'],
-    color: 'violet',
+    example: {
+      original: 'SSL configuration in production',
+      output: 'Transforms systematically:\n1. Original: "SSL configuration in production"\n2. Synonym: "secure socket layer setup in production environment"\n3. Expanded: "SSL certificate configuration HTTPS production deployment"\n4. Contracted: "SSL production config"\n5. Technical: "TLS security settings live environment"'
+    }
   },
   {
     value: 'multi_query',
     label: 'Multi-Query',
-    description: 'Generate alternative phrasings',
-    details: 'Creates multiple alternative ways to phrase your question. Helps overcome vocabulary mismatches between your query and documents. Uses RRF to merge results from all query variants.',
-    useCases: ['Complex queries', 'When exact terms are unknown', 'Broad coverage needed'],
-    pros: ['Better coverage', 'Handles synonyms', 'RRF merges variants', 'Vocabulary flexibility'],
-    cons: ['More processing time', 'May introduce noise'],
+    description: 'Rephrase the same question in different ways',
+    details: 'Generates 3-5 alternative phrasings of the SAME question using different vocabulary and wording. Targets different document types (tutorials, guides, API docs) and expertise levels (beginner vs expert). All variants express the same intent. Uses RRF to merge results from all phrasings.',
+    useCases: ['Documents use varied terminology', 'Unknown exact terms', 'Vocabulary mismatches', 'Different doc styles'],
+    pros: ['Linguistic flexibility', 'Handles synonyms', 'Matches varied writing styles', 'Simple approach'],
+    cons: ['Same semantic space', 'May miss edge cases', 'Not as systematic as Augmented'],
     color: 'teal',
+    example: {
+      original: 'Salesforce platform event listener config',
+      output: 'Rephrases in different ways:\n1. "How to configure Salesforce platform event listeners?"\n2. "Salesforce platform event subscription setup"\n3. "Setting up Salesforce platform event handlers"\n4. "Salesforce platform event listener configuration guide"\n5. "Steps to configure Salesforce event listeners"'
+    }
   },
   {
     value: 'hyde',
@@ -310,6 +324,10 @@ const ENHANCEMENT_STRATEGIES = [
     pros: ['Excellent semantic matching', 'Finds answer-like docs', 'Good for how-to questions'],
     cons: ['Requires good LLM', 'May hallucinate', 'Slower performance'],
     color: 'grape',
+    example: {
+      original: 'How to configure SSL certificates in Apache?',
+      output: 'Generates hypothetical answer:\n"To configure SSL in Apache, first install mod_ssl, then create a VirtualHost with SSLEngine on, SSLCertificateFile pointing to your cert, and SSLCertificateKeyFile for the private key. Restart Apache to apply changes."\n\nThen searches for documents similar to this answer.'
+    }
   },
   {
     value: 'decomposition',
@@ -320,16 +338,10 @@ const ENHANCEMENT_STRATEGIES = [
     pros: ['Handles complexity', 'RRF merges sub-queries', 'Comprehensive results', 'Systematic approach'],
     cons: ['Slowest option', 'Most expensive', 'May over-complicate simple queries'],
     color: 'orange',
-  },
-  {
-    value: 'rag_fusion',
-    label: 'RAG Fusion',
-    description: 'Generate multiple query perspectives',
-    details: 'Creates multiple diverse perspectives of your query and fuses the results using Reciprocal Rank Fusion (RRF). Excellent for comprehensive retrieval with diverse viewpoints.',
-    useCases: ['Research queries', 'When you need diverse perspectives', 'Critical decisions'],
-    pros: ['Most comprehensive', 'RRF ranks by consensus', 'Diverse perspectives', 'Robust results'],
-    cons: ['Expensive', 'Slower', 'May be overkill for simple queries'],
-    color: 'pink',
+    example: {
+      original: 'How to configure SSL certificates in Apache?',
+      output: 'Breaks down into sub-questions:\n1. "What are the prerequisites for SSL in Apache?"\n2. "How to generate or obtain SSL certificates?"\n3. "What are the Apache SSL configuration directives?"\n4. "How to test and verify SSL configuration?"'
+    }
   },
 ];
 
@@ -345,12 +357,8 @@ const getQueryExample = (strategyValue: string): string => {
   switch (strategyValue) {
     case 'hyde':
       return '"What are the steps to configure SSL certificates? What are the security considerations? What are the common SSL configuration issues?"';
-    case 'step_back':
-      return '"What is SSL? How do I configure SSL certificates? What are SSL security best practices?"';
     case 'decomposition':
       return '"How to configure SSL certificates", "SSL certificate installation steps", "SSL security configuration"';
-    case 'rag_fusion':
-      return '"How to configure SSL certificates", "SSL certificate setup guide", "SSL configuration best practices"';
     case 'multi_query':
       return '"How to configure SSL certificates", "SSL certificate installation", "SSL setup tutorial"';
     case 'augmented':
@@ -362,6 +370,21 @@ const getQueryExample = (strategyValue: string): string => {
 
 export default function ConversationCreate() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const mode = searchParams.get('mode') || 'wizard'; // 'wizard' or 'pipeline'
+
+  // If mode is pipeline, render pipeline canvas instead
+  if (mode === 'pipeline') {
+    return <ConversationCanvasBuilder />;
+  }
+
+  // Otherwise, render the wizard
+  return <ConversationWizard />;
+}
+
+// Wizard Component (existing logic)
+function ConversationWizard() {
+  const navigate = useNavigate();
 
   // Form state
   const [conversationName, setConversationName] = useState('');
@@ -371,15 +394,29 @@ export default function ConversationCreate() {
   const [selectedStrategy, setSelectedStrategy] = useState<string>('native');
   const [collectionName, setCollectionName] = useState('LongTermMemory');
   const [enableReranking, setEnableReranking] = useState(false);
+  const [relevanceThreshold, setRelevanceThreshold] = useState(0.5);
   const [selectedRerankerId, setSelectedRerankerId] = useState<string | null>(null);
   const [selectedRerankerModel, setSelectedRerankerModel] = useState<string | null>(null);
   const [enableLLMGeneration, setEnableLLMGeneration] = useState(true);
   const [topK, setTopK] = useState(5);
+  const [enableKnowledgeAssistant, setEnableKnowledgeAssistant] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
+
+  // Strategies info modal state
+  const [strategiesInfoModalOpen, setStrategiesInfoModalOpen] = useState(false);
+  const [comparisonMode, setComparisonMode] = useState(false);
+  const [selectedForComparison, setSelectedForComparison] = useState<string[]>([]);
 
   // Fetch data
   const { data: providers, isLoading: providersLoading } = useGetActiveModelProviders();
   const { data: collections, isLoading: collectionsLoading } = useGetCollections();
+
+  // Helper function to get provider name
+  const getProviderName = (providerId: string | null) => {
+    if (!providerId || !providers) return 'Not Selected';
+    const provider = providers.find(p => p.id === providerId);
+    return provider ? provider.name : 'Not Selected';
+  };
 
   // Update reranker defaults when LLM provider or model changes
   useEffect(() => {
@@ -467,6 +504,7 @@ export default function ConversationCreate() {
 
       // Reranking configuration
       payload.enable_reranking = enableReranking;
+      payload.relevance_threshold = relevanceThreshold;
       if (enableReranking && selectedRerankerId) {
         payload.reranker_provider_id = selectedRerankerId;
       }
@@ -479,6 +517,9 @@ export default function ConversationCreate() {
 
       // Vector search configuration
       payload.top_k = topK;
+
+      // Multi-agent orchestration configuration
+      payload.enable_knowledge_assistant = enableKnowledgeAssistant;
 
       const response = await fetch(buildApiUrl('/conversations'), {
         method: 'POST',
@@ -526,9 +567,9 @@ export default function ConversationCreate() {
 
 
   return (
-    <Page title="Create Conversation">
+    <Page title="Create New Conversation Agent">
       <PageHeader
-        title="Create New Conversation"
+        title="Create New Conversation Agent"
         breadcrumbs={breadcrumbs}
       />
 
@@ -614,10 +655,10 @@ export default function ConversationCreate() {
                       placeholder="Number of documents to retrieve"
                       value={topK}
                       onChange={(value) => setTopK(typeof value === 'number' ? value : 5)}
-                      min={3}
-                      max={10}
+                      min={5}
+                      max={30}
                       required
-                      description="Number of documents to retrieve from vector database (3-10)"
+                      description="Number of documents to retrieve from vector database (5-30)"
                     />
                   </Grid.Col>
                 </Grid>
@@ -627,9 +668,23 @@ export default function ConversationCreate() {
             {/* Query Enhancement Strategy */}
             <Card shadow="sm" padding="md" radius="md" withBorder>
               <Stack gap="sm">
-                <Group gap="xs">
-                  <IconSettings size={20} color="var(--mantine-color-blue-6)" />
-                  <Title order={4}>Query Enhancement Strategy</Title>
+                <Group gap="xs" justify="space-between" align="flex-start">
+                  <Group gap="xs">
+                    <IconSettings size={20} color="var(--mantine-color-blue-6)" />
+                    <Title order={4}>Query Enhancement Strategy</Title>
+                  </Group>
+                  <Button
+                    size="xs"
+                    variant="gradient"
+                    gradient={{ from: 'violet', to: 'purple', deg: 135 }}
+                    leftSection={<IconHelp size={16} />}
+                    onClick={() => setStrategiesInfoModalOpen(true)}
+                    style={{
+                      boxShadow: '0 2px 8px rgba(109, 40, 217, 0.3)',
+                    }}
+                  >
+                    Learn & Compare
+                  </Button>
                 </Group>
 
                 <Select
@@ -645,17 +700,29 @@ export default function ConversationCreate() {
                 />
 
                 {/* RRF Info Alert for multi-variant strategies */}
-                {selectedStrategy !== 'native' && selectedStrategy !== 'step_back' && selectedStrategy !== 'hyde' && (
+                {selectedStrategy !== 'native' && selectedStrategy !== 'hyde' && (
                   <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
-                    <Text size="xs">
-                      <strong>Reciprocal Rank Fusion (RRF) Auto-Enabled:</strong> This strategy generates multiple query variants.
-                      The system will automatically search with all variants in parallel and merge results using RRF to rank documents that appear across multiple searches higher.
-                    </Text>
+                    <Stack gap={6}>
+                      <Text size="xs">
+                        <strong>Reciprocal Rank Fusion (RRF) Auto-Enabled:</strong> This strategy generates multiple query variants.
+                      </Text>
+                      <Text size="xs" c="dimmed">
+                        The system will:
+                      </Text>
+                      <List size="xs" withPadding>
+                        <List.Item>Search your knowledge base with ALL variants in parallel</List.Item>
+                        <List.Item>Merge results using RRF algorithm (documents appearing in multiple searches rank higher)</List.Item>
+                        <List.Item>Return your configured Top K documents (the best matches after merging)</List.Item>
+                      </List>
+                      <Text size="xs" c="dimmed">
+                        Example: With 5 query variants and Top K=10, the system retrieves ~15 documents per variant, merges them via RRF, and returns your final 10 best documents.
+                      </Text>
+                    </Stack>
                   </Alert>
                 )}
 
-                {/* Single query info for Native, Step-Back, HyDE */}
-                {(selectedStrategy === 'step_back' || selectedStrategy === 'hyde') && (
+                {/* Single query info for HyDE */}
+                {(selectedStrategy === 'hyde') && (
                   <Alert icon={<IconInfoCircle size={16} />} color="gray" variant="light">
                     <Text size="xs">
                       <strong>Single Enhanced Query:</strong> This strategy generates one enhanced query variant.
@@ -666,17 +733,17 @@ export default function ConversationCreate() {
               </Stack>
             </Card>
 
-            {/* Document Reranking Configuration */}
+            {/* Judge Ranker Configuration */}
             <Card shadow="sm" padding="md" radius="md" withBorder>
               <Stack gap="sm">
                 <Group gap="xs">
                   <IconFilter size={20} color="var(--mantine-color-blue-6)" />
-                  <Title order={4}>Document Reranking</Title>
+                  <Title order={4}>Judge Ranker</Title>
                 </Group>
 
                 <Switch
-                  label="Enable Document Reranking"
-                  description="When enabled, retrieved documents are judged and reranked before answer generation. When disabled, documents go directly to answer generation."
+                  label="Enable Judge Ranker"
+                  description="When enabled, retrieved documents are evaluated and ranked before answer generation. When disabled, documents go directly to answer generation."
                   checked={enableReranking}
                   onChange={(event) => {
                     setEnableReranking(event.currentTarget.checked);
@@ -696,20 +763,20 @@ export default function ConversationCreate() {
                     <Grid gutter="md">
                       <Grid.Col span={6}>
                         <Select
-                          label="Reranker Provider (Optional)"
+                          label="Judge Ranker Provider (Optional)"
                           placeholder={providersLoading ? 'Loading providers...' : 'Select a provider'}
                           data={[
                             {
-                              group: 'Specialized Rerankers',
+                              group: 'Specialized Judges',
                               items: providers
                                 ?.filter((p) => p.reranker && p.reranker.models && p.reranker.models.length > 0)
                                 .map((p) => ({
                                   value: p.id,
-                                  label: `${p.name} (Dedicated Reranker)`,
+                                  label: `${p.name} (Dedicated Judge)`,
                                 })) || []
                             },
                             {
-                              group: 'LLMs as Rerankers',
+                              group: 'LLMs as Judges',
                               items: providers
                                 ?.filter((p) => p.generative && p.generative.models && p.generative.models.length > 0 && (!p.reranker || !p.reranker.models || p.reranker.models.length === 0))
                                 .map((p) => ({
@@ -726,13 +793,13 @@ export default function ConversationCreate() {
                           searchable
                           clearable
                           disabled={providersLoading || !providers}
-                          description="Choose a specialized reranker or any LLM"
+                          description="Choose a specialized judge or any LLM"
                         />
                       </Grid.Col>
 
                       <Grid.Col span={6}>
                         <Select
-                          label="Reranker Model"
+                          label="Judge Model"
                           placeholder="Select a model"
                           data={
                             selectedRerankerId && providers
@@ -765,10 +832,35 @@ export default function ConversationCreate() {
                           searchable
                           clearable
                           disabled={!selectedRerankerId}
-                          description="Choose the model for reranking"
+                          description="Choose the model for judging"
                         />
                       </Grid.Col>
                     </Grid>
+
+                    <Stack gap="sm" mt="md">
+                      <NumberInput
+                        label="Relevance Threshold"
+                        description="Minimum relevance score (0.0-1.0) for filtering documents. Documents scoring below this threshold are excluded from the answer."
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        value={relevanceThreshold}
+                        onChange={(value) => setRelevanceThreshold(typeof value === 'number' ? value : 0.5)}
+                        placeholder="0.5"
+                      />
+                      <Alert
+                        icon={<IconInfoCircle size={16} />}
+                        title="Relevance Threshold Guide"
+                        color="blue"
+                        variant="light"
+                      >
+                        <List size="sm" spacing="xs">
+                          <List.Item><strong>0.0 - 0.25:</strong> Very permissive - keeps almost all documents</List.Item>
+                          <List.Item><strong>0.5 (Default):</strong> Moderate - balances quality and coverage</List.Item>
+                          <List.Item><strong>0.75 - 1.0:</strong> Very strict - keeps only highly relevant documents</List.Item>
+                        </List>
+                      </Alert>
+                    </Stack>
                   </>
                 )}
               </Stack>
@@ -844,6 +936,45 @@ export default function ConversationCreate() {
                       <strong>Benefits:</strong> Faster responses, no token costs, 100% factual accuracy, full traceability.
                       <br />
                       <strong>Best for:</strong> Research, legal review, debugging, technical documentation.
+                    </Text>
+                  </Alert>
+                )}
+              </Stack>
+            </Card>
+
+            {/* Knowledge Assistant Card */}
+            <Card withBorder shadow="sm" radius="md" p="md">
+              <Stack gap="md">
+                <Group gap="xs">
+                  <ThemeIcon size="md" variant="light" color="grape">
+                    <IconRobot size={18} />
+                  </ThemeIcon>
+                  <Title order={4}>Knowledge Assistant</Title>
+                </Group>
+
+                <Switch
+                  label="Enable Knowledge Assistant"
+                  description="Let AI perform tasks (like writing, coding, analysis) using information from your knowledge base as context."
+                  checked={enableKnowledgeAssistant}
+                  onChange={(event) => setEnableKnowledgeAssistant(event.currentTarget.checked)}
+                />
+
+                {enableKnowledgeAssistant ? (
+                  <Alert icon={<IconInfoCircle size={16} />} color="grape" variant="light">
+                    <Text size="sm">
+                      <strong>Knowledge Assistant Mode:</strong> AI searches your knowledge base AND performs tasks using what it finds.
+                      <br />
+                      <strong>How it works:</strong> Finds relevant info from your docs → Uses it to complete your task
+                      <br />
+                      <strong>Best for:</strong> "Write a summary based on...", "Generate code using our docs", "Create a plan from..."
+                    </Text>
+                  </Alert>
+                ) : (
+                  <Alert icon={<IconInfoCircle size={16} />} color="yellow" variant="light">
+                    <Text size="sm">
+                      <strong>Search-Only Mode:</strong> AI only searches and displays information from your knowledge base.
+                      <br />
+                      <strong>Best for:</strong> "What is...?", "Find documents about...", "Show me information on..."
                     </Text>
                   </Alert>
                 )}
@@ -944,41 +1075,434 @@ export default function ConversationCreate() {
               </Card>
             )}
 
-            {/* Reranking Information Card */}
-            <Card withBorder p="md" radius="md" bg="orange.0" style={{ border: '1px solid var(--mantine-color-orange-2)' }}>
-              <Stack gap="sm">
-                <Group gap="xs">
-                  <IconFilter size={16} color="var(--mantine-color-orange-6)" />
-                  <Text fw={600} size="sm" c="orange.7">Document Reranking</Text>
-                </Group>
-
-                <Text size="xs" c="dimmed" mb="xs">
-                  When enabled, retrieved documents are judged and reranked before answer generation for better accuracy.
-                </Text>
-
-                <Box p="xs" bg="white" style={{ borderRadius: '6px', border: '1px solid var(--mantine-color-orange-2)' }}>
-                  <Text size="xs" c="dimmed" fw={500} mb="xs">Reranking Options:</Text>
-                  <Stack gap={2}>
-                    <Text size="xs" c="dimmed">
-                      • <strong>Dedicated Reranker:</strong> Specialized models (Cohere, Voyage AI)
-                    </Text>
-                    <Text size="xs" c="dimmed">
-                      • <strong>LLM as Reranker:</strong> Any generative LLM for judging
-                    </Text>
-                    <Text size="xs" c="dimmed">
-                      • <strong>No Selection:</strong> Uses conversation's main LLM
-                    </Text>
-                  </Stack>
-                </Box>
-
-                <Text size="xs" c="orange.6" fw={500}>
-                  Note: If disabled, documents go directly from retrieval to answer generation.
-                </Text>
-              </Stack>
-            </Card>
           </Stack>
         </Grid.Col>
       </Grid>
+
+      {/* Strategies Info Modal */}
+      <Modal
+        opened={strategiesInfoModalOpen}
+        onClose={() => {
+          setStrategiesInfoModalOpen(false);
+          setComparisonMode(false);
+          setSelectedForComparison([]);
+        }}
+        title={
+          <Group gap="xs">
+            <ThemeIcon
+              size="md"
+              variant="filled"
+              style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              }}
+            >
+              <IconHelp size={18} />
+            </ThemeIcon>
+            <Text fw={600}>Query Enhancement Strategies</Text>
+          </Group>
+        }
+        size="xl"
+      >
+        <Stack gap="lg">
+          <Group justify="space-between" align="center">
+            <Text size="sm" c="dimmed">
+              {comparisonMode
+                ? 'Select two strategies to compare side-by-side'
+                : 'Choose the right strategy based on your query complexity and desired retrieval quality'
+              }
+            </Text>
+            <Button
+              variant={comparisonMode ? 'filled' : 'light'}
+              color="violet"
+              size="xs"
+              leftSection={<IconArrowsLeftRight size={16} />}
+              onClick={() => {
+                setComparisonMode(!comparisonMode);
+                setSelectedForComparison([]);
+              }}
+            >
+              {comparisonMode ? 'Back to Browse' : 'Compare Strategies'}
+            </Button>
+          </Group>
+
+          {!comparisonMode ? (
+            // Browse Mode - Accordion
+            <>
+              <Accordion
+                variant="separated"
+                defaultValue={selectedStrategy}
+                styles={{
+                  item: {
+                    border: '1px solid var(--mantine-color-gray-3)',
+                    '&[data-active]': {
+                      borderLeftWidth: '4px',
+                    },
+                  },
+                }}
+              >
+                {ENHANCEMENT_STRATEGIES.map((strategy) => (
+                  <Accordion.Item
+                    key={strategy.value}
+                    value={strategy.value}
+                    style={{
+                      borderLeft: `4px solid var(--mantine-color-${strategy.color}-6)`,
+                    }}
+                  >
+                    <Accordion.Control>
+                      <Group justify="space-between" align="center" wrap="nowrap">
+                        <Group gap="xs">
+                          <ThemeIcon size="sm" color={strategy.color} variant="light">
+                            <IconSettings size={14} />
+                          </ThemeIcon>
+                          <div>
+                            <Text fw={600} size="sm">
+                              {strategy.label}
+                            </Text>
+                            <Text size="xs" c="dimmed">
+                              {strategy.description}
+                            </Text>
+                          </div>
+                        </Group>
+                        {selectedStrategy === strategy.value && (
+                          <Badge color="green" variant="light" leftSection={<IconCheck size={12} />}>
+                            Active
+                          </Badge>
+                        )}
+                      </Group>
+                    </Accordion.Control>
+                    <Accordion.Panel>
+                      <Stack gap="md" pt="xs">
+                        <Text size="sm">{strategy.details}</Text>
+
+                        <Grid gutter="md">
+                          <Grid.Col span={6}>
+                            <div>
+                              <Text size="xs" fw={600} c="green.7" mb={4}>
+                                ✓ Pros
+                              </Text>
+                              <List size="xs" spacing={2}>
+                                {strategy.pros.map((pro, idx) => (
+                                  <List.Item key={idx}>{pro}</List.Item>
+                                ))}
+                              </List>
+                            </div>
+                          </Grid.Col>
+
+                          <Grid.Col span={6}>
+                            <div>
+                              <Text size="xs" fw={600} c="red.7" mb={4}>
+                                ✗ Cons
+                              </Text>
+                              <List size="xs" spacing={2}>
+                                {strategy.cons.map((con, idx) => (
+                                  <List.Item key={idx}>{con}</List.Item>
+                                ))}
+                              </List>
+                            </div>
+                          </Grid.Col>
+                        </Grid>
+
+                        <div>
+                          <Text size="xs" fw={600} c="blue.7" mb={4}>
+                            Best for:
+                          </Text>
+                          <Group gap={6}>
+                            {strategy.useCases.map((useCase, idx) => (
+                              <Badge key={idx} size="xs" variant="dot" color={strategy.color}>
+                                {useCase}
+                              </Badge>
+                            ))}
+                          </Group>
+                        </div>
+
+                        {strategy.example && (
+                          <Paper p="sm" withBorder bg="gray.0">
+                            <Stack gap="xs">
+                              <Text size="xs" fw={600} c="violet.7">
+                                📝 Example
+                              </Text>
+                              <div>
+                                <Text size="xs" c="dimmed" mb={2}>Original Query:</Text>
+                                <Text size="xs" fw={500}>{strategy.example.original}</Text>
+                              </div>
+                              <div>
+                                <Text size="xs" c="dimmed" mb={2}>Strategy Output:</Text>
+                                <Text size="xs" style={{ whiteSpace: 'pre-line' }}>{strategy.example.output}</Text>
+                              </div>
+                            </Stack>
+                          </Paper>
+                        )}
+                      </Stack>
+                    </Accordion.Panel>
+                  </Accordion.Item>
+                ))}
+              </Accordion>
+
+              <Divider />
+
+              <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+                <Text size="sm">
+                  <strong>Tip:</strong> Start with <strong>Native RAG</strong> for simple queries or <strong>Augmented</strong> for best coverage.
+                  Use advanced strategies like <strong>RAG Fusion</strong> or <strong>Decomposition</strong> when you need comprehensive, high-quality results and don't mind the extra processing time.
+                </Text>
+              </Alert>
+            </>
+          ) : (
+            // Comparison Mode
+            <>
+              {selectedForComparison.length < 2 ? (
+                // Selection Phase
+                <Stack gap="sm">
+                  <Alert icon={<IconInfoCircle size={16} />} color="violet" variant="light">
+                    <Text size="sm">
+                      Select <strong>{2 - selectedForComparison.length}</strong> {selectedForComparison.length === 1 ? 'more strategy' : 'strategies'} to compare
+                      {selectedForComparison.length > 0 && (
+                        <Badge ml="xs" color="violet" variant="light">
+                          {selectedForComparison.length} selected
+                        </Badge>
+                      )}
+                    </Text>
+                  </Alert>
+
+                  <Stack gap="xs">
+                    {ENHANCEMENT_STRATEGIES.map((strategy) => (
+                      <Card
+                        key={strategy.value}
+                        padding="md"
+                        radius="md"
+                        withBorder
+                        style={{
+                          borderLeft: `4px solid var(--mantine-color-${strategy.color}-6)`,
+                          cursor: 'pointer',
+                          backgroundColor: selectedForComparison.includes(strategy.value)
+                            ? 'var(--mantine-color-violet-0)'
+                            : undefined,
+                        }}
+                        onClick={() => {
+                          if (selectedForComparison.includes(strategy.value)) {
+                            setSelectedForComparison(selectedForComparison.filter(s => s !== strategy.value));
+                          } else if (selectedForComparison.length < 2) {
+                            setSelectedForComparison([...selectedForComparison, strategy.value]);
+                          }
+                        }}
+                      >
+                        <Group justify="space-between" align="center">
+                          <Group gap="sm">
+                            <Checkbox
+                              checked={selectedForComparison.includes(strategy.value)}
+                              onChange={() => { }}
+                              color="violet"
+                            />
+                            <ThemeIcon size="sm" color={strategy.color} variant="light">
+                              <IconSettings size={14} />
+                            </ThemeIcon>
+                            <div>
+                              <Text fw={600} size="sm">
+                                {strategy.label}
+                              </Text>
+                              <Text size="xs" c="dimmed">
+                                {strategy.description}
+                              </Text>
+                            </div>
+                          </Group>
+                          {selectedStrategy === strategy.value && (
+                            <Badge color="green" variant="light" size="sm">
+                              Active
+                            </Badge>
+                          )}
+                        </Group>
+                      </Card>
+                    ))}
+                  </Stack>
+                </Stack>
+              ) : (
+                // Comparison View - Table Format
+                <Stack gap="md">
+                  <Group justify="space-between" align="center">
+                    <Badge color="violet" variant="light" size="lg">
+                      Comparing {selectedForComparison.length} Strategies
+                    </Badge>
+                    <Button
+                      variant="subtle"
+                      color="gray"
+                      size="xs"
+                      leftSection={<IconX size={14} />}
+                      onClick={() => setSelectedForComparison([])}
+                    >
+                      Clear Selection
+                    </Button>
+                  </Group>
+
+                  <Paper withBorder radius="md" style={{ overflow: 'hidden' }}>
+                    <Table striped highlightOnHover withTableBorder withColumnBorders>
+                      <Table.Thead>
+                        <Table.Tr>
+                          <Table.Th style={{ width: '180px', backgroundColor: 'var(--mantine-color-gray-1)' }}>
+                            <Text fw={700} size="sm">Attribute</Text>
+                          </Table.Th>
+                          {selectedForComparison.map((strategyValue) => {
+                            const strategy = ENHANCEMENT_STRATEGIES.find(s => s.value === strategyValue);
+                            if (!strategy) return null;
+
+                            return (
+                              <Table.Th
+                                key={strategy.value}
+                                style={{
+                                  backgroundColor: `var(--mantine-color-${strategy.color}-0)`,
+                                  borderTop: `4px solid var(--mantine-color-${strategy.color}-6)`
+                                }}
+                              >
+                                <Stack gap="xs">
+                                  <Group gap="xs" wrap="nowrap">
+                                    <ThemeIcon size="sm" color={strategy.color} variant="light">
+                                      <IconSettings size={14} />
+                                    </ThemeIcon>
+                                    <div>
+                                      <Text fw={700} size="sm">{strategy.label}</Text>
+                                      <Text size="xs" c="dimmed">{strategy.description}</Text>
+                                    </div>
+                                  </Group>
+                                  {selectedStrategy === strategy.value && (
+                                    <Badge color="green" variant="light" size="xs" leftSection={<IconCheck size={12} />}>
+                                      Currently Active
+                                    </Badge>
+                                  )}
+                                </Stack>
+                              </Table.Th>
+                            );
+                          })}
+                        </Table.Tr>
+                      </Table.Thead>
+                      <Table.Tbody>
+                        {/* Overview Row */}
+                        <Table.Tr>
+                          <Table.Td style={{ backgroundColor: 'var(--mantine-color-gray-0)', verticalAlign: 'top' }}>
+                            <Text fw={600} size="sm">Overview</Text>
+                          </Table.Td>
+                          {selectedForComparison.map((strategyValue) => {
+                            const strategy = ENHANCEMENT_STRATEGIES.find(s => s.value === strategyValue);
+                            if (!strategy) return null;
+
+                            return (
+                              <Table.Td key={strategy.value} style={{ verticalAlign: 'top' }}>
+                                <Text size="sm">{strategy.details}</Text>
+                              </Table.Td>
+                            );
+                          })}
+                        </Table.Tr>
+
+                        {/* Pros Row */}
+                        <Table.Tr>
+                          <Table.Td style={{ backgroundColor: 'var(--mantine-color-gray-0)', verticalAlign: 'top' }}>
+                            <Text fw={600} size="sm" c="green.7">✓ Pros</Text>
+                          </Table.Td>
+                          {selectedForComparison.map((strategyValue) => {
+                            const strategy = ENHANCEMENT_STRATEGIES.find(s => s.value === strategyValue);
+                            if (!strategy) return null;
+
+                            return (
+                              <Table.Td key={strategy.value} style={{ verticalAlign: 'top' }}>
+                                <List size="sm" spacing={4}>
+                                  {strategy.pros.map((pro, idx) => (
+                                    <List.Item key={idx}>{pro}</List.Item>
+                                  ))}
+                                </List>
+                              </Table.Td>
+                            );
+                          })}
+                        </Table.Tr>
+
+                        {/* Cons Row */}
+                        <Table.Tr>
+                          <Table.Td style={{ backgroundColor: 'var(--mantine-color-gray-0)', verticalAlign: 'top' }}>
+                            <Text fw={600} size="sm" c="red.7">✗ Cons</Text>
+                          </Table.Td>
+                          {selectedForComparison.map((strategyValue) => {
+                            const strategy = ENHANCEMENT_STRATEGIES.find(s => s.value === strategyValue);
+                            if (!strategy) return null;
+
+                            return (
+                              <Table.Td key={strategy.value} style={{ verticalAlign: 'top' }}>
+                                <List size="sm" spacing={4}>
+                                  {strategy.cons.map((con, idx) => (
+                                    <List.Item key={idx}>{con}</List.Item>
+                                  ))}
+                                </List>
+                              </Table.Td>
+                            );
+                          })}
+                        </Table.Tr>
+
+                        {/* Use Cases Row */}
+                        <Table.Tr>
+                          <Table.Td style={{ backgroundColor: 'var(--mantine-color-gray-0)', verticalAlign: 'top' }}>
+                            <Text fw={600} size="sm" c="blue.7">Best For</Text>
+                          </Table.Td>
+                          {selectedForComparison.map((strategyValue) => {
+                            const strategy = ENHANCEMENT_STRATEGIES.find(s => s.value === strategyValue);
+                            if (!strategy) return null;
+
+                            return (
+                              <Table.Td key={strategy.value} style={{ verticalAlign: 'top' }}>
+                                <Stack gap={6}>
+                                  {strategy.useCases.map((useCase, idx) => (
+                                    <Badge key={idx} size="sm" variant="light" color={strategy.color}>
+                                      {useCase}
+                                    </Badge>
+                                  ))}
+                                </Stack>
+                              </Table.Td>
+                            );
+                          })}
+                        </Table.Tr>
+
+                        {/* Example Row */}
+                        <Table.Tr>
+                          <Table.Td style={{ backgroundColor: 'var(--mantine-color-gray-0)', verticalAlign: 'top' }}>
+                            <Text fw={600} size="sm" c="violet.7">📝 Example</Text>
+                          </Table.Td>
+                          {selectedForComparison.map((strategyValue) => {
+                            const strategy = ENHANCEMENT_STRATEGIES.find(s => s.value === strategyValue);
+                            if (!strategy || !strategy.example) return null;
+
+                            return (
+                              <Table.Td key={strategy.value} style={{ verticalAlign: 'top' }}>
+                                <Stack gap="sm">
+                                  <div>
+                                    <Text size="xs" c="dimmed" fw={500} mb={4}>Original Query:</Text>
+                                    <Text size="xs">{strategy.example.original}</Text>
+                                  </div>
+                                  <Divider />
+                                  <div>
+                                    <Text size="xs" c="dimmed" fw={500} mb={4}>Strategy Output:</Text>
+                                    <Text size="xs" style={{ whiteSpace: 'pre-line' }}>{strategy.example.output}</Text>
+                                  </div>
+                                </Stack>
+                              </Table.Td>
+                            );
+                          })}
+                        </Table.Tr>
+                      </Table.Tbody>
+                    </Table>
+                  </Paper>
+                </Stack>
+              )}
+            </>
+          )}
+
+          <Divider />
+
+          <Group justify="flex-end">
+            <Button onClick={() => {
+              setStrategiesInfoModalOpen(false);
+              setComparisonMode(false);
+              setSelectedForComparison([]);
+            }}>
+              Close
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Page>
   );
 }
