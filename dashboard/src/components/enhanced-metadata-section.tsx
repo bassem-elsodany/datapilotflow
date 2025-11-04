@@ -1,7 +1,6 @@
 import { ActionIcon, Anchor, Badge, Box, Card, Collapse, Divider, Group, Stack, Text, ThemeIcon } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconBrain, IconChevronDown, IconDatabase, IconExternalLink, IconHash, IconInfoCircle, IconScale, IconSparkles } from '@tabler/icons-react';
-import { useState } from 'react';
 
 interface Source {
   url: string;
@@ -32,11 +31,9 @@ export function EnhancedMetadataSection({
     const labels: { [key: string]: string } = {
       native: 'Native RAG',
       augmented: 'Augmented',
-      step_back: 'Step-Back',
       multi_query: 'Multi-Query',
       hyde: 'HyDE',
       decomposition: 'Decomposition',
-      rag_fusion: 'RAG Fusion',
     };
     return labels[strategy] || strategy;
   };
@@ -132,12 +129,11 @@ export function EnhancedMetadataSection({
                     QUERY VARIANTS ({enhancedQueries.length})
                   </Text>
                   {enhancementStrategy &&
-                   (enhancementStrategy === 'augmented' ||
-                    enhancementStrategy === 'multi_query' ||
-                    enhancementStrategy === 'decomposition' ||
-                    enhancementStrategy === 'rag_fusion') && (
-                    <Badge size="xs" color="blue" variant="light">RRF Fusion</Badge>
-                  )}
+                    (enhancementStrategy === 'augmented' ||
+                      enhancementStrategy === 'multi_query' ||
+                      enhancementStrategy === 'decomposition') && (
+                      <Badge size="xs" color="blue" variant="light">RRF Fusion</Badge>
+                    )}
                 </Group>
                 <Text
                   size="xs"

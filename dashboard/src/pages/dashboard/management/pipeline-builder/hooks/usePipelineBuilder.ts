@@ -72,8 +72,9 @@ export function usePipelineBuilder() {
         sourceHandle: 'source',
         target: targetNode.id,
         targetHandle: 'target',
-        type: 'arrow',
+        type: 'default',
         animated: true,
+        markerEnd: { type: 'arrowclosed' },
         style: { stroke: '#228be6', strokeWidth: 2 }
       });
       console.log(`Auto-connected: ${nodeType} -> ${targetNode.data.type}`);
@@ -91,8 +92,9 @@ export function usePipelineBuilder() {
         sourceHandle: 'source',
         target: newNode.id,
         targetHandle: 'target',
-        type: 'arrow',
+        type: 'default',
         animated: true,
+        markerEnd: { type: 'arrowclosed' },
         style: { stroke: '#228be6', strokeWidth: 2 }
       });
       console.log(`Auto-connected: ${sourceNode.data.type} -> ${nodeType}`);

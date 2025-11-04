@@ -221,13 +221,27 @@ export const useGetPipelineStatus = (pipelineId: string, options?: { enabled?: b
   })();
 
 // Get job as pipeline (for job-to-pipeline visualization conversion)
-export const useGetJobAsPipeline = (jobId: string, options?: { enabled?: boolean }) =>
-  createGetQueryHook({
-    endpoint: `/knowledge/jobs/${jobId}/pipeline`,
+export const useGetJobAsPipeline = (jobId: string | undefined, options?: { enabled?: boolean }) => {
+  // Only create the endpoint if we have a valid jobId
+  // Otherwise, React Query might still try to fetch even with enabled: false
+  const shouldFetch = options?.enabled !== false && !!jobId;
+  const safeJobId = jobId || 'invalid-placeholder-do-not-fetch';
+
+  const hook = createGetQueryHook({
+    endpoint: `/knowledge/jobs/${safeJobId}/pipeline`,
     responseSchema: PipelineSchema,
     rQueryParams: {
-      queryKey: ['job-pipeline', { jobId }],
-      enabled: options?.enabled !== false && !!jobId,
-      staleTime: 1000 * 60 * 5, // 5 minutes
+      queryKey: ['job-pipeline', { jobId: safeJobId }],
+      retry: false, // Never retry failed placeholder requests
+      refetchOnMount: false, // Never refetch on mount
+      refetchOnWindowFocus: false, // Never refetch on window focus
+      refetchOnReconnect: false, // Never refetch on reconnect
+      staleTime: Infinity, // Never consider data stale
     },
-  })();
+  });
+
+  // IMPORTANT: Pass the enabled flag through to the hook call
+  return hook({
+    enabled: shouldFetch, // This is what actually controls the query execution
+  });
+};

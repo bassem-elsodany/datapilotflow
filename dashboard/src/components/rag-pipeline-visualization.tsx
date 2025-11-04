@@ -1,4 +1,4 @@
-import { Badge, Box, Card, Collapse, Group, Progress, Stack, Text, ThemeIcon } from '@mantine/core';
+import { Badge, Card, Collapse, Group, Progress, Stack, Text, ThemeIcon } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import {
   IconArrowRight,
@@ -8,7 +8,9 @@ import {
   IconDatabase,
   IconFilter,
   IconMessageCircle,
-  IconWand
+  IconWand,
+  IconRouter,
+  IconGitFork
 } from '@tabler/icons-react';
 import { useMemo } from 'react';
 
@@ -47,6 +49,8 @@ interface RAGPipelineVisualizationProps {
     documentCount?: number;
     relevantCount?: number;
     distanceThreshold?: number;
+    detectedIntent?: string;  // NEW: Intent from supervisor
+    useTaskAgent?: boolean;    // NEW: Whether task agent was used
   };
 
   // Configuration
@@ -86,11 +90,9 @@ export function RAGPipelineVisualization({
       const labels: { [key: string]: string } = {
         native: 'Native RAG',
         augmented: 'Augmented',
-        step_back: 'Step-Back',
         multi_query: 'Multi-Query',
         hyde: 'HyDE',
         decomposition: 'Decomposition',
-        rag_fusion: 'RAG Fusion',
       };
       return labels[strategy] || strategy;
     };
@@ -98,11 +100,9 @@ export function RAGPipelineVisualization({
     const getStrategySubstage = (strategy?: string): string => {
       const substages: { [key: string]: string } = {
         augmented: 'Combining original with enhanced variants',
-        step_back: 'Generating broader conceptual question',
         multi_query: 'Generating multiple query variants',
         hyde: 'Generating hypothetical answer',
         decomposition: 'Decomposing into sub-questions',
-        rag_fusion: 'Creating fusion perspectives',
       };
       return substages[strategy || ''] || 'Enhancing query';
     };
@@ -119,7 +119,37 @@ export function RAGPipelineVisualization({
       isVisible: true,
     });
 
-    // Node 2: Query Enhancement (if strategy is not native)
+    // Node 2: Supervisor Intent Detection (NEW)
+    const supervisorStatus = getNodeStatus('supervisor_intent');
+    const intentLabel = metadata.detectedIntent === 'rag_only'
+      ? 'Retrieval Only'
+      : metadata.detectedIntent === 'rag_then_task'
+      ? 'Retrieval + Task'
+      : 'Detecting Intent...';
+
+    nodes.push({
+      id: 'supervisor_intent',
+      title: 'Intent Detection',
+      description: intentLabel,
+      icon: IconRouter,
+      color: 'blue',
+      status: supervisorStatus,
+      isVisible: true,
+      substeps: [
+        {
+          name: 'Analyzing user intent',
+          status: 'completed',
+        },
+        {
+          name: `Route: ${intentLabel}`,
+          status: completedStages.includes('supervisor_intent') || currentStage !== 'supervisor_intent'
+            ? 'completed'
+            : 'active',
+        },
+      ],
+    });
+
+    // Node 3: Query Enhancement (if strategy is not native)
     console.log('🔍 Checking Query Enhancement:', {
       hasStrategy: !!metadata.strategy,
       strategy: metadata.strategy,
@@ -243,11 +273,9 @@ export function RAGPipelineVisualization({
     const labels: { [key: string]: string } = {
       native: 'Native RAG',
       augmented: 'Augmented',
-      step_back: 'Step-Back',
       multi_query: 'Multi-Query',
       hyde: 'HyDE',
       decomposition: 'Decomposition',
-      rag_fusion: 'RAG Fusion',
     };
     return labels[strategy] || strategy;
   };
@@ -348,13 +376,13 @@ function WorkflowNodeCard({ node }: { node: WorkflowNode }) {
         borderColor: node.status === 'active'
           ? `var(--mantine-color-${node.color}-4)`
           : node.status === 'completed'
-          ? 'var(--mantine-color-green-3)'
-          : 'var(--mantine-color-gray-3)',
+            ? 'var(--mantine-color-green-3)'
+            : 'var(--mantine-color-gray-3)',
         backgroundColor: node.status === 'active'
           ? `var(--mantine-color-${node.color}-0)`
           : node.status === 'completed'
-          ? 'var(--mantine-color-green-0)'
-          : 'white',
+            ? 'var(--mantine-color-green-0)'
+            : 'white',
         transition: 'all 0.3s ease',
         opacity: node.status === 'pending' ? 0.6 : 1,
       }}

@@ -24,7 +24,6 @@ import {
   IconMessageCircle,
   IconRobot,
   IconRoute,
-  IconScale,
   IconSearch,
   IconSparkles,
   IconTool
@@ -38,8 +37,6 @@ interface WorkflowStage {
   status: 'pending' | 'active' | 'completed' | 'skipped';
   icon: React.ReactNode;
   color: string;
-  startTime?: number;
-  endTime?: number;
   metadata?: {
     [key: string]: any;
   };
@@ -52,43 +49,33 @@ interface WorkflowSubstage {
   metric?: string;
 }
 
-interface WorkflowProgressModalProps {
+interface KnowledgeAssistantModalProps {
   opened: boolean;
   onClose: () => void;
   currentStage: string | null;
   completedStages: string[];
-  rerankingEnabled: boolean;
   enableLLMGeneration: boolean;
-  enableKnowledgeAssistant: boolean;  // NEW: Is Knowledge Assistant enabled in settings
   metadata: {
-    originalQuery?: string;
-    enhancedQueries?: string[];  // ALWAYS an array - even for single queries
+    intent?: string;
     strategy?: string;
     documentCount?: number;
     relevantCount?: number;
-    indexType?: string;
-    searchTime?: number;
-    vectorDimension?: number;
-    intent?: string;  // NEW: Supervisor detected intent
-    stageDetails?: Record<string, any>;  // NEW: Detailed data for each completed stage
-    ragSubstages?: string[];  // NEW: Track completed RAG substages (query_enhancement, document_retrieval, document_judging)
+    stageDetails?: Record<string, any>;
+    ragSubstages?: string[];
   };
 }
 
-export function WorkflowProgressModal({
+export function KnowledgeAssistantModal({
   opened,
   onClose,
   currentStage,
   completedStages,
-  rerankingEnabled,
   enableLLMGeneration,
-  enableKnowledgeAssistant,
   metadata
-}: WorkflowProgressModalProps) {
+}: KnowledgeAssistantModalProps) {
   const theme = useMantineTheme();
   const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set());
 
-  // Auto-expand RAG Agent Execution when it's active or has substages completing
   React.useEffect(() => {
     if (currentStage === 'rag_agent_executing' || metadata.ragSubstages?.length > 0) {
       setExpandedStages((prev) => {
@@ -114,14 +101,12 @@ export function WorkflowProgressModal({
     });
   };
 
-  // Helper function to render detailed information for each stage
   const renderStageDetails = (stageId: string) => {
     const details = metadata?.stageDetails?.[stageId];
     if (!details || !details.data) return null;
 
-    const { data, message } = details;
+    const { data } = details;
 
-    // Render different details based on stage type
     switch (stageId) {
       case 'supervisor_init':
         return (
@@ -244,204 +229,89 @@ export function WorkflowProgressModal({
     }
   };
 
-  // Check if Knowledge Assistant (supervisor) is enabled from settings
-  const isKnowledgeAssistantEnabled = enableKnowledgeAssistant;
-
-  // Define workflow stages based on actual LangGraph flow - memoized to prevent infinite re-renders
   const stages: WorkflowStage[] = useMemo(() => {
-    console.log('🔧 [MODAL] Building stages with ragSubstages:', metadata.ragSubstages);
     const allStages: WorkflowStage[] = [];
 
-    // Add supervisor stages ONLY if Knowledge Assistant is enabled
-    if (isKnowledgeAssistantEnabled) {
-      allStages.push(
-        {
-          id: 'supervisor_init',
-          name: 'Supervisor Orchestration',
-          description: 'Initializing multi-agent supervisor',
-          status: getStageStatus('supervisor_init'),
-          icon: <IconRobot size={20} />,
-          color: 'grape',
-          substages: [
-            {
-              name: 'Supervisor agent initialized',
-              status: completedStages.includes('supervisor_init') ? 'completed' : 'active'
-            }
-          ]
+    allStages.push(
+      {
+        id: 'supervisor_init',
+        name: 'Supervisor Orchestration',
+        description: 'Initializing multi-agent supervisor',
+        status: getStageStatus('supervisor_init'),
+        icon: <IconRobot size={20} />,
+        color: 'grape',
+        substages: [
+          {
+            name: 'Supervisor agent initialized',
+            status: completedStages.includes('supervisor_init') ? 'completed' : 'active'
+          }
+        ]
+      },
+      {
+        id: 'intent_detection',
+        name: 'Intent Detection',
+        description: 'Analyzing query to determine routing strategy',
+        status: getStageStatus('intent_detection'),
+        icon: <IconRoute size={20} />,
+        color: 'indigo',
+        metadata: {
+          intent: metadata.intent
         },
-        {
-          id: 'intent_detection',
-          name: 'Intent Detection',
-          description: 'Analyzing query to determine routing strategy',
-          status: getStageStatus('intent_detection'),
-          icon: <IconRoute size={20} />,
-          color: 'indigo',
-          metadata: {
-            intent: metadata.intent
+        substages: [
+          {
+            name: 'Analyzing user query intent',
+            status: completedStages.includes('intent_detection') ? 'completed' : 'active'
           },
-          substages: [
-            {
-              name: 'Analyzing user query intent',
-              status: completedStages.includes('intent_detection') ? 'completed' : 'active'
-            },
-            {
-              name: metadata.intent ? `Detected: ${metadata.intent}` : 'Determining routing path',
-              status: completedStages.includes('intent_detected') || completedStages.includes('intent_detection') ? 'completed' : 'active',
-              metric: metadata.intent
-            }
-          ]
-        },
-        {
-          id: 'rag_agent_executing',
-          name: 'RAG Agent Execution',
-          description: 'Retrieving and ranking relevant documents',
-          status: getStageStatus('rag_agent_executing'),
-          icon: <IconFileSearch size={20} />,
-          color: 'cyan',
-          substages: [
-            {
-              name: '✨ Query Enhancement',
-              status: (metadata.ragSubstages?.includes('query_enhancement') || completedStages.includes('rag_agent_executing')) ? 'completed' : 'active',
-              metric: metadata.strategy ? getStrategyLabel(metadata.strategy) : 'Native'
-            },
-            {
-              name: '🗄️ Document Retrieval',
-              status: (metadata.ragSubstages?.includes('document_retrieval') || completedStages.includes('rag_agent_executing')) ? 'completed' : 'active',
-              metric: metadata.documentCount ? `${metadata.documentCount} docs` : undefined
-            },
-            {
-              name: '⚖️ Judge Ranker',
-              status: (metadata.ragSubstages?.includes('document_judging') || completedStages.includes('rag_agent_executing')) ? 'completed' : 'active',
-              metric: metadata.relevantCount ? `${metadata.relevantCount} relevant` : undefined
-            }
-          ]
-        }
-      );
-
-      // Only add Task Agent if intent is rag_then_task
-      if (metadata.intent === 'rag_then_task') {
-        allStages.push({
-          id: 'task_agent_executing',
-          name: 'Task Agent Execution',
-          description: 'Executing task with RAG context',
-          status: getStageStatus('task_agent_executing'),
-          icon: <IconTool size={20} />,
-          color: 'teal',
-          substages: [
-            {
-              name: 'Task agent processing with knowledge',
-              status: completedStages.includes('task_agent_executing') ? 'completed' : 'active'
-            }
-          ]
-        });
+          {
+            name: metadata.intent ? `Detected: ${metadata.intent}` : 'Determining routing path',
+            status: completedStages.includes('intent_detected') || completedStages.includes('intent_detection') ? 'completed' : 'active',
+            metric: metadata.intent
+          }
+        ]
+      },
+      {
+        id: 'rag_agent_executing',
+        name: 'RAG Agent Execution',
+        description: 'Retrieving and ranking relevant documents',
+        status: getStageStatus('rag_agent_executing'),
+        icon: <IconFileSearch size={20} />,
+        color: 'cyan',
+        substages: [
+          {
+            name: '✨ Query Enhancement',
+            status: (metadata.ragSubstages?.includes('query_enhancement') || completedStages.includes('rag_agent_executing')) ? 'completed' : 'active',
+            metric: metadata.strategy ? getStrategyLabel(metadata.strategy) : 'Native'
+          },
+          {
+            name: '🗄️ Document Retrieval',
+            status: (metadata.ragSubstages?.includes('document_retrieval') || completedStages.includes('rag_agent_executing')) ? 'completed' : 'active',
+            metric: metadata.documentCount ? `${metadata.documentCount} docs` : undefined
+          },
+          {
+            name: '⚖️ Judge Ranker',
+            status: (metadata.ragSubstages?.includes('document_judging') || completedStages.includes('rag_agent_executing')) ? 'completed' : 'active',
+            metric: metadata.relevantCount ? `${metadata.relevantCount} relevant` : undefined
+          }
+        ]
       }
+    );
 
-      // When Knowledge Assistant is ON, don't show detailed RAG stages (they're internal to RAG Agent)
-      // Just show the final response generation
-    } else {
-      // When Knowledge Assistant is OFF, show detailed RAG pipeline stages
-      allStages.push(
-        // Stage 1: Query Analysis & Enhancement (conditional - skip if native)
-        {
-          id: 'query_enhancement',
-          name: 'Query Enhancement',
-          description: metadata.strategy && metadata.strategy !== 'native'
-            ? `Using ${getStrategyLabel(metadata.strategy)} strategy`
-            : 'Native query (no enhancement needed)',
-          status: getStageStatus('query_enhancement'), // Let getStageStatus handle all the logic
-          icon: <IconSparkles size={20} />,
-          color: 'violet',
-          metadata: {
-            originalQuery: metadata.originalQuery,
-            enhancedQueries: metadata.enhancedQueries,
-            strategy: metadata.strategy
-          },
-          substages: metadata.strategy && metadata.strategy !== 'native' ? [
-            {
-              name: 'Analyzing query intent',
-              // Active while query enhancement is running, completed after
-              status: (completedStages.includes('query_enhancement') || currentStage === 'query_enhancement') ? 'completed' : 'active'
-            },
-            {
-              name: getStrategySubstage(metadata.strategy),
-              // Completed if stage is done, active while running
-              status: completedStages.includes('query_enhancement') ? 'completed' : 'active'
-            }
-          ] : undefined
-        },
-
-        // Stage 2: Vector Search & Retrieval
-        {
-          id: 'document_retrieval',
-          name: 'Document Retrieval',
-          description: `Searching ${metadata.documentCount || 0} documents with HNSW index`,
-          status: getStageStatus('document_retrieval'),
-          icon: <IconDatabase size={20} />,
-          color: 'blue',
-          metadata: {
-            documentCount: metadata.documentCount,
-            indexType: metadata.indexType || 'HNSW',
-            vectorDimension: metadata.vectorDimension,
-            searchTime: metadata.searchTime
-          },
-          substages: [
-            {
-              name: 'Converting query to embedding',
-              // Only show completed if we're past this stage or currently in it
-              status: (completedStages.includes('document_retrieval') || currentStage === 'document_retrieval') ? 'completed' : 'active',
-              metric: metadata.vectorDimension ? `${metadata.vectorDimension}D vector` : undefined
-            },
-            {
-              name: 'Performing vector similarity search',
-              // Only show completed if we're past this stage or currently in it
-              status: (completedStages.includes('document_retrieval') || currentStage === 'document_retrieval') ? 'completed' : 'active',
-              metric: metadata.indexType ? `${metadata.indexType} index` : undefined
-            },
-            {
-              name: 'Applying distance threshold filter',
-              // Only show completed if we're past this stage or currently in it
-              status: (completedStages.includes('document_retrieval') || currentStage === 'document_retrieval') ? 'completed' : 'active',
-              metric: 'COSINE < 0.5'
-            },
-            {
-              name: 'Retrieved documents',
-              // Completed if stage is done, active if currently retrieving
-              status: completedStages.includes('document_retrieval') ? 'completed' : 'active',
-              metric: metadata.documentCount ? `${metadata.documentCount} docs` : undefined
-            }
-          ]
-        },
-
-        // Stage 3: Judge Ranker (conditional)
-        {
-          id: 'document_judging',
-          name: 'Judge Ranker',
-          description: rerankingEnabled
-            ? `Evaluating relevance of ${metadata.documentCount || 0} documents`
-            : 'Judge Ranker disabled - skipped',
-          status: rerankingEnabled
-            ? getStageStatus('document_judging')
-            : 'skipped',
-          icon: <IconScale size={20} />,
-          color: 'orange',
-          metadata: {
-            documentCount: metadata.documentCount,
-            relevantCount: metadata.relevantCount
-          },
-          substages: rerankingEnabled ? [
-            {
-              name: 'LLM-based relevance evaluation',
-              // Show as active while judging is happening
-              status: currentStage === 'document_judging' ? 'active' : 'completed'
-            },
-            {
-              name: 'Ranking and filtering documents',
-              // Completed if stage is done, active if currently judging
-              status: completedStages.includes('document_judging') ? 'completed' : currentStage === 'document_judging' ? 'active' : 'completed',
-              metric: metadata.relevantCount ? `${metadata.relevantCount} relevant` : undefined
-            }
-          ] : undefined
-        });
+    // Only add Task Agent if intent is rag_then_task
+    if (metadata.intent === 'rag_then_task') {
+      allStages.push({
+        id: 'task_agent_executing',
+        name: 'Task Agent Execution',
+        description: 'Executing task with RAG context',
+        status: getStageStatus('task_agent_executing'),
+        icon: <IconTool size={20} />,
+        color: 'teal',
+        substages: [
+          {
+            name: 'Task agent processing with knowledge',
+            status: completedStages.includes('task_agent_executing') ? 'completed' : 'active'
+          }
+        ]
+      });
     }
 
     // Add Response Generation stage (always last)
@@ -478,40 +348,19 @@ export function WorkflowProgressModal({
     });
 
     return allStages;
-  }, [
-    isKnowledgeAssistantEnabled,
-    metadata,
-    currentStage,
-    completedStages, // Now stable from parent's useMemo
-    rerankingEnabled,
-    enableLLMGeneration
-  ]);
+  }, [metadata, currentStage, completedStages, enableLLMGeneration]);
 
   function getStageStatus(stageId: string): 'pending' | 'active' | 'completed' | 'skipped' {
     if (completedStages.includes(stageId)) return 'completed';
     if (currentStage === stageId) return 'active';
 
-    // Handle skipped stages based on configuration (only for stages that are conditionally included)
-    if (stageId === 'query_enhancement' && (!metadata.strategy || metadata.strategy === 'native')) return 'skipped';
-    if (stageId === 'document_judging' && !rerankingEnabled) return 'skipped';
+    const stageOrder: string[] = ['supervisor_init', 'intent_detection', 'rag_agent_executing'];
 
-    // Build dynamic stage order based on what's included
-    const stageOrder: string[] = [];
-
-    if (isKnowledgeAssistantEnabled) {
-      // Knowledge Assistant flow: high-level stages
-      stageOrder.push('supervisor_init', 'intent_detection', 'rag_agent_executing');
-
-      // Only add task_agent to order if intent is rag_then_task
-      if (metadata.intent === 'rag_then_task') {
-        stageOrder.push('task_agent_executing');
-      }
-
-      stageOrder.push('response_generation');
-    } else {
-      // Regular RAG flow: detailed pipeline stages
-      stageOrder.push('query_enhancement', 'document_retrieval', 'document_judging', 'response_generation');
+    if (metadata.intent === 'rag_then_task') {
+      stageOrder.push('task_agent_executing');
     }
+
+    stageOrder.push('response_generation');
 
     const currentIndex = currentStage ? stageOrder.indexOf(currentStage) : -1;
     const stageIndex = stageOrder.indexOf(stageId);
@@ -533,17 +382,6 @@ export function WorkflowProgressModal({
     return labels[strategy] || strategy;
   }
 
-  function getStrategySubstage(strategy: string): string {
-    const substages: { [key: string]: string } = {
-      'augmented': 'Combining original with enhanced variants',
-      'multi_query': 'Creating alternative phrasings',
-      'hyde': 'Generating hypothetical answers',
-      'decomposition': 'Breaking down into sub-questions'
-    };
-    return substages[strategy] || 'Enhancing query';
-  }
-
-  // Filter out skipped stages for accurate counting
   const activeStages = stages.filter(s => s.status !== 'skipped');
   const completedCount = activeStages.filter(s => s.status === 'completed').length;
   const totalStages = activeStages.length;
@@ -577,17 +415,17 @@ export function WorkflowProgressModal({
               <ThemeIcon
                 size="lg"
                 variant="gradient"
-                gradient={{ from: 'blue', to: 'cyan', deg: 45 }}
+                gradient={{ from: 'grape', to: 'violet', deg: 45 }}
               >
                 <IconSearch size={20} />
               </ThemeIcon>
               <Box>
                 <Text size="lg" fw={600}>
-                  {isKnowledgeAssistantEnabled ? 'Knowledge Assistant Processing' : 'RAG Pipeline Processing'}
+                  Knowledge Assistant Processing
                 </Text>
                 <Text size="xs" c="dimmed">
                   {completedCount} of {totalStages} stages completed
-                  {isKnowledgeAssistantEnabled && metadata.intent && ` • Mode: ${metadata.intent}`}
+                  {metadata.intent && ` • Mode: ${metadata.intent}`}
                 </Text>
               </Box>
             </Group>
@@ -624,79 +462,11 @@ export function WorkflowProgressModal({
           />
         </Box>
 
-        {/* Query Comparison */}
-        {metadata.originalQuery && (
-          <Card
-            withBorder
-            p="sm"
-            radius="md"
-            style={{
-              backgroundColor: metadata.enhancedQueries && metadata.enhancedQueries.length > 0
-                ? theme.colors.violet[0]
-                : theme.colors.gray[0],
-              borderColor: metadata.enhancedQueries && metadata.enhancedQueries.length > 0
-                ? theme.colors.violet[3]
-                : theme.colors.gray[3]
-            }}
-          >
-            <Stack gap="xs">
-              <Group gap="xs">
-                <ThemeIcon size="sm" color="indigo" variant="light">
-                  <IconMessageCircle size={14} />
-                </ThemeIcon>
-                <Text size="xs" fw={600} c="dimmed">ORIGINAL QUERY</Text>
-              </Group>
-              <Text size="sm" style={{ wordBreak: 'break-word' }}>
-                {metadata.originalQuery}
-              </Text>
-
-              {/* Show enhanced queries if available */}
-              {metadata.enhancedQueries && metadata.enhancedQueries.length > 0 && (
-                <>
-                  <Divider my={6} label={
-                    <Badge size="sm" variant="filled" color="violet">
-                      {metadata.enhancedQueries.length > 1
-                        ? `${metadata.enhancedQueries.length} Query Variants`
-                        : 'Query Enhanced'}
-                    </Badge>
-                  } labelPosition="center" />
-                  <Group gap="xs">
-                    <ThemeIcon size="sm" color="violet" variant="filled">
-                      <IconSparkles size={14} />
-                    </ThemeIcon>
-                    <Text size="xs" fw={700} c="violet.9">
-                      {metadata.enhancedQueries.length > 1
-                        ? 'ENHANCED QUERIES'
-                        : 'ENHANCED QUERY'}
-                    </Text>
-                    <Badge size="xs" variant="dot" color="violet">
-                      {getStrategyLabel(metadata.strategy || 'unknown')}
-                    </Badge>
-                  </Group>
-                  <Text size="xs" c="violet.8" style={{ lineHeight: 1.5 }}>
-                    {/* Show all enhanced queries with bullets */}
-                    {metadata.enhancedQueries.map((query, index) => (
-                      <span key={index}>
-                        <Text component="span" size="xs" fw={600} c="violet.6" style={{ marginRight: '4px' }}>
-                          [{index + 1}]
-                        </Text>
-                        {query}
-                        {index < metadata.enhancedQueries.length - 1 && ' • '}
-                      </span>
-                    ))}
-                  </Text>
-                </>
-              )}
-            </Stack>
-          </Card>
-        )}
-
-        {/* Circular Node Flow - Visual Pipeline */}
+        {/* Circular Node Flow */}
         <Box style={{ overflowX: 'auto', padding: '12px 0' }}>
           <Group gap={4} wrap="nowrap" justify="center" style={{ minWidth: 'fit-content' }}>
             {activeStages.map((stage, index) => (
               <React.Fragment key={stage.id}>
-                {/* Node */}
                 <Stack
                   gap={6}
                   align="center"
@@ -710,7 +480,6 @@ export function WorkflowProgressModal({
                     }
                   }}
                 >
-                  {/* Circular Icon */}
                   <Box
                     style={{
                       width: '48px',
@@ -741,7 +510,6 @@ export function WorkflowProgressModal({
                         style: { color: '#868e96' }
                       } as any)
                     )}
-                    {/* Show expand indicator for RAG Agent */}
                     {stage.substages && stage.id === 'rag_agent_executing' && (
                       <Box
                         style={{
@@ -766,7 +534,6 @@ export function WorkflowProgressModal({
                     )}
                   </Box>
 
-                  {/* Node Label */}
                   <Text
                     size="xs"
                     fw={500}
@@ -781,7 +548,6 @@ export function WorkflowProgressModal({
                   </Text>
                 </Stack>
 
-                {/* Connecting Arrow */}
                 {index < activeStages.length - 1 && (
                   <Box
                     style={{
@@ -813,10 +579,9 @@ export function WorkflowProgressModal({
             ))}
           </Group>
 
-          {/* Expanded RAG Subflow (under RAG Agent Execution node) */}
+          {/* Expanded RAG Subflow */}
           {activeStages.find(s => s.id === 'rag_agent_executing' && s.substages) && expandedStages.has('rag_agent_executing') && (
             <Box style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              {/* Vertical Arrow Connector */}
               <Box
                 style={{
                   width: '2px',
@@ -841,7 +606,6 @@ export function WorkflowProgressModal({
                 />
               </Box>
 
-              {/* Subflow Box */}
               <Box
                 mt="xs"
                 p="md"
@@ -893,7 +657,7 @@ export function WorkflowProgressModal({
 
                   <Box style={{ textAlign: 'center' }}>
                     <ThemeIcon size={44} radius="xl" variant="light" color="orange">
-                      <IconScale size={22} />
+                      <IconSparkles size={22} />
                     </ThemeIcon>
                     <Text size="xs" mt={6} fw={500}>Judge</Text>
                     <Text size="xs" c="dimmed">Ranker</Text>
@@ -911,7 +675,7 @@ export function WorkflowProgressModal({
 
         <Divider label="Detailed Progress" labelPosition="center" />
 
-        {/* Timeline of Stages (kept for detailed view) */}
+        {/* Timeline */}
         <Timeline
           active={activeStages.findIndex(s => s.status === 'active')}
           bulletSize={32}
@@ -946,7 +710,6 @@ export function WorkflowProgressModal({
                 </Group>
               }
             >
-              {/* Substages */}
               {stage.substages && stage.status !== 'skipped' && (
                 <Collapse in={expandedStages.has(stage.id) || stage.status === 'active'}>
                   <Card
@@ -992,64 +755,12 @@ export function WorkflowProgressModal({
                 </Collapse>
               )}
 
-              {/* Detailed information for completed stages */}
               {stage.status === 'completed' && renderStageDetails(stage.id)}
             </Timeline.Item>
           ))}
         </Timeline>
-
-        {/* Technical Details (Expandable) */}
-        <Card withBorder p="xs" radius="md" style={{ backgroundColor: theme.colors.gray[0] }}>
-          <Group gap="xs" style={{ cursor: 'pointer' }} onClick={() => toggleExpanded('technical')}>
-            <ThemeIcon size="xs" variant="light" color="blue">
-              <IconFileSearch size={12} />
-            </ThemeIcon>
-            <Text size="xs" fw={500} style={{ flex: 1 }}>Technical Details</Text>
-            <IconChevronDown
-              size={14}
-              style={{
-                transform: expandedStages.has('technical') ? 'rotate(180deg)' : 'rotate(0deg)',
-                transition: 'transform 0.2s ease'
-              }}
-            />
-          </Group>
-
-          <Collapse in={expandedStages.has('technical')}>
-            <Stack gap="xs" mt="xs">
-              <Group gap="xs">
-                <Text size="xs" c="dimmed" style={{ width: '140px' }}>Vector Index:</Text>
-                <Badge size="xs" variant="light" color="blue">
-                  {metadata.indexType || 'HNSW'}
-                </Badge>
-              </Group>
-              {metadata.vectorDimension && (
-                <Group gap="xs">
-                  <Text size="xs" c="dimmed" style={{ width: '140px' }}>Vector Dimension:</Text>
-                  <Badge size="xs" variant="light" color="cyan">
-                    {metadata.vectorDimension}D
-                  </Badge>
-                </Group>
-              )}
-              <Group gap="xs">
-                <Text size="xs" c="dimmed" style={{ width: '140px' }}>Documents Retrieved:</Text>
-                <Badge size="xs" variant="light" color="green">
-                  {metadata.documentCount || 0}
-                </Badge>
-              </Group>
-              {metadata.relevantCount !== undefined && (
-                <Group gap="xs">
-                  <Text size="xs" c="dimmed" style={{ width: '140px' }}>Relevant After Reranking:</Text>
-                  <Badge size="xs" variant="light" color="orange">
-                    {metadata.relevantCount}
-                  </Badge>
-                </Group>
-              )}
-            </Stack>
-          </Collapse>
-        </Card>
       </Stack>
 
-      {/* CSS for animations */}
       <style>{`
         @keyframes spin {
           from { transform: rotate(0deg); }
@@ -1062,4 +773,3 @@ export function WorkflowProgressModal({
     </Modal>
   );
 }
-

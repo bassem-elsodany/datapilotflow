@@ -145,8 +145,8 @@ export function CanvasWrapper({
 
 
     return (
-      <div 
-        style={{ width: '100%', height: '100%' }}
+      <div
+        style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}
         onDrop={onDrop}
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
@@ -154,22 +154,24 @@ export function CanvasWrapper({
         tabIndex={0}
       >
       <ReactFlowProvider>
-               <ReactFlow
-                 nodes={nodes}
-                 edges={edges}
-                 onNodesChange={onNodesChange}
-                 onEdgesChange={onEdgesChange}
-                 nodeTypes={nodeTypes}
-                 edgeTypes={edgeTypes}
-                 onNodeClick={onNodeClick}
-                 onNodeDoubleClick={onNodeDoubleClick}
-                 onInit={onInit}
-                 fitView
-               >
-          <MiniMap />
-          <Controls />
-                 <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
-        </ReactFlow>
+        <div style={{ flex: 1, width: '100%' }}>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            onNodeClick={onNodeClick}
+            onNodeDoubleClick={onNodeDoubleClick}
+            onInit={onInit}
+            fitView
+          >
+            <MiniMap />
+            <Controls />
+            <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
+          </ReactFlow>
+        </div>
       </ReactFlowProvider>
     </div>
   );

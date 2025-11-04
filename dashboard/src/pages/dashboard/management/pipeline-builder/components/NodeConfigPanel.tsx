@@ -7,13 +7,15 @@
 
 import { ActionIcon, Group, Paper, Stack, Text } from '@mantine/core';
 import { IconChevronDown, IconChevronUp, IconX } from '@tabler/icons-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { PipelineNode } from '@/api/resources/pipelines';
 
 // Import node-specific configuration components
 import { WebsiteSourceConfig } from './node-configs/WebsiteSourceConfig';
 import { MultiplePagesConfig } from './node-configs/MultiplePagesConfig';
 import { SinglePageConfig } from './node-configs/SinglePageConfig';
+import { LocalFilesConfig } from './node-configs/LocalFilesConfig';
+import { ConfluenceConfig } from './node-configs/ConfluenceConfig';
 import { DomainFilterConfig } from './node-configs/DomainFilterConfig';
 import { ContentFilterConfig } from './node-configs/ContentFilterConfig';
 import { HtmlExtractorConfig } from './node-configs/HtmlExtractorConfig';
@@ -34,6 +36,13 @@ interface NodeConfigPanelProps {
 export function NodeConfigPanel({ node, opened, onClose, onSave }: NodeConfigPanelProps) {
   const [isExpanded, setIsExpanded] = useState(true);
 
+  // Auto-expand panel when a new node is selected for editing or when panel is opened
+  useEffect(() => {
+    if (opened && node) {
+      setIsExpanded(true);
+    }
+  }, [node, opened]);
+
   if (!opened || !node) return null;
 
   // Get display name for panel title
@@ -42,6 +51,8 @@ export function NodeConfigPanel({ node, opened, onClose, onSave }: NodeConfigPan
       website: 'Website Source',
       multiple_pages: 'Multiple Pages Source',
       single_page: 'Single Page Source',
+      local_files: 'Local Files Source',
+      confluence: 'Confluence Source',
       domainFilter: 'Domain Filter',
       contentFilter: 'Content Filter',
       htmlExtractor: 'HTML Extractor',
@@ -67,6 +78,12 @@ export function NodeConfigPanel({ node, opened, onClose, onSave }: NodeConfigPan
 
       case 'single_page':
         return <SinglePageConfig node={node} onSave={onSave} onClose={onClose} />;
+
+      case 'local_files':
+        return <LocalFilesConfig node={node} onSave={onSave} onClose={onClose} />;
+
+      case 'confluence':
+        return <ConfluenceConfig node={node} onSave={onSave} onClose={onClose} />;
 
       // Filters & Transforms
       case 'domainFilter':
