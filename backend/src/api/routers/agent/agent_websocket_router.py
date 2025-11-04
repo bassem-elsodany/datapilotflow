@@ -378,6 +378,7 @@ async def agent_query_websocket(websocket: WebSocket, token: str = Query(None), 
                             await websocket.send_text(
                                 json.dumps(
                                     {
+                                        "type": "error",
                                         "stage": "error",
                                         "message": "Conversation not found. Please refresh and try again.",
                                         "timestamp": time.time(),
@@ -392,6 +393,7 @@ async def agent_query_websocket(websocket: WebSocket, token: str = Query(None), 
                         await websocket.send_text(
                             json.dumps(
                                 {
+                                    "type": "error",
                                     "stage": "error",
                                     "message": f"Error loading conversation: {str(e)}",
                                     "timestamp": time.time(),
@@ -405,6 +407,7 @@ async def agent_query_websocket(websocket: WebSocket, token: str = Query(None), 
                     await websocket.send_text(
                         json.dumps(
                             {
+                                "type": "error",
                                 "stage": "error",
                                 "message": "Query is required",
                                 "timestamp": time.time(),
@@ -421,6 +424,7 @@ async def agent_query_websocket(websocket: WebSocket, token: str = Query(None), 
                     await websocket.send_text(
                         json.dumps(
                             {
+                                "type": "error",
                                 "stage": "error",
                                 "message": error_msg,
                                 "timestamp": time.time(),
@@ -438,6 +442,7 @@ async def agent_query_websocket(websocket: WebSocket, token: str = Query(None), 
                 await websocket.send_text(
                     json.dumps(
                         {
+                            "type": "workflow_started",
                             "stage": "starting",
                             "message": f"Processing query: {query[:100]}...",
                             "data": {
@@ -537,6 +542,7 @@ async def agent_query_websocket(websocket: WebSocket, token: str = Query(None), 
                     await websocket.send_text(
                         json.dumps(
                             {
+                                "type": "workflow_started",
                                 "stage": "workflow_started",
                                 "message": "Starting LangGraph workflow...",
                                 "data": {"strategy": selected_strategy or "native"},
