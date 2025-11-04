@@ -669,13 +669,15 @@ async def get_response_stream(
             # Emit START event when we transition to a new stage
             if current_stage != last_stage and current_stage in stage_mapping.values():
                 last_stage = current_stage
-                logger.info(f"🚀 [RAG START EVENT] Emitting START event for stage: {current_stage}")
-                yield {
+                start_event = {
                     "type": "workflow_progress",
                     "stage": current_stage,
                     "message": f"Processing {current_stage}...",
                     "execution_time_ms": execution_time_ms,
                 }
+                logger.info(f"🚀 [RAG START EVENT] Emitting START event for stage: {current_stage}")
+                logger.debug(f"🚀 [RAG START EVENT] Event data: {start_event}")
+                yield start_event
 
             # Emit COMPLETE events with detailed data based on stage
             # Only emit completion event once per node (not repeatedly)

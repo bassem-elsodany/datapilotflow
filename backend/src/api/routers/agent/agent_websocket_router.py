@@ -583,9 +583,11 @@ async def agent_query_websocket(websocket: WebSocket, token: str = Query(None), 
                             "workflow_progress",
                         ]:
                             logger.info(
-                                f"📡 Forwarding event: {chunk_type}, stage={chunk.get('stage')}"
+                                f"📡 Forwarding event: type={chunk_type}, stage={chunk.get('stage')}, message={chunk.get('message')}"
                             )
+                            logger.debug(f"📡 Full event payload: {json.dumps(chunk)}")
                             await websocket.send_text(json.dumps(chunk))
+                            logger.info(f"✅ Event sent to client successfully")
                             continue
 
                         # Track the state changes
