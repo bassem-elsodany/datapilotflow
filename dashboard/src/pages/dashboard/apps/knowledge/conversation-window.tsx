@@ -649,9 +649,9 @@ export default function ConversationWindow() {
 
         case 'query_enhancement':
         case 'query_enhancement_complete':
-          // GUARD: Skip if using supervisor - these events are now handled in supervisor_progress
-          if (enableKnowledgeAssistant) {
-            console.log('⏭️ Skipping old query_enhancement handler - using supervisor instead');
+          // GUARD: Skip if using supervisor/agent mode - only handle for RAG mode
+          if (messageMode === 'agent') {
+            console.log('⏭️ Skipping query_enhancement handler - using agent/supervisor mode instead');
             break;
           }
 
@@ -725,9 +725,9 @@ export default function ConversationWindow() {
 
         case 'document_retrieval':
         case 'document_retrieval_complete':
-          // GUARD: Skip if using supervisor - these events are now handled in supervisor_progress
-          if (enableKnowledgeAssistant) {
-            console.log('⏭️ Skipping old document_retrieval handler - using supervisor instead');
+          // GUARD: Skip if using supervisor/agent mode - only handle for RAG mode
+          if (messageMode === 'agent') {
+            console.log('⏭️ Skipping document_retrieval handler - using agent/supervisor mode instead');
             break;
           }
 
@@ -779,9 +779,9 @@ export default function ConversationWindow() {
 
         case 'document_judging':
         case 'document_reranking':
-          // GUARD: Skip if using supervisor - these events are now handled in supervisor_progress
-          if (enableKnowledgeAssistant) {
-            console.log('⏭️ Skipping old document_judging handler - using supervisor instead');
+          // GUARD: Skip if using supervisor/agent mode - only handle for RAG mode
+          if (messageMode === 'agent') {
+            console.log('⏭️ Skipping document_judging handler - using agent/supervisor mode instead');
             break;
           }
 
@@ -816,11 +816,12 @@ export default function ConversationWindow() {
           break;
 
         case 'response_generation':
-          // GUARD: Skip if using supervisor - these events are now handled in supervisor_progress
-          if (enableKnowledgeAssistant) {
-            console.log('⏭️ Skipping old response_generation handler - using supervisor instead');
+          // GUARD: Skip if using supervisor/agent mode - only handle for RAG mode
+          if (messageMode === 'agent') {
+            console.log('⏭️ Skipping response_generation handler - using agent/supervisor mode instead');
             break;
           }
+          console.log('📤 [RESPONSE GENERATION] Processing response generation for RAG mode');
 
           // Update the existing streaming message with response generation status
           setMessages(prev => {
