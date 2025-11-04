@@ -695,8 +695,8 @@ async def get_response_stream_rag(
                     "message": f"Processing {current_stage}...",
                     "execution_time_ms": execution_time_ms,
                 }
-                logger.info(f"🚀 [RAG START EVENT] Emitting START event for stage: {current_stage}")
-                logger.debug(f"🚀 [RAG START EVENT] Event data: {start_event}")
+                logger.critical(f"🚀 [RAG START EVENT] Emitting START event for stage: {current_stage} (node: {node_name})")
+                logger.critical(f"🚀 [RAG START EVENT] Event data: {start_event}")
                 yield start_event
 
             # Emit COMPLETE events with detailed data based on stage
@@ -810,6 +810,7 @@ async def get_response_stream_rag(
                     # Answer Generation / Raw Formatting
                     final_answer = state_update.get("final_answer", "")
 
+                    # Emit COMPLETE event for answer generation
                     logger.info(f"✅ [RAG COMPLETE EVENT] Emitting COMPLETE event for answer_generation_complete with {len(final_answer)} characters")
                     yield {
                         "type": "workflow_progress",
