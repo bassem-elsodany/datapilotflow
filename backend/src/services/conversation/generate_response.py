@@ -516,6 +516,109 @@ async def get_response_stream_rag(
     start_time = time.time()
 
     try:
+        logger.info(f"🚀 Starting LangGraph workflow for query: '{query[:50]}...'")
+        logger.debug(
+            f"Workflow config: strategy={selected_strategy}, collection={collection_name}"
+        )
+
+        config = {}
+        if settings.AGENT_TRACING_ENABLED:
+            logger.debug(
+                f"Agent tracing enabled: Workflow config: strategy={selected_strategy}, collection={collection_name}, llm_provider_id={llm_provider_id}, llm_model_name={llm_model_name}"
+            )
+            # Enable LiteLLM tracking for cost and token usage
+            track_litellm()
+            logger.debug("✅ LiteLLM tracking enabled for cost and token usage")
+
+            # Build tags for Opik trace
+            trace_tags = [
+                f"strategy:{selected_strategy or 'native'}",
+                f"provider:{llm_provider_id}",
+                f"model:{llm_model_name}",
+                f"collection:{collection_name}",
+                f"conversation:{conversation_id}",
+            ]
+            if conversation_description:
+                trace_tags.append(f"domain:{conversation_description[:50]}")
+
+            opik_tracer = OpikTracer(
+                graph=workflow.get_graph(xray=True),
+                tags=trace_tags,
+            )
+            # Note: No thread_id needed - each query is independent (stateless RAG)
+            config = {
+                "callbacks": [opik_tracer],
+            }
+        else:
+            logger.debug(
+                f"Agent tracing disabled: Workflow config: strategy={selected_strategy}, collection={collection_name}"
+            )
+
+        # Build workflow configuration
+        # Calculate top_k_per_query: For RRF, we retrieve more docs per query to account for fusion
+        # Smart default: retrieve at least 5 per query, or scale with top_k if user requests more
+        top_k_per_query = max(
+            5, int(top_k * 1.5)
+        )  # 50% more to account for RRF deduplication
+
+        workflow_config = {
+            "collection_name": collection_name,
+            "user_id": user_id,
+            "llm_provider_id": llm_provider_id,
+            "llm_model_name": llm_model_name,
+            "enhancement_config": enhancement_config or {},
+            "conversation_id": conversation_id,
+            "enable_reranking": enable_reranking,
+            "reranking_config": {
+                "relevance_threshold": relevance_threshold,
+                "use_score_based": True,  # Use continuous scores instead of binary labels
+            },
+            "enable_llm_generation": enable_llm_generation,
+            "top_k": top_k,
+            "retrieval_config": {
+                "top_k_per_query": top_k_per_query,  # Dynamically scale based on user's top_k
+                "rrf_k": 60,  # RRF constant (from original paper)
+            },
+        }
+
+        logger.info(
+            f"🔧 Workflow config: enable_reranking={enable_reranking}, enable_llm_generation={enable_llm_generation}, collection={collection_name}, strategy={selected_strategy}"
+        )
+
+        # Get provider configuration to create LLM client
+        provider_service = get_model_provider_service()
+        provider = provider_service.get_model_provider(llm_provider_id, user_id)
+
+        if not provider:
+            raise ValueError(f"Provider not found: {llm_provider_id}")
+
+        if not provider.is_active:
+            raise ValueError(f"Provider is not active: {provider.name}")
+
+        # Get temperature and max_tokens from provider's generative config
+        generative_config = provider.generative.config if provider.generative else {}
+        temperature = generative_config.get("temperature", 0.7)
+        max_tokens = generative_config.get("max_tokens", 4096)
+
+        # Create LLM client using ChatLiteLLM with provider's config
+        model_string = f"{provider.provider_type}/{llm_model_name}"
+        llm_client = ChatLiteLLM(
+            model=model_string,
+            api_key=provider.api_key,
+            api_base=provider.endpoint if provider.endpoint else None,
+            timeout=provider.timeout if provider.timeout else 60,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+        logger.info(
+            f"✅ Created LLM client: {model_string} (temperature={temperature}, max_tokens={max_tokens})"
+        )
+
+        # Add LLM client to workflow config
+        workflow_config["llm_client"] = llm_client
+
+        logger.info("📚 Using direct RAG workflow (no supervisor)")
 
         # Create initial state
         initial_state = create_initial_state(
