@@ -219,7 +219,7 @@ const STEP_CONFIGS = [
   },
   {
     label: 'Advanced Settings',
-    description: 'Fine-tune behavior',
+    description: 'Answer generation mode',
     icon: <IconWand size={20} />,
     color: 'violet',
     gradientFrom: LOGO_COLORS.pilot,       // Purple (Pilot)
@@ -1236,11 +1236,9 @@ function StepAdvancedSettings({
     <Stack gap="md">
       <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
         <Text size="sm">
-          Fine-tune advanced behavior including answer generation and system prompts for Assistant mode.
+          Configure how answers are generated. You can either enable AI-powered responses or use raw document results.
         </Text>
       </Alert>
-
-      <Divider label="Answer Generation" labelPosition="left" />
 
       <Switch
         label="Enable Generative Answer"
