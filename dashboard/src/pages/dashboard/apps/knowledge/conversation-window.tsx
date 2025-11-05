@@ -880,6 +880,7 @@ export default function ConversationWindow() {
           // Handle streaming response chunks from agent
           // Extract chunk from data.chunk or chunk property
           const textChunk = data?.data?.chunk || data?.chunk || chunk;
+          const chunkMetadata = data?.metadata || data?.data?.metadata;
 
           if (textChunk) {
             setMessages(prev => {
@@ -889,24 +890,38 @@ export default function ConversationWindow() {
                 const isPlaceholder = lastMessage.content.includes('🤖 Starting conversation');
 
                 // Update existing streaming message
+                const updatedMessage = {
+                  ...lastMessage,
+                  content: isPlaceholder ? textChunk : lastMessage.content + textChunk,
+                  isStreaming: true
+                };
+
+                // Attach metadata if provided (usually on first chunk)
+                if (chunkMetadata) {
+                  updatedMessage.metadata = chunkMetadata;
+                }
+
                 return [
                   ...prev.slice(0, -1),
-                  {
-                    ...lastMessage,
-                    content: isPlaceholder ? textChunk : lastMessage.content + textChunk,
-                    isStreaming: true
-                  }
+                  updatedMessage
                 ];
               } else {
                 // Create new streaming message
+                const newMessage: Message = {
+                  role: 'assistant',
+                  content: textChunk,
+                  timestamp: new Date(),
+                  isStreaming: true
+                };
+
+                // Attach metadata if provided (usually on first chunk)
+                if (chunkMetadata) {
+                  newMessage.metadata = chunkMetadata;
+                }
+
                 return [
                   ...prev,
-                  {
-                    role: 'assistant',
-                    content: textChunk,
-                    timestamp: new Date(),
-                    isStreaming: true
-                  }
+                  newMessage
                 ];
               }
             });

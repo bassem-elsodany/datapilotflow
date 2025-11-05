@@ -932,16 +932,51 @@ async def get_response_stream_rag(
             yield complete_event
             logger.critical(f"✅ [RAG END STATE] EMITTED response_generation_complete with {len(final_answer)} chars")
 
-        # CRITICAL FIX: Emit streaming_response event with final answer so frontend displays it
+        # CRITICAL FIX: Stream the final answer in chunks so frontend displays it with streaming effect
         final_answer = last_state.get("final_answer", "") if last_state else ""
+        retrieved_docs = last_state.get("retrieved_documents", []) if last_state else []
+
         if final_answer:
             logger.critical(f"🔴 [RAG RESPONSE] Emitting streaming_response with final answer ({len(final_answer)} chars)")
-            yield {
-                "type": "streaming_response",
-                "chunk": final_answer,
-                "execution_time_ms": execution_time_ms,
-            }
-            logger.critical(f"✅ [RAG RESPONSE] EMITTED streaming_response with final answer")
+
+            # Stream response in chunks (every 50 characters for smooth streaming effect)
+            chunk_size = 50
+            for i in range(0, len(final_answer), chunk_size):
+                chunk = final_answer[i:i + chunk_size]
+
+                # Emit metadata ONLY on the first chunk
+                if i == 0:
+                    # Build metadata from retrieved documents
+                    source_urls = []
+                    chunk_ids = []
+                    for doc in retrieved_docs:
+                        if doc.get("source_url") and doc["source_url"] not in source_urls:
+                            source_urls.append(doc["source_url"])
+                        if doc.get("chunk_id") and doc["chunk_id"] not in chunk_ids:
+                            chunk_ids.append(doc["chunk_id"])
+
+                    logger.critical(f"🔴 [RAG RESPONSE] Emitting first chunk with metadata: {len(source_urls)} sources, {len(chunk_ids)} chunks")
+                    yield {
+                        "type": "streaming_response",
+                        "chunk": chunk,
+                        "metadata": {
+                            "source_urls": source_urls,
+                            "chunk_ids": chunk_ids,
+                            "document_count": len(retrieved_docs),
+                            "enhancement_strategy": last_state.get("enhancement_strategies_applied", "augmented"),
+                            "enhanced_queries": last_state.get("enhanced_query", {}).get("variants", []),
+                        },
+                        "execution_time_ms": execution_time_ms,
+                    }
+                else:
+                    # Subsequent chunks don't include metadata
+                    yield {
+                        "type": "streaming_response",
+                        "chunk": chunk,
+                        "execution_time_ms": execution_time_ms,
+                    }
+
+            logger.critical(f"✅ [RAG RESPONSE] EMITTED all streaming_response chunks for {len(final_answer)} chars")
 
         # Yield final result with complete state
         if last_state:
