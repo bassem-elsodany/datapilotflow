@@ -367,6 +367,117 @@ class ConversationHistoryService:
         )
         return conversation_id
 
+    def create_conversation_v2(
+        self,
+        user_id: str,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+        system_prompt: Optional[SystemPrompt] = None,
+        enhancement: Optional[EnhancementConfig] = None,
+        vector_database: Optional[VectorDatabaseConfig] = None,
+        reranker: Optional[RerankerConfig] = None,
+        answer_generation: Optional[AnswerGenerationConfig] = None,
+        tags: Optional[List[str]] = None,
+        enable_knowledge_assistant: bool = False,
+    ) -> str:
+        """Create a new conversation with nested configuration structure."""
+
+        # Validate enhancement provider if provided
+        if enhancement and enhancement.provider:
+            try:
+                from src.services.model_provider.model_provider_service import (
+                    get_model_provider_service,
+                )
+
+                provider_service = get_model_provider_service()
+                provider = provider_service.get_model_provider(
+                    enhancement.provider.id, user_id
+                )
+
+                if not provider or not provider.is_active:
+                    logger.warning(
+                        f"Enhancement provider not found or inactive: {enhancement.provider.id}"
+                    )
+                    enhancement = None
+            except Exception as e:
+                logger.error(f"Error validating enhancement provider: {e}")
+                enhancement = None
+
+        # Validate answer generation provider if provided
+        if answer_generation and answer_generation.provider:
+            try:
+                from src.services.model_provider.model_provider_service import (
+                    get_model_provider_service,
+                )
+
+                provider_service = get_model_provider_service()
+                provider = provider_service.get_model_provider(
+                    answer_generation.provider.id, user_id
+                )
+
+                if not provider or not provider.is_active:
+                    logger.warning(
+                        f"Answer generation provider not found or inactive: {answer_generation.provider.id}"
+                    )
+                    answer_generation = None
+            except Exception as e:
+                logger.error(f"Error validating answer generation provider: {e}")
+                answer_generation = None
+
+        # Validate reranker provider if provided
+        if reranker and reranker.provider:
+            try:
+                from src.services.model_provider.model_provider_service import (
+                    get_model_provider_service,
+                )
+
+                provider_service = get_model_provider_service()
+                provider = provider_service.get_model_provider(
+                    reranker.provider.id, user_id
+                )
+
+                if not provider or not provider.is_active:
+                    logger.warning(
+                        f"Reranker provider not found or inactive: {reranker.provider.id}"
+                    )
+                    reranker = None
+                elif not provider.reranker:
+                    logger.warning(
+                        f"Provider does not support reranking: {provider.name}"
+                    )
+                    reranker = None
+            except Exception as e:
+                logger.error(f"Error validating reranker provider: {e}")
+                reranker = None
+
+        # Build conversation data
+        conversation_data = {
+            "user_id": user_id,
+            "created_at": datetime.utcnow(),
+            "last_updated": datetime.utcnow(),
+            "messages": [],
+            "name": name,
+            "description": description,
+            "system_prompt": asdict(system_prompt) if system_prompt else None,
+            "enhancement": asdict(enhancement) if enhancement else None,
+            "vector_database": asdict(vector_database) if vector_database else None,
+            "reranker": asdict(reranker) if reranker else None,
+            "answer_generation": asdict(answer_generation) if answer_generation else None,
+            "tags": tags or [],
+            "enable_knowledge_assistant": enable_knowledge_assistant,
+        }
+
+        # Insert and get the MongoDB _id
+        result = self.collection.insert_one(conversation_data)
+        conversation_id = str(result.inserted_id)
+
+        logger.info(
+            f"Created conversation {conversation_id} for user {user_id} "
+            f"with agent_type: {'supervisor' if enable_knowledge_assistant else 'rag'}, "
+            f"strategy: {enhancement.strategy if enhancement else 'native'}"
+        )
+        return conversation_id
+
     def get_conversation(
         self, conversation_id: str, user_id: str = None
     ) -> Optional[ConversationSession]:
