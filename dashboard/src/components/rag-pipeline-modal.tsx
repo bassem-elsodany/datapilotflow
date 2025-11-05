@@ -2,7 +2,6 @@ import {
   Badge,
   Box,
   Card,
-  Collapse,
   Divider,
   Group,
   Modal,
@@ -10,13 +9,11 @@ import {
   Stack,
   Text,
   ThemeIcon,
-  Timeline,
   useMantineTheme
 } from '@mantine/core';
 import {
   IconBrain,
   IconCheck,
-  IconChevronDown,
   IconCircleDot,
   IconDatabase,
   IconFileSearch,
@@ -26,7 +23,7 @@ import {
   IconSearch,
   IconSparkles
 } from '@tabler/icons-react';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 
 interface WorkflowStage {
   id: string;
@@ -79,107 +76,6 @@ export function RAGPipelineModal({
 }: RAGPipelineModalProps) {
   console.log(`🎬 [RAG MODAL COMPONENT] Render - opened=${opened}, currentStage='${currentStage}', completed=[${completedStages.join(',')}]`);
   const theme = useMantineTheme();
-  const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set());
-
-  const toggleExpanded = (stageId: string) => {
-    setExpandedStages((prev) => {
-      const next = new Set(prev);
-      if (next.has(stageId)) {
-        next.delete(stageId);
-      } else {
-        next.add(stageId);
-      }
-      return next;
-    });
-  };
-
-  const renderStageDetails = (stageId: string) => {
-    const details = metadata?.stageDetails?.[stageId];
-    if (!details || !details.data) return null;
-
-    const { data, message } = details;
-
-    switch (stageId) {
-      case 'query_enhancement':
-        return (
-          <Card withBorder p="xs" mt="xs" style={{ backgroundColor: theme.colors.violet[0], borderColor: theme.colors.violet[3] }}>
-            <Stack gap="xs">
-              <Text size="xs" fw={500} c="violet.7">✨ Query Enhanced</Text>
-              {data.query_variants && (
-                <Text size="xs" c="dimmed">
-                  <strong>Variants:</strong> {data.query_variants.length}
-                </Text>
-              )}
-              {data.strategy && (
-                <Badge size="xs" variant="light" color="violet">
-                  {data.strategy}
-                </Badge>
-              )}
-            </Stack>
-          </Card>
-        );
-
-      case 'document_retrieval':
-        return (
-          <Card withBorder p="xs" mt="xs" style={{ backgroundColor: theme.colors.blue[0], borderColor: theme.colors.blue[3] }}>
-            <Stack gap="xs">
-              <Text size="xs" fw={500} c="blue.7">📚 Documents Retrieved</Text>
-              <Group gap="xs">
-                <Badge size="xs" variant="filled" color="green">
-                  {data.document_count || 0} documents
-                </Badge>
-              </Group>
-              {data.collection && (
-                <Text size="xs" c="dimmed">
-                  <strong>Collection:</strong> {data.collection}
-                </Text>
-              )}
-            </Stack>
-          </Card>
-        );
-
-      case 'document_judging':
-        return (
-          <Card withBorder p="xs" mt="xs" style={{ backgroundColor: theme.colors.orange[0], borderColor: theme.colors.orange[3] }}>
-            <Stack gap="xs">
-              <Text size="xs" fw={500} c="orange.7">⚖️ Documents Ranked</Text>
-              <Group gap="xs">
-                <Badge size="xs" variant="filled" color="green">
-                  {data.total_documents || 0} total
-                </Badge>
-                <Badge size="xs" variant="filled" color="orange">
-                  {data.relevant_documents || 0} relevant
-                </Badge>
-              </Group>
-              {data.avg_score !== undefined && (
-                <Text size="xs" c="dimmed">
-                  <strong>Avg Score:</strong> {(data.avg_score * 100).toFixed(1)}%
-                </Text>
-              )}
-            </Stack>
-          </Card>
-        );
-
-      case 'response_generation':
-        return (
-          <Card withBorder p="xs" mt="xs" style={{ backgroundColor: theme.colors.teal[0], borderColor: theme.colors.teal[3] }}>
-            <Stack gap="xs">
-              <Text size="xs" fw={500} c="teal.7">✅ Response Generated</Text>
-              <Group gap="xs">
-                {metadata && (
-                  <Badge size="xs" variant="light" color="teal">
-                    Complete
-                  </Badge>
-                )}
-              </Group>
-            </Stack>
-          </Card>
-        );
-
-      default:
-        return null;
-    }
-  };
 
   const stages: WorkflowStage[] = useMemo(() => {
     console.log(`🔧 [RAG MODAL] Building stages with currentStage='${currentStage}', completedStages=[${completedStages.join(',')}]`);
@@ -272,30 +168,32 @@ export function RAGPipelineModal({
       ]
     });
 
-    // Stage 3: Judge Ranker - ALWAYS show because backend always runs it
-    allStages.push({
-      id: 'document_judging',
-      name: 'Judge Ranker',
-      description: `Evaluating relevance of ${metadata.documentCount || 0} documents`,
-      status: getLocalStageStatus('document_judging'),
-      icon: <IconScale size={20} />,
-      color: 'orange',
-      metadata: {
-        documentCount: metadata.documentCount,
-        relevantCount: metadata.relevantCount
-      },
-      substages: [
-        {
-          name: 'LLM-based relevance evaluation',
-          status: getSubstageStatus('document_judging')
+    // Stage 3: Judge Ranker - Only show when reranking is enabled
+    if (rerankingEnabled) {
+      allStages.push({
+        id: 'document_judging',
+        name: 'Judge Ranker',
+        description: `Evaluating relevance of ${metadata.documentCount || 0} documents`,
+        status: getLocalStageStatus('document_judging'),
+        icon: <IconScale size={20} />,
+        color: 'orange',
+        metadata: {
+          documentCount: metadata.documentCount,
+          relevantCount: metadata.relevantCount
         },
-        {
-          name: 'Ranking and filtering documents',
-          status: getSubstageStatus('document_judging'),
-          metric: metadata.relevantCount ? `${metadata.relevantCount} relevant` : undefined
-        }
-      ]
-    });
+        substages: [
+          {
+            name: 'LLM-based relevance evaluation',
+            status: getSubstageStatus('document_judging')
+          },
+          {
+            name: 'Ranking and filtering documents',
+            status: getSubstageStatus('document_judging'),
+            metric: metadata.relevantCount ? `${metadata.relevantCount} relevant` : undefined
+          }
+        ]
+      });
+    }
 
     // Stage 4: Response Generation
     allStages.push({
@@ -388,39 +286,48 @@ export function RAGPipelineModal({
       opened={opened}
       onClose={onClose}
       withCloseButton={false}
+      withOverlay={false}
       centered={false}
-      size="xl"
-      padding="lg"
+      size="lg"
+      padding="md"
       styles={{
         inner: {
           alignItems: 'flex-end',
-          paddingBottom: '80px'
+          paddingBottom: '20px',
+          pointerEvents: 'none',
+        },
+        content: {
+          pointerEvents: 'auto',
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          backdropFilter: 'blur(10px)',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)',
         },
         body: {
-          maxHeight: '70vh',
-          overflowY: 'auto'
+          padding: '12px 16px',
+          maxHeight: 'none',
+          overflowY: 'visible'
         }
       }}
       transitionProps={{ transition: 'slide-up', duration: 300 }}
     >
-      <Stack gap="md">
+      <Stack gap="xs">
         {/* Header with Progress */}
         <Box>
-          <Group justify="space-between" mb="xs">
+          <Group justify="space-between" mb={4}>
             <Group gap="xs">
               <ThemeIcon
-                size="lg"
+                size="md"
                 variant="gradient"
                 gradient={{ from: 'blue', to: 'cyan', deg: 45 }}
               >
-                <IconSearch size={20} />
+                <IconSearch size={18} />
               </ThemeIcon>
               <Box>
-                <Text size="lg" fw={600}>
-                  RAG Pipeline Processing
+                <Text size="sm" fw={600}>
+                  RAG Pipeline
                 </Text>
                 <Text size="xs" c="dimmed">
-                  {completedCount} of {totalStages} stages completed
+                  {completedCount} of {totalStages} stages
                 </Text>
               </Box>
             </Group>
@@ -449,7 +356,7 @@ export function RAGPipelineModal({
 
           <Progress
             value={progress}
-            size="lg"
+            size="md"
             radius="xl"
             animated={currentStage !== null}
             color={currentStage ? 'blue' : 'green'}
@@ -457,6 +364,154 @@ export function RAGPipelineModal({
               root: { backgroundColor: theme.colors.gray[2] }
             }}
           />
+        </Box>
+
+        {/* Circular Node Flow */}
+        {(() => {
+          console.log(`🔄 [CIRCULAR NODES] Rendering ${activeStages.length} stages:`, activeStages.map(s => `${s.id}=${s.status}`).join(', '));
+          return null;
+        })()}
+        <Box style={{ overflowX: 'auto', padding: '12px 0' }}>
+          <Group gap={4} wrap="nowrap" justify="center" style={{ minWidth: 'fit-content' }}>
+            {activeStages.map((stage, index) => {
+              const shouldShowLoader = stage.status === 'active';
+              const stageOrder = ['query_enhancement', 'document_retrieval', 'document_judging', 'response_generation'];
+              const stageNumber = stageOrder.indexOf(stage.id) + 1;
+              console.log(`🎯 [STAGE #${stageNumber}] ${stage.id}: status='${stage.status}', shouldShowLoader=${shouldShowLoader}`);
+              if (shouldShowLoader) {
+                console.log(`  ✅✅✅ STAGE #${stageNumber} SHOULD SHOW LOADER! ✅✅✅`);
+              } else {
+                console.log(`  ❌ Stage #${stageNumber} will NOT show loader (status is '${stage.status}')`);
+              }
+              return (
+                <React.Fragment key={stage.id}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px',
+                      alignItems: 'center',
+                      minWidth: '100px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        position: 'relative',
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: stage.status === 'active'
+                          ? 'linear-gradient(135deg, #339af0 0%, #1c7ed6 100%)'
+                          : '#e9ecef',
+                        boxShadow: stage.status === 'active' || stage.status === 'completed'
+                          ? '0 2px 6px rgba(0, 0, 0, 0.1)'
+                          : 'none',
+                        border: stage.status === 'pending' ? '2px dashed #adb5bd' : 'none',
+                        transition: 'all 0.3s ease',
+                      }}
+                    >
+                      {(() => { console.log(`🔵 [DIV RENDER] ${stage.id} - bg=${stage.status === 'active' ? 'blue' : 'gray'}, will render children...`); return null; })()}
+                      {(() => {
+                        const isActive = stage.status === 'active';
+                        console.log(`  ↳ [${stage.id}] isActive=${isActive}, stage.icon=`, stage.icon, `type=${typeof stage.icon}`);
+                        if (isActive) {
+                          console.log(`    🌀 Rendering IconLoader for ${stage.id}`);
+                          return (
+                            <IconLoader
+                              size={20}
+                              stroke={2}
+                              className="animate-spin"
+                              style={{
+                                color: 'white',
+                                display: 'block',
+                                width: '20px',
+                                height: '20px',
+                                animation: 'spin 1s linear infinite',
+                                opacity: 1,
+                                visibility: 'visible',
+                                pointerEvents: 'none'
+                              }}
+                            />
+                          );
+                        }
+                        console.log(`    🖼️ Rendering cloned icon for ${stage.id}, color will be ${stage.status === 'completed' ? '#51cf66' : '#868e96'}`);
+                        return React.cloneElement(stage.icon as React.ReactElement, {
+                          size: 20,
+                          style: { color: stage.status === 'completed' ? '#51cf66' : '#868e96' }
+                        } as any);
+                      })()}
+
+                      {/* Green checkmark overlay for completed stages */}
+                      {stage.status === 'completed' && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            bottom: '-2px',
+                            right: '-2px',
+                            width: '16px',
+                            height: '16px',
+                            borderRadius: '50%',
+                            background: 'linear-gradient(135deg, #51cf66 0%, #37b24d 100%)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.12)',
+                            border: '2px solid white',
+                          }}
+                        >
+                          <IconCheck size={10} style={{ color: 'white', strokeWidth: 3 }} />
+                        </div>
+                      )}
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: '12px',
+                        fontWeight: 500,
+                        textAlign: 'center',
+                        color: stage.status === 'pending' ? '#868e96' : '#212529',
+                        maxWidth: '90px',
+                        lineHeight: 1.3
+                      }}
+                    >
+                      {stage.name}
+                    </div>
+                  </div>
+
+                  {index < activeStages.length - 1 && (
+                    <Box
+                      style={{
+                        width: '20px',
+                        height: '2px',
+                        backgroundColor: stage.status === 'completed' ? '#51cf66' : '#dee2e6',
+                        transition: 'background-color 0.3s ease',
+                        marginBottom: '24px',
+                        position: 'relative'
+                      }}
+                    >
+                      <Box
+                        style={{
+                          position: 'absolute',
+                          right: '-4px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          width: 0,
+                          height: 0,
+                          borderTop: '4px solid transparent',
+                          borderBottom: '4px solid transparent',
+                          borderLeft: `6px solid ${stage.status === 'completed' ? '#51cf66' : '#dee2e6'}`,
+                          transition: 'border-color 0.3s ease'
+                        }}
+                      />
+                    </Box>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </Group>
         </Box>
 
         {/* Query Comparison */}
@@ -522,289 +577,6 @@ export function RAGPipelineModal({
             </Stack>
           </Card>
         )}
-
-        {/* Circular Node Flow */}
-        {(() => {
-          console.log(`🔄 [CIRCULAR NODES] Rendering ${activeStages.length} stages:`, activeStages.map(s => `${s.id}=${s.status}`).join(', '));
-          return null;
-        })()}
-        <Box style={{ overflowX: 'auto', padding: '12px 0' }}>
-          <Group gap={4} wrap="nowrap" justify="center" style={{ minWidth: 'fit-content' }}>
-            {activeStages.map((stage, index) => {
-              const shouldShowLoader = stage.status === 'active';
-              const stageOrder = ['query_enhancement', 'document_retrieval', 'document_judging', 'response_generation'];
-              const stageNumber = stageOrder.indexOf(stage.id) + 1;
-              console.log(`🎯 [STAGE #${stageNumber}] ${stage.id}: status='${stage.status}', shouldShowLoader=${shouldShowLoader}`);
-              if (shouldShowLoader) {
-                console.log(`  ✅✅✅ STAGE #${stageNumber} SHOULD SHOW LOADER! ✅✅✅`);
-              } else {
-                console.log(`  ❌ Stage #${stageNumber} will NOT show loader (status is '${stage.status}')`);
-              }
-              return (
-              <React.Fragment key={stage.id}>
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '6px',
-                    alignItems: 'center',
-                    minWidth: '100px',
-                  }}
-                >
-                  <div
-                    style={{
-                      width: '48px',
-                      height: '48px',
-                      borderRadius: '50%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      background: stage.status === 'active'
-                        ? 'linear-gradient(135deg, #339af0 0%, #1c7ed6 100%)'
-                        : '#e9ecef',
-                      boxShadow: stage.status === 'active' || stage.status === 'completed'
-                        ? '0 2px 8px rgba(0, 0, 0, 0.12)'
-                        : 'none',
-                      border: stage.status === 'pending' ? '2px dashed #adb5bd' : 'none',
-                      transition: 'all 0.3s ease',
-                    }}
-                  >
-                    {(() => { console.log(`🔵 [DIV RENDER] ${stage.id} - bg=${stage.status === 'active' ? 'blue' : 'gray'}, will render children...`); return null; })()}
-                    {(() => {
-                      const isActive = stage.status === 'active';
-                      console.log(`  ↳ [${stage.id}] isActive=${isActive}, stage.icon=`, stage.icon, `type=${typeof stage.icon}`);
-                      if (isActive) {
-                        console.log(`    🌀 Rendering IconLoader for ${stage.id}`);
-                        return (
-                          <IconLoader
-                            size={24}
-                            stroke={2}
-                            className="animate-spin"
-                            style={{
-                              color: 'white',
-                              display: 'block',
-                              width: '24px',
-                              height: '24px',
-                              animation: 'spin 1s linear infinite',
-                              opacity: 1,
-                              visibility: 'visible',
-                              pointerEvents: 'none'
-                            }}
-                          />
-                        );
-                      }
-                      console.log(`    🖼️ Rendering cloned icon for ${stage.id}, color will be ${stage.status === 'completed' ? '#51cf66' : '#868e96'}`);
-                      return React.cloneElement(stage.icon as React.ReactElement, {
-                        style: { color: stage.status === 'completed' ? '#51cf66' : '#868e96' }
-                      } as any);
-                    })()}
-
-                    {/* Green checkmark overlay for completed stages */}
-                    {stage.status === 'completed' && (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          bottom: '-2px',
-                          right: '-2px',
-                          width: '18px',
-                          height: '18px',
-                          borderRadius: '50%',
-                          background: 'linear-gradient(135deg, #51cf66 0%, #37b24d 100%)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          boxShadow: '0 1px 4px rgba(0, 0, 0, 0.15)',
-                          border: '2px solid white',
-                        }}
-                      >
-                        <IconCheck size={12} style={{ color: 'white', strokeWidth: 3 }} />
-                      </div>
-                    )}
-                  </div>
-
-                  <div
-                    style={{
-                      fontSize: '12px',
-                      fontWeight: 500,
-                      textAlign: 'center',
-                      color: stage.status === 'pending' ? '#868e96' : '#212529',
-                      maxWidth: '90px',
-                      lineHeight: 1.3
-                    }}
-                  >
-                    {stage.name}
-                  </div>
-                </div>
-
-                {index < activeStages.length - 1 && (
-                  <Box
-                    style={{
-                      width: '24px',
-                      height: '2px',
-                      backgroundColor: stage.status === 'completed' ? '#51cf66' : '#dee2e6',
-                      transition: 'background-color 0.3s ease',
-                      marginBottom: '30px',
-                      position: 'relative'
-                    }}
-                  >
-                    <Box
-                      style={{
-                        position: 'absolute',
-                        right: '-4px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        width: 0,
-                        height: 0,
-                        borderTop: '4px solid transparent',
-                        borderBottom: '4px solid transparent',
-                        borderLeft: `6px solid ${stage.status === 'completed' ? '#51cf66' : '#dee2e6'}`,
-                        transition: 'border-color 0.3s ease'
-                      }}
-                    />
-                  </Box>
-                )}
-              </React.Fragment>
-            );
-            })}
-          </Group>
-        </Box>
-
-        <Divider label="Detailed Progress" labelPosition="center" />
-
-        {/* Timeline */}
-        <Timeline
-          active={activeStages.findIndex(s => s.status === 'active')}
-          bulletSize={32}
-          lineWidth={2}
-          color="blue"
-        >
-          {activeStages.map((stage) => (
-            <Timeline.Item
-              key={stage.id}
-              bullet={
-                stage.status === 'completed' ? (
-                  <IconCheck size={18} />
-                ) : stage.status === 'active' ? (
-                  <IconLoader size={18} className="animate-spin" />
-                ) : (
-                  <IconCircleDot size={18} />
-                )
-              }
-              title={
-                <Group gap="xs" wrap="nowrap">
-                  <ThemeIcon
-                    size="md"
-                    variant={stage.status === 'active' ? 'filled' : stage.status === 'completed' ? 'light' : 'default'}
-                    color={stage.status === 'skipped' ? 'gray' : stage.color}
-                  >
-                    {stage.icon}
-                  </ThemeIcon>
-                  <Box style={{ flex: 1 }}>
-                    <Text size="sm" fw={500}>{stage.name}</Text>
-                    <Text size="xs" c="dimmed">{stage.description}</Text>
-                  </Box>
-                </Group>
-              }
-            >
-              {stage.substages && stage.status !== 'skipped' && (
-                <Collapse in={expandedStages.has(stage.id) || stage.status === 'active'}>
-                  <Card
-                    withBorder
-                    p="xs"
-                    radius="md"
-                    mt="xs"
-                    style={{
-                      backgroundColor: stage.status === 'active'
-                        ? theme.colors[stage.color][0]
-                        : theme.colors.gray[0],
-                      borderColor: stage.status === 'active'
-                        ? theme.colors[stage.color][3]
-                        : theme.colors.gray[3]
-                    }}
-                  >
-                    <Stack gap="xs">
-                      {stage.substages.map((substage, subIndex) => (
-                        <Group key={subIndex} gap="xs" wrap="nowrap">
-                          <ThemeIcon
-                            size="xs"
-                            variant="light"
-                            color={substage.status === 'completed' ? 'green' : stage.color}
-                          >
-                            {substage.status === 'completed' ? (
-                              <IconCheck size={12} />
-                            ) : (
-                              <IconLoader size={12} className="animate-spin" />
-                            )}
-                          </ThemeIcon>
-                          <Text size="xs" style={{ flex: 1 }}>
-                            {substage.name}
-                          </Text>
-                          {substage.metric && (
-                            <Badge size="xs" variant="light" color={stage.color}>
-                              {substage.metric}
-                            </Badge>
-                          )}
-                        </Group>
-                      ))}
-                    </Stack>
-                  </Card>
-                </Collapse>
-              )}
-
-              {stage.status === 'completed' && renderStageDetails(stage.id)}
-            </Timeline.Item>
-          ))}
-        </Timeline>
-
-        {/* Technical Details */}
-        <Card withBorder p="xs" radius="md" style={{ backgroundColor: theme.colors.gray[0] }}>
-          <Group gap="xs" style={{ cursor: 'pointer' }} onClick={() => toggleExpanded('technical')}>
-            <ThemeIcon size="xs" variant="light" color="blue">
-              <IconFileSearch size={12} />
-            </ThemeIcon>
-            <Text size="xs" fw={500} style={{ flex: 1 }}>Technical Details</Text>
-            <IconChevronDown
-              size={14}
-              style={{
-                transform: expandedStages.has('technical') ? 'rotate(180deg)' : 'rotate(0deg)',
-                transition: 'transform 0.2s ease'
-              }}
-            />
-          </Group>
-
-          <Collapse in={expandedStages.has('technical')}>
-            <Stack gap="xs" mt="xs">
-              <Group gap="xs">
-                <Text size="xs" c="dimmed" style={{ width: '140px' }}>Vector Index:</Text>
-                <Badge size="xs" variant="light" color="blue">
-                  {metadata.indexType || 'HNSW'}
-                </Badge>
-              </Group>
-              {metadata.vectorDimension && (
-                <Group gap="xs">
-                  <Text size="xs" c="dimmed" style={{ width: '140px' }}>Vector Dimension:</Text>
-                  <Badge size="xs" variant="light" color="cyan">
-                    {metadata.vectorDimension}D
-                  </Badge>
-                </Group>
-              )}
-              <Group gap="xs">
-                <Text size="xs" c="dimmed" style={{ width: '140px' }}>Documents Retrieved:</Text>
-                <Badge size="xs" variant="light" color="green">
-                  {metadata.documentCount || 0}
-                </Badge>
-              </Group>
-              {metadata.relevantCount !== undefined && (
-                <Group gap="xs">
-                  <Text size="xs" c="dimmed" style={{ width: '140px' }}>Relevant After Reranking:</Text>
-                  <Badge size="xs" variant="light" color="orange">
-                    {metadata.relevantCount}
-                  </Badge>
-                </Group>
-              )}
-            </Stack>
-          </Collapse>
-        </Card>
       </Stack>
 
       <style>{`

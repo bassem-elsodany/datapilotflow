@@ -52,8 +52,10 @@ import {
   IconTrash,
   IconX
 } from '@tabler/icons-react';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useRAGWorkflowProgress } from '@/hooks/useRAGWorkflowProgress';
+import { useSupervisorWorkflowProgress } from '@/hooks/useSupervisorWorkflowProgress';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -303,6 +305,10 @@ export default function ConversationWindow() {
     ragSubstages: [],  // Initialize empty substages
   });
 
+  // Initialize workflow progress handlers for both RAG and Supervisor modes
+  const { handleRAGWorkflowProgress, cleanup: cleanupRAG } = useRAGWorkflowProgress();
+  const { handleSupervisorWorkflowProgress, cleanup: cleanupSupervisor } = useSupervisorWorkflowProgress();
+
   // Fetch data
   const { data: providers, isLoading: providersLoading } = useGetActiveModelProviders();
   const { data: collections, isLoading: collectionsLoading } = useGetCollections();
@@ -358,14 +364,25 @@ export default function ConversationWindow() {
     }
   }, [settingsModalOpen, sessionId]);
 
-  // Cleanup WebSocket on unmount
+  // Sync messageMode with enableKnowledgeAssistant setting
+  // When user enables/disables Agent Mode in settings, update the message mode
+  useEffect(() => {
+    setMessageMode(enableKnowledgeAssistant ? 'agent' : 'rag');
+    console.log(`🔄 [MESSAGE MODE SYNC] Set messageMode to: ${enableKnowledgeAssistant ? 'agent' : 'rag'}`);
+  }, [enableKnowledgeAssistant]);
+
+  // Cleanup WebSocket on unmount and pending timeouts
   useEffect(() => {
     return () => {
       if (wsRef.current) {
         wsRef.current.close();
       }
+      // Clean up any pending completion timeouts from both handlers
+      cleanupRAG();
+      cleanupSupervisor();
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps: Only run cleanup on unmount, not when cleanup functions change
 
   const loadConversationHistory = async () => {
     try {
@@ -474,6 +491,11 @@ export default function ConversationWindow() {
           conversation_id: sessionId,
         };
 
+        // Log the message being sent with mode/endpoint info
+        const modeLabel = messageMode === 'agent' ? '∞ ASSISTANT AGENT' : '📚 RAG AGENT';
+        const endpointLabel = messageMode === 'agent' ? '/ws/agent/query/supervisor' : '/ws/agent/query/rag';
+        console.log(`📤 [QUERY SENT] Mode: ${modeLabel} | Endpoint: ${endpointLabel} | Query: ${inputMessage.substring(0, 100)}${inputMessage.length > 100 ? '...' : ''}`);
+
         wsRef.current.send(JSON.stringify(message));
       } catch (error) {
         const errorMessage: Message = {
@@ -541,6 +563,11 @@ export default function ConversationWindow() {
         : apiEndpoints.agent.websocket.rag;
       const wsUrl = apiUtils.buildWebSocketUrl(wsEndpoint, token || undefined);
 
+      // Log the endpoint being invoked
+      const modeLabel = messageMode === 'agent' ? '∞ ASSISTANT AGENT' : '📚 RAG AGENT';
+      const endpointLabel = messageMode === 'agent' ? '/ws/agent/query/supervisor' : '/ws/agent/query/rag';
+      console.log(`🔌 [WS CONNECTING] Mode: ${modeLabel} | Endpoint: ${endpointLabel}`);
+
       wsRef.current = new WebSocket(wsUrl);
 
       // Add connection timeout
@@ -556,6 +583,8 @@ export default function ConversationWindow() {
         clearTimeout(connectionTimeout);
         setIsConnected(true);
         setConnectionRetries(0); // Reset retry counter on successful connection
+        const modeLabel = messageMode === 'agent' ? '∞ ASSISTANT AGENT' : '📚 RAG AGENT';
+        console.log(`✅ [WS CONNECTED] Mode: ${modeLabel} | Connection established successfully`);
       };
 
       wsRef.current.onmessage = (event) => {
@@ -570,13 +599,17 @@ export default function ConversationWindow() {
 
       wsRef.current.onclose = (event) => {
         clearTimeout(connectionTimeout);
-        setIsConnected(true); // Reset to connected state since we connect on-demand
+        setIsConnected(false); // Mark as disconnected when connection closes
         setIsLoading(false);
         finalizeStreamingMessages();
+        
+        // Log close reason for debugging
+        console.log(`🔌 WebSocket closed: code=${event.code}, reason=${event.reason || 'No reason provided'}`);
       };
 
       wsRef.current.onerror = (error) => {
-        setIsConnected(true); // Reset to connected state since we connect on-demand
+        console.error('❌ WebSocket error:', error);
+        setIsConnected(false); // Mark as disconnected on error
         setIsLoading(false);
         finalizeStreamingMessages();
       };
@@ -987,115 +1020,41 @@ export default function ConversationWindow() {
           }));
           break;
 
-        case 'workflow_progress': {
-          // Handle RAG substage progress events from LangGraph node execution
-          // Backend sends current_node and stage (start and complete events)
-          const currentNode = data?.current_node || '';
-          const stageFromEvent = data?.stage || '';
+        case 'workflow_error':
+          // Handle workflow error - show actual error message from backend
+          console.log('❌ [WORKFLOW ERROR] Workflow failed:', data);
 
-          // Check if this is a COMPLETE event (has query_variants, document_count, etc.)
-          const isCompleteEvent = stageFromEvent.endsWith('_complete');
+          // Stop loading indicator
+          setIsLoading(false);
 
-          // Extract data from complete events
-          const queryVariants = data?.data?.query_variants || [];
-          const strategyFromData = data?.data?.strategy || '';
-          const documentCount = data?.data?.document_count || 0;
-          const relevantCount = data?.data?.relevant_documents || 0;
-          const avgScore = data?.data?.avg_score;
-
-          console.log(`🔄 [WORKFLOW PROGRESS] stage=${stageFromEvent}, current_node=${currentNode}, isComplete=${isCompleteEvent}, queryVariants=${queryVariants.length}, documentCount=${documentCount}`);
-
-          // Map LangGraph node names to UI stage names (MUST match backend stage_mapping)
-          const nodeToStageMap: Record<string, string> = {
-            'augmented_strategy_node': 'query_enhancement',
-            'multi_query_strategy_node': 'query_enhancement',
-            'hyde_strategy_node': 'query_enhancement',
-            'decomposition_strategy_node': 'query_enhancement',
-            'document_retriever': 'document_retrieval',
-            'document_judger': 'document_judging',
-            'answer_generator': 'response_generation',
-            'raw_response_formatter': 'response_generation',
+          // Add error message to conversation
+          const errorContent = data.response || data.error || 'An error occurred during the workflow. Please try again.';
+          const errorMessage: Message = {
+            role: 'assistant',
+            content: errorContent,
+            timestamp: new Date(),
           };
+          setMessages(prev => [...prev, errorMessage]);
 
-          // Use stage from event if available, otherwise map from node name
-          let mappedStage = stageFromEvent.replace('_complete', '');
-          if (!mappedStage) {
-            mappedStage = nodeToStageMap[currentNode] || currentNode;
+          // Close the modal
+          setWorkflowState(prev => ({
+            ...prev,
+            isActive: false,
+            currentStage: null,
+          }));
+          break;
+
+        case 'workflow_progress': {
+          // Route to appropriate handler based on mode
+          if (enableKnowledgeAssistant) {
+            // Supervisor mode - use supervisor handler
+            console.log('🤖 Routing to SUPERVISOR workflow handler');
+            handleSupervisorWorkflowProgress(data, workflowState, setWorkflowState);
+          } else {
+            // RAG mode - use RAG handler
+            console.log('🎭 Routing to RAG workflow handler');
+            handleRAGWorkflowProgress(data, workflowState, setWorkflowState);
           }
-
-          setWorkflowState(prev => {
-            // Check if we actually need to update state
-            const newCompleted = [...prev.completedStages];
-            const newRagSubstages = [...(prev.ragSubstages || [])];
-            const newStageDetails = { ...prev.stageDetails };
-
-            let hasChanges = false;
-
-            // Add this substage to ragSubstages if it's a RAG-related stage (only once per stage)
-            if (mappedStage === 'query_enhancement' && !newRagSubstages.includes('query_enhancement')) {
-              newRagSubstages.push('query_enhancement');
-              hasChanges = true;
-            } else if (mappedStage === 'document_retrieval' && !newRagSubstages.includes('document_retrieval')) {
-              newRagSubstages.push('document_retrieval');
-              hasChanges = true;
-            } else if (mappedStage === 'document_judging' && !newRagSubstages.includes('document_judging')) {
-              newRagSubstages.push('document_judging');
-              hasChanges = true;
-            } else if (mappedStage === 'response_generation' && !newRagSubstages.includes('response_generation')) {
-              newRagSubstages.push('response_generation');
-              hasChanges = true;
-            }
-
-            // Build updated state only if there are changes
-            if (isCompleteEvent) {
-              if (!newCompleted.includes(mappedStage)) {
-                newCompleted.push(mappedStage);
-                hasChanges = true;
-              }
-
-              // Store detailed data for the completed stage
-              newStageDetails[mappedStage] = {
-                message: data?.message || '',
-                data: data?.data || {},
-                timestamp: new Date().toISOString(),
-                execution_time_ms: data?.execution_time_ms || 0,
-              };
-              hasChanges = true;
-
-              // Extract and capture data based on stage
-              const newState: any = {
-                ...prev,
-                ragSubstages: newRagSubstages,
-                completedStages: newCompleted,
-                stageDetails: newStageDetails,
-              };
-
-              if (mappedStage === 'query_enhancement' && queryVariants.length > 0) {
-                newState.enhancedQueries = queryVariants;
-                newState.strategy = strategyFromData || prev.strategy;
-                console.log(`✨ Enhanced queries captured from complete event:`, queryVariants);
-              } else if (mappedStage === 'document_retrieval' && documentCount > 0) {
-                newState.documentCount = documentCount;
-                console.log(`📚 Document count captured:`, documentCount);
-              } else if (mappedStage === 'document_judging' && relevantCount >= 0) {
-                newState.relevantCount = relevantCount;
-                console.log(`⚖️ Relevant count captured:`, relevantCount);
-              }
-
-              return hasChanges ? newState : prev;
-            } else {
-              // START event - Always update to ensure rendering, even if stage hasn't "changed"
-              console.log(`▶️ START event for stage: ${mappedStage} (prev was: ${prev.currentStage})`);
-              return {
-                ...prev,
-                currentStage: mappedStage,
-                ragSubstages: newRagSubstages,
-              };
-            }
-
-            // Should never reach here for START events, but just in case
-            return prev;
-          });
           break;
         }
 
@@ -1182,10 +1141,18 @@ export default function ConversationWindow() {
                 stageDetails: newStageDetails,
               };
 
+              // Capture from query_enhancement_complete event
               if (completedStage === 'query_enhancement' && data?.data?.query_variants) {
                 updateState.enhancedQueries = data.data.query_variants;
                 updateState.strategy = data.data.strategy || prev.strategy;
-                console.log(`✨ Enhanced queries captured:`, data.data.query_variants);
+                console.log(`✨ Enhanced queries captured from query_enhancement_complete:`, data.data.query_variants);
+              }
+
+              // Also capture from rag_agent_executing_complete event (for supervisor mode)
+              if (completedStage === 'rag_agent_executing' && data?.data?.query_variants) {
+                updateState.enhancedQueries = data.data.query_variants;
+                updateState.strategy = data.data.strategy_used || prev.strategy;
+                console.log(`✨ Enhanced queries captured from rag_agent_executing_complete:`, data.data.query_variants);
               }
 
               return updateState;
@@ -1315,12 +1282,12 @@ export default function ConversationWindow() {
         case 'error':
           // Handle errors
           finalizeStreamingMessages();
-          const errorMessage: Message = {
+          const genericErrorMessage: Message = {
             role: 'assistant',
             content: message || error || 'An error occurred during the conversation.',
             timestamp: new Date(),
           };
-          setMessages(prev => [...prev, errorMessage]);
+          setMessages(prev => [...prev, genericErrorMessage]);
           setIsLoading(false);
           break;
 
@@ -1381,28 +1348,28 @@ export default function ConversationWindow() {
   const handleSaveSettings = async () => {
     if (!sessionId) return;
 
+    // Validate BEFORE setting loading state
+    if (enableLLMGeneration && !selectedProviderId) {
+      notifications.show({
+        title: 'Error',
+        message: 'Please select an LLM provider when Generative Answer is enabled',
+        color: 'red',
+      });
+      return;
+    }
+
+    if (enableLLMGeneration && !selectedModel) {
+      notifications.show({
+        title: 'Error',
+        message: 'Please select an LLM model when Generative Answer is enabled',
+        color: 'red',
+      });
+      return;
+    }
+
     try {
       setIsSavingSettings(true);
       const token = localStorage.getItem('jwt_token');
-
-      // Validate LLM provider and model when generative answer is enabled
-      if (enableLLMGeneration && !selectedProviderId) {
-        notifications.show({
-          title: 'Error',
-          message: 'Please select an LLM provider when Generative Answer is enabled',
-          color: 'red',
-        });
-        return;
-      }
-
-      if (enableLLMGeneration && !selectedModel) {
-        notifications.show({
-          title: 'Error',
-          message: 'Please select an LLM model when Generative Answer is enabled',
-          color: 'red',
-        });
-        return;
-      }
 
       const payload: any = {
         llm_provider_id: enableLLMGeneration ? selectedProviderId : null,
@@ -1463,6 +1430,66 @@ export default function ConversationWindow() {
       setIsSavingSettings(false);
     }
   };
+
+  // Auto-save settings with debounce when user changes badges
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const autoSaveSettings = useCallback(async () => {
+    if (!sessionId) return;
+
+    try {
+      const token = localStorage.getItem('jwt_token');
+
+      const payload: any = {
+        llm_provider_id: enableLLMGeneration ? selectedProviderId : null,
+        llm_model_name: enableLLMGeneration ? selectedModel : null,
+        enhancement_strategy: selectedStrategy !== 'none' ? selectedStrategy : null,
+        collection_name: collectionName,
+        enable_reranking: enableReranking,
+        relevance_threshold: relevanceThreshold,
+        reranker_provider_id: enableReranking ? selectedRerankerId : null,
+        reranker_model_name: enableReranking ? selectedRerankerModel : null,
+        enable_llm_generation: enableLLMGeneration,
+        top_k: topK,
+        enable_knowledge_assistant: enableKnowledgeAssistant,
+      };
+
+      const response = await fetch(apiUtils.buildApiUrl(`/conversations/${sessionId}`), {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        console.error('Failed to auto-save conversation settings');
+      }
+    } catch (error) {
+      console.error('Error auto-saving conversation settings:', error);
+    }
+  }, [sessionId, selectedProviderId, selectedModel, selectedStrategy, collectionName, enableReranking, relevanceThreshold, selectedRerankerId, selectedRerankerModel, enableLLMGeneration, topK, enableKnowledgeAssistant]);
+
+  // Debounced auto-save when settings change
+  useEffect(() => {
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+
+    // Only auto-save if settings modal is NOT open (to avoid conflicts with manual save)
+    if (!settingsModalOpen && sessionId) {
+      autoSaveTimeoutRef.current = setTimeout(() => {
+        autoSaveSettings();
+      }, 1000); // 1 second debounce
+    }
+
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+    };
+  }, [selectedProviderId, selectedModel, selectedStrategy, collectionName, enableReranking, relevanceThreshold, selectedRerankerId, selectedRerankerModel, enableLLMGeneration, topK, enableKnowledgeAssistant, settingsModalOpen, sessionId, autoSaveSettings]);
 
   const handleBack = () => {
     navigate(paths.dashboard.apps.knowledgeSearch);
@@ -1923,41 +1950,45 @@ export default function ConversationWindow() {
         <Stack gap="sm">
           {/* Query Input - Top */}
           <Box>
-            <TextInput
-              placeholder={messageMode === 'agent'
-                ? "Ask the agent to help with tasks or answer questions..."
-                : "Ask about your knowledge base or refine your query..."}
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
-              size="md"
-              radius="md"
-              style={{
-                borderColor: isConnected ? undefined : 'var(--mantine-color-orange-4)',
-                transition: 'all 0.2s ease',
-              }}
-              disabled={isLoading || isLoadingHistory}
-              rightSection={
-                isLoading ? (
-                  <IconLoader size={18} className="animate-spin" style={{ marginRight: '12px' }} />
-                ) : !isConnected ? (
-                  <IconLoader size={18} className="animate-spin" style={{ color: 'var(--mantine-color-orange-6)', marginRight: '12px' }} />
-                ) : (
-                  <Button
-                    onClick={sendMessage}
-                    disabled={!inputMessage.trim()}
-                    variant="filled"
-                    size="sm"
-                    color="blue"
-                    radius="md"
-                    style={{ marginRight: '4px' }}
-                    leftSection={<IconSend size={16} />}
-                  >
-                    Send
-                  </Button>
-                )
-              }
-            />
+            <Group gap="xs" align="center">
+              <TextInput
+                placeholder={messageMode === 'agent'
+                  ? "Ask the agent to help with tasks or answer questions..."
+                  : "Ask about your knowledge base or refine your query..."}
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyPress={handleKeyPress}
+                size="md"
+                radius="md"
+                style={{
+                  borderColor: isConnected ? undefined : 'var(--mantine-color-orange-4)',
+                  transition: 'all 0.2s ease',
+                  flex: 1,
+                }}
+                disabled={isLoading || isLoadingHistory}
+                rightSection={
+                  isLoading ? (
+                    <IconLoader size={18} className="animate-spin" />
+                  ) : !isConnected ? (
+                    <IconLoader size={18} className="animate-spin" style={{ color: 'var(--mantine-color-orange-6)' }} />
+                  ) : null
+                }
+              />
+              {isConnected && !isLoading && (
+                <Button
+                  onClick={sendMessage}
+                  disabled={!inputMessage.trim()}
+                  variant="filled"
+                  size="md"
+                  color="blue"
+                  radius="md"
+                  style={{ minWidth: '80px' }}
+                  leftSection={<IconSend size={18} />}
+                >
+                  Send
+                </Button>
+              )}
+            </Group>
           </Box>
 
           {/* Settings Bar - Bottom */}
@@ -1968,7 +1999,14 @@ export default function ConversationWindow() {
               <Select
                 placeholder="Mode"
                 value={messageMode}
-                onChange={(value) => setMessageMode((value as 'agent' | 'rag') || 'agent')}
+                onChange={(value) => {
+                  const newMode = (value as 'agent' | 'rag') || 'agent';
+                  setMessageMode(newMode);
+                  // When user selects a mode, also update the enableKnowledgeAssistant setting
+                  const newEnableKA = newMode === 'agent';
+                  setEnableKnowledgeAssistant(newEnableKA);
+                  console.log(`🔄 [MODE CHANGED] User selected: ${newMode} → enableKnowledgeAssistant=${newEnableKA}`);
+                }}
                 data={[
                   { value: 'agent', label: '∞ Assistant Agent' },
                   { value: 'rag', label: '📚 RAG Agent' }

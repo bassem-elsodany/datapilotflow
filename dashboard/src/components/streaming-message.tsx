@@ -55,9 +55,7 @@ export function StreamingMessage({
       setIsTyping(true);
 
       // For real-time streaming, show content immediately as it comes
-      if (content !== displayContent) {
-        setDisplayContent(content);
-      }
+      setDisplayContent(content);
     } else {
       // When streaming is complete, ensure full content is shown
       setDisplayContent(content);
@@ -70,7 +68,7 @@ export function StreamingMessage({
         }, 300);
       }
     }
-  }, [content, isStreaming, onComplete, displayContent]);
+  }, [content, isStreaming, onComplete]);
 
   const formatTimestamp = (timestamp: Date | string): string => {
     try {
