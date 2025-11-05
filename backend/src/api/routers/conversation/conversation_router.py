@@ -127,6 +127,78 @@ class CreateSessionRequest(BaseModel):
     )
 
 
+def _serialize_conversation_to_response(session: 'ConversationSession') -> dict:
+    """Serialize ConversationSession to API response format (new nested structure)."""
+    response = {
+        "id": session._id,
+        "name": session.name or f"Session {session._id[:8]}",
+        "description": session.description,
+        "created_at": session.created_at.isoformat(),
+        "last_updated": session.last_updated.isoformat(),
+        "message_count": session.message_count,
+        "tags": session.tags or [],
+        "enable_knowledge_assistant": session.enable_knowledge_assistant,
+    }
+
+    # System prompt (embedded)
+    if session.system_prompt:
+        response["system_prompt"] = {
+            "id": session.system_prompt.id,
+            "title": session.system_prompt.title,
+            "content": session.system_prompt.content,
+        }
+
+    # Enhancement configuration
+    if session.enhancement:
+        response["enhancement"] = {
+            "strategy": session.enhancement.strategy,
+            "provider": (
+                {
+                    "id": session.enhancement.provider.id,
+                    "model_name": session.enhancement.provider.model_name,
+                }
+                if session.enhancement.provider
+                else None
+            ),
+        }
+
+    # Vector database configuration
+    if session.vector_database:
+        response["vector_database"] = {
+            "collection_name": session.vector_database.collection_name,
+            "top_k": session.vector_database.top_k,
+        }
+
+    # Reranker configuration
+    if session.reranker:
+        response["reranker"] = {
+            "provider": (
+                {
+                    "id": session.reranker.provider.id,
+                    "model_name": session.reranker.provider.model_name,
+                }
+                if session.reranker.provider
+                else None
+            ),
+            "relevance_threshold": session.reranker.relevance_threshold,
+        }
+
+    # Answer generation configuration
+    if session.answer_generation:
+        response["answer_generation"] = {
+            "provider": (
+                {
+                    "id": session.answer_generation.provider.id,
+                    "model_name": session.answer_generation.provider.model_name,
+                }
+                if session.answer_generation.provider
+                else None
+            )
+        }
+
+    return response
+
+
 class ChatMessage(BaseModel):
     message: str
     candidate_id: str
@@ -497,41 +569,15 @@ async def reset_conversation_messages(
 @router.get("", status_code=status.HTTP_200_OK)
 async def get_conversation_sessions(current_user: User = Depends(get_current_user)):
     """
-    Get all conversation sessions for the current user.
+    Get all conversation sessions for the current user with new nested configuration structure.
     """
     try:
         sessions = conversation_history_service.get_user_conversations(current_user.id)
 
         session_responses = []
         for session in sessions:
-            session_data = {
-                "id": str(session._id),
-                "name": session.name or f"Session {str(session._id)[:8]}",
-                "description": session.description,
-                "created_at": session.created_at.isoformat(),
-                "last_updated": session.last_updated.isoformat(),
-                "message_count": session.message_count,
-                "topics_discussed": session.topics_discussed or [],
-                "knowledge_sources_used": session.knowledge_sources_used or [],
-                "llm_provider_id": session.llm_provider_id,
-                "llm_model_name": session.llm_model_name,
-                "collection_name": session.collection_name,
-                "total_queries": session.total_queries,
-                "total_documents_retrieved": session.total_documents_retrieved,
-                "average_response_time_ms": session.average_response_time_ms,
-                "tags": session.tags or [],
-            }
-
-            # Add enhancement config
-            if session.enhancement_config:
-                session_data["enhancement_strategy"] = (
-                    session.enhancement_config.strategy
-                )
-                session_data["enhancement_enabled"] = session.enhancement_config.enabled
-            else:
-                session_data["enhancement_strategy"] = "none"
-                session_data["enhancement_enabled"] = False
-
+            # Serialize each conversation to response format (new nested structure)
+            session_data = _serialize_conversation_to_response(session)
             session_responses.append(session_data)
 
         return {
@@ -585,45 +631,8 @@ async def get_conversation_session(
             conversation_id, current_user.id
         )
 
-        session_data = {
-            "id": session._id,
-            "name": session.name or f"Session {session._id[:8]}",
-            "description": session.description,
-            "created_at": session.created_at.isoformat(),
-            "last_updated": session.last_updated.isoformat(),
-            "message_count": session.message_count,
-            "topics_discussed": session.topics_discussed or [],
-            "knowledge_sources_used": session.knowledge_sources_used or [],
-            "llm_provider_id": session.llm_provider_id,
-            "llm_model_name": session.llm_model_name,
-            "collection_name": session.collection_name,
-            "total_queries": session.total_queries,
-            "total_documents_retrieved": session.total_documents_retrieved,
-            "average_response_time_ms": session.average_response_time_ms,
-            "tags": session.tags or [],
-            "enable_reranking": getattr(session, "enable_reranking", False),
-            "reranker_provider_id": getattr(session, "reranker_provider_id", None),
-            "reranker_model_name": getattr(session, "reranker_model_name", None),
-            "enable_llm_generation": getattr(session, "enable_llm_generation", True),
-            "top_k": getattr(session, "top_k", None),
-            "enable_knowledge_assistant": getattr(session, "enable_knowledge_assistant", True),
-        }
-
-        logger.info(
-            f"  session_data['enable_llm_generation']: {session_data['enable_llm_generation']}"
-        )
-        logger.info(
-            f"  session_data['enable_knowledge_assistant']: {session_data['enable_knowledge_assistant']}"
-        )
-
-        # Add enhancement config
-        if session.enhancement_config:
-            session_data["enhancement_config"] = {
-                "strategy": session.enhancement_config.strategy,
-                "enabled": session.enhancement_config.enabled,
-            }
-        else:
-            session_data["enhancement_config"] = {"strategy": "none", "enabled": False}
+        # Serialize conversation to response format (new nested structure)
+        session_data = _serialize_conversation_to_response(session)
 
         # Add expanded provider if requested
         if llm_provider:
