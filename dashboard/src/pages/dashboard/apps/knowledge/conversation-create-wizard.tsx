@@ -985,23 +985,51 @@ function StepEnhancementStrategy({ form, onLearnClick }: StepProps & { onLearnCl
       </Group>
 
       {selectedStrategyInfo && (
-        <Card withBorder p="md" bg="gray.0">
-          <Stack gap="sm">
-            <div>
-              <Text fw={600} size="sm" mb="xs">
-                {selectedStrategyInfo.label}
-              </Text>
-              <Text size="sm" c="dimmed">
-                {selectedStrategyInfo.description}
-              </Text>
-            </div>
+        <Card
+          withBorder
+          p="md"
+          style={{
+            background: `linear-gradient(135deg, ${selectedStrategyInfo.color === 'green' ? '#dcfce7' : selectedStrategyInfo.color === 'cyan' ? '#cffafe' : selectedStrategyInfo.color === 'blue' ? '#dbeafe' : selectedStrategyInfo.color === 'grape' ? '#f3e8ff' : selectedStrategyInfo.color === 'violet' ? '#ede9fe' : '#f3f4f6'} 0%, #ffffff 100%)`,
+            borderColor: selectedStrategyInfo.color === 'green' ? '#22c55e' : selectedStrategyInfo.color === 'cyan' ? '#06b6d4' : selectedStrategyInfo.color === 'blue' ? '#3b82f6' : selectedStrategyInfo.color === 'grape' ? '#a855f7' : selectedStrategyInfo.color === 'violet' ? '#8b5cf6' : '#d1d5db',
+            borderWidth: '2px'
+          }}
+        >
+          <Stack gap="md">
+            <Group gap="sm">
+              <div
+                style={{
+                  width: '8px',
+                  height: '40px',
+                  borderRadius: '4px',
+                  background: selectedStrategyInfo.color === 'green' ? '#22c55e' : selectedStrategyInfo.color === 'cyan' ? '#06b6d4' : selectedStrategyInfo.color === 'blue' ? '#3b82f6' : selectedStrategyInfo.color === 'grape' ? '#a855f7' : selectedStrategyInfo.color === 'violet' ? '#8b5cf6' : '#d1d5db'
+                }}
+              />
+              <div>
+                <Text fw={700} size="md" style={{
+                  color: selectedStrategyInfo.color === 'green' ? '#15803d' : selectedStrategyInfo.color === 'cyan' ? '#164e63' : selectedStrategyInfo.color === 'blue' ? '#1e40af' : selectedStrategyInfo.color === 'grape' ? '#6b21a8' : selectedStrategyInfo.color === 'violet' ? '#5b21b6' : '#374151'
+                }}>
+                  {selectedStrategyInfo.label}
+                </Text>
+                <Text size="sm" c="dimmed" mt="4px">
+                  {selectedStrategyInfo.description}
+                </Text>
+              </div>
+            </Group>
 
             <Grid gutter="md">
               <Grid.Col span={{ base: 12, sm: 6 }}>
                 <Stack gap="xs">
-                  <Text fw={600} size="xs" c="green">
-                    Pros
-                  </Text>
+                  <Group gap="xs">
+                    <div style={{
+                      width: '4px',
+                      height: '16px',
+                      borderRadius: '2px',
+                      background: '#22c55e'
+                    }} />
+                    <Text fw={600} size="xs" c="green">
+                      Pros
+                    </Text>
+                  </Group>
                   <List size="xs">
                     {selectedStrategyInfo.pros.map((pro) => (
                       <List.Item key={pro}>{pro}</List.Item>
@@ -1011,9 +1039,17 @@ function StepEnhancementStrategy({ form, onLearnClick }: StepProps & { onLearnCl
               </Grid.Col>
               <Grid.Col span={{ base: 12, sm: 6 }}>
                 <Stack gap="xs">
-                  <Text fw={600} size="xs" c="red">
-                    Cons
-                  </Text>
+                  <Group gap="xs">
+                    <div style={{
+                      width: '4px',
+                      height: '16px',
+                      borderRadius: '2px',
+                      background: '#ef4444'
+                    }} />
+                    <Text fw={600} size="xs" c="red">
+                      Cons
+                    </Text>
+                  </Group>
                   <List size="xs">
                     {selectedStrategyInfo.cons.map((con) => (
                       <List.Item key={con}>{con}</List.Item>
