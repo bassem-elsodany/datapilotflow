@@ -1005,7 +1005,7 @@ export default function ConversationWindow() {
 
           console.log(`🔄 [WORKFLOW PROGRESS] stage=${stageFromEvent}, current_node=${currentNode}, isComplete=${isCompleteEvent}, queryVariants=${queryVariants.length}, documentCount=${documentCount}`);
 
-          // Map LangGraph node names to UI stage names
+          // Map LangGraph node names to UI stage names (MUST match backend stage_mapping)
           const nodeToStageMap: Record<string, string> = {
             'augmented_strategy_node': 'query_enhancement',
             'multi_query_strategy_node': 'query_enhancement',
@@ -1013,8 +1013,8 @@ export default function ConversationWindow() {
             'decomposition_strategy_node': 'query_enhancement',
             'document_retriever': 'document_retrieval',
             'document_judger': 'document_judging',
-            'answer_generator': 'answer_generation',
-            'raw_response_formatter': 'answer_generation',
+            'answer_generator': 'response_generation',
+            'raw_response_formatter': 'response_generation',
           };
 
           // Use stage from event if available, otherwise map from node name
@@ -1041,8 +1041,8 @@ export default function ConversationWindow() {
             } else if (mappedStage === 'document_judging' && !newRagSubstages.includes('document_judging')) {
               newRagSubstages.push('document_judging');
               hasChanges = true;
-            } else if (mappedStage === 'answer_generation' && !newRagSubstages.includes('answer_generation')) {
-              newRagSubstages.push('answer_generation');
+            } else if (mappedStage === 'response_generation' && !newRagSubstages.includes('response_generation')) {
+              newRagSubstages.push('response_generation');
               hasChanges = true;
             }
 

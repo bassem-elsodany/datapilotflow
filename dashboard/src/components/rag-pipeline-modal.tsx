@@ -286,20 +286,20 @@ export function RAGPipelineModal({
       substages: enableLLMGeneration ? [
         {
           name: 'Building context from documents',
-          status: getSubstageStatus('answer_generation')
+          status: getSubstageStatus('response_generation')
         },
         {
           name: 'Streaming LLM response',
-          status: getSubstageStatus('answer_generation')
+          status: getSubstageStatus('response_generation')
         }
       ] : [
         {
           name: 'Structuring documents for display',
-          status: getSubstageStatus('answer_generation')
+          status: getSubstageStatus('response_generation')
         },
         {
           name: 'Formatting raw content',
-          status: getSubstageStatus('answer_generation')
+          status: getSubstageStatus('response_generation')
         }
       ]
     });
@@ -324,12 +324,12 @@ export function RAGPipelineModal({
   }
 
   function isSubstageCompleted(substageKey: string): boolean {
-    // Map substage keys to ragSubstages array values
+    // Map substage keys to ragSubstages array values (MUST match backend stage names)
     const substageMapping: Record<string, string> = {
       'query_enhancement': 'query_enhancement',
       'document_retrieval': 'document_retrieval',
       'document_judging': 'document_judging',
-      'answer_generation': 'answer_generation',
+      'response_generation': 'response_generation',
     };
 
     const mapped = substageMapping[substageKey];
