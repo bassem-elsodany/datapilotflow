@@ -1418,29 +1418,41 @@ function StepReviewAndCreate({ form, providers, collections }: StepProps) {
   const selectedCollection = collections?.find(
     (c) => c.name === form.values.collectionName
   );
+  const selectedRerankerProvider = providers?.find(
+    (p) => p.id === form.values.selectedRerankerId
+  );
+  const enhancementStrategyInfo = ENHANCEMENT_STRATEGIES.find((s) => s.value === form.values.selectedStrategy);
 
   return (
     <Stack gap="md">
       <Alert icon={<IconCheck size={16} />} color="green" variant="light">
         <Text size="sm">
-          Review your configuration below. Click <strong>Create Conversation</strong> to proceed.
+          Review your configuration below. All settings will be saved as nested configuration. Click <strong>Create Conversation</strong> to proceed.
         </Text>
       </Alert>
 
+      {/* STEP 0: AGENT TYPE */}
       <Card withBorder p="md" bg="blue.0">
         <Stack gap="xs">
           <Group justify="space-between">
-            <Text fw={600}>Agent Type</Text>
+            <Text fw={600}>Step 0: Agent Type</Text>
             <Badge size="lg" color={form.values.agentType === 'rag' ? 'blue' : 'grape'}>
               {form.values.agentType === 'rag' ? 'RAG Mode' : 'Assistant Mode'}
             </Badge>
           </Group>
+          <Text size="xs" c="dimmed">
+            {form.values.agentType === 'rag'
+              ? 'Standard RAG pipeline: retrieval + optional reranking + optional answer generation'
+              : 'Supervisor mode: intelligent task routing + RAG context + system prompt execution'}
+          </Text>
         </Stack>
       </Card>
 
+      {/* STEP 1: CONVERSATION SETTINGS */}
       <Card withBorder p="md">
         <Stack gap="sm">
-          <Text fw={600} size="lg">
+          <Text fw={600}>Step 1: Conversation Settings</Text>
+          <Text fw={500} size="lg">
             {form.values.conversationName}
           </Text>
           {form.values.conversationDescription && (
@@ -1451,77 +1463,165 @@ function StepReviewAndCreate({ form, providers, collections }: StepProps) {
         </Stack>
       </Card>
 
-      <Grid>
-        <Grid.Col span={{ base: 12, sm: 6 }}>
-          <Card withBorder p="md">
-            <Stack gap="xs">
-              <Text fw={600} size="sm">
-                LLM Configuration
+      {/* STEP 2: ENHANCEMENT STRATEGY */}
+      <Card withBorder p="md" bg="cyan.0">
+        <Stack gap="sm">
+          <Text fw={600}>Step 2: Enhancement Strategy</Text>
+          <Group gap="md">
+            <div>
+              <Text size="sm" fw={500} mb="xs">
+                Strategy
               </Text>
-              <Text size="xs" c="dimmed">
-                Provider: {selectedProvider?.name || 'Not selected'}
-              </Text>
-              <Text size="xs" c="dimmed">
-                Model: {form.values.selectedModel || 'Not selected'}
-              </Text>
-            </Stack>
-          </Card>
-        </Grid.Col>
-
-        <Grid.Col span={{ base: 12, sm: 6 }}>
-          <Card withBorder p="md">
-            <Stack gap="xs">
-              <Text fw={600} size="sm">
-                Vector Database
-              </Text>
-              <Text size="xs" c="dimmed">
-                Collection: {selectedCollection?.name || form.values.collectionName}
-              </Text>
-              <Text size="xs" c="dimmed">
-                Records: {selectedCollection?.record_count.toLocaleString() || 'Unknown'}
-              </Text>
-              <Text size="xs" c="dimmed">
-                Top K: {form.values.topK}
-              </Text>
-            </Stack>
-          </Card>
-        </Grid.Col>
-      </Grid>
-
-      <Card withBorder p="md">
-        <Stack gap="xs">
-          <Text fw={600} size="sm">
-            Enhancement Strategy
-          </Text>
-          <Badge>
-            {ENHANCEMENT_STRATEGIES.find((s) => s.value === form.values.selectedStrategy)?.label}
-          </Badge>
+              <Badge size="lg" color={enhancementStrategyInfo?.color || 'gray'}>
+                {enhancementStrategyInfo?.label || 'Native'}
+              </Badge>
+            </div>
+            {form.values.selectedStrategy !== 'native' && (
+              <div>
+                <Text size="sm" fw={500} mb="xs">
+                  Query Enhancement Provider
+                </Text>
+                <Stack gap="4px">
+                  <Text size="xs" c="dimmed">
+                    Provider: {selectedProvider?.name || 'Not selected'}
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    Model: {form.values.selectedModel || 'Not selected'}
+                  </Text>
+                </Stack>
+              </div>
+            )}
+          </Group>
         </Stack>
       </Card>
 
+      {/* STEP 3: VECTOR DATABASE */}
+      <Card withBorder p="md">
+        <Stack gap="sm">
+          <Text fw={600}>Step 3: Vector Database</Text>
+          <Grid gutter="md">
+            <Grid.Col span={{ base: 12, sm: 6 }}>
+              <Stack gap="xs">
+                <div>
+                  <Text size="xs" fw={500} c="dimmed">Collection Name</Text>
+                  <Text size="sm">{selectedCollection?.name || form.values.collectionName}</Text>
+                </div>
+                <div>
+                  <Text size="xs" fw={500} c="dimmed">Records</Text>
+                  <Text size="sm">{selectedCollection?.record_count.toLocaleString() || 'Unknown'}</Text>
+                </div>
+              </Stack>
+            </Grid.Col>
+            <Grid.Col span={{ base: 12, sm: 6 }}>
+              <Stack gap="xs">
+                <div>
+                  <Text size="xs" fw={500} c="dimmed">Top K (Retrieval Count)</Text>
+                  <Text size="sm">{form.values.topK} documents</Text>
+                </div>
+              </Stack>
+            </Grid.Col>
+          </Grid>
+        </Stack>
+      </Card>
+
+      {/* STEP 4: RERANKER (OPTIONAL) */}
       {form.values.enableReranking && (
         <Card withBorder p="md" bg="yellow.0">
-          <Stack gap="xs">
-            <Text fw={600} size="sm">
-              Judge Ranker Enabled
-            </Text>
-            <Text size="xs" c="dimmed">
-              Relevance Threshold: {form.values.relevanceThreshold}
-            </Text>
+          <Stack gap="sm">
+            <Text fw={600}>Step 4: Judge Ranker (Document Re-ranking)</Text>
+            <Grid gutter="md">
+              <Grid.Col span={{ base: 12, sm: 6 }}>
+                <Stack gap="xs">
+                  <div>
+                    <Text size="xs" fw={500} c="dimmed">Reranker Provider</Text>
+                    <Text size="sm">{selectedRerankerProvider?.name || 'Not selected'}</Text>
+                  </div>
+                  <div>
+                    <Text size="xs" fw={500} c="dimmed">Model</Text>
+                    <Text size="sm">{form.values.selectedRerankerModel || 'Not selected'}</Text>
+                  </div>
+                </Stack>
+              </Grid.Col>
+              <Grid.Col span={{ base: 12, sm: 6 }}>
+                <Stack gap="xs">
+                  <div>
+                    <Text size="xs" fw={500} c="dimmed">Relevance Threshold</Text>
+                    <Text size="sm">{form.values.relevanceThreshold} (0-1 scale)</Text>
+                  </div>
+                  <Text size="xs" c="dimmed">
+                    Documents below this score will be filtered out
+                  </Text>
+                </Stack>
+              </Grid.Col>
+            </Grid>
           </Stack>
         </Card>
       )}
 
+      {/* STEP 5: ANSWER GENERATION & SYSTEM PROMPT */}
       <Card withBorder p="md">
-        <Stack gap="xs">
-          <Text fw={600} size="sm">
-            Answer Generation
-          </Text>
-          <Badge color={form.values.enableLLMGeneration ? 'green' : 'gray'}>
-            {form.values.enableLLMGeneration ? 'Enabled' : 'Disabled'}
-          </Badge>
+        <Stack gap="sm">
+          <Text fw={600}>Step 5: Answer Generation & System Prompt</Text>
+          <Group gap="md">
+            <div>
+              <Text size="sm" fw={500} mb="xs">
+                Generative Answer
+              </Text>
+              <Badge size="lg" color={form.values.enableLLMGeneration ? 'green' : 'gray'}>
+                {form.values.enableLLMGeneration ? 'Enabled' : 'Disabled'}
+              </Badge>
+            </div>
+            {form.values.enableLLMGeneration && (
+              <div>
+                <Text size="sm" fw={500} mb="xs">
+                  Answer Generation Provider
+                </Text>
+                <Stack gap="4px">
+                  <Text size="xs" c="dimmed">
+                    Provider: {selectedProvider?.name || 'Not selected'}
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    Model: {form.values.selectedModel || 'Not selected'}
+                  </Text>
+                </Stack>
+              </div>
+            )}
+          </Group>
+          {form.values.agentType === 'assistant' && (
+            <div style={{ borderTop: '1px solid #dee2e6', paddingTop: '12px', marginTop: '12px' }}>
+              <Text size="sm" fw={500} mb="xs">System Prompt</Text>
+              <Badge color={form.values.selectedSystemPromptId ? 'blue' : 'gray'}>
+                {form.values.selectedSystemPromptId ? 'Configured' : 'Not configured'}
+              </Badge>
+            </div>
+          )}
         </Stack>
       </Card>
+
+      {/* SUMMARY OF NESTED STRUCTURE */}
+      <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light" title="Configuration Summary">
+        <Stack gap="xs" size="xs">
+          <Text size="xs">This conversation will be saved with the following nested configuration:</Text>
+          <div style={{
+            backgroundColor: '#f5f5f5',
+            padding: '8px 12px',
+            borderRadius: '4px',
+            fontFamily: 'monospace',
+            fontSize: '11px',
+            lineHeight: '1.4'
+          }}>
+            <div>{'{'}</div>
+            <div>&nbsp;&nbsp;name: "{form.values.conversationName}",</div>
+            <div>&nbsp;&nbsp;enhancement: {'{'}strategy: "{form.values.selectedStrategy}"{form.values.selectedStrategy !== 'native' ? ', provider: {id, model}' : ''}{'}'},</div>
+            <div>&nbsp;&nbsp;vector_database: {'{'}collection_name: "{form.values.collectionName}", top_k: {form.values.topK}{'}'},</div>
+            {form.values.enableReranking && <div>&nbsp;&nbsp;reranker: {'{'}provider: {'{'}id, model{'}'}, relevance_threshold: {form.values.relevanceThreshold}{'}'},</div>}
+            {form.values.enableLLMGeneration && <div>&nbsp;&nbsp;answer_generation: {'{'}provider: {'{'}id: "{form.values.selectedProviderId}", model: "{form.values.selectedModel}"{'}'}{'}'}{','},</div>}
+            {form.values.agentType === 'assistant' && <div>&nbsp;&nbsp;system_prompt: {form.values.selectedSystemPromptId ? '{id, title, content}' : 'null'}{','},</div>}
+            <div>&nbsp;&nbsp;enable_knowledge_assistant: {form.values.enableKnowledgeAssistant ? 'true' : 'false'}</div>
+            <div>{'}'}</div>
+          </div>
+        </Stack>
+      </Alert>
     </Stack>
   );
 }
