@@ -3,6 +3,61 @@ Conversation History Service for Knowledge Search
 
 This module provides conversation history management for knowledge search sessions,
 enabling context-aware responses that understand previous interactions.
+
+NESTED CONFIGURATION STRUCTURE
+===============================
+
+The conversation configuration has been restructured into organized, nested dataclasses:
+
+1. **SystemPrompt**: Embedded system prompt for the conversation
+   - id: UUID identifier
+   - title: Prompt title
+   - content: Actual prompt content
+
+2. **EnhancementConfig**: Query enhancement strategy and provider
+   - strategy: "native", "multi_query", "augmented", "hyde", "decomposition"
+   - provider: Optional provider for enhancement (e.g., embedding model)
+
+3. **VectorDatabaseConfig**: Vector database settings
+   - collection_name: Database collection name (default: "LongTermMemory")
+   - top_k: Number of documents to retrieve (default: 5)
+
+4. **RerankerConfig**: Document reranking settings
+   - provider: Optional reranker provider
+   - relevance_threshold: Score threshold for document filtering (0-1, default: 0.5)
+
+5. **AnswerGenerationConfig**: LLM-based answer generation
+   - provider: Optional LLM provider for answer generation
+
+BOUNDARY PATTERN ARCHITECTURE
+==============================
+
+The service uses a boundary pattern where:
+- API endpoints and WebSocket handlers perform conversion at boundaries
+- Core business logic remains unchanged
+- extract_conversation_config() helper flattens nested structure for agents
+- _deserialize_nested_config() reconstructs objects from MongoDB documents
+- asdict() converts dataclass objects to MongoDB-compatible dictionaries
+
+MIGRATION STRATEGY
+==================
+
+Two versions of methods are maintained:
+- v1: Original flat structure (backwards compatible)
+- v2: New nested structure (recommended for new code)
+
+Examples:
+- create_conversation() vs create_conversation_v2()
+- update_conversation_config() vs update_conversation_config_v2()
+
+USE EXTRACT_CONVERSATION_CONFIG FOR AGENT CODE
+==============================================
+
+When passing conversation config to agents, always use:
+  config = extract_conversation_config(conversation)
+
+This ensures agents work with the flat parameter structure they expect,
+while the database maintains the organized nested structure.
 """
 
 import uuid
@@ -1078,6 +1133,82 @@ class ConversationHistoryService:
 
         except Exception as e:
             logger.error(f"Error updating conversation config {conversation_id}: {e}")
+            return False
+
+    def update_conversation_config_v2(
+        self,
+        conversation_id: str,
+        user_id: str,
+        system_prompt: Optional[SystemPrompt] = None,
+        enhancement: Optional[EnhancementConfig] = None,
+        vector_database: Optional[VectorDatabaseConfig] = None,
+        reranker: Optional[RerankerConfig] = None,
+        answer_generation: Optional[AnswerGenerationConfig] = None,
+        tags: Optional[List[str]] = None,
+        enable_knowledge_assistant: Optional[bool] = None,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+    ) -> bool:
+        """Update conversation configuration with nested structure support."""
+        from bson import ObjectId
+
+        try:
+            update_data = {"$set": {"last_updated": datetime.utcnow()}}
+
+            # Update basic fields
+            if name is not None:
+                update_data["$set"]["name"] = name
+            if description is not None:
+                update_data["$set"]["description"] = description
+            if tags is not None:
+                update_data["$set"]["tags"] = tags
+            if enable_knowledge_assistant is not None:
+                update_data["$set"]["enable_knowledge_assistant"] = enable_knowledge_assistant
+
+            # Update system prompt (embedded)
+            if system_prompt is not None:
+                update_data["$set"]["system_prompt"] = asdict(system_prompt)
+
+            # Update enhancement configuration
+            if enhancement is not None:
+                enhancement_dict = {
+                    "strategy": enhancement.strategy,
+                    "provider": asdict(enhancement.provider) if enhancement.provider else None,
+                }
+                update_data["$set"]["enhancement"] = enhancement_dict
+
+            # Update vector database configuration
+            if vector_database is not None:
+                update_data["$set"]["vector_database"] = asdict(vector_database)
+
+            # Update reranker configuration
+            if reranker is not None:
+                reranker_dict = {
+                    "provider": asdict(reranker.provider) if reranker.provider else None,
+                    "relevance_threshold": reranker.relevance_threshold,
+                }
+                update_data["$set"]["reranker"] = reranker_dict
+
+            # Update answer generation configuration
+            if answer_generation is not None:
+                answer_gen_dict = {
+                    "provider": asdict(answer_generation.provider) if answer_generation.provider else None,
+                }
+                update_data["$set"]["answer_generation"] = answer_gen_dict
+
+            result = self.collection.update_one(
+                {"_id": ObjectId(conversation_id), "user_id": user_id}, update_data
+            )
+
+            if result.modified_count > 0:
+                logger.info(f"Updated configuration (v2) for conversation {conversation_id}")
+                return True
+            else:
+                logger.warning(f"No changes made to conversation {conversation_id}")
+                return False
+
+        except Exception as e:
+            logger.error(f"Error updating conversation config v2 {conversation_id}: {e}")
             return False
 
     def get_conversation_with_provider(
