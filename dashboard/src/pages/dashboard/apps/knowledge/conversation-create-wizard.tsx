@@ -55,6 +55,7 @@ import {
   IconHelp,
   IconInfoCircle,
   IconRobot,
+  IconScale,
   IconSettings,
   IconWand,
 } from '@tabler/icons-react';
@@ -213,7 +214,7 @@ const STEP_CONFIGS = [
   {
     label: 'Judge Ranker',
     description: 'Document ranking (optional)',
-    icon: <IconFilter size={20} />,
+    icon: <IconScale size={20} />,
     color: 'orange',
     gradientFrom: '#f97316',                // Orange
     gradientTo: '#ea580c',                  // Dark Orange
