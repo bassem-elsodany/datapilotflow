@@ -117,8 +117,8 @@ const STEP_CONFIGS = [
     gradientTo: LOGO_COLORS.accent2,       // Vibrant Green
   },
   {
-    label: 'LLM Setup',
-    description: 'Configure language model',
+    label: 'Conversation Settings',
+    description: 'Basic conversation info',
     icon: <IconSettings size={20} />,
     color: 'cyan',
     gradientFrom: LOGO_COLORS.accent1,     // Soft Teal
@@ -209,15 +209,15 @@ export function ConversationCreateWizard() {
       case 0:
         return true; // Agent type always valid
       case 1:
-        return (
-          !!form.values.conversationName.trim() &&
-          !!form.values.selectedProviderId &&
-          !!form.values.selectedModel
-        );
+        return !!form.values.conversationName.trim(); // Conversation name required
       case 2:
         return !!form.values.collectionName && form.values.topK >= 5;
       case 3:
-        return true; // Advanced settings all optional
+        // Provider & model required only if generative answer enabled
+        if (form.values.enableLLMGeneration) {
+          return !!form.values.selectedProviderId && !!form.values.selectedModel;
+        }
+        return true; // All optional if generative answer disabled
       case 4:
         return true; // Review always valid
       default:
@@ -391,12 +391,10 @@ export function ConversationCreateWizard() {
         {/* STEP 0: AGENT TYPE SELECTION */}
         {activeStep === 0 && <StepAgentType form={form} />}
 
-        {/* STEP 1: LLM CONFIGURATION */}
+        {/* STEP 1: CONVERSATION SETTINGS */}
         {activeStep === 1 && (
-          <StepLLMConfiguration
+          <StepConversationSettings
             form={form}
-            providers={providers}
-            providersLoading={providersLoading}
           />
         )}
 
@@ -607,16 +605,14 @@ function StepAgentType({ form }: StepProps) {
   );
 }
 
-function StepLLMConfiguration({
+function StepConversationSettings({
   form,
-  providers,
-  providersLoading,
 }: StepProps) {
   return (
     <Stack gap="md">
       <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
         <Text size="sm">
-          Select the language model that will power your conversation. This model will be used for understanding queries and generating responses.
+          Set up basic information about your conversation. These details help you organize and identify different conversations.
         </Text>
       </Alert>
 
@@ -631,45 +627,8 @@ function StepLLMConfiguration({
         label="Description (Optional)"
         placeholder="Brief description of what this conversation is for..."
         {...form.getInputProps('conversationDescription')}
-        rows={3}
+        rows={4}
       />
-
-      <Divider my="sm" />
-
-      <Select
-        label="LLM Provider"
-        placeholder={providersLoading ? 'Loading providers...' : 'Select a provider'}
-        data={
-          providers?.map((p) => ({
-            value: p.id,
-            label: `${p.name} (${p.provider_type})`,
-          })) || []
-        }
-        {...form.getInputProps('selectedProviderId')}
-        searchable
-        disabled={providersLoading}
-        required
-      />
-
-      {form.values.selectedProviderId && providers ? (
-        <Select
-          label="Model"
-          placeholder="Select a model"
-          data={
-            providers
-              .find((p) => p.id === form.values.selectedProviderId)
-              ?.generative?.models.map((m: string) => ({
-                value: m,
-                label: m,
-              })) || []
-          }
-          {...form.getInputProps('selectedModel')}
-          searchable
-          required
-        />
-      ) : (
-        <Select label="Model" placeholder="Select provider first" disabled />
-      )}
     </Stack>
   );
 }
@@ -818,11 +777,50 @@ function StepAdvancedSettings({
       />
 
       {form.values.enableLLMGeneration ? (
-        <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
-          <Text size="sm">
-            AI will generate natural language answers based on retrieved documents. Uses tokens but provides polished responses.
-          </Text>
-        </Alert>
+        <>
+          <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+            <Text size="sm">
+              AI will generate natural language answers based on retrieved documents. Uses tokens but provides polished responses.
+            </Text>
+          </Alert>
+
+          <Divider my="sm" />
+
+          <Select
+            label="LLM Provider"
+            placeholder={providersLoading ? 'Loading providers...' : 'Select a provider'}
+            data={
+              providers?.map((p) => ({
+                value: p.id,
+                label: `${p.name} (${p.provider_type})`,
+              })) || []
+            }
+            {...form.getInputProps('selectedProviderId')}
+            searchable
+            disabled={providersLoading}
+            required
+          />
+
+          {form.values.selectedProviderId && providers ? (
+            <Select
+              label="Model"
+              placeholder="Select a model"
+              data={
+                providers
+                  .find((p) => p.id === form.values.selectedProviderId)
+                  ?.generative?.models.map((m: string) => ({
+                    value: m,
+                    label: m,
+                  })) || []
+              }
+              {...form.getInputProps('selectedModel')}
+              searchable
+              required
+            />
+          ) : (
+            <Select label="Model" placeholder="Select provider first" disabled />
+          )}
+        </>
       ) : (
         <Alert icon={<IconInfoCircle size={16} />} color="yellow" variant="light">
           <Text size="sm">
