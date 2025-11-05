@@ -560,9 +560,10 @@ export function RAGPipelineModal({
                       position: 'relative',
                     }}
                   >
+                    {console.log(`🔵 [BOX RENDER] ${stage.id} - bg=${stage.status === 'active' ? 'blue' : 'gray'}, will render children...`)}
                     {(() => {
                       const isActive = stage.status === 'active';
-                      console.log(`  ↳ [${stage.id}] isActive=${isActive}, will render loader=${isActive}`);
+                      console.log(`  ↳ [${stage.id}] isActive=${isActive}, stage.icon=`, stage.icon, `type=${typeof stage.icon}`);
                       if (isActive) {
                         console.log(`    🌀 Rendering IconLoader for ${stage.id}`);
                         return (
@@ -582,6 +583,7 @@ export function RAGPipelineModal({
                           />
                         );
                       }
+                      console.log(`    🖼️ Rendering cloned icon for ${stage.id}, color will be ${stage.status === 'completed' ? '#51cf66' : '#868e96'}`);
                       return React.cloneElement(stage.icon as React.ReactElement, {
                         style: { color: stage.status === 'completed' ? '#51cf66' : '#868e96' }
                       } as any);
