@@ -201,8 +201,10 @@ export function EnhancedMessageRenderer({
     }
 
     const urlGroups: { [url: string]: string[] } = {};
+    const chunkIdsArray = metadata.chunk_ids || [];
+
     metadata.source_urls.forEach((url, urlIndex) => {
-      const chunkId = metadata.chunk_ids?.[urlIndex];
+      const chunkId = chunkIdsArray[urlIndex];
       if (!urlGroups[url]) {
         urlGroups[url] = [];
       }
@@ -213,7 +215,7 @@ export function EnhancedMessageRenderer({
 
     return Object.entries(urlGroups).map(([url, chunkIds]) => ({
       url,
-      chunkIds,
+      chunkIds: chunkIds || [],  // Ensure never null
     }));
   }, [metadata?.source_urls, metadata?.chunk_ids]);
 

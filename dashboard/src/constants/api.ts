@@ -6,5 +6,5 @@ export const API_PREFIX = `/api/${API_VERSION}`;
 export const API_CONFIG = {
   version: API_VERSION,
   prefix: API_PREFIX,
-  baseUrl: import.meta.env.VITE_API_BASE_URL || `http://localhost:8800`,
+  baseUrl: import.meta.env.VITE_API_BASE_URL || `http://localhost:65500`,
 } as const;

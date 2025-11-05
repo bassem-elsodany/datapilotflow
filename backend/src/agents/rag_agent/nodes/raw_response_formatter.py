@@ -157,10 +157,10 @@ def raw_response_formatter(state: WorkflowState) -> WorkflowState:
         logger.error(f"❌ {error_msg}")
         logger.error("❌ [NODE FINISH] raw_response_formatter (with error)")
 
-        # Set fallback response
+        # Set fallback response with actual error details
         state["context"] = ""
         state["final_answer"] = (
-            "I apologize, but I encountered an error while formatting the raw results. Please try again."
+            f"I apologize, but I encountered an error while formatting the raw results: {str(e)}"
         )
 
     return state

@@ -48,6 +48,42 @@ class EnhancementConfiguration:
 
 
 @dataclass
+class SystemPromptTask:
+    """Represents a reusable system prompt template for a conversation."""
+
+    id: str  # UUID identifier
+    user_id: str
+    conversation_id: str
+    name: str  # e.g., "Code Reviewer", "Document Summarizer", "Technical Writer"
+    description: Optional[str] = None  # Description of what this prompt does
+    system_prompt: str = ""  # The actual system prompt template
+    tags: Optional[List[str]] = None  # Tags for organization and filtering
+    is_active: bool = True  # Whether this prompt is active and available for use
+    usage_count: int = 0  # Number of times this prompt has been used
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    created_by: Optional[str] = None  # User who created this prompt
+    version: int = 1  # Version number for tracking changes
+
+    def __post_init__(self):
+        if self.id is None or self.id == "":
+            self.id = str(uuid.uuid4())
+        if self.created_at is None:
+            self.created_at = datetime.utcnow()
+        if self.updated_at is None:
+            self.updated_at = datetime.utcnow()
+        if self.tags is None:
+            self.tags = []
+        if self.created_by is None:
+            self.created_by = self.user_id
+
+    @property
+    def is_empty(self) -> bool:
+        """Check if the prompt is empty."""
+        return not self.system_prompt or self.system_prompt.strip() == ""
+
+
+@dataclass
 class ConversationMessage:
     """Represents a single message in a conversation."""
 
@@ -110,6 +146,9 @@ class ConversationSession:
     average_response_time_ms: Optional[float] = None
     # Tags for organization
     tags: Optional[List[str]] = None
+    # System Prompt Tasks configuration (Phase 1 - Core system prompts)
+    system_prompt_tasks: Optional[List[SystemPromptTask]] = None  # List of available system prompts for this conversation
+    selected_system_prompt_id: Optional[str] = None  # Currently selected system prompt ID
 
     def __post_init__(self):
         if self.topics_discussed is None:
@@ -118,6 +157,8 @@ class ConversationSession:
             self.knowledge_sources_used = []
         if self.tags is None:
             self.tags = []
+        if self.system_prompt_tasks is None:
+            self.system_prompt_tasks = []
         # Generate default name if none provided
         if self.name is None:
             self.name = f"Session {self.created_at.strftime('%Y-%m-%d %H:%M')}"
@@ -143,6 +184,28 @@ class ConversationSession:
         if self.enhancement_config and self.enhancement_config.enabled:
             return self.enhancement_config.strategy
         return "none"
+
+    @property
+    def selected_system_prompt(self) -> Optional[SystemPromptTask]:
+        """Get the currently selected system prompt task."""
+        if not self.selected_system_prompt_id or not self.system_prompt_tasks:
+            return None
+        for task in self.system_prompt_tasks:
+            if task.id == self.selected_system_prompt_id:
+                return task
+        return None
+
+    @property
+    def has_system_prompts(self) -> bool:
+        """Check if any system prompts are available."""
+        return bool(self.system_prompt_tasks and len(self.system_prompt_tasks) > 0)
+
+    @property
+    def active_system_prompts(self) -> List[SystemPromptTask]:
+        """Get all active system prompts."""
+        if not self.system_prompt_tasks:
+            return []
+        return [task for task in self.system_prompt_tasks if task.is_active]
 
 
 class ConversationHistoryService:
@@ -939,6 +1002,368 @@ class ConversationHistoryService:
                 f"Error updating conversation statistics {conversation_id}: {e}"
             )
             return False
+
+    # ============ System Prompt Tasks Management (Phase 1 - Core CRUD) ============
+
+    def create_system_prompt(
+        self,
+        user_id: str,
+        conversation_id: str,
+        name: str,
+        system_prompt: str,
+        description: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+    ) -> Optional[SystemPromptTask]:
+        """
+        Create a new system prompt task for a conversation.
+
+        Args:
+            user_id: User who owns the conversation
+            conversation_id: Conversation ID
+            name: Name of the system prompt (e.g., "Code Reviewer")
+            system_prompt: The actual system prompt content
+            description: Optional description of what this prompt does
+            tags: Optional tags for organization
+
+        Returns:
+            Created SystemPromptTask or None if failed
+        """
+        try:
+            from bson import ObjectId
+
+            # Validate conversation exists and belongs to user
+            doc = self.collection.find_one(
+                {"_id": ObjectId(conversation_id), "user_id": user_id}
+            )
+            if not doc:
+                logger.warning(
+                    f"Conversation not found: {conversation_id} for user {user_id}"
+                )
+                return None
+
+            # Create the system prompt task
+            task = SystemPromptTask(
+                id="",  # Will be generated in __post_init__
+                user_id=user_id,
+                conversation_id=conversation_id,
+                name=name,
+                description=description,
+                system_prompt=system_prompt,
+                tags=tags or [],
+                is_active=True,
+                usage_count=0,
+                created_by=user_id,
+                version=1,
+            )
+
+            # Convert to dict for storage
+            task_dict = asdict(task)
+
+            # Add to conversation's system_prompt_tasks array
+            update_result = self.collection.update_one(
+                {"_id": ObjectId(conversation_id)},
+                {
+                    "$push": {"system_prompt_tasks": task_dict},
+                    "$set": {"last_updated": datetime.utcnow()},
+                },
+            )
+
+            if update_result.modified_count > 0:
+                logger.info(
+                    f"Created system prompt '{name}' for conversation {conversation_id}"
+                )
+                return task
+            else:
+                logger.warning(
+                    f"Failed to create system prompt for conversation {conversation_id}"
+                )
+                return None
+
+        except Exception as e:
+            logger.error(f"Error creating system prompt: {e}")
+            return None
+
+    def get_system_prompt(
+        self, conversation_id: str, prompt_id: str, user_id: str = None
+    ) -> Optional[SystemPromptTask]:
+        """
+        Get a specific system prompt by ID.
+
+        Args:
+            conversation_id: Conversation ID
+            prompt_id: System prompt ID
+            user_id: Optional user ID for validation
+
+        Returns:
+            SystemPromptTask or None if not found
+        """
+        try:
+            from bson import ObjectId
+
+            query = {"_id": ObjectId(conversation_id)}
+            if user_id:
+                query["user_id"] = user_id
+
+            doc = self.collection.find_one(
+                query, {"system_prompt_tasks": {"$elemMatch": {"id": prompt_id}}}
+            )
+
+            if doc and "system_prompt_tasks" in doc and len(doc["system_prompt_tasks"]) > 0:
+                prompt_dict = doc["system_prompt_tasks"][0]
+                return self._dict_to_system_prompt(prompt_dict)
+
+            logger.debug(f"System prompt not found: {prompt_id}")
+            return None
+
+        except Exception as e:
+            logger.error(f"Error retrieving system prompt {prompt_id}: {e}")
+            return None
+
+    def list_system_prompts(
+        self, conversation_id: str, user_id: str = None, active_only: bool = False
+    ) -> List[SystemPromptTask]:
+        """
+        List all system prompts for a conversation.
+
+        Args:
+            conversation_id: Conversation ID
+            user_id: Optional user ID for validation
+            active_only: If True, return only active prompts
+
+        Returns:
+            List of SystemPromptTask objects
+        """
+        try:
+            from bson import ObjectId
+
+            query = {"_id": ObjectId(conversation_id)}
+            if user_id:
+                query["user_id"] = user_id
+
+            doc = self.collection.find_one(query)
+
+            if not doc or "system_prompt_tasks" not in doc:
+                return []
+
+            prompts = []
+            for prompt_dict in doc.get("system_prompt_tasks", []):
+                if active_only and not prompt_dict.get("is_active", True):
+                    continue
+                prompts.append(self._dict_to_system_prompt(prompt_dict))
+
+            return prompts
+
+        except Exception as e:
+            logger.error(f"Error listing system prompts for {conversation_id}: {e}")
+            return []
+
+    def update_system_prompt(
+        self,
+        conversation_id: str,
+        prompt_id: str,
+        user_id: str,
+        name: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        description: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        is_active: Optional[bool] = None,
+    ) -> bool:
+        """
+        Update a system prompt.
+
+        Args:
+            conversation_id: Conversation ID
+            prompt_id: System prompt ID
+            user_id: User ID for validation
+            name: New name (optional)
+            system_prompt: New prompt content (optional)
+            description: New description (optional)
+            tags: New tags (optional)
+            is_active: New active status (optional)
+
+        Returns:
+            True if updated successfully
+        """
+        try:
+            from bson import ObjectId
+
+            # Build update dict
+            update_fields = {"last_updated": datetime.utcnow()}
+
+            if name is not None:
+                update_fields["system_prompt_tasks.$.name"] = name
+            if system_prompt is not None:
+                update_fields["system_prompt_tasks.$.system_prompt"] = system_prompt
+                update_fields["system_prompt_tasks.$.version"] = (
+                    update_fields.get("system_prompt_tasks.$.version", 0) + 1
+                )
+            if description is not None:
+                update_fields["system_prompt_tasks.$.description"] = description
+            if tags is not None:
+                update_fields["system_prompt_tasks.$.tags"] = tags
+            if is_active is not None:
+                update_fields["system_prompt_tasks.$.is_active"] = is_active
+
+            update_fields["system_prompt_tasks.$.updated_at"] = datetime.utcnow()
+
+            result = self.collection.update_one(
+                {
+                    "_id": ObjectId(conversation_id),
+                    "user_id": user_id,
+                    "system_prompt_tasks.id": prompt_id,
+                },
+                {"$set": update_fields},
+            )
+
+            if result.modified_count > 0:
+                logger.info(f"Updated system prompt {prompt_id}")
+                return True
+            else:
+                logger.warning(f"System prompt {prompt_id} not found or not updated")
+                return False
+
+        except Exception as e:
+            logger.error(f"Error updating system prompt {prompt_id}: {e}")
+            return False
+
+    def delete_system_prompt(
+        self, conversation_id: str, prompt_id: str, user_id: str
+    ) -> bool:
+        """
+        Delete a system prompt.
+
+        Args:
+            conversation_id: Conversation ID
+            prompt_id: System prompt ID
+            user_id: User ID for validation
+
+        Returns:
+            True if deleted successfully
+        """
+        try:
+            from bson import ObjectId
+
+            result = self.collection.update_one(
+                {
+                    "_id": ObjectId(conversation_id),
+                    "user_id": user_id,
+                },
+                {
+                    "$pull": {"system_prompt_tasks": {"id": prompt_id}},
+                    "$set": {"last_updated": datetime.utcnow()},
+                },
+            )
+
+            if result.modified_count > 0:
+                logger.info(f"Deleted system prompt {prompt_id}")
+                return True
+            else:
+                logger.warning(f"System prompt {prompt_id} not found")
+                return False
+
+        except Exception as e:
+            logger.error(f"Error deleting system prompt {prompt_id}: {e}")
+            return False
+
+    def select_system_prompt(
+        self, conversation_id: str, prompt_id: Optional[str], user_id: str
+    ) -> bool:
+        """
+        Select a system prompt for the conversation.
+
+        Args:
+            conversation_id: Conversation ID
+            prompt_id: System prompt ID to select (None to deselect)
+            user_id: User ID for validation
+
+        Returns:
+            True if selection successful
+        """
+        try:
+            from bson import ObjectId
+
+            result = self.collection.update_one(
+                {
+                    "_id": ObjectId(conversation_id),
+                    "user_id": user_id,
+                },
+                {
+                    "$set": {
+                        "selected_system_prompt_id": prompt_id,
+                        "last_updated": datetime.utcnow(),
+                    }
+                },
+            )
+
+            if result.modified_count > 0:
+                action = f"selected {prompt_id}" if prompt_id else "deselected system prompt"
+                logger.info(f"System prompt {action} for conversation {conversation_id}")
+                return True
+            else:
+                logger.warning(f"Conversation {conversation_id} not found")
+                return False
+
+        except Exception as e:
+            logger.error(f"Error selecting system prompt: {e}")
+            return False
+
+    def increment_prompt_usage(
+        self, conversation_id: str, prompt_id: str, user_id: str
+    ) -> bool:
+        """
+        Increment the usage count for a system prompt.
+
+        Args:
+            conversation_id: Conversation ID
+            prompt_id: System prompt ID
+            user_id: User ID for validation
+
+        Returns:
+            True if incremented successfully
+        """
+        try:
+            from bson import ObjectId
+
+            result = self.collection.update_one(
+                {
+                    "_id": ObjectId(conversation_id),
+                    "user_id": user_id,
+                    "system_prompt_tasks.id": prompt_id,
+                },
+                {
+                    "$inc": {"system_prompt_tasks.$.usage_count": 1},
+                    "$set": {"last_updated": datetime.utcnow()},
+                },
+            )
+
+            if result.modified_count > 0:
+                return True
+            else:
+                logger.warning(f"Failed to increment usage for prompt {prompt_id}")
+                return False
+
+        except Exception as e:
+            logger.error(f"Error incrementing prompt usage: {e}")
+            return False
+
+    @staticmethod
+    def _dict_to_system_prompt(prompt_dict: Dict[str, Any]) -> SystemPromptTask:
+        """Convert a dictionary to SystemPromptTask object."""
+        return SystemPromptTask(
+            id=prompt_dict.get("id", ""),
+            user_id=prompt_dict.get("user_id", ""),
+            conversation_id=prompt_dict.get("conversation_id", ""),
+            name=prompt_dict.get("name", ""),
+            description=prompt_dict.get("description"),
+            system_prompt=prompt_dict.get("system_prompt", ""),
+            tags=prompt_dict.get("tags", []),
+            is_active=prompt_dict.get("is_active", True),
+            usage_count=prompt_dict.get("usage_count", 0),
+            created_at=prompt_dict.get("created_at"),
+            updated_at=prompt_dict.get("updated_at"),
+            created_by=prompt_dict.get("created_by"),
+            version=prompt_dict.get("version", 1),
+        )
 
 
 # Global instance

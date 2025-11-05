@@ -24,6 +24,10 @@ export function EnhancedMetadataSection({
   rerankingEnabled = false,
   collapsedByDefault = false,
 }: EnhancedMetadataSectionProps) {
+  // Safety: ensure arrays are never null
+  const safeEnhancedQueries = enhancedQueries || [];
+  const safeSources = sources || [];
+
   const [opened, { toggle }] = useDisclosure(!collapsedByDefault);
 
   const getStrategyLabel = (strategy?: string): string => {
@@ -95,7 +99,7 @@ export function EnhancedMetadataSection({
             )}
           </Group>
 
-          {sources.length > 0 && (
+          {safeSources.length > 0 && (
             <ActionIcon
               variant="subtle"
               color="gray"
@@ -114,19 +118,19 @@ export function EnhancedMetadataSection({
         </Group>
 
         {/* Expandable sources section */}
-        {sources.length > 0 && (
+        {safeSources.length > 0 && (
           <Collapse in={opened}>
             <Divider my="xs" />
 
             {/* Query Variants Section */}
-            {enhancedQueries.length > 0 && (
+            {safeEnhancedQueries.length > 0 && (
               <Box mb="xs">
                 <Group gap={4} mb={4}>
                   <ThemeIcon size="xs" variant="light" color="violet">
                     <IconSparkles size={10} />
                   </ThemeIcon>
                   <Text size="xs" fw={600} c="dimmed">
-                    QUERY VARIANTS ({enhancedQueries.length})
+                    QUERY VARIANTS ({safeEnhancedQueries.length})
                   </Text>
                   {enhancementStrategy &&
                     (enhancementStrategy === 'augmented' ||
@@ -144,8 +148,8 @@ export function EnhancedMetadataSection({
                     lineHeight: 1.4
                   }}
                 >
-                  {enhancedQueries.map((query, qIdx) => (
-                    <Group key={qIdx} gap={4} mb={qIdx < enhancedQueries.length - 1 ? 6 : 0}>
+                  {safeEnhancedQueries.map((query, qIdx) => (
+                    <Group key={qIdx} gap={4} mb={qIdx < safeEnhancedQueries.length - 1 ? 6 : 0}>
                       <Badge size="xs" color="grape" variant="dot">
                         {qIdx + 1}
                       </Badge>
@@ -164,12 +168,12 @@ export function EnhancedMetadataSection({
                   <IconExternalLink size={10} />
                 </ThemeIcon>
                 <Text size="xs" fw={600} c="dimmed">
-                  SOURCES ({sources.length})
+                  SOURCES ({safeSources.length})
                 </Text>
               </Group>
 
               <Stack gap={4}>
-                {sources.map((source, index) => (
+                {safeSources.map((source, index) => (
                   <Card
                     key={index}
                     padding="xs"
@@ -212,7 +216,7 @@ export function EnhancedMetadataSection({
                         </ActionIcon>
                       </Group>
 
-                      {source.chunkIds.length > 0 && (
+                      {source.chunkIds && source.chunkIds.length > 0 && (
                         <Group gap={4} ml="xl">
                           <IconHash size={10} color="var(--mantine-color-gray-6)" />
                           <Text

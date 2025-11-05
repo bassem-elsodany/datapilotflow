@@ -195,10 +195,10 @@ def answer_generator(state: WorkflowState) -> WorkflowState:
         logger.error(f"❌ {error_msg}")
         logger.error("❌ [NODE FINISH] answer_generator (with error)")
 
-        # Set fallback answer
+        # Set fallback answer with actual error details
         state["context"] = ""
         state["final_answer"] = (
-            "I apologize, but I encountered an error while generating the answer. Please try again."
+            f"I apologize, but I encountered an error while generating the answer: {str(e)}"
         )
 
     return state
