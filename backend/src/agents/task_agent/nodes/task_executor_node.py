@@ -77,7 +77,14 @@ def task_executor_node(state: TaskAgentState) -> Dict[str, Any]:
             chain_input["conversation_description"] = conversation_description
             logger.info(f"📝 [TASK EXECUTOR] Injected conversation description into chain input")
 
+        logger.critical(f"🔴 [TASK EXECUTOR] About to invoke chain with input keys: {list(chain_input.keys())}")
+        if has_rag_context:
+            logger.critical(f"🔴 [TASK EXECUTOR] RAG context length in input: {len(chain_input.get('rag_context', ''))}")
+            logger.critical(f"🔴 [TASK EXECUTOR] RAG context preview: {chain_input.get('rag_context', '')[:200]}")
+
         result = chain.invoke(chain_input)
+
+        logger.critical(f"🔴 [TASK EXECUTOR] Chain invoked successfully, result type: {type(result)}")
         task_result = result.content if hasattr(result, "content") else str(result)
 
         logger.info(f"✅ Task Executor: Generated result ({len(task_result)} chars)")

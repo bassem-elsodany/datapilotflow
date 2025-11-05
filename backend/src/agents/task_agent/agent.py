@@ -157,30 +157,35 @@ class TaskAgentService(AgentService):
         judged_docs = rag_context.judged_documents
         relevant_count = rag_context.relevant_count
 
-        logger.info(f"📚 [FORMAT_RAG_KNOWLEDGE] Processing {len(judged_docs)} judged documents")
+        logger.critical(f"🔴 [FORMAT_RAG_KNOWLEDGE] Processing {len(judged_docs)} judged documents")
+        logger.critical(f"🔴 [FORMAT_RAG_KNOWLEDGE] Type of judged_docs: {type(judged_docs)}")
+
+        if judged_docs and len(judged_docs) > 0:
+            logger.critical(f"🔴 [FORMAT_RAG_KNOWLEDGE] First doc type: {type(judged_docs[0])}")
+            logger.critical(f"🔴 [FORMAT_RAG_KNOWLEDGE] First doc: {str(judged_docs[0])[:500]}")
 
         # Filter for relevant documents (label = 1)
         relevant_docs = [doc for doc in judged_docs if doc.get('relevance_label', 0) == 1]
-        logger.info(f"📚 [FORMAT_RAG_KNOWLEDGE] Found {len(relevant_docs)} relevant documents (label=1)")
+        logger.critical(f"🔴 [FORMAT_RAG_KNOWLEDGE] Found {len(relevant_docs)} relevant documents (label=1)")
 
         # Use relevant docs, fallback to all if none marked as relevant
         docs_to_use = relevant_docs if relevant_docs else judged_docs
-        logger.info(f"📚 [FORMAT_RAG_KNOWLEDGE] Using {len(docs_to_use)} documents for formatting")
+        logger.critical(f"🔴 [FORMAT_RAG_KNOWLEDGE] Using {len(docs_to_use)} documents for formatting")
 
         # Format top 10 documents for context
         docs_text_parts = []
         for i, doc in enumerate(docs_to_use[:10]):
             # Log document structure
             if i == 0:
-                logger.info(f"📚 [FORMAT_RAG_KNOWLEDGE] First doc keys: {list(doc.keys())}")
-                logger.info(f"📚 [FORMAT_RAG_KNOWLEDGE] First doc has 'title': {'title' in doc}")
-                logger.info(f"📚 [FORMAT_RAG_KNOWLEDGE] First doc has 'text': {'text' in doc}")
-                logger.info(f"📚 [FORMAT_RAG_KNOWLEDGE] First doc has 'relevance_score': {'relevance_score' in doc}")
+                logger.critical(f"🔴 [FORMAT_RAG_KNOWLEDGE] First doc keys: {list(doc.keys())}")
+                logger.critical(f"🔴 [FORMAT_RAG_KNOWLEDGE] First doc: {str(doc)[:300]}")
 
             # Try to get title - use chunk_id or source_url as fallback
             title = doc.get('title') or doc.get('source_url') or doc.get('chunk_id', 'Untitled')
             relevance_score = doc.get('relevance_score', doc.get('distance', 0))
             text_content = doc.get('text', '')[:500]
+
+            logger.critical(f"🔴 [FORMAT_RAG_KNOWLEDGE] Doc {i+1}: title={title}, relevance={relevance_score}, text_len={len(text_content)}")
 
             doc_text = f"\n[Document {i+1}] {title}\nRelevance: {relevance_score:.2f}\nContent: {text_content}..."
             docs_text_parts.append(doc_text)
