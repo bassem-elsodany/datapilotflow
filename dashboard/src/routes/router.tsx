@@ -78,7 +78,7 @@ const router = createBrowserRouter([
       },
       {
         path: paths.dashboard.apps.conversationCreate,
-        element: LazyPage(() => import('@/pages/dashboard/apps/knowledge/conversation-create')),
+        element: LazyPage(() => import('@/pages/dashboard/apps/knowledge/conversation-create-wizard')),
       },
       {
         path: '/dashboard/apps/conversation/:sessionId',
