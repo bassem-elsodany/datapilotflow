@@ -913,6 +913,14 @@ function StepVectorDatabase({ form, collections, collectionsLoading }: StepProps
         required
         description="How many relevant documents to retrieve (5-30)"
       />
+
+      {form.values.selectedStrategy !== 'native' && (
+        <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+          <Text size="sm">
+            <strong>Multi-Variant Retrieval:</strong> This strategy generates multiple query variations, searches the knowledge base with each, and merges results using Reciprocal Rank Fusion (RRF).
+          </Text>
+        </Alert>
+      )}
     </Stack>
   );
 }
