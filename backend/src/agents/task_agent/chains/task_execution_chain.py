@@ -35,9 +35,13 @@ def get_task_execution_chain(llm_client: ChatLiteLLM, use_rag_context: bool = Fa
     if use_rag_context:
         system_prompt = str(TASK_WITH_RAG_SYSTEM_PROMPT)
         user_prompt = str(TASK_WITH_RAG_USER_PROMPT)
+        logger.info("🎯 [TASK CHAIN] Using RAG-enhanced prompts with knowledge base context")
     else:
         system_prompt = str(TASK_SYSTEM_PROMPT)
         user_prompt = str(TASK_USER_PROMPT)
+        logger.info("🎯 [TASK CHAIN] Using standard prompts WITHOUT knowledge base")
+
+    logger.debug(f"🎯 [TASK CHAIN] User prompt template: {user_prompt[:200]}...")
 
     # Create prompt template
     prompt = ChatPromptTemplate.from_messages(

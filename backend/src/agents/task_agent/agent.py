@@ -74,11 +74,29 @@ class TaskAgentService(AgentService):
 
             # Create initial task state
             rag_context = state.get("rag_context")
+
+            # Debug: Log what RAG context we received
+            if rag_context:
+                logger.info(f"🎯 [TASK AGENT] RAG Context found:")
+                logger.info(f"   - Retrieved count: {rag_context.retrieved_count}")
+                logger.info(f"   - Relevant count: {rag_context.relevant_count}")
+                logger.info(f"   - Judged docs count: {len(rag_context.judged_documents) if rag_context.judged_documents else 0}")
+                if rag_context.judged_documents and len(rag_context.judged_documents) > 0:
+                    logger.info(f"   - First doc keys: {list(rag_context.judged_documents[0].keys())}")
+                    logger.info(f"   - First doc sample: {str(rag_context.judged_documents[0])[:200]}...")
+            else:
+                logger.warning("⚠️  [TASK AGENT] NO RAG Context received!")
+
+            # Format RAG knowledge for injection
+            rag_knowledge_str = None
+            if rag_context:
+                rag_knowledge_str = self._format_rag_knowledge(rag_context)
+                logger.info(f"📚 [TASK AGENT] Formatted RAG knowledge length: {len(rag_knowledge_str)} chars")
+                logger.info(f"📚 [TASK AGENT] RAG knowledge preview: {rag_knowledge_str[:300]}...")
+
             task_state = create_initial_state(
                 user_request=user_request,
-                rag_knowledge=(
-                    self._format_rag_knowledge(rag_context) if rag_context else None
-                ),
+                rag_knowledge=rag_knowledge_str,
             )
 
             # Add llm_client to config (same pattern as RAG Agent)
@@ -133,15 +151,35 @@ class TaskAgentService(AgentService):
         judged_docs = rag_context.judged_documents
         relevant_count = rag_context.relevant_count
 
+        logger.info(f"📚 [FORMAT_RAG_KNOWLEDGE] Processing {len(judged_docs)} judged documents")
+
+        # Filter for relevant documents (label = 1)
+        relevant_docs = [doc for doc in judged_docs if doc.get('relevance_label', 0) == 1]
+        logger.info(f"📚 [FORMAT_RAG_KNOWLEDGE] Found {len(relevant_docs)} relevant documents (label=1)")
+
+        # Use relevant docs, fallback to all if none marked as relevant
+        docs_to_use = relevant_docs if relevant_docs else judged_docs
+        logger.info(f"📚 [FORMAT_RAG_KNOWLEDGE] Using {len(docs_to_use)} documents for formatting")
+
         # Format top 10 documents for context
-        docs_text = "\n".join(
-            [
-                f"\n[Document {i+1}] {doc.get('title', 'Untitled')}\n"
-                f"Relevance: {doc.get('relevance_score', 0):.2f}\n"
-                f"Content: {doc.get('text', '')[:500]}..."
-                for i, doc in enumerate(judged_docs[:10])
-            ]
-        )
+        docs_text_parts = []
+        for i, doc in enumerate(docs_to_use[:10]):
+            # Log document structure
+            if i == 0:
+                logger.info(f"📚 [FORMAT_RAG_KNOWLEDGE] First doc keys: {list(doc.keys())}")
+                logger.info(f"📚 [FORMAT_RAG_KNOWLEDGE] First doc has 'title': {'title' in doc}")
+                logger.info(f"📚 [FORMAT_RAG_KNOWLEDGE] First doc has 'text': {'text' in doc}")
+                logger.info(f"📚 [FORMAT_RAG_KNOWLEDGE] First doc has 'relevance_score': {'relevance_score' in doc}")
+
+            # Try to get title - use chunk_id or source_url as fallback
+            title = doc.get('title') or doc.get('source_url') or doc.get('chunk_id', 'Untitled')
+            relevance_score = doc.get('relevance_score', doc.get('distance', 0))
+            text_content = doc.get('text', '')[:500]
+
+            doc_text = f"\n[Document {i+1}] {title}\nRelevance: {relevance_score:.2f}\nContent: {text_content}..."
+            docs_text_parts.append(doc_text)
+
+        docs_text = "\n".join(docs_text_parts)
 
         return f"""Additional Context - Knowledge Base Information:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

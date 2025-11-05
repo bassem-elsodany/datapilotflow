@@ -49,6 +49,14 @@ def task_executor_node(state: TaskAgentState) -> Dict[str, Any]:
 
     # Check if RAG context available
     has_rag_context = state.get("rag_knowledge") is not None
+    rag_knowledge_content = state.get("rag_knowledge", "")
+
+    logger.info(f"📚 [TASK EXECUTOR] RAG Knowledge Available: {has_rag_context}")
+    if has_rag_context:
+        logger.info(f"📚 [TASK EXECUTOR] RAG Knowledge length: {len(rag_knowledge_content)} chars")
+        logger.info(f"📚 [TASK EXECUTOR] RAG Knowledge preview: {rag_knowledge_content[:200]}...")
+    else:
+        logger.warning("⚠️  [TASK EXECUTOR] NO RAG Knowledge provided - will use standalone prompts")
 
     # Get task execution chain
     chain = get_task_execution_chain(llm_client, use_rag_context=has_rag_context)
@@ -58,7 +66,8 @@ def task_executor_node(state: TaskAgentState) -> Dict[str, Any]:
         # Build input with correct variable names matching the prompts
         chain_input = {"task_request": user_request}
         if has_rag_context:
-            chain_input["rag_context"] = state.get("rag_knowledge", "")
+            chain_input["rag_context"] = rag_knowledge_content
+            logger.info(f"📚 [TASK EXECUTOR] Injected RAG context into chain input")
 
         result = chain.invoke(chain_input)
         task_result = result.content if hasattr(result, "content") else str(result)
