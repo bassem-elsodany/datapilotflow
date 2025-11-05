@@ -277,42 +277,35 @@ class RenameSessionRequest(BaseModel):
 
 
 class UpdateSessionConfigRequest(BaseModel):
-    llm_provider_id: Optional[str] = Field(None, description="LLM provider ID to use")
-    llm_model_name: Optional[str] = Field(None, description="Specific model name")
-    enhancement_strategy: Optional[str] = Field(
-        None, description="Query enhancement strategy"
+    """Request model for updating conversation configuration with new nested structure."""
+
+    name: Optional[str] = Field(
+        None, max_length=100, description="Conversation name"
     )
-    collection_name: Optional[str] = Field(
-        None, description="Vector DB collection name"
+    description: Optional[str] = Field(
+        None, max_length=500, description="Conversation description"
     )
-    enable_reranking: Optional[bool] = Field(
-        None, description="Enable document reranking"
+    system_prompt: Optional[SystemPromptRequest] = Field(
+        None, description="Embedded system prompt"
     )
-    relevance_threshold: Optional[float] = Field(
-        None,
-        ge=0.0,
-        le=1.0,
-        description="Relevance score threshold for filtering documents (0.0-1.0)",
+    enhancement: Optional[EnhancementConfigRequest] = Field(
+        None, description="Query enhancement configuration"
     )
-    reranker_provider_id: Optional[str] = Field(
-        None, description="Dedicated reranker provider ID"
+    vector_database: Optional[VectorDatabaseConfigRequest] = Field(
+        None, description="Vector database configuration"
     )
-    reranker_model_name: Optional[str] = Field(None, description="Reranker model name")
-    enable_llm_generation: Optional[bool] = Field(
-        None, description="Enable LLM answer generation"
+    reranker: Optional[RerankerConfigRequest] = Field(
+        None, description="Document reranker configuration"
     )
-    top_k: Optional[int] = Field(
-        None,
-        ge=5,
-        le=30,
-        description="Number of documents to retrieve from vector database",
+    answer_generation: Optional[AnswerGenerationConfigRequest] = Field(
+        None, description="Answer generation configuration"
     )
-    tags: Optional[List[str]] = Field(None, description="Tags for organizing")
+    tags: Optional[List[str]] = Field(
+        None, description="Tags for organizing conversations"
+    )
     enable_knowledge_assistant: Optional[bool] = Field(
-        None, description="Enable Knowledge Assistant (multi-agent supervisor with intent routing)"
-    )
-    selected_system_prompt_id: Optional[str] = Field(
-        None, description="ID of the selected system prompt for Knowledge Assistant"
+        None,
+        description="Enable multi-agent supervisor (True=Supervisor, False=RAG)",
     )
 
 
@@ -740,32 +733,100 @@ async def update_conversation_session(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Update conversation session (RESTful endpoint).
+    Update conversation session with new nested configuration structure.
     """
     try:
-        success = conversation_history_service.update_conversation_config(
-            conversation_id=conversation_id,
-            user_id=current_user.id,
-            llm_provider_id=config_request.llm_provider_id,
-            llm_model_name=config_request.llm_model_name,
-            enhancement_strategy=config_request.enhancement_strategy,
-            collection_name=config_request.collection_name,
-            enable_reranking=config_request.enable_reranking,
-            relevance_threshold=config_request.relevance_threshold,
-            reranker_provider_id=config_request.reranker_provider_id,
-            reranker_model_name=config_request.reranker_model_name,
-            enable_llm_generation=config_request.enable_llm_generation,
-            top_k=config_request.top_k,
-            tags=config_request.tags,
-            enable_knowledge_assistant=config_request.enable_knowledge_assistant,
-            selected_system_prompt_id=config_request.selected_system_prompt_id,
+        # Get current conversation
+        conversation = conversation_history_service.get_conversation(
+            conversation_id, current_user.id
+        )
+        if not conversation:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+
+        # Build MongoDB update document with new nested structure
+        update_doc = {}
+
+        # Basic fields
+        if config_request.name is not None:
+            update_doc["name"] = config_request.name
+        if config_request.description is not None:
+            update_doc["description"] = config_request.description
+        if config_request.tags is not None:
+            update_doc["tags"] = config_request.tags
+        if config_request.enable_knowledge_assistant is not None:
+            update_doc["enable_knowledge_assistant"] = (
+                config_request.enable_knowledge_assistant
+            )
+
+        # System prompt (embedded)
+        if config_request.system_prompt is not None:
+            update_doc["system_prompt"] = {
+                "id": config_request.system_prompt.id,
+                "title": config_request.system_prompt.title,
+                "content": config_request.system_prompt.content,
+            }
+
+        # Enhancement configuration
+        if config_request.enhancement is not None:
+            provider = None
+            if config_request.enhancement.provider:
+                provider = {
+                    "id": config_request.enhancement.provider.id,
+                    "model_name": config_request.enhancement.provider.model_name,
+                }
+            update_doc["enhancement"] = {
+                "strategy": config_request.enhancement.strategy,
+                "provider": provider,
+            }
+
+        # Vector database configuration
+        if config_request.vector_database is not None:
+            update_doc["vector_database"] = {
+                "collection_name": config_request.vector_database.collection_name,
+                "top_k": config_request.vector_database.top_k,
+            }
+
+        # Reranker configuration
+        if config_request.reranker is not None:
+            provider = None
+            if config_request.reranker.provider:
+                provider = {
+                    "id": config_request.reranker.provider.id,
+                    "model_name": config_request.reranker.provider.model_name,
+                }
+            update_doc["reranker"] = {
+                "provider": provider,
+                "relevance_threshold": config_request.reranker.relevance_threshold,
+            }
+
+        # Answer generation configuration
+        if config_request.answer_generation is not None:
+            provider = None
+            if config_request.answer_generation.provider:
+                provider = {
+                    "id": config_request.answer_generation.provider.id,
+                    "model_name": config_request.answer_generation.provider.model_name,
+                }
+            update_doc["answer_generation"] = {"provider": provider}
+
+        if not update_doc:
+            raise HTTPException(
+                status_code=400, detail="No fields to update"
+            )
+
+        # Update last_updated timestamp
+        from datetime import datetime
+        update_doc["last_updated"] = datetime.utcnow()
+
+        # Update MongoDB document
+        from bson import ObjectId
+        result = conversation_history_service.collection.update_one(
+            {"_id": ObjectId(conversation_id), "user_id": current_user.id},
+            {"$set": update_doc},
         )
 
-        if not success:
-            raise HTTPException(
-                status_code=404,
-                detail="Conversation session not found or no changes made",
-            )
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Conversation not found")
 
         return {
             "success": True,
@@ -776,7 +837,7 @@ async def update_conversation_session(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error updating conversation: {e}")
+        logger.error(f"Error updating conversation: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
