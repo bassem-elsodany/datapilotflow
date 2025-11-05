@@ -312,48 +312,115 @@ class SelectSystemPromptRequest(BaseModel):
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_conversation_session(
-    create_request: CreateSessionRequest = CreateSessionRequest(),
+    create_request: CreateSessionRequest,
     current_user: User = Depends(get_current_user),
 ):
     """
-    Create a new conversation session with optional LLM and enhancement configuration.
+    Create a new conversation session with restructured nested configuration.
+
+    Request body structure:
+    {
+      "name": "string (optional)",
+      "description": "string (optional)",
+      "system_prompt": {...},  # optional
+      "enhancement": {
+        "strategy": "string",
+        "provider": {"id": "string", "model_name": "string"} (optional)
+      },
+      "vector_database": {
+        "collection_name": "string",
+        "top_k": number
+      },
+      "reranker": {
+        "provider": {"id": "string", "model_name": "string"} (optional),
+        "relevance_threshold": number
+      },
+      "answer_generation": {
+        "provider": {"id": "string", "model_name": "string"} (optional)
+      },
+      "tags": ["string"],
+      "enable_knowledge_assistant": boolean
+    }
     """
     try:
-        session_id = conversation_history_service.create_conversation(
+        # Convert request models to service dataclasses
+        system_prompt = None
+        if create_request.system_prompt:
+            system_prompt = SystemPrompt(
+                id=create_request.system_prompt.id,
+                title=create_request.system_prompt.title,
+                content=create_request.system_prompt.content,
+            )
+
+        enhancement = None
+        if create_request.enhancement:
+            provider = None
+            if create_request.enhancement.provider:
+                provider = ProviderConfig(
+                    id=create_request.enhancement.provider.id,
+                    model_name=create_request.enhancement.provider.model_name,
+                )
+            enhancement = EnhancementConfig(
+                strategy=create_request.enhancement.strategy, provider=provider
+            )
+
+        vector_database = None
+        if create_request.vector_database:
+            vector_database = VectorDatabaseConfig(
+                collection_name=create_request.vector_database.collection_name,
+                top_k=create_request.vector_database.top_k,
+            )
+
+        reranker = None
+        if create_request.reranker:
+            provider = None
+            if create_request.reranker.provider:
+                provider = ProviderConfig(
+                    id=create_request.reranker.provider.id,
+                    model_name=create_request.reranker.provider.model_name,
+                )
+            reranker = RerankerConfig(
+                provider=provider,
+                relevance_threshold=create_request.reranker.relevance_threshold,
+            )
+
+        answer_generation = None
+        if create_request.answer_generation:
+            provider = None
+            if create_request.answer_generation.provider:
+                provider = ProviderConfig(
+                    id=create_request.answer_generation.provider.id,
+                    model_name=create_request.answer_generation.provider.model_name,
+                )
+            answer_generation = AnswerGenerationConfig(provider=provider)
+
+        session_id = conversation_history_service.create_conversation_v2(
             user_id=current_user.id,
             name=create_request.name,
             description=create_request.description,
-            llm_provider_id=create_request.llm_provider_id,
-            llm_model_name=create_request.llm_model_name,
-            enhancement_strategy=create_request.enhancement_strategy,
-            collection_name=create_request.collection_name or "LongTermMemory",
-            enable_reranking=create_request.enable_reranking,
-            relevance_threshold=create_request.relevance_threshold,
-            reranker_provider_id=create_request.reranker_provider_id,
-            reranker_model_name=create_request.reranker_model_name,
-            enable_llm_generation=create_request.enable_llm_generation,
-            top_k=create_request.top_k,
-            enable_knowledge_assistant=create_request.enable_knowledge_assistant,
-            selected_system_prompt_id=create_request.selected_system_prompt_id,
+            system_prompt=system_prompt,
+            enhancement=enhancement,
+            vector_database=vector_database,
+            reranker=reranker,
+            answer_generation=answer_generation,
             tags=create_request.tags,
+            enable_knowledge_assistant=create_request.enable_knowledge_assistant,
         )
 
+        agent_type = "supervisor" if create_request.enable_knowledge_assistant else "rag"
         return {
             "success": True,
             "id": session_id,
             "name": create_request.name or f"Session {session_id[:8]}",
-            "llm_provider_id": create_request.llm_provider_id,
-            "enhancement_strategy": create_request.enhancement_strategy,
-            "collection_name": create_request.collection_name or "LongTermMemory",
-            "enable_reranking": create_request.enable_reranking,
-            "reranker_provider_id": create_request.reranker_provider_id,
-            "reranker_model_name": create_request.reranker_model_name,
-            "enable_llm_generation": create_request.enable_llm_generation,
+            "agent_type": agent_type,
+            "enhancement_strategy": (
+                create_request.enhancement.strategy if create_request.enhancement else None
+            ),
             "message": "Conversation session created successfully",
         }
 
     except Exception as e:
-        logger.error(f"Error creating conversation session: {e}")
+        logger.error(f"Error creating conversation session: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
