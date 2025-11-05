@@ -919,7 +919,7 @@ function StepVectorDatabase({ form, collections, collectionsLoading }: StepProps
           <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
             <Stack gap="xs">
               <Text size="xs">
-                <strong>Multi-Variant Retrieval:</strong> This strategy generates multiple query variations to comprehensively search your knowledge base.
+                <strong>Since the selected strategy is not Native:</strong> This strategy generates multiple query variations to comprehensively search your knowledge base.
               </Text>
               <List size="xs">
                 <List.Item>Generate {form.values.selectedStrategy === 'augmented' ? '4' : '3-5'} query variants ({form.values.selectedStrategy === 'augmented' ? 'via transformations' : 'via rephrasing'})</List.Item>
