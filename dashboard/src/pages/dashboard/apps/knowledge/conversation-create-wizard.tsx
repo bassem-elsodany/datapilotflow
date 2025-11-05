@@ -1296,11 +1296,21 @@ function StepAdvancedSettings({
           )}
         </>
       ) : (
-        <Alert icon={<IconInfoCircle size={16} />} color="yellow" variant="light">
-          <Text size="sm">
-            Raw results mode. Shows retrieved documents as-is without LLM processing. Faster and more cost-effective.
-          </Text>
-        </Alert>
+        <>
+          <Alert icon={<IconInfoCircle size={16} />} color="yellow" variant="light">
+            <Text size="sm">
+              Raw results mode. Shows retrieved documents as-is without LLM processing. Faster and more cost-effective.
+            </Text>
+          </Alert>
+
+          {form.values.selectedStrategy !== 'native' && (
+            <Alert icon={<IconAlertCircle size={16} />} color="orange" variant="light">
+              <Text size="sm">
+                <strong>Note:</strong> You've selected a query enhancement strategy ({form.values.selectedStrategy}) but disabled generative answers. The multi-variant retrieval results will be merged and ranked, but returned as raw documents. Consider enabling generative answers to better utilize the enhanced retrieval results.
+              </Text>
+            </Alert>
+          )}
+        </>
       )}
 
       {form.values.agentType === 'assistant' && (
