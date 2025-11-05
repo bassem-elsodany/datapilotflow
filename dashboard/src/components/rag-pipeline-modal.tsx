@@ -558,6 +558,7 @@ export function RAGPipelineModal({
                       border: stage.status === 'pending' ? '2px dashed #adb5bd' : 'none',
                       transition: 'all 0.3s ease',
                       position: 'relative',
+                      zIndex: stage.status === 'active' ? 10 : 1,
                     }}
                   >
                     {console.log(`🔵 [DIV RENDER] ${stage.id} - bg=${stage.status === 'active' ? 'blue' : 'gray'}, will render children...`)}
