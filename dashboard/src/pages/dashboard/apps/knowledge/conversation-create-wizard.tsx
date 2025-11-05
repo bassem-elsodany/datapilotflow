@@ -210,9 +210,17 @@ const STEP_CONFIGS = [
     gradientTo: LOGO_COLORS.flow,          // Lime Green (Flow)
   },
   {
+    label: 'Judge Ranker',
+    description: 'Document ranking (optional)',
+    icon: <IconFilter size={20} />,
+    color: 'orange',
+    gradientFrom: '#f97316',                // Orange
+    gradientTo: '#ea580c',                  // Dark Orange
+  },
+  {
     label: 'Advanced Settings',
     description: 'Fine-tune behavior',
-    icon: <IconFilter size={20} />,
+    icon: <IconWand size={20} />,
     color: 'violet',
     gradientFrom: LOGO_COLORS.pilot,       // Purple (Pilot)
     gradientTo: LOGO_COLORS.accent3,       // Yellow-Green
@@ -291,16 +299,18 @@ export function ConversationCreateWizard() {
       case 1:
         return !!form.values.conversationName.trim(); // Conversation name required
       case 2:
-        return !!form.values.collectionName && form.values.topK >= 5; // Collection & topK required
-      case 3:
         return true; // Enhancement strategy always valid
+      case 3:
+        return !!form.values.collectionName && form.values.topK >= 5; // Collection & topK required
       case 4:
+        return true; // Reranker all optional
+      case 5:
         // Provider & model required only if generative answer enabled
         if (form.values.enableLLMGeneration) {
           return !!form.values.selectedProviderId && !!form.values.selectedModel;
         }
         return true; // All optional if generative answer disabled
-      case 5:
+      case 6:
         return true; // Review always valid
       default:
         return false;
@@ -497,8 +507,17 @@ export function ConversationCreateWizard() {
           />
         )}
 
-        {/* STEP 4: ADVANCED SETTINGS */}
+        {/* STEP 4: JUDGE RANKER */}
         {activeStep === 4 && (
+          <StepReranker
+            form={form}
+            providers={providers}
+            providersLoading={providersLoading}
+          />
+        )}
+
+        {/* STEP 5: ADVANCED SETTINGS */}
+        {activeStep === 5 && (
           <StepAdvancedSettings
             form={form}
             providers={providers}
@@ -511,8 +530,8 @@ export function ConversationCreateWizard() {
           />
         )}
 
-        {/* STEP 5: REVIEW & CREATE */}
-        {activeStep === 5 && (
+        {/* STEP 6: REVIEW & CREATE */}
+        {activeStep === 6 && (
           <StepReviewAndCreate
             form={form}
             providers={providers}
@@ -541,7 +560,7 @@ export function ConversationCreateWizard() {
               Cancel
             </Button>
 
-            {activeStep < 5 ? (
+            {activeStep < 6 ? (
               <Button
                 onClick={handleNextStep}
                 disabled={isCreating}
@@ -1110,26 +1129,18 @@ function StepEnhancementStrategy({ form, onLearnClick }: StepProps & { onLearnCl
   );
 }
 
-function StepAdvancedSettings({
-  form,
-  providers,
-  providersLoading,
-  onPromptSelected,
-  selectedSystemPrompt,
-}: StepProps) {
+function StepReranker({ form, providers, providersLoading }: StepProps) {
   return (
     <Stack gap="md">
       <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
         <Text size="sm">
-          Fine-tune advanced behavior including document ranking, answer generation, and system prompts for Assistant mode.
+          Optionally enable document ranking to evaluate and re-rank retrieved documents by relevance before answer generation. This step is optional and can be skipped.
         </Text>
       </Alert>
 
-      <Divider label="Document Ranking" labelPosition="left" />
-
       <Switch
         label="Enable Judge Ranker"
-        description="Evaluate and rank retrieved documents by relevance"
+        description="When enabled, retrieved documents are evaluated and ranked by relevance before answer generation"
         {...form.getInputProps('enableReranking', {
           type: 'checkbox',
         })}
@@ -1137,11 +1148,19 @@ function StepAdvancedSettings({
 
       {form.values.enableReranking && (
         <>
+          <Divider my="sm" />
+
+          <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+            <Text size="sm">
+              Select a specialized judge provider or use any LLM to evaluate document relevance. The judge will re-rank documents before they are used for answer generation.
+            </Text>
+          </Alert>
+
           <Grid gutter="md">
             <Grid.Col span={{ base: 12, sm: 6 }}>
               <Select
                 label="Judge Provider"
-                placeholder="Select a provider"
+                placeholder={providersLoading ? 'Loading providers...' : 'Select a provider'}
                 data={
                   providers?.map((p) => ({
                     value: p.id,
@@ -1151,6 +1170,7 @@ function StepAdvancedSettings({
                 {...form.getInputProps('selectedRerankerId')}
                 searchable
                 disabled={providersLoading}
+                description="Choose a specialized judge or any LLM"
               />
             </Grid.Col>
             <Grid.Col span={{ base: 12, sm: 6 }}>
@@ -1164,11 +1184,17 @@ function StepAdvancedSettings({
                         ?.reranker?.models.map((m: string) => ({
                           value: m,
                           label: m,
-                        })) || []
+                        })) || providers
+                          .find((p) => p.id === form.values.selectedRerankerId)
+                          ?.generative?.models.map((m: string) => ({
+                            value: m,
+                            label: m,
+                          })) || []
                     : []
                 }
                 {...form.getInputProps('selectedRerankerModel')}
                 searchable
+                description="Choose a model specialized in relevance ranking or general-purpose LLM"
               />
             </Grid.Col>
           </Grid>
@@ -1179,10 +1205,28 @@ function StepAdvancedSettings({
             max={1}
             step={0.05}
             {...form.getInputProps('relevanceThreshold')}
-            description="Minimum relevance score (0-1) for filtering documents"
+            description="Minimum relevance score (0-1) for filtering documents (optional)"
           />
         </>
       )}
+    </Stack>
+  );
+}
+
+function StepAdvancedSettings({
+  form,
+  providers,
+  providersLoading,
+  onPromptSelected,
+  selectedSystemPrompt,
+}: StepProps) {
+  return (
+    <Stack gap="md">
+      <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+        <Text size="sm">
+          Fine-tune advanced behavior including answer generation and system prompts for Assistant mode.
+        </Text>
+      </Alert>
 
       <Divider label="Answer Generation" labelPosition="left" />
 
