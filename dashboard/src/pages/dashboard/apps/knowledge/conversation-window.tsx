@@ -4,6 +4,7 @@ import { useGetCollections } from '@/api/resources/vectordb';
 import { WorkflowProgressModal } from '@/components/workflow-progress-modal';
 import { StreamingMessage } from '@/components/streaming-message';
 import { TypingIndicator } from '@/components/typing-indicator';
+import { SystemPromptManager } from '@/components/system-prompt-manager';
 import { apiEndpoints, apiUtils } from '@/config';
 import { paths } from '@/routes/paths';
 import {
@@ -244,6 +245,7 @@ export default function ConversationWindow() {
   const [enableLLMGeneration, setEnableLLMGeneration] = useState(true);
   const [topK, setTopK] = useState<number | undefined>(undefined);
   const [enableKnowledgeAssistant, setEnableKnowledgeAssistant] = useState(true);
+  const [selectedSystemPromptId, setSelectedSystemPromptId] = useState<string | undefined>();
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [expandedMetadata, setExpandedMetadata] = useState<Set<number>>(new Set());
 
@@ -1383,6 +1385,7 @@ export default function ConversationWindow() {
         enable_llm_generation: enableLLMGeneration,
         top_k: topK,
         enable_knowledge_assistant: enableKnowledgeAssistant,
+        selected_system_prompt_id: enableKnowledgeAssistant ? selectedSystemPromptId : null,
       };
 
 
@@ -1452,6 +1455,7 @@ export default function ConversationWindow() {
         enable_llm_generation: enableLLMGeneration,
         top_k: topK,
         enable_knowledge_assistant: enableKnowledgeAssistant,
+        selected_system_prompt_id: enableKnowledgeAssistant ? selectedSystemPromptId : null,
       };
 
       const response = await fetch(apiUtils.buildApiUrl(`/conversations/${sessionId}`), {
@@ -2504,15 +2508,23 @@ export default function ConversationWindow() {
           />
 
           {enableKnowledgeAssistant ? (
-            <Alert icon={<IconInfoCircle size={16} />} color="grape" variant="light">
-              <Text size="sm">
-                <strong>Knowledge Assistant Mode:</strong> AI searches your knowledge base AND performs tasks using what it finds.
-                <br />
-                <strong>How it works:</strong> Finds relevant info → Uses it to complete your task
-                <br />
-                <strong>Best for:</strong> "Write a summary...", "Generate code using our docs", "Create a plan..."
-              </Text>
-            </Alert>
+            <>
+              <Alert icon={<IconInfoCircle size={16} />} color="grape" variant="light">
+                <Text size="sm">
+                  <strong>Knowledge Assistant Mode:</strong> AI searches your knowledge base AND performs tasks using what it finds.
+                  <br />
+                  <strong>How it works:</strong> Finds relevant info → Uses it to complete your task
+                  <br />
+                  <strong>Best for:</strong> "Write a summary...", "Generate code using our docs", "Create a plan..."
+                </Text>
+              </Alert>
+
+              <SystemPromptManager
+                conversationId={sessionId || ''}
+                selectedPromptId={selectedSystemPromptId}
+                onPromptSelected={(prompt) => setSelectedSystemPromptId(prompt.id)}
+              />
+            </>
           ) : (
             <Alert icon={<IconInfoCircle size={16} />} color="yellow" variant="light">
               <Text size="sm">
