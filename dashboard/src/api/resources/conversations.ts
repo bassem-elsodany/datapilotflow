@@ -2,14 +2,79 @@ import { z } from 'zod';
 import { createGetQueryHook, createPostMutationHook, createPutMutationHook, createDeleteMutationHook } from '../helpers';
 import { apiEndpoints } from '../../config';
 
-// Conversation Schema
+// ============================================================================
+// NESTED CONFIGURATION SCHEMAS
+// ============================================================================
+
+// Provider Configuration Schema
+export const ProviderConfigSchema = z.object({
+  id: z.string(),
+  model_name: z.string(),
+});
+
+export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
+
+// System Prompt Schema
+export const SystemPromptSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  content: z.string(),
+}).optional().nullable();
+
+export type SystemPrompt = z.infer<typeof SystemPromptSchema>;
+
+// Enhancement Configuration Schema
+export const EnhancementConfigSchema = z.object({
+  strategy: z.string(),
+  provider: ProviderConfigSchema.optional().nullable(),
+}).optional().nullable();
+
+export type EnhancementConfig = z.infer<typeof EnhancementConfigSchema>;
+
+// Vector Database Configuration Schema
+export const VectorDatabaseConfigSchema = z.object({
+  collection_name: z.string(),
+  top_k: z.number(),
+}).optional().nullable();
+
+export type VectorDatabaseConfig = z.infer<typeof VectorDatabaseConfigSchema>;
+
+// Reranker Configuration Schema
+export const RerankerConfigSchema = z.object({
+  provider: ProviderConfigSchema.optional().nullable(),
+  relevance_threshold: z.number(),
+}).optional().nullable();
+
+export type RerankerConfig = z.infer<typeof RerankerConfigSchema>;
+
+// Answer Generation Configuration Schema
+export const AnswerGenerationConfigSchema = z.object({
+  provider: ProviderConfigSchema.optional().nullable(),
+}).optional().nullable();
+
+export type AnswerGenerationConfig = z.infer<typeof AnswerGenerationConfigSchema>;
+
+// ============================================================================
+// CONVERSATION SCHEMAS
+// ============================================================================
+
+// Conversation Schema (with nested configuration)
 export const ConversationSchema = z.object({
   id: z.string(),
   name: z.string(),
+  description: z.string().optional().nullable(),
   created_at: z.string(),
-  message_count: z.number(),
-  topics_discussed: z.array(z.string()),
-  knowledge_sources_used: z.array(z.string()),
+  message_count: z.number().optional(),
+  topics_discussed: z.array(z.string()).optional(),
+  knowledge_sources_used: z.array(z.string()).optional(),
+  // Nested configuration
+  system_prompt: SystemPromptSchema,
+  enhancement: EnhancementConfigSchema,
+  vector_database: VectorDatabaseConfigSchema,
+  reranker: RerankerConfigSchema,
+  answer_generation: AnswerGenerationConfigSchema,
+  enable_knowledge_assistant: z.boolean().optional(),
+  tags: z.array(z.string()).optional(),
 });
 
 export type Conversation = z.infer<typeof ConversationSchema>;
@@ -97,6 +162,49 @@ export const RenameSessionResponseSchema = z.object({
 
 export type RenameSessionResponse = z.infer<typeof RenameSessionResponseSchema>;
 
+// ============================================================================
+// CREATE/UPDATE CONVERSATION REQUEST SCHEMAS (Nested Structure)
+// ============================================================================
+
+// Create Conversation Request with nested configuration
+export const CreateConversationRequestSchema = z.object({
+  name: z.string(),
+  description: z.string().optional(),
+  system_prompt: SystemPromptSchema.optional(),
+  enhancement: EnhancementConfigSchema.optional(),
+  vector_database: VectorDatabaseConfigSchema.optional(),
+  reranker: RerankerConfigSchema.optional(),
+  answer_generation: AnswerGenerationConfigSchema.optional(),
+  enable_knowledge_assistant: z.boolean().optional(),
+  tags: z.array(z.string()).optional(),
+});
+
+export type CreateConversationRequest = z.infer<typeof CreateConversationRequestSchema>;
+
+// Update Conversation Request with nested configuration
+export const UpdateConversationRequestSchema = z.object({
+  name: z.string().optional(),
+  description: z.string().optional(),
+  system_prompt: SystemPromptSchema.optional(),
+  enhancement: EnhancementConfigSchema.optional(),
+  vector_database: VectorDatabaseConfigSchema.optional(),
+  reranker: RerankerConfigSchema.optional(),
+  answer_generation: AnswerGenerationConfigSchema.optional(),
+  enable_knowledge_assistant: z.boolean().optional(),
+  tags: z.array(z.string()).optional(),
+});
+
+export type UpdateConversationRequest = z.infer<typeof UpdateConversationRequestSchema>;
+
+// Update Conversation Response Schema
+export const UpdateConversationResponseSchema = z.object({
+  success: z.boolean(),
+  id: z.string(),
+  message: z.string(),
+});
+
+export type UpdateConversationResponse = z.infer<typeof UpdateConversationResponseSchema>;
+
 // API Hooks
 
 // List all conversations
@@ -113,14 +221,30 @@ export const useGetConversation = (conversationId: string) => createGetQueryHook
   rQueryParams: { queryKey: ['conversations', conversationId] },
 })();
 
-// Create new conversation
+// Create new conversation (with nested configuration)
 export const useCreateConversation = createPostMutationHook({
   endpoint: '/conversations',
-  bodySchema: CreateSessionRequestSchema,
+  bodySchema: CreateConversationRequestSchema,
   responseSchema: CreateSessionResponseSchema,
   rMutationParams: {
-    onSuccess: (data, variables, context, queryClient) => {
+    onSuccess: (_data, _variables, _context, queryClient) => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    },
+  },
+});
+
+// Update conversation configuration
+export const useUpdateConversation = createPutMutationHook({
+  endpoint: '/conversations/:conversationId',
+  bodySchema: UpdateConversationRequestSchema,
+  responseSchema: UpdateConversationResponseSchema,
+  rMutationParams: {
+    onSuccess: (_data, variables, _context, queryClient) => {
+      const conversationId = (variables as any).route?.conversationId;
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      if (conversationId) {
+        queryClient.invalidateQueries({ queryKey: ['conversations', conversationId] });
+      }
     },
   },
 });
@@ -129,7 +253,7 @@ export const useCreateConversation = createPostMutationHook({
 export const useDeleteConversation = createDeleteMutationHook({
   endpoint: '/conversations/:conversationId',
   rMutationParams: {
-    onSuccess: (data, variables, context, queryClient) => {
+    onSuccess: (_data, _variables, _context, queryClient) => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
     },
   },
@@ -141,7 +265,7 @@ export const useRenameConversation = createPutMutationHook({
   bodySchema: RenameSessionRequestSchema,
   responseSchema: RenameSessionResponseSchema,
   rMutationParams: {
-    onSuccess: (data, variables, context, queryClient) => {
+    onSuccess: (_data, _variables, _context, queryClient) => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
     },
   },
@@ -153,9 +277,9 @@ export const useSendChatMessage = createPostMutationHook({
   bodySchema: ChatMessageRequestSchema,
   responseSchema: ChatResponseSchema,
   rMutationParams: {
-    onSuccess: (data, variables, context, queryClient) => {
+    onSuccess: (_data, variables, _context, queryClient) => {
       // Invalidate the specific conversation to refresh messages
-      const conversationId = variables.route?.conversationId;
+      const conversationId = (variables as any).route?.conversationId;
       if (conversationId) {
         queryClient.invalidateQueries({ queryKey: ['conversations', conversationId] });
       }
