@@ -177,7 +177,7 @@ const STEP_CONFIGS = [
     label: 'Enhancement Strategy',
     description: 'Query enhancement options',
     icon: <IconWand size={20} />,
-    color: 'grape',
+    color: 'violet',
     gradientFrom: LOGO_COLORS.pilot,       // Purple (Pilot)
     gradientTo: LOGO_COLORS.flow,          // Lime Green (Flow)
   },
