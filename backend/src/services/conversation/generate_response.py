@@ -284,19 +284,28 @@ async def get_response_stream_supervisor(
                 logger.debug(f"📡 [SUPERVISOR RAG EVENT] type={event_type}, node={node_name}")
 
                 # Capture final state when workflow completes
-                if event_type == "__end__":
-                    logger.critical(f"🔴 [SUPERVISOR RAG] __end__ event received!")
+                # With version="v2", the final state comes from on_chain_end for LangGraph node
+                if event_type == "on_chain_end" and node_name == "LangGraph":
+                    logger.critical(f"🔴 [SUPERVISOR RAG] LangGraph on_chain_end event received - THIS IS THE FINAL STATE!")
                     logger.critical(f"🔴 [SUPERVISOR RAG] event_data type: {type(event_data)}")
-                    if isinstance(event_data, dict):
+
+                    # Extract output from event_data
+                    if hasattr(event_data, 'output'):
+                        rag_result = event_data.output
+                        logger.critical(f"🔴 [SUPERVISOR RAG] Extracted from event_data.output")
+                    elif isinstance(event_data, dict) and 'output' in event_data:
+                        rag_result = event_data['output']
+                        logger.critical(f"🔴 [SUPERVISOR RAG] Extracted from event_data['output']")
+                    elif isinstance(event_data, dict):
                         rag_result = event_data
-                        logger.critical(f"🔴 [SUPERVISOR RAG] event_data is dict with keys: {list(event_data.keys())}")
-                    elif hasattr(event_data, 'state'):
-                        rag_result = event_data.state
-                        logger.critical(f"🔴 [SUPERVISOR RAG] event_data has .state, assigned to rag_result")
+                        logger.critical(f"🔴 [SUPERVISOR RAG] Using event_data directly as dict")
                     else:
                         rag_result = {}
-                        logger.critical(f"🔴 [SUPERVISOR RAG] event_data is unknown type, setting rag_result to empty dict")
-                    logger.critical(f"🔴 [SUPERVISOR RAG] rag_result is now: {str(rag_result)[:300]}")
+                        logger.critical(f"🔴 [SUPERVISOR RAG] Could not extract output, using empty dict")
+
+                    logger.critical(f"🔴 [SUPERVISOR RAG] rag_result type: {type(rag_result)}")
+                    if isinstance(rag_result, dict):
+                        logger.critical(f"🔴 [SUPERVISOR RAG] rag_result has {len(rag_result)} keys: {list(rag_result.keys())[:10]}")
                     continue
 
                 # Handle node END events to extract output data
