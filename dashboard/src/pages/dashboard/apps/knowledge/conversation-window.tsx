@@ -415,26 +415,33 @@ export default function ConversationWindow() {
 
         setSessionName(data.session?.name || 'Conversation');
 
-        // Load conversation settings - NO FALLBACKS, USE EXACT DB VALUES
+        // Load conversation settings from nested structure
         if (data.session) {
-          setSelectedProviderId(data.session.llm_provider_id || null);
-          setSelectedModel(data.session.llm_model_name || null);
-          setSelectedStrategy(data.session.enhancement_config?.strategy || 'native');
-          setCollectionName(data.session.collection_name || 'LongTermMemory');
+          // Extract from nested answer_generation config
+          if (data.session.answer_generation?.provider) {
+            setSelectedProviderId(data.session.answer_generation.provider.id || null);
+            setSelectedModel(data.session.answer_generation.provider.model_name || null);
+          } else {
+            setSelectedProviderId(null);
+            setSelectedModel(null);
+          }
 
-          // Load reranking settings - exact values from DB
-          const newEnableReranking = data.session.enable_reranking !== undefined ? data.session.enable_reranking : false;
-          setEnableReranking(newEnableReranking);
+          // Extract from nested enhancement config
+          setSelectedStrategy(data.session.enhancement?.strategy || 'native');
 
-          setSelectedRerankerId(data.session.reranker_provider_id || null);
-          setSelectedRerankerModel(data.session.reranker_model_name || null);
+          // Extract from nested vector_database config
+          setCollectionName(data.session.vector_database?.collection_name || 'LongTermMemory');
+          setTopK(data.session.vector_database?.top_k || 5);
 
-          // Load LLM generation setting - exact value from DB
-          const newEnableLLMGeneration = data.session.enable_llm_generation !== undefined ? data.session.enable_llm_generation : false;
+          // Extract from nested reranker config
+          const hasReranker = data.session.reranker?.provider ? true : false;
+          setEnableReranking(hasReranker);
+          setSelectedRerankerId(data.session.reranker?.provider?.id || null);
+          setSelectedRerankerModel(data.session.reranker?.provider?.model_name || null);
+
+          // Determine LLM generation enabled (true if answer_generation has provider)
+          const newEnableLLMGeneration = data.session.answer_generation?.provider ? true : false;
           setEnableLLMGeneration(newEnableLLMGeneration);
-
-          // Load top_k - exact value from DB
-          setTopK(data.session.top_k);
 
           // Load supervisor setting - exact value from DB
           const newEnableKnowledgeAssistant = data.session.enable_knowledge_assistant !== undefined ? data.session.enable_knowledge_assistant : true;
@@ -1373,19 +1380,34 @@ export default function ConversationWindow() {
       setIsSavingSettings(true);
       const token = localStorage.getItem('jwt_token');
 
+      // Build nested configuration structure
       const payload: any = {
-        llm_provider_id: enableLLMGeneration ? selectedProviderId : null,
-        llm_model_name: enableLLMGeneration ? selectedModel : null,
-        enhancement_strategy: selectedStrategy !== 'none' ? selectedStrategy : null,
-        collection_name: collectionName,
-        enable_reranking: enableReranking,
-        relevance_threshold: relevanceThreshold,
-        reranker_provider_id: enableReranking ? selectedRerankerId : null,
-        reranker_model_name: enableReranking ? selectedRerankerModel : null,
-        enable_llm_generation: enableLLMGeneration,
-        top_k: topK,
+        // Enhancement configuration
+        enhancement: {
+          strategy: selectedStrategy !== 'none' ? selectedStrategy : 'native',
+          provider: null, // Enhancement provider is optional
+        },
+        // Vector database configuration
+        vector_database: {
+          collection_name: collectionName,
+          top_k: topK,
+        },
+        // Reranker configuration
+        reranker: enableReranking ? {
+          provider: selectedRerankerId && selectedRerankerModel ? {
+            id: selectedRerankerId,
+            model_name: selectedRerankerModel,
+          } : null,
+          relevance_threshold: relevanceThreshold,
+        } : null,
+        // Answer generation configuration
+        answer_generation: enableLLMGeneration && selectedProviderId && selectedModel ? {
+          provider: {
+            id: selectedProviderId,
+            model_name: selectedModel,
+          },
+        } : null,
         enable_knowledge_assistant: enableKnowledgeAssistant,
-        selected_system_prompt_id: enableKnowledgeAssistant ? selectedSystemPromptId : null,
       };
 
 
@@ -1443,19 +1465,34 @@ export default function ConversationWindow() {
     try {
       const token = localStorage.getItem('jwt_token');
 
+      // Build nested configuration structure
       const payload: any = {
-        llm_provider_id: enableLLMGeneration ? selectedProviderId : null,
-        llm_model_name: enableLLMGeneration ? selectedModel : null,
-        enhancement_strategy: selectedStrategy !== 'none' ? selectedStrategy : null,
-        collection_name: collectionName,
-        enable_reranking: enableReranking,
-        relevance_threshold: relevanceThreshold,
-        reranker_provider_id: enableReranking ? selectedRerankerId : null,
-        reranker_model_name: enableReranking ? selectedRerankerModel : null,
-        enable_llm_generation: enableLLMGeneration,
-        top_k: topK,
+        // Enhancement configuration
+        enhancement: {
+          strategy: selectedStrategy !== 'none' ? selectedStrategy : 'native',
+          provider: null, // Enhancement provider is optional
+        },
+        // Vector database configuration
+        vector_database: {
+          collection_name: collectionName,
+          top_k: topK,
+        },
+        // Reranker configuration
+        reranker: enableReranking ? {
+          provider: selectedRerankerId && selectedRerankerModel ? {
+            id: selectedRerankerId,
+            model_name: selectedRerankerModel,
+          } : null,
+          relevance_threshold: relevanceThreshold,
+        } : null,
+        // Answer generation configuration
+        answer_generation: enableLLMGeneration && selectedProviderId && selectedModel ? {
+          provider: {
+            id: selectedProviderId,
+            model_name: selectedModel,
+          },
+        } : null,
         enable_knowledge_assistant: enableKnowledgeAssistant,
-        selected_system_prompt_id: enableKnowledgeAssistant ? selectedSystemPromptId : null,
       };
 
       const response = await fetch(apiUtils.buildApiUrl(`/conversations/${sessionId}`), {

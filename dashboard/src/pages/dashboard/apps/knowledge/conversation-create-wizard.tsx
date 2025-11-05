@@ -369,35 +369,47 @@ export function ConversationCreateWizard() {
       setIsCreating(true);
       const token = localStorage.getItem('jwt_token');
 
+      // Build nested configuration structure
       const payload: any = {
         name: form.values.conversationName.trim(),
         description: form.values.conversationDescription.trim() || null,
-        llm_provider_id: form.values.selectedProviderId,
-        llm_model_name: form.values.selectedModel,
-        enhancement_strategy:
-          form.values.selectedStrategy !== 'none'
-            ? form.values.selectedStrategy
-            : null,
-        collection_name: form.values.collectionName,
-        top_k: form.values.topK,
-        enable_reranking: form.values.enableReranking,
-        relevance_threshold: form.values.relevanceThreshold,
-        reranker_provider_id: form.values.enableReranking
-          ? form.values.selectedRerankerId
-          : null,
-        reranker_model_name: form.values.enableReranking
-          ? form.values.selectedRerankerModel
-          : null,
-        enable_llm_generation: form.values.enableLLMGeneration,
         enable_knowledge_assistant:
           form.values.agentType === 'assistant'
             ? true
             : form.values.enableKnowledgeAssistant,
-        selected_system_prompt_id:
-          form.values.agentType === 'assistant' &&
-          form.values.selectedSystemPromptId
-            ? form.values.selectedSystemPromptId
-            : null,
+        // Enhancement configuration
+        enhancement: {
+          strategy: form.values.selectedStrategy !== 'none'
+            ? form.values.selectedStrategy
+            : 'native',
+          provider: null, // Enhancement provider is optional
+        },
+        // Vector database configuration
+        vector_database: {
+          collection_name: form.values.collectionName,
+          top_k: form.values.topK,
+        },
+        // Reranker configuration
+        reranker: form.values.enableReranking ? {
+          provider: form.values.selectedRerankerId && form.values.selectedRerankerModel ? {
+            id: form.values.selectedRerankerId,
+            model_name: form.values.selectedRerankerModel,
+          } : null,
+          relevance_threshold: form.values.relevanceThreshold,
+        } : null,
+        // Answer generation configuration
+        answer_generation: form.values.enableLLMGeneration && form.values.selectedProviderId && form.values.selectedModel ? {
+          provider: {
+            id: form.values.selectedProviderId,
+            model_name: form.values.selectedModel,
+          },
+        } : null,
+        // System prompt (will be set separately if needed)
+        system_prompt: form.values.selectedSystemPromptId && !form.values.selectedSystemPromptId.startsWith('temp-') ? {
+          id: form.values.selectedSystemPromptId,
+          title: 'Selected System Prompt',
+          content: '',
+        } : null,
       };
 
       const response = await fetch(apiUtils.buildApiUrl('/conversations'), {
