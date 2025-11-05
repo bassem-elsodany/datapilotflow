@@ -3,10 +3,11 @@
  *
  * Multi-step wizard for creating conversations with:
  * Step 0: Agent Type Selection (RAG vs Assistant)
- * Step 1: LLM Provider & Model Configuration
- * Step 2: Vector Database & Query Enhancement Settings
- * Step 3: Advanced Settings (Reranking, Judge, Generation, System Prompt)
- * Step 4: Review & Create
+ * Step 1: Conversation Settings (Name, Description)
+ * Step 2: Vector Database Selection
+ * Step 3: Enhancement Strategy (Query enhancement options)
+ * Step 4: Advanced Settings (Reranking, LLM, System Prompt)
+ * Step 5: Review & Create
  */
 
 import { useGetActiveModelProviders } from '@/api/resources/model-providers';
@@ -18,6 +19,7 @@ import { ColorfulVerticalStepper } from '@/components/colorful-vertical-stepper'
 import { apiUtils } from '@/config';
 import { paths } from '@/routes/paths';
 import {
+  Accordion,
   Alert,
   Badge,
   Box,
@@ -34,6 +36,7 @@ import {
   Select,
   Stack,
   Switch,
+  Table,
   Text,
   TextInput,
   Textarea,
@@ -44,9 +47,11 @@ import { notifications } from '@mantine/notifications';
 import {
   IconAlertCircle,
   IconArrowLeft,
+  IconArrowsLeftRight,
   IconCheck,
   IconDatabase,
   IconFilter,
+  IconHelp,
   IconInfoCircle,
   IconRobot,
   IconSettings,
@@ -87,12 +92,56 @@ interface ConversationFormData {
 }
 
 const ENHANCEMENT_STRATEGIES = [
-  { value: 'native', label: 'Native Query', color: 'blue' },
-  { value: 'multi_query', label: 'Multi-Query', color: 'cyan' },
-  { value: 'hyde', label: 'HyDE', color: 'teal' },
-  { value: 'decomposition', label: 'Query Decomposition', color: 'grape' },
-  { value: 'augmented', label: 'Augmented Queries', color: 'lime' },
-  { value: 'none', label: 'No Enhancement', color: 'gray' },
+  {
+    value: 'native',
+    label: 'Native RAG',
+    description: 'Traditional RAG without query enhancement',
+    details: 'Your query is sent directly to the retrieval system without any modifications. Best for simple, well-formed questions and fastest performance.',
+    useCases: ['Simple lookups', 'Direct questions', 'Performance-critical scenarios', 'General purpose'],
+    pros: ['Fastest performance', 'Most straightforward', 'No added complexity', 'Lowest cost'],
+    cons: ['May miss relevant documents', 'Limited coverage', 'Depends on exact wording'],
+    color: 'blue',
+  },
+  {
+    value: 'augmented',
+    label: 'Augmented (Best Coverage)',
+    description: 'Systematic transformations for maximum coverage',
+    details: 'Applies 4 specific transformation techniques to your query: (1) Synonym Expansion, (2) Query Expansion (add implicit concepts), (3) Query Contraction (focus on core), (4) Technical Reformulation. Each variant explores a different semantic space (broad/narrow/technical/simple). Preserves original query. Uses RRF to merge all variants.',
+    useCases: ['Maximum coverage needed', 'Comprehensive search', 'Documents use varied styles', 'Critical queries'],
+    pros: ['Systematic coverage', 'Fills retrieval gaps', 'Explores all angles', 'Context preserved'],
+    cons: ['Slightly slower than Native', 'Uses more tokens', 'May be overkill for simple queries'],
+    color: 'green',
+  },
+  {
+    value: 'multi_query',
+    label: 'Multi-Query',
+    description: 'Rephrase the same question in different ways',
+    details: 'Generates 3-5 alternative phrasings of the SAME question using different vocabulary and wording. Targets different document types (tutorials, guides, API docs) and expertise levels (beginner vs expert). All variants express the same intent. Uses RRF to merge results from all phrasings.',
+    useCases: ['Documents use varied terminology', 'Unknown exact terms', 'Vocabulary mismatches', 'Different doc styles'],
+    pros: ['Linguistic flexibility', 'Handles synonyms', 'Matches varied writing styles', 'Simple approach'],
+    cons: ['Same semantic space', 'May miss edge cases', 'Not as systematic as Augmented'],
+    color: 'cyan',
+  },
+  {
+    value: 'hyde',
+    label: 'HyDE (Hypothetical Document Embeddings)',
+    description: 'Generate hypothetical answers for better matching',
+    details: 'Creates hypothetical answers to your question, then searches for documents similar to those answers. Excellent for semantic similarity.',
+    useCases: ['Answer-seeking queries', 'When you know what format you want', 'Semantic search'],
+    pros: ['Excellent semantic matching', 'Finds answer-like docs', 'Good for how-to questions'],
+    cons: ['Requires good LLM', 'May hallucinate', 'Slower performance'],
+    color: 'grape',
+  },
+  {
+    value: 'decomposition',
+    label: 'Decomposition',
+    description: 'Break complex queries into sub-questions',
+    details: 'Splits your complex question into simpler sub-questions. Each sub-question is processed separately for comprehensive coverage. Uses RRF to merge results from all sub-queries.',
+    useCases: ['Complex multi-part questions', 'Research tasks', 'Thorough analysis needed'],
+    pros: ['Handles complexity', 'RRF merges sub-queries', 'Comprehensive results', 'Systematic approach'],
+    cons: ['Slowest option', 'Most expensive', 'May over-complicate simple queries'],
+    color: 'violet',
+  },
 ];
 
 // Logo color palette from DataPilotFlow branding
@@ -125,8 +174,16 @@ const STEP_CONFIGS = [
     gradientTo: LOGO_COLORS.data,          // Teal (Data)
   },
   {
+    label: 'Enhancement Strategy',
+    description: 'Query enhancement options',
+    icon: <IconWand size={20} />,
+    color: 'grape',
+    gradientFrom: LOGO_COLORS.pilot,       // Purple (Pilot)
+    gradientTo: LOGO_COLORS.flow,          // Lime Green (Flow)
+  },
+  {
     label: 'Vector Database',
-    description: 'Set retrieval strategy',
+    description: 'Select collection',
     icon: <IconDatabase size={20} />,
     color: 'teal',
     gradientFrom: LOGO_COLORS.data,        // Teal (Data)
@@ -136,9 +193,9 @@ const STEP_CONFIGS = [
     label: 'Advanced Settings',
     description: 'Fine-tune behavior',
     icon: <IconFilter size={20} />,
-    color: 'grape',
+    color: 'violet',
     gradientFrom: LOGO_COLORS.pilot,       // Purple (Pilot)
-    gradientTo: LOGO_COLORS.flow,          // Lime Green (Flow)
+    gradientTo: LOGO_COLORS.accent3,       // Yellow-Green
   },
   {
     label: 'Review & Create',
@@ -160,6 +217,9 @@ export function ConversationCreateWizard() {
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [selectedSystemPrompt, setSelectedSystemPrompt] = useState<any>(null);
+  const [strategiesInfoModalOpen, setStrategiesInfoModalOpen] = useState(false);
+  const [comparisonMode, setComparisonMode] = useState(false);
+  const [selectedForComparison, setSelectedForComparison] = useState<string[]>([]);
 
   // Fetch data
   const { data: providers, isLoading: providersLoading } = useGetActiveModelProviders();
@@ -211,14 +271,16 @@ export function ConversationCreateWizard() {
       case 1:
         return !!form.values.conversationName.trim(); // Conversation name required
       case 2:
-        return !!form.values.collectionName && form.values.topK >= 5;
+        return !!form.values.collectionName && form.values.topK >= 5; // Collection & topK required
       case 3:
+        return true; // Enhancement strategy always valid
+      case 4:
         // Provider & model required only if generative answer enabled
         if (form.values.enableLLMGeneration) {
           return !!form.values.selectedProviderId && !!form.values.selectedModel;
         }
         return true; // All optional if generative answer disabled
-      case 4:
+      case 5:
         return true; // Review always valid
       default:
         return false;
@@ -398,8 +460,16 @@ export function ConversationCreateWizard() {
           />
         )}
 
-        {/* STEP 2: VECTOR DATABASE & QUERY ENHANCEMENT */}
+        {/* STEP 2: ENHANCEMENT STRATEGY */}
         {activeStep === 2 && (
+          <StepEnhancementStrategy
+            form={form}
+            onLearnClick={() => setStrategiesInfoModalOpen(true)}
+          />
+        )}
+
+        {/* STEP 3: VECTOR DATABASE */}
+        {activeStep === 3 && (
           <StepVectorDatabase
             form={form}
             collections={collections}
@@ -407,8 +477,8 @@ export function ConversationCreateWizard() {
           />
         )}
 
-        {/* STEP 3: ADVANCED SETTINGS */}
-        {activeStep === 3 && (
+        {/* STEP 4: ADVANCED SETTINGS */}
+        {activeStep === 4 && (
           <StepAdvancedSettings
             form={form}
             providers={providers}
@@ -421,8 +491,8 @@ export function ConversationCreateWizard() {
           />
         )}
 
-        {/* STEP 4: REVIEW & CREATE */}
-        {activeStep === 4 && (
+        {/* STEP 5: REVIEW & CREATE */}
+        {activeStep === 5 && (
           <StepReviewAndCreate
             form={form}
             providers={providers}
@@ -451,7 +521,7 @@ export function ConversationCreateWizard() {
               Cancel
             </Button>
 
-            {activeStep < 4 ? (
+            {activeStep < 5 ? (
               <Button
                 onClick={handleNextStep}
                 disabled={isCreating}
@@ -472,6 +542,181 @@ export function ConversationCreateWizard() {
           </Group>
         </Group>
       </ColorfulVerticalStepper>
+
+      {/* LEARN & COMPARE MODAL */}
+      <Modal
+        opened={strategiesInfoModalOpen}
+        onClose={() => {
+          setStrategiesInfoModalOpen(false);
+          setComparisonMode(false);
+          setSelectedForComparison([]);
+        }}
+        title={
+          <Group gap="xs">
+            <ThemeIcon
+              size="md"
+              variant="filled"
+              style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              }}
+            >
+              <IconHelp size={18} />
+            </ThemeIcon>
+            <Text fw={600}>Query Enhancement Strategies</Text>
+          </Group>
+        }
+        size="xl"
+      >
+        <Stack gap="lg">
+          <Group justify="space-between" align="center">
+            <Text size="sm" c="dimmed">
+              {comparisonMode
+                ? 'Select two strategies to compare side-by-side'
+                : 'Choose the right strategy based on your query complexity and desired retrieval quality'
+              }
+            </Text>
+            <Button
+              variant={comparisonMode ? 'filled' : 'light'}
+              color="violet"
+              size="xs"
+              leftSection={<IconArrowsLeftRight size={16} />}
+              onClick={() => {
+                setComparisonMode(!comparisonMode);
+                setSelectedForComparison([]);
+              }}
+            >
+              {comparisonMode ? 'Back to Browse' : 'Compare Strategies'}
+            </Button>
+          </Group>
+
+          {!comparisonMode ? (
+            // Browse Mode - Accordion
+            <Accordion variant="separated">
+              {ENHANCEMENT_STRATEGIES.map((strategy) => (
+                <Accordion.Item key={strategy.value} value={strategy.value}>
+                  <Accordion.Control>
+                    <Group gap="sm">
+                      <Badge color={strategy.color}>{strategy.label}</Badge>
+                      <Text size="sm" c="dimmed">{strategy.description}</Text>
+                    </Group>
+                  </Accordion.Control>
+                  <Accordion.Panel>
+                    <Stack gap="md">
+                      <div>
+                        <Text fw={600} size="sm" mb="xs">Details</Text>
+                        <Text size="sm">{strategy.details}</Text>
+                      </div>
+
+                      <div>
+                        <Text fw={600} size="sm" mb="xs">Use Cases</Text>
+                        <List size="sm">
+                          {strategy.useCases.map((useCase) => (
+                            <List.Item key={useCase}>{useCase}</List.Item>
+                          ))}
+                        </List>
+                      </div>
+
+                      <Grid>
+                        <Grid.Col span={{ base: 12, sm: 6 }}>
+                          <div>
+                            <Text fw={600} size="sm" mb="xs" c="green">Pros</Text>
+                            <List size="sm">
+                              {strategy.pros.map((pro) => (
+                                <List.Item key={pro}>{pro}</List.Item>
+                              ))}
+                            </List>
+                          </div>
+                        </Grid.Col>
+                        <Grid.Col span={{ base: 12, sm: 6 }}>
+                          <div>
+                            <Text fw={600} size="sm" mb="xs" c="red">Cons</Text>
+                            <List size="sm">
+                              {strategy.cons.map((con) => (
+                                <List.Item key={con}>{con}</List.Item>
+                              ))}
+                            </List>
+                          </div>
+                        </Grid.Col>
+                      </Grid>
+
+                      <Button
+                        size="xs"
+                        variant="light"
+                        onClick={() => {
+                          form.setFieldValue('selectedStrategy', strategy.value);
+                          setStrategiesInfoModalOpen(false);
+                        }}
+                      >
+                        Select This Strategy
+                      </Button>
+                    </Stack>
+                  </Accordion.Panel>
+                </Accordion.Item>
+              ))}
+            </Accordion>
+          ) : (
+            // Comparison Mode
+            <Stack gap="md">
+              {selectedForComparison.length < 2 && (
+                <Text size="sm" c="dimmed">
+                  {selectedForComparison.length === 0
+                    ? 'Select two strategies to compare'
+                    : 'Select one more strategy'}
+                </Text>
+              )}
+              <Group gap="sm" wrap="wrap">
+                {ENHANCEMENT_STRATEGIES.map((strategy) => (
+                  <Button
+                    key={strategy.value}
+                    variant={selectedForComparison.includes(strategy.value) ? 'filled' : 'light'}
+                    color={selectedForComparison.includes(strategy.value) ? 'blue' : 'gray'}
+                    size="sm"
+                    disabled={selectedForComparison.length === 2 && !selectedForComparison.includes(strategy.value)}
+                    onClick={() => {
+                      setSelectedForComparison((prev) =>
+                        prev.includes(strategy.value)
+                          ? prev.filter((v) => v !== strategy.value)
+                          : [...prev, strategy.value]
+                      );
+                    }}
+                  >
+                    {strategy.label}
+                  </Button>
+                ))}
+              </Group>
+
+              {selectedForComparison.length === 2 && (
+                <Table striped>
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>Aspect</Table.Th>
+                      <Table.Th>{ENHANCEMENT_STRATEGIES.find((s) => s.value === selectedForComparison[0])?.label}</Table.Th>
+                      <Table.Th>{ENHANCEMENT_STRATEGIES.find((s) => s.value === selectedForComparison[1])?.label}</Table.Th>
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    <Table.Tr>
+                      <Table.Td fw={600}>Description</Table.Td>
+                      <Table.Td>{ENHANCEMENT_STRATEGIES.find((s) => s.value === selectedForComparison[0])?.description}</Table.Td>
+                      <Table.Td>{ENHANCEMENT_STRATEGIES.find((s) => s.value === selectedForComparison[1])?.description}</Table.Td>
+                    </Table.Tr>
+                    <Table.Tr>
+                      <Table.Td fw={600}>Details</Table.Td>
+                      <Table.Td>{ENHANCEMENT_STRATEGIES.find((s) => s.value === selectedForComparison[0])?.details}</Table.Td>
+                      <Table.Td>{ENHANCEMENT_STRATEGIES.find((s) => s.value === selectedForComparison[1])?.details}</Table.Td>
+                    </Table.Tr>
+                    <Table.Tr>
+                      <Table.Td fw={600}>Performance</Table.Td>
+                      <Table.Td>{selectedForComparison[0] === 'native' ? 'Fastest' : selectedForComparison[0] === 'decomposition' ? 'Slowest' : 'Moderate'}</Table.Td>
+                      <Table.Td>{selectedForComparison[1] === 'native' ? 'Fastest' : selectedForComparison[1] === 'decomposition' ? 'Slowest' : 'Moderate'}</Table.Td>
+                    </Table.Tr>
+                  </Table.Tbody>
+                </Table>
+              )}
+            </Stack>
+          )}
+        </Stack>
+      </Modal>
     </Page>
   );
 }
@@ -638,29 +883,9 @@ function StepVectorDatabase({ form, collections, collectionsLoading }: StepProps
     <Stack gap="md">
       <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
         <Text size="sm">
-          Configure how the system retrieves information from your knowledge base. Query enhancement strategies help find more relevant documents.
+          Select the knowledge base collection you want to search from. Configure how many relevant documents to retrieve.
         </Text>
       </Alert>
-
-      <Select
-        label="Enhancement Strategy"
-        placeholder="Select strategy"
-        data={ENHANCEMENT_STRATEGIES.map((s) => ({
-          value: s.value,
-          label: s.label,
-        }))}
-        {...form.getInputProps('selectedStrategy')}
-        description="How to enhance queries for better retrieval"
-      />
-
-      {form.values.selectedStrategy !== 'native' &&
-        form.values.selectedStrategy !== 'none' && (
-          <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
-            <Text size="sm">
-              <strong>Multi-Variant Retrieval:</strong> This strategy generates multiple query variations, searches the knowledge base with each, and merges results using Reciprocal Rank Fusion (RRF).
-            </Text>
-          </Alert>
-        )}
 
       <Select
         label="Vector DB Collection"
@@ -688,6 +913,89 @@ function StepVectorDatabase({ form, collections, collectionsLoading }: StepProps
         required
         description="How many relevant documents to retrieve (5-30)"
       />
+    </Stack>
+  );
+}
+
+function StepEnhancementStrategy({ form, onLearnClick }: StepProps & { onLearnClick: () => void }) {
+  const selectedStrategyInfo = ENHANCEMENT_STRATEGIES.find((s) => s.value === form.values.selectedStrategy);
+
+  return (
+    <Stack gap="md">
+      <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+        <Text size="sm">
+          Choose how your queries will be enhanced before searching the knowledge base. Different strategies work better for different types of questions.
+        </Text>
+      </Alert>
+
+      <Group justify="space-between" align="flex-end">
+        <div style={{ flex: 1 }}>
+          <Select
+            label="Enhancement Strategy"
+            placeholder="Select strategy"
+            data={ENHANCEMENT_STRATEGIES.map((s) => ({
+              value: s.value,
+              label: s.label,
+            }))}
+            {...form.getInputProps('selectedStrategy')}
+            description="How to enhance queries for better retrieval"
+          />
+        </div>
+        <Button
+          size="xs"
+          variant="gradient"
+          gradient={{ from: 'violet', to: 'purple', deg: 135 }}
+          leftSection={<IconHelp size={16} />}
+          onClick={onLearnClick}
+          style={{
+            boxShadow: '0 2px 8px rgba(109, 40, 217, 0.3)',
+          }}
+        >
+          Learn & Compare
+        </Button>
+      </Group>
+
+      {selectedStrategyInfo && (
+        <Card withBorder p="md" bg="gray.0">
+          <Stack gap="sm">
+            <div>
+              <Text fw={600} size="sm" mb="xs">
+                {selectedStrategyInfo.label}
+              </Text>
+              <Text size="sm" c="dimmed">
+                {selectedStrategyInfo.description}
+              </Text>
+            </div>
+
+            <Grid gutter="md">
+              <Grid.Col span={{ base: 12, sm: 6 }}>
+                <Stack gap="xs">
+                  <Text fw={600} size="xs" c="green">
+                    Pros
+                  </Text>
+                  <List size="xs">
+                    {selectedStrategyInfo.pros.map((pro) => (
+                      <List.Item key={pro}>{pro}</List.Item>
+                    ))}
+                  </List>
+                </Stack>
+              </Grid.Col>
+              <Grid.Col span={{ base: 12, sm: 6 }}>
+                <Stack gap="xs">
+                  <Text fw={600} size="xs" c="red">
+                    Cons
+                  </Text>
+                  <List size="xs">
+                    {selectedStrategyInfo.cons.map((con) => (
+                      <List.Item key={con}>{con}</List.Item>
+                    ))}
+                  </List>
+                </Stack>
+              </Grid.Col>
+            </Grid>
+          </Stack>
+        </Card>
+      )}
     </Stack>
   );
 }
