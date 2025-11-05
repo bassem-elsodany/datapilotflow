@@ -455,6 +455,49 @@ async def get_response_stream_supervisor(
                 "execution_time_ms": (time.time() - start_time) * 1000,
             }
 
+            # Stream response in chunks for Supervisor mode (same as RAG mode)
+            if final_response:
+                logger.critical(f"🔴 [SUPERVISOR RESPONSE] Emitting streaming_response with final answer ({len(final_response)} chars)")
+
+                # Stream response in chunks (every 50 characters for smooth streaming effect)
+                chunk_size = 50
+                for i in range(0, len(final_response), chunk_size):
+                    chunk = final_response[i:i + chunk_size]
+
+                    # Emit metadata ONLY on the first chunk
+                    if i == 0:
+                        # Build metadata from retrieved documents
+                        source_urls = []
+                        chunk_ids = []
+                        for doc in rag_documents:
+                            if isinstance(doc, dict) and doc.get("source_url"):
+                                if doc["source_url"] not in source_urls:
+                                    source_urls.append(doc["source_url"])
+                            if isinstance(doc, dict) and doc.get("chunk_id"):
+                                if doc["chunk_id"] not in chunk_ids:
+                                    chunk_ids.append(doc["chunk_id"])
+
+                        logger.critical(f"🔴 [SUPERVISOR RESPONSE] Emitting first chunk with metadata: {len(source_urls)} sources, {len(chunk_ids)} chunks")
+                        yield {
+                            "type": "streaming_response",
+                            "chunk": chunk,
+                            "metadata": {
+                                "source_urls": source_urls,
+                                "chunk_ids": chunk_ids,
+                                "document_count": len(rag_documents),
+                            },
+                            "execution_time_ms": execution_time_ms,
+                        }
+                    else:
+                        # Subsequent chunks don't include metadata
+                        yield {
+                            "type": "streaming_response",
+                            "chunk": chunk,
+                            "execution_time_ms": execution_time_ms,
+                        }
+
+                logger.critical(f"✅ [SUPERVISOR RESPONSE] EMITTED all streaming_response chunks for {len(final_response)} chars")
+
             final_result = {
                 "type": "workflow_complete",
                 "execution_time_ms": execution_time_ms,
