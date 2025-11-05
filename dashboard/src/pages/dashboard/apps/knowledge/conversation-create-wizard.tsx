@@ -95,46 +95,58 @@ const ENHANCEMENT_STRATEGIES = [
   { value: 'none', label: 'No Enhancement', color: 'gray' },
 ];
 
+// Logo color palette from DataPilotFlow branding
+const LOGO_COLORS = {
+  data: '#45c9bb',        // Teal (Data)
+  pilot: '#ae89ae',       // Purple (Pilot)
+  flow: '#bbe773',        // Lime Green (Flow)
+  accent1: '#87cbbc',     // Soft Teal
+  accent2: '#3bc57d',     // Vibrant Green
+  accent3: '#9dd245',     // Yellow-Green
+  accent4: '#ddde65',     // Yellow
+  gray: '#8d949d',        // Cool Gray
+};
+
 const STEP_CONFIGS = [
   {
     label: 'Agent Type',
     description: 'Choose conversation mode',
     icon: <IconRobot size={20} />,
     color: 'blue',
-    gradientFrom: '#45c9bb',
-    gradientTo: '#3bc57d',
+    gradientFrom: LOGO_COLORS.data,        // Teal (Data)
+    gradientTo: LOGO_COLORS.accent2,       // Vibrant Green
   },
   {
     label: 'LLM Setup',
     description: 'Configure language model',
     icon: <IconSettings size={20} />,
     color: 'cyan',
-    gradientFrom: '#87cbbc',
-    gradientTo: '#45c9bb',
+    gradientFrom: LOGO_COLORS.accent1,     // Soft Teal
+    gradientTo: LOGO_COLORS.data,          // Teal (Data)
   },
   {
     label: 'Vector Database',
     description: 'Set retrieval strategy',
     icon: <IconDatabase size={20} />,
     color: 'teal',
-    gradientFrom: '#45c9bb',
-    gradientTo: '#bbe773',
+    gradientFrom: LOGO_COLORS.data,        // Teal (Data)
+    gradientTo: LOGO_COLORS.flow,          // Lime Green (Flow)
   },
   {
     label: 'Advanced Settings',
     description: 'Fine-tune behavior',
     icon: <IconFilter size={20} />,
     color: 'grape',
-    gradientFrom: '#ae89ae',
-    gradientTo: '#bbe773',
+    gradientFrom: LOGO_COLORS.pilot,       // Purple (Pilot)
+    gradientTo: LOGO_COLORS.flow,          // Lime Green (Flow)
   },
   {
     label: 'Review & Create',
     description: 'Confirm and submit',
     icon: <IconCheck size={20} />,
     color: 'green',
-    gradientFrom: '#3bc57d',
-    gradientTo: '#9dd245',
+    gradientFrom: LOGO_COLORS.accent2,     // Vibrant Green
+    gradientTo: LOGO_COLORS.accent3,       // Yellow-Green
   },
 ];
 
@@ -499,26 +511,26 @@ function StepAgentType({ form }: StepProps) {
               cursor: 'pointer',
               border:
                 form.values.agentType === 'rag'
-                  ? '2px solid var(--mantine-color-blue-6)'
+                  ? `2px solid ${LOGO_COLORS.data}`
                   : '1px solid var(--mantine-color-gray-3)',
               backgroundColor:
                 form.values.agentType === 'rag'
-                  ? 'var(--mantine-color-blue-0)'
+                  ? `${LOGO_COLORS.data}15`
                   : undefined,
             }}
             onClick={() => form.setFieldValue('agentType', 'rag')}
           >
             <Group gap="sm" mb="md">
-              <ThemeIcon size="lg" variant="light" color="blue" radius="md">
+              <ThemeIcon size="lg" variant="light" radius="md" style={{ backgroundColor: `${LOGO_COLORS.data}20`, color: LOGO_COLORS.data }}>
                 <IconDatabase size={20} />
               </ThemeIcon>
               <div>
-                <Text fw={600} size="md">
+                <Text fw={600} size="md" style={{ color: LOGO_COLORS.data }}>
                   RAG Mode
                 </Text>
               </div>
               {form.values.agentType === 'rag' && (
-                <Badge ml="auto" size="lg" color="blue">
+                <Badge ml="auto" size="lg" style={{ backgroundColor: LOGO_COLORS.data, color: 'white' }}>
                   Selected
                 </Badge>
               )}
@@ -543,26 +555,26 @@ function StepAgentType({ form }: StepProps) {
               cursor: 'pointer',
               border:
                 form.values.agentType === 'assistant'
-                  ? '2px solid var(--mantine-color-grape-6)'
+                  ? `2px solid ${LOGO_COLORS.pilot}`
                   : '1px solid var(--mantine-color-gray-3)',
               backgroundColor:
                 form.values.agentType === 'assistant'
-                  ? 'var(--mantine-color-grape-0)'
+                  ? `${LOGO_COLORS.pilot}15`
                   : undefined,
             }}
             onClick={() => form.setFieldValue('agentType', 'assistant')}
           >
             <Group gap="sm" mb="md">
-              <ThemeIcon size="lg" variant="light" color="grape" radius="md">
+              <ThemeIcon size="lg" variant="light" radius="md" style={{ backgroundColor: `${LOGO_COLORS.pilot}20`, color: LOGO_COLORS.pilot }}>
                 <IconRobot size={20} />
               </ThemeIcon>
               <div>
-                <Text fw={600} size="md">
+                <Text fw={600} size="md" style={{ color: LOGO_COLORS.pilot }}>
                   Assistant Mode
                 </Text>
               </div>
               {form.values.agentType === 'assistant' && (
-                <Badge ml="auto" size="lg" color="grape">
+                <Badge ml="auto" size="lg" style={{ backgroundColor: LOGO_COLORS.pilot, color: 'white' }}>
                   Selected
                 </Badge>
               )}
