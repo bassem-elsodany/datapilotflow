@@ -112,13 +112,9 @@ export function ColorfulVerticalStepper({
                           overflow: 'visible'
                         }}
                       >
-                        {completed ? (
-                          <IconCheck size={18} style={{ strokeWidth: 2.2 }} />
-                        ) : (
-                          <Box style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            {step.icon}
-                          </Box>
-                        )}
+                        <Box style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {step.icon}
+                        </Box>
 
                         {/* Subtle rotating ring for active only */}
                         {active && (
