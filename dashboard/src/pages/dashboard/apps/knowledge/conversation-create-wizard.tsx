@@ -1174,28 +1174,40 @@ function StepReranker({ form, providers, providersLoading }: StepProps) {
               />
             </Grid.Col>
             <Grid.Col span={{ base: 12, sm: 6 }}>
-              <Select
-                label="Judge Model"
-                placeholder="Select a model"
-                data={
-                  form.values.selectedRerankerId && providers
-                    ? providers
-                        .find((p) => p.id === form.values.selectedRerankerId)
-                        ?.reranker?.models.map((m: string) => ({
-                          value: m,
-                          label: m,
-                        })) || providers
-                          .find((p) => p.id === form.values.selectedRerankerId)
-                          ?.generative?.models.map((m: string) => ({
-                            value: m,
-                            label: m,
-                          })) || []
-                    : []
-                }
-                {...form.getInputProps('selectedRerankerModel')}
-                searchable
-                description="Choose a model specialized in relevance ranking or general-purpose LLM"
-              />
+              {(() => {
+                const selectedProvider = providers?.find(
+                  (p) => p.id === form.values.selectedRerankerId
+                );
+                const rerankerModels = selectedProvider?.reranker?.models || [];
+                const generativeModels =
+                  selectedProvider?.generative?.models || [];
+                const hasRerankerModels = rerankerModels.length > 0;
+
+                const modelData = hasRerankerModels
+                  ? rerankerModels.map((m: string) => ({
+                      value: m,
+                      label: m,
+                    }))
+                  : generativeModels.map((m: string) => ({
+                      value: m,
+                      label: m,
+                    }));
+
+                return (
+                  <Select
+                    label="Judge Model"
+                    placeholder="Select a model"
+                    data={modelData}
+                    {...form.getInputProps('selectedRerankerModel')}
+                    searchable
+                    description={
+                      hasRerankerModels
+                        ? "Specialized reranker model"
+                        : "Using generative LLM for ranking"
+                    }
+                  />
+                );
+              })()}
             </Grid.Col>
           </Grid>
 
