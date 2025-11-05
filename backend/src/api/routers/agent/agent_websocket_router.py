@@ -144,7 +144,9 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
     - Consistent, deterministic retrieval pipelines
     - Lower latency compared to supervisor with multiple agents
     """
-    logger.info("🚀 RAG-only WebSocket endpoint connected")
+    logger.info("=" * 80)
+    logger.info("🚀 📚 RAG AGENT ENDPOINT INVOKED | /ws/agent/query/rag")
+    logger.info("=" * 80)
 
     # Validate JWT token
     timeout = settings.WEBSOCKET_TIMEOUT
@@ -183,6 +185,9 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
                 # Extract ONLY query and conversation_id from UI
                 query = msg.get("query")
                 conversation_id = msg.get("conversation_id") or msg.get("session_id")
+
+                # Log the incoming query
+                logger.info(f"📨 [RAG QUERY RECEIVED] Query: {query[:100]}{'...' if len(query) > 100 else ''} | Conversation ID: {conversation_id}")
 
                 # Initialize defaults
                 llm_provider_id = None
@@ -365,24 +370,25 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
                 async for chunk in stream:
                     chunk_type = chunk.get("type")
                     chunk_stage = chunk.get("stage")
-                    logger.critical(
+                    logger.debug(
                         f"📡 [RAG EVENT] Received from backend: type={chunk_type}, stage={chunk_stage}"
                     )
                     logger.debug(f"📡 [RAG EVENT DATA] {json.dumps(chunk)}")
 
                     if chunk_type in ["workflow_progress", "workflow_complete", "workflow_error", "streaming_response"]:
-                        logger.critical(f"📡 [RAG SEND] Sending to client: type={chunk_type}, stage={chunk_stage}")
+                        logger.debug(f"📡 [RAG SEND] Sending to client: type={chunk_type}, stage={chunk_stage}")
                         await websocket.send_text(json.dumps(chunk))
-                        logger.critical(f"✅ [RAG SENT] Event sent to client")
+                        logger.debug(f"✅ [RAG SENT] Event sent to client")
                     else:
                         logger.warning(
                             f"⚠️ Skipping unexpected RAG event type: {chunk_type}"
                         )
 
-                logger.info("✅ RAG query processing completed")
-                await websocket.close(code=1000, reason="Response processed, connection closed")
-                return
+                logger.info("✅ RAG query processing completed, waiting for next query...")
 
+            except WebSocketDisconnect:
+                logger.debug(f"📤 WebSocket disconnected by client")
+                return
             except asyncio.TimeoutError:
                 logger.debug(f"⏱️ WebSocket receive timeout after {timeout}s - closing connection")
                 await websocket.close(code=1000, reason="Connection idle timeout")
@@ -402,16 +408,19 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
             except Exception as e:
                 logger.error(f"❌ Error processing RAG message: {str(e)}")
                 logger.error(f"Traceback: {traceback.format_exc()}")
-                await websocket.send_text(
-                    json.dumps(
-                        {
-                            "type": "error",
-                            "stage": "error",
-                            "message": f"Error processing request: {str(e)}",
-                            "timestamp": time.time(),
-                        }
+                try:
+                    await websocket.send_text(
+                        json.dumps(
+                            {
+                                "type": "error",
+                                "stage": "error",
+                                "message": f"Error processing request: {str(e)}",
+                                "timestamp": time.time(),
+                            }
+                        )
                     )
-                )
+                except Exception as send_error:
+                    logger.debug(f"Could not send error message to client (connection may be closed): {send_error}")
 
     except WebSocketDisconnect:
         logger.info(f"❌ RAG WebSocket disconnected for user: {user_id}")
@@ -456,7 +465,9 @@ async def agent_query_supervisor_websocket(websocket: WebSocket, token: str = Qu
     }
     ```
     """
-    logger.info("🚀 Supervisor WebSocket endpoint connected")
+    logger.info("=" * 80)
+    logger.info("🚀 ∞ ASSISTANT AGENT ENDPOINT INVOKED | /ws/agent/query/supervisor")
+    logger.info("=" * 80)
 
     # Validate JWT token
     timeout = settings.WEBSOCKET_TIMEOUT
@@ -495,6 +506,9 @@ async def agent_query_supervisor_websocket(websocket: WebSocket, token: str = Qu
                 # Extract ONLY query and conversation_id from UI
                 query = msg.get("query")
                 conversation_id = msg.get("conversation_id") or msg.get("session_id")
+
+                # Log the incoming query
+                logger.info(f"📨 [SUPERVISOR QUERY RECEIVED] Query: {query[:100]}{'...' if len(query) > 100 else ''} | Conversation ID: {conversation_id}")
 
                 # Initialize defaults
                 llm_provider_id = None
@@ -681,7 +695,7 @@ async def agent_query_supervisor_websocket(websocket: WebSocket, token: str = Qu
                     )
                     logger.debug(f"📡 Full event payload: {json.dumps(chunk)}")
 
-                    if chunk_type in ["supervisor_progress", "supervisor_started", "workflow_complete", "supervisor_error"]:
+                    if chunk_type in ["supervisor_progress", "supervisor_started", "workflow_complete", "workflow_started", "streaming_response", "supervisor_error"]:
                         await websocket.send_text(json.dumps(chunk))
                         logger.info(f"✅ Supervisor event sent to client successfully")
                     else:
@@ -689,39 +703,46 @@ async def agent_query_supervisor_websocket(websocket: WebSocket, token: str = Qu
                             f"⚠️ Skipping unexpected Supervisor event type: {chunk_type}"
                         )
 
-                logger.info("✅ Supervisor query processing completed")
-                await websocket.close(code=1000, reason="Response processed, connection closed")
-                return
+                logger.info("✅ Supervisor query processing completed, waiting for next query...")
 
+            except WebSocketDisconnect:
+                logger.debug(f"📤 WebSocket disconnected by client")
+                return
             except asyncio.TimeoutError:
                 logger.debug(f"⏱️ WebSocket receive timeout after {timeout}s - closing connection")
                 await websocket.close(code=1000, reason="Connection idle timeout")
                 return
             except json.JSONDecodeError:
                 logger.error("❌ Invalid JSON received")
-                await websocket.send_text(
-                    json.dumps(
-                        {
-                            "type": "error",
-                            "stage": "error",
-                            "message": "Invalid JSON format",
-                            "timestamp": time.time(),
-                        }
+                try:
+                    await websocket.send_text(
+                        json.dumps(
+                            {
+                                "type": "error",
+                                "stage": "error",
+                                "message": "Invalid JSON format",
+                                "timestamp": time.time(),
+                            }
+                        )
                     )
-                )
+                except Exception as send_error:
+                    logger.debug(f"Could not send error message to client (connection may be closed): {send_error}")
             except Exception as e:
                 logger.error(f"❌ Error processing Supervisor message: {str(e)}")
                 logger.error(f"Traceback: {traceback.format_exc()}")
-                await websocket.send_text(
-                    json.dumps(
-                        {
-                            "type": "error",
-                            "stage": "error",
-                            "message": f"Error processing request: {str(e)}",
-                            "timestamp": time.time(),
-                        }
+                try:
+                    await websocket.send_text(
+                        json.dumps(
+                            {
+                                "type": "error",
+                                "stage": "error",
+                                "message": f"Error processing request: {str(e)}",
+                                "timestamp": time.time(),
+                            }
+                        )
                     )
-                )
+                except Exception as send_error:
+                    logger.debug(f"Could not send error message to client (connection may be closed): {send_error}")
 
     except WebSocketDisconnect:
         logger.info(f"❌ Supervisor WebSocket disconnected for user: {user_id}")
