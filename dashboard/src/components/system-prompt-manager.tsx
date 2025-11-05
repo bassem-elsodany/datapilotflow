@@ -53,6 +53,7 @@ interface SystemPrompt {
 interface SystemPromptManagerProps {
   conversationId: string;
   selectedPromptId?: string;
+  selectedPromptData?: SystemPrompt | null;
   onPromptSelected?: (prompt: SystemPrompt) => void;
 }
 
@@ -112,6 +113,7 @@ When writing:
 export function SystemPromptManager({
   conversationId,
   selectedPromptId,
+  selectedPromptData,
   onPromptSelected,
 }: SystemPromptManagerProps) {
   const [prompts, setPrompts] = useState<SystemPrompt[]>([]);
@@ -129,6 +131,18 @@ export function SystemPromptManager({
       loadPrompts();
     }
   }, [managerModalOpen, conversationId]);
+
+  // If in conversation creation mode and a prompt is selected, show it in the list
+  useEffect(() => {
+    if (!conversationId && selectedPromptId?.startsWith('temp-') && selectedPromptData) {
+      // Find if this temp prompt is already in the list
+      const existingPrompt = prompts.find(p => p.id === selectedPromptId);
+      if (!existingPrompt) {
+        // Add the unsaved prompt to the displayed list
+        setPrompts([selectedPromptData, ...prompts]);
+      }
+    }
+  }, [selectedPromptId, conversationId, selectedPromptData]);
 
   const loadPrompts = async () => {
     if (!conversationId) return;

@@ -402,6 +402,7 @@ function ConversationWizard() {
   const [topK, setTopK] = useState(5);
   const [enableKnowledgeAssistant, setEnableKnowledgeAssistant] = useState(true);
   const [selectedSystemPromptId, setSelectedSystemPromptId] = useState<string | undefined>();
+  const [selectedSystemPrompt, setSelectedSystemPrompt] = useState<any>(null);
   const [isCreating, setIsCreating] = useState(false);
 
   // Strategies info modal state
@@ -538,6 +539,36 @@ function ConversationWizard() {
       if (response.ok) {
         const data = await response.json();
         const sessionId = data.id;
+
+        // If user selected a temporary prompt (created during conversation creation),
+        // we need to create it now that the conversation exists
+        if (selectedSystemPromptId && selectedSystemPromptId.startsWith('temp-') && selectedSystemPrompt) {
+          try {
+            const promptResponse = await fetch(buildApiUrl(`/conversations/${sessionId}/system-prompts`), {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                name: selectedSystemPrompt.name,
+                description: selectedSystemPrompt.description || '',
+                system_prompt: selectedSystemPrompt.system_prompt,
+                tags: selectedSystemPrompt.tags || [],
+              }),
+            });
+
+            if (promptResponse.ok) {
+              const promptData = await promptResponse.json();
+              // Update with the real prompt ID for future reference
+              // (no need to do anything here, just log success)
+              console.log('System prompt created:', promptData.data?.id);
+            }
+          } catch (error) {
+            console.error('Error creating system prompt:', error);
+            // Don't fail the conversation creation, just log the error
+          }
+        }
 
         notifications.show({
           title: 'Success',
@@ -979,7 +1010,11 @@ function ConversationWizard() {
                     <SystemPromptManager
                       conversationId=""
                       selectedPromptId={selectedSystemPromptId}
-                      onPromptSelected={(prompt) => setSelectedSystemPromptId(prompt.id)}
+                      selectedPromptData={selectedSystemPrompt}
+                      onPromptSelected={(prompt) => {
+                        setSelectedSystemPromptId(prompt.id);
+                        setSelectedSystemPrompt(prompt);
+                      }}
                     />
                   </>
                 ) : (
