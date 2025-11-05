@@ -10,14 +10,12 @@ import {
   Stack,
   Text,
   ThemeIcon,
-  Timeline,
   useMantineTheme
 } from '@mantine/core';
 import {
   IconBrain,
   IconCheck,
   IconChevronDown,
-  IconCircleDot,
   IconDatabase,
   IconFileSearch,
   IconLoader,
@@ -288,7 +286,7 @@ export function SupervisorModePipelineModal({
         {
           id: 'rag_agent_executing',
           name: 'RAG Agent Execution',
-          description: 'Retrieving and ranking relevant documents',
+          description: rerankingEnabled ? 'Retrieving and ranking relevant documents' : 'Retrieving relevant documents',
           status: getStageStatus('rag_agent_executing'),
           icon: <IconFileSearch size={20} />,
           color: 'cyan',
@@ -303,11 +301,12 @@ export function SupervisorModePipelineModal({
               status: (metadata.ragSubstages?.includes('document_retrieval') || completedStages.includes('rag_agent_executing')) ? 'completed' : 'active',
               metric: metadata.documentCount ? `${metadata.documentCount} docs` : undefined
             },
-            {
+            // Only show Judge Ranker if reranking is enabled
+            ...(rerankingEnabled ? [{
               name: '⚖️ Judge Ranker',
-              status: (metadata.ragSubstages?.includes('document_judging') || completedStages.includes('rag_agent_executing')) ? 'completed' : 'active',
+              status: ((metadata.ragSubstages?.includes('document_judging') || completedStages.includes('rag_agent_executing')) ? 'completed' : 'active') as 'active' | 'completed',
               metric: metadata.relevantCount ? `${metadata.relevantCount} relevant` : undefined
-            }
+            }] : [])
           ]
         }
       );
@@ -429,17 +428,26 @@ export function SupervisorModePipelineModal({
       opened={opened}
       onClose={onClose}
       withCloseButton={false}
+      withOverlay={false}
       centered={false}
-      size="xl"
-      padding="lg"
+      size="lg"
+      padding="md"
       styles={{
         inner: {
           alignItems: 'flex-end',
-          paddingBottom: '80px'
+          paddingBottom: '20px',
+          pointerEvents: 'none',
+        },
+        content: {
+          pointerEvents: 'auto',
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          backdropFilter: 'blur(10px)',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)',
         },
         body: {
-          maxHeight: '70vh',
-          overflowY: 'auto'
+          padding: '12px 16px',
+          maxHeight: 'none',
+          overflowY: 'visible'
         }
       }}
       transitionProps={{ transition: 'slide-up', duration: 300 }}
@@ -499,73 +507,6 @@ export function SupervisorModePipelineModal({
           />
         </Box>
 
-        {/* Query Comparison */}
-        {metadata.originalQuery && (
-          <Card
-            withBorder
-            p="sm"
-            radius="md"
-            style={{
-              backgroundColor: metadata.enhancedQueries && metadata.enhancedQueries.length > 0
-                ? theme.colors.violet[0]
-                : theme.colors.gray[0],
-              borderColor: metadata.enhancedQueries && metadata.enhancedQueries.length > 0
-                ? theme.colors.violet[3]
-                : theme.colors.gray[3]
-            }}
-          >
-            <Stack gap="xs">
-              <Group gap="xs">
-                <ThemeIcon size="sm" color="indigo" variant="light">
-                  <IconMessageCircle size={14} />
-                </ThemeIcon>
-                <Text size="xs" fw={600} c="dimmed">ORIGINAL QUERY</Text>
-              </Group>
-              <Text size="sm" style={{ wordBreak: 'break-word' }}>
-                {metadata.originalQuery}
-              </Text>
-
-              {/* Show enhanced queries if available */}
-              {metadata.enhancedQueries && metadata.enhancedQueries && metadata.enhancedQueries.length > 0 && (
-                <>
-                  <Divider my={6} label={
-                    <Badge size="sm" variant="filled" color="violet">
-                      {metadata.enhancedQueries && metadata.enhancedQueries.length > 1
-                        ? `${metadata.enhancedQueries.length} Query Variants`
-                        : 'Query Enhanced'}
-                    </Badge>
-                  } labelPosition="center" />
-                  <Group gap="xs">
-                    <ThemeIcon size="sm" color="violet" variant="filled">
-                      <IconSparkles size={14} />
-                    </ThemeIcon>
-                    <Text size="xs" fw={700} c="violet.9">
-                      {metadata.enhancedQueries.length > 1
-                        ? 'ENHANCED QUERIES'
-                        : 'ENHANCED QUERY'}
-                    </Text>
-                    <Badge size="xs" variant="dot" color="violet">
-                      {getStrategyLabel(metadata.strategy || 'unknown')}
-                    </Badge>
-                  </Group>
-                  <Text size="xs" c="violet.8" style={{ lineHeight: 1.5 }}>
-                    {/* Show all enhanced queries with bullets */}
-                    {metadata.enhancedQueries && metadata.enhancedQueries.map((query, index) => (
-                      <span key={index}>
-                        <Text component="span" size="xs" fw={600} c="violet.6" style={{ marginRight: '4px' }}>
-                          [{index + 1}]
-                        </Text>
-                        {query}
-                        {metadata.enhancedQueries && index < metadata.enhancedQueries.length - 1 && ' • '}
-                      </span>
-                    ))}
-                  </Text>
-                </>
-              )}
-            </Stack>
-          </Card>
-        )}
-
         {/* Circular Node Flow - Visual Pipeline */}
         <Box style={{ overflowX: 'auto', padding: '12px 0' }}>
           <Group gap={4} wrap="nowrap" justify="center" style={{ minWidth: 'fit-content' }}>
@@ -608,7 +549,11 @@ export function SupervisorModePipelineModal({
                     }}
                   >
                     {stage.status === 'completed' ? (
-                      <IconCheck size={24} style={{ color: 'white' }} />
+                      // Show original icon in green for completed stages (checkmark will be overlaid)
+                      React.cloneElement(stage.icon as React.ReactElement, {
+                        size: 24,
+                        style: { color: 'white' }
+                      } as any)
                     ) : stage.status === 'active' ? (
                       <IconLoader size={24} className="animate-spin" style={{ color: 'white' }} />
                     ) : (
@@ -617,7 +562,7 @@ export function SupervisorModePipelineModal({
                       } as any)
                     )}
                     {/* Show expand indicator for RAG Agent */}
-                    {stage.substages && stage.id === 'rag_agent_executing' && (
+                    {stage.substages && stage.id === 'rag_agent_executing' && !stage.substages?.length && (
                       <Box
                         style={{
                           position: 'absolute',
@@ -637,6 +582,28 @@ export function SupervisorModePipelineModal({
                             color: theme.colors.cyan[6]
                           }}
                         />
+                      </Box>
+                    )}
+
+                    {/* Green checkmark overlay for completed stages */}
+                    {stage.status === 'completed' && (
+                      <Box
+                        style={{
+                          position: 'absolute',
+                          bottom: '-2px',
+                          right: '-2px',
+                          width: '16px',
+                          height: '16px',
+                          borderRadius: '50%',
+                          background: 'linear-gradient(135deg, #51cf66 0%, #37b24d 100%)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.12)',
+                          border: '2px solid white',
+                        }}
+                      >
+                        <IconCheck size={10} style={{ color: 'white', strokeWidth: 3 }} />
                       </Box>
                     )}
                   </Box>
@@ -735,21 +702,22 @@ export function SupervisorModePipelineModal({
                   </Text>
                 </Group>
 
-                <Group justify="center" gap="md" wrap="nowrap">
-                  <Box style={{ textAlign: 'center' }}>
-                    <ThemeIcon size={44} radius="xl" variant="light" color="violet">
-                      <IconSparkles size={22} />
-                    </ThemeIcon>
-                    <Text size="xs" mt={6} fw={500}>Query</Text>
-                    <Text size="xs" c="dimmed">Enhancement</Text>
-                    {completedStages.includes('rag_agent_executing') && (
-                      <ThemeIcon size={18} radius="xl" color="green" variant="filled" mt={4} mx="auto">
-                        <IconCheck size={12} />
+                <Box>
+                  <Group justify="center" gap="md" wrap="nowrap">
+                    <Box style={{ textAlign: 'center' }}>
+                      <ThemeIcon size={44} radius="xl" variant="light" color="violet">
+                        <IconSparkles size={22} />
                       </ThemeIcon>
-                    )}
-                  </Box>
+                      <Text size="xs" mt={6} fw={500}>Query</Text>
+                      <Text size="xs" c="dimmed">Enhancement</Text>
+                      {completedStages.includes('rag_agent_executing') && (
+                        <ThemeIcon size={18} radius="xl" color="green" variant="filled" mt={4} mx="auto">
+                          <IconCheck size={12} />
+                        </ThemeIcon>
+                      )}
+                    </Box>
 
-                  <Text size="xl" c="cyan.6" fw={700}>→</Text>
+                    <Text size="xl" c="cyan.6" fw={700}>→</Text>
 
                   <Box style={{ textAlign: 'center' }}>
                     <ThemeIcon size={44} radius="xl" variant="light" color="blue">
@@ -778,150 +746,107 @@ export function SupervisorModePipelineModal({
                       </ThemeIcon>
                     )}
                   </Box>
-                </Group>
+                  </Group>
+                </Box>
+
+                {/* Enhanced Queries Output - shown below Query Enhancement stage */}
+                {metadata.enhancedQueries && metadata.enhancedQueries.length > 0 && (
+                  <Box mt="md" pt="md" style={{ borderTop: `2px solid ${theme.colors.violet[2]}` }}>
+                    <Group gap="xs" mb="xs">
+                      <ThemeIcon size="sm" color="violet" variant="filled">
+                        <IconSparkles size={14} />
+                      </ThemeIcon>
+                      <Text size="xs" fw={700} c="violet.9">
+                        ENHANCED QUERIES OUTPUT
+                      </Text>
+                      <Badge size="xs" variant="dot" color="violet">
+                        {getStrategyLabel(metadata.strategy || 'unknown')}
+                      </Badge>
+                    </Group>
+                    <Text size="xs" c="violet.8" style={{ lineHeight: 1.5 }}>
+                      {metadata.enhancedQueries.map((query, index) => (
+                        <span key={index}>
+                          <Text component="span" size="xs" fw={600} c="violet.6" style={{ marginRight: '4px' }}>
+                            [{index + 1}]
+                          </Text>
+                          {query}
+                          {index < metadata.enhancedQueries!.length - 1 && ' • '}
+                        </span>
+                      ))}
+                    </Text>
+                  </Box>
+                )}
               </Box>
             </Box>
           )}
         </Box>
 
-        <Divider label="Detailed Progress" labelPosition="center" />
-
-        {/* Timeline of Stages (kept for detailed view) */}
-        <Timeline
-          active={activeStages.findIndex(s => s.status === 'active')}
-          bulletSize={32}
-          lineWidth={2}
-          color="blue"
-        >
-          {activeStages.map((stage) => (
-            <Timeline.Item
-              key={stage.id}
-              bullet={
-                stage.status === 'completed' ? (
-                  <IconCheck size={18} />
-                ) : stage.status === 'active' ? (
-                  <IconLoader size={18} className="animate-spin" />
-                ) : (
-                  <IconCircleDot size={18} />
-                )
-              }
-              title={
-                <Group gap="xs" wrap="nowrap">
-                  <ThemeIcon
-                    size="md"
-                    variant={stage.status === 'active' ? 'filled' : stage.status === 'completed' ? 'light' : 'default'}
-                    color={stage.status === 'skipped' ? 'gray' : stage.color}
-                  >
-                    {stage.icon}
-                  </ThemeIcon>
-                  <Box style={{ flex: 1 }}>
-                    <Text size="sm" fw={500}>{stage.name}</Text>
-                    <Text size="xs" c="dimmed">{stage.description}</Text>
-                  </Box>
-                </Group>
-              }
-            >
-              {/* Substages */}
-              {stage.substages && stage.status !== 'skipped' && (
-                <Collapse in={expandedStages.has(stage.id) || stage.status === 'active'}>
-                  <Card
-                    withBorder
-                    p="xs"
-                    radius="md"
-                    mt="xs"
-                    style={{
-                      backgroundColor: stage.status === 'active'
-                        ? theme.colors[stage.color][0]
-                        : theme.colors.gray[0],
-                      borderColor: stage.status === 'active'
-                        ? theme.colors[stage.color][3]
-                        : theme.colors.gray[3]
-                    }}
-                  >
-                    <Stack gap="xs">
-                      {stage.substages.map((substage, subIndex) => (
-                        <Group key={subIndex} gap="xs" wrap="nowrap">
-                          <ThemeIcon
-                            size="xs"
-                            variant="light"
-                            color={substage.status === 'completed' ? 'green' : stage.color}
-                          >
-                            {substage.status === 'completed' ? (
-                              <IconCheck size={12} />
-                            ) : (
-                              <IconLoader size={12} className="animate-spin" />
-                            )}
-                          </ThemeIcon>
-                          <Text size="xs" style={{ flex: 1 }}>
-                            {substage.name}
-                          </Text>
-                          {substage.metric && (
-                            <Badge size="xs" variant="light" color={stage.color}>
-                              {substage.metric}
-                            </Badge>
-                          )}
-                        </Group>
-                      ))}
-                    </Stack>
-                  </Card>
-                </Collapse>
-              )}
-
-              {/* Detailed information for completed stages */}
-              {stage.status === 'completed' && renderStageDetails(stage.id)}
-            </Timeline.Item>
-          ))}
-        </Timeline>
-
-        {/* Technical Details (Expandable) */}
-        <Card withBorder p="xs" radius="md" style={{ backgroundColor: theme.colors.gray[0] }}>
-          <Group gap="xs" style={{ cursor: 'pointer' }} onClick={() => toggleExpanded('technical')}>
-            <ThemeIcon size="xs" variant="light" color="blue">
-              <IconFileSearch size={12} />
-            </ThemeIcon>
-            <Text size="xs" fw={500} style={{ flex: 1 }}>Technical Details</Text>
-            <IconChevronDown
-              size={14}
-              style={{
-                transform: expandedStages.has('technical') ? 'rotate(180deg)' : 'rotate(0deg)',
-                transition: 'transform 0.2s ease'
-              }}
-            />
-          </Group>
-
-          <Collapse in={expandedStages.has('technical')}>
-            <Stack gap="xs" mt="xs">
+        {/* Query Comparison - Original Query and Enhanced Variants at Bottom */}
+        {metadata.originalQuery && (
+          <Card
+            withBorder
+            p="sm"
+            radius="md"
+            style={{
+              backgroundColor: metadata.enhancedQueries && metadata.enhancedQueries.length > 0
+                ? theme.colors.violet[0]
+                : theme.colors.gray[0],
+              borderColor: metadata.enhancedQueries && metadata.enhancedQueries.length > 0
+                ? theme.colors.violet[3]
+                : theme.colors.gray[3]
+            }}
+          >
+            <Stack gap="xs">
               <Group gap="xs">
-                <Text size="xs" c="dimmed" style={{ width: '140px' }}>Vector Index:</Text>
-                <Badge size="xs" variant="light" color="blue">
-                  {metadata.indexType || 'HNSW'}
-                </Badge>
+                <ThemeIcon size="sm" color="indigo" variant="light">
+                  <IconMessageCircle size={14} />
+                </ThemeIcon>
+                <Text size="xs" fw={600} c="dimmed">ORIGINAL QUERY</Text>
               </Group>
-              {metadata.vectorDimension && (
-                <Group gap="xs">
-                  <Text size="xs" c="dimmed" style={{ width: '140px' }}>Vector Dimension:</Text>
-                  <Badge size="xs" variant="light" color="cyan">
-                    {metadata.vectorDimension}D
-                  </Badge>
-                </Group>
-              )}
-              <Group gap="xs">
-                <Text size="xs" c="dimmed" style={{ width: '140px' }}>Documents Retrieved:</Text>
-                <Badge size="xs" variant="light" color="green">
-                  {metadata.documentCount || 0}
-                </Badge>
-              </Group>
-              {metadata.relevantCount !== undefined && (
-                <Group gap="xs">
-                  <Text size="xs" c="dimmed" style={{ width: '140px' }}>Relevant After Reranking:</Text>
-                  <Badge size="xs" variant="light" color="orange">
-                    {metadata.relevantCount}
-                  </Badge>
-                </Group>
+              <Text size="sm" style={{ wordBreak: 'break-word' }}>
+                {metadata.originalQuery}
+              </Text>
+
+              {/* Show enhanced queries if available */}
+              {metadata.enhancedQueries && metadata.enhancedQueries && metadata.enhancedQueries.length > 0 && (
+                <>
+                  <Divider my={6} label={
+                    <Badge size="sm" variant="filled" color="violet">
+                      {metadata.enhancedQueries && metadata.enhancedQueries.length > 1
+                        ? `${metadata.enhancedQueries.length} Query Variants`
+                        : 'Query Enhanced'}
+                    </Badge>
+                  } labelPosition="center" />
+                  <Group gap="xs">
+                    <ThemeIcon size="sm" color="violet" variant="filled">
+                      <IconSparkles size={14} />
+                    </ThemeIcon>
+                    <Text size="xs" fw={700} c="violet.9">
+                      {metadata.enhancedQueries.length > 1
+                        ? 'ENHANCED QUERIES'
+                        : 'ENHANCED QUERY'}
+                    </Text>
+                    <Badge size="xs" variant="dot" color="violet">
+                      {getStrategyLabel(metadata.strategy || 'unknown')}
+                    </Badge>
+                  </Group>
+                  <Text size="xs" c="violet.8" style={{ lineHeight: 1.5 }}>
+                    {/* Show all enhanced queries with bullets */}
+                    {metadata.enhancedQueries && metadata.enhancedQueries.map((query, index) => (
+                      <span key={index}>
+                        <Text component="span" size="xs" fw={600} c="violet.6" style={{ marginRight: '4px' }}>
+                          [{index + 1}]
+                        </Text>
+                        {query}
+                        {metadata.enhancedQueries && index < metadata.enhancedQueries.length - 1 && ' • '}
+                      </span>
+                    ))}
+                  </Text>
+                </>
               )}
             </Stack>
-          </Collapse>
-        </Card>
+          </Card>
+        )}
       </Stack>
 
       {/* CSS for animations */}
