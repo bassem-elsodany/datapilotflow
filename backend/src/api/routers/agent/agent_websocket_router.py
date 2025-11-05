@@ -370,7 +370,7 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
                     )
                     logger.debug(f"📡 [RAG EVENT DATA] {json.dumps(chunk)}")
 
-                    if chunk_type in ["workflow_progress", "workflow_complete", "workflow_error"]:
+                    if chunk_type in ["workflow_progress", "workflow_complete", "workflow_error", "streaming_response"]:
                         logger.critical(f"📡 [RAG SEND] Sending to client: type={chunk_type}, stage={chunk_stage}")
                         await websocket.send_text(json.dumps(chunk))
                         logger.critical(f"✅ [RAG SENT] Event sent to client")

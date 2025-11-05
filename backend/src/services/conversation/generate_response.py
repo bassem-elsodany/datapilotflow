@@ -659,13 +659,14 @@ async def get_response_stream_rag(
             "decomposition_strategy_node": "query_enhancement",
             "document_retriever": "document_retrieval",
             "document_judger": "document_judging",
-            "answer_generator": "answer_generation",
-            "raw_response_formatter": "answer_generation",
+            "answer_generator": "response_generation",
+            "raw_response_formatter": "response_generation",
         }
 
         # Track stage completion to emit COMPLETE events
         stages_completed = set()
         query_enhancement_emitted = False  # Track if we've emitted query_enhancement START event
+        answer_generation_emitted = False  # Track if we've emitted response_generation START event
 
         async for chunk in stream_iterator:
             logger.critical(f"🔴 [RAG CHUNK] Received chunk with keys: {list(chunk.keys())}")
@@ -702,6 +703,26 @@ async def get_response_stream_rag(
                 yield start_event
                 query_enhancement_emitted = True
                 last_stage = "query_enhancement"
+
+            # CRITICAL FIX 2: answer_generator node also doesn't emit chunks to stream
+            # But final_answer appears in the state after it runs
+            # Check if final_answer exists and response_generation hasn't been emitted yet
+            if (not answer_generation_emitted and
+                state_update.get("final_answer") and
+                last_stage != "response_generation"):
+                logger.critical(f"🔴 [RAG HIDDEN NODE] Detected final_answer in state but no answer_generator node chunk received!")
+                logger.critical(f"🔴 [RAG HIDDEN NODE] Emitting response_generation START event for missing/silent answer_generator node")
+
+                # Emit START event for response_generation
+                start_event = {
+                    "type": "workflow_progress",
+                    "stage": "response_generation",
+                    "message": "Processing response generation...",
+                    "execution_time_ms": execution_time_ms,
+                }
+                yield start_event
+                answer_generation_emitted = True
+                last_stage = "response_generation"
 
             # Map node to stage for consistency with supervisor path
             current_stage = stage_mapping.get(node_name, node_name)
@@ -796,6 +817,18 @@ async def get_response_stream_rag(
                         },
                         "execution_time_ms": execution_time_ms,
                     }
+
+                    # CRITICAL FIX: answer_generator node doesn't emit chunks, so emit response_generation START now
+                    # This prevents the frontend from getting stuck waiting for response_generation events
+                    logger.critical(f"🔴 [RAG ANSWER GEN] Emitting response_generation START immediately after document_retrieval_complete")
+                    yield {
+                        "type": "workflow_progress",
+                        "stage": "response_generation",
+                        "message": "Generating response with LLM...",
+                        "execution_time_ms": execution_time_ms,
+                    }
+                    answer_generation_emitted = True
+
                     # Skip the generic stream_chunk for this node since we already sent complete event
                     continue
 
@@ -833,14 +866,14 @@ async def get_response_stream_rag(
                     continue
 
                 elif node_name in ["answer_generator", "raw_response_formatter"]:
-                    # Answer Generation / Raw Formatting
+                    # Response Generation / Raw Formatting
                     final_answer = state_update.get("final_answer", "")
 
-                    # Emit COMPLETE event for answer generation
-                    logger.info(f"✅ [RAG COMPLETE EVENT] Emitting COMPLETE event for answer_generation_complete with {len(final_answer)} characters")
+                    # Emit COMPLETE event for response generation
+                    logger.info(f"✅ [RAG COMPLETE EVENT] Emitting COMPLETE event for response_generation_complete with {len(final_answer)} characters")
                     yield {
                         "type": "workflow_progress",
-                        "stage": "answer_generation_complete",
+                        "stage": "response_generation_complete",
                         "message": f"Generated response: {len(final_answer)} characters",
                         "data": {
                             "response_length": len(final_answer),
@@ -864,6 +897,51 @@ async def get_response_stream_rag(
 
         # Calculate final execution time
         execution_time_ms = (time.time() - start_time) * 1000
+
+        logger.critical(f"🔴 [RAG STREAM ENDED] Stream finished after {chunk_count} chunks")
+        logger.critical(f"🔴 [RAG STREAM ENDED] answer_generation_emitted={answer_generation_emitted}, has_final_answer={bool(last_state.get('final_answer'))}")
+        logger.critical(f"🔴 [RAG STREAM ENDED] final_answer length={len(last_state.get('final_answer', ''))}")
+
+        # CRITICAL FIX 3: If response_generation wasn't emitted but we have final_answer, emit it now
+        if not answer_generation_emitted and last_state.get("final_answer"):
+            logger.critical(f"🔴 [RAG END STATE] Detected final_answer at end of stream but response_generation never emitted!")
+            logger.critical(f"🔴 [RAG END STATE] Emitting response_generation START and COMPLETE events now")
+
+            # Emit START event
+            start_event = {
+                "type": "workflow_progress",
+                "stage": "response_generation",
+                "message": "Processing response generation...",
+                "execution_time_ms": execution_time_ms,
+            }
+            yield start_event
+            answer_generation_emitted = True
+
+            # Emit COMPLETE event with answer data
+            final_answer = last_state.get("final_answer", "")
+            complete_event = {
+                "type": "workflow_progress",
+                "stage": "response_generation_complete",
+                "message": f"Generated response: {len(final_answer)} characters",
+                "data": {
+                    "response_length": len(final_answer),
+                    "generation_mode": "llm",
+                },
+                "execution_time_ms": execution_time_ms,
+            }
+            yield complete_event
+            logger.critical(f"✅ [RAG END STATE] EMITTED response_generation_complete with {len(final_answer)} chars")
+
+        # CRITICAL FIX: Emit streaming_response event with final answer so frontend displays it
+        final_answer = last_state.get("final_answer", "") if last_state else ""
+        if final_answer:
+            logger.critical(f"🔴 [RAG RESPONSE] Emitting streaming_response with final answer ({len(final_answer)} chars)")
+            yield {
+                "type": "streaming_response",
+                "content": final_answer,
+                "execution_time_ms": execution_time_ms,
+            }
+            logger.critical(f"✅ [RAG RESPONSE] EMITTED streaming_response with final answer")
 
         # Yield final result with complete state
         if last_state:
