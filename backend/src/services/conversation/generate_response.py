@@ -479,6 +479,15 @@ async def get_response_stream_supervisor(
 
                 result_state["rag_context"] = rag_context
 
+                # Log RAG context for debugging
+                logger.critical(f"🔴 [RAG CONTEXT] Stored in result_state")
+                logger.critical(f"🔴 [RAG CONTEXT] Retrieved count: {rag_context.retrieved_count}")
+                logger.critical(f"🔴 [RAG CONTEXT] Relevant count: {rag_context.relevant_count}")
+                logger.critical(f"🔴 [RAG CONTEXT] Judged docs count: {len(rag_context.judged_documents)}")
+                if rag_context.judged_documents:
+                    logger.critical(f"🔴 [RAG CONTEXT] First doc type: {type(rag_context.judged_documents[0])}")
+                    logger.critical(f"🔴 [RAG CONTEXT] First doc: {str(rag_context.judged_documents[0])[:300]}")
+
                 # Add response message from RAG agent's final_answer
                 # RAG nodes set final_answer in their state, not response
                 response_content = rag_result.get("final_answer", "")
