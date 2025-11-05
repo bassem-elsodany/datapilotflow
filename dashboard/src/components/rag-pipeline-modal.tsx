@@ -187,11 +187,9 @@ export function RAGPipelineModal({
     // Define getStageStatus inside useMemo to ensure fresh closure
     const getLocalStageStatus = (stageId: string): 'pending' | 'active' | 'completed' | 'skipped' => {
       if (completedStages.includes(stageId)) {
-        console.log(`🎯 [RAG MODAL] getLocalStageStatus('${stageId}') = COMPLETED`);
         return 'completed';
       }
       if (currentStage === stageId) {
-        console.log(`🎯 [RAG MODAL] getLocalStageStatus('${stageId}') = ACTIVE (currentStage='${currentStage}')`);
         return 'active';
       }
 
