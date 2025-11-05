@@ -211,30 +211,79 @@ async def get_response_stream_supervisor(
                             # 1. Emit START event (no data)
                             # 2. Emit COMPLETE event (with actual output data)
 
-                            # NOTE: In Supervisor mode, we DON'T emit RAG sub-stage events to the client
-                            # The RAG pipeline is an internal implementation detail of rag_agent_executing
-                            # Emitting these events would confuse the frontend which expects supervisor-level events only
-                            # Instead, we just log them for debugging and move on
-                            logger.debug(f"🔧 [SUPERVISOR] RAG sub-node: {node_name} (suppressing event emission)")
-
                             if node_name in [
                                 "multi_query_strategy_node",
                                 "hyde_strategy_node",
                                 "decomposition_strategy_node",
                                 "augmented_strategy_node",
                             ]:
+                                # START event
+                                yield {
+                                    "type": "workflow_progress",
+                                    "stage": "query_enhancement",
+                                    "message": "Enhancing query...",
+                                    "execution_time_ms": (time.time() - start_time)
+                                    * 1000,
+                                }
+
+                                # COMPLETE event with data
                                 enhanced_queries = node_output.get(
                                     "enhanced_query", {}
                                 ).get("variants", [])
-                                logger.debug(f"  Query enhanced with {len(enhanced_queries)} variants")
+                                yield {
+                                    "type": "workflow_progress",
+                                    "stage": "query_enhancement_complete",
+                                    "message": f"Query enhanced with {len(enhanced_queries)} variants",
+                                    "data": {
+                                        "strategy": node_name.replace(
+                                            "_strategy_node", ""
+                                        ),
+                                        "query_variants": enhanced_queries,
+                                        "variant_count": len(enhanced_queries),
+                                    },
+                                    "execution_time_ms": (time.time() - start_time)
+                                    * 1000,
+                                }
 
                             elif node_name == "document_retriever":
+                                # START event
+                                yield {
+                                    "type": "workflow_progress",
+                                    "stage": "document_retrieval",
+                                    "message": "Retrieving documents...",
+                                    "execution_time_ms": (time.time() - start_time)
+                                    * 1000,
+                                }
+
+                                # COMPLETE event with data
                                 retrieved_docs = node_output.get(
                                     "retrieved_documents", []
                                 )
-                                logger.debug(f"  Retrieved {len(retrieved_docs)} documents")
+                                yield {
+                                    "type": "workflow_progress",
+                                    "stage": "document_retrieval_complete",
+                                    "message": f"Retrieved {len(retrieved_docs)} documents",
+                                    "data": {
+                                        "document_count": len(retrieved_docs),
+                                        "collection": rag_config.get(
+                                            "collection_name", "unknown"
+                                        ),
+                                    },
+                                    "execution_time_ms": (time.time() - start_time)
+                                    * 1000,
+                                }
 
                             elif node_name == "document_judger":
+                                # START event
+                                yield {
+                                    "type": "workflow_progress",
+                                    "stage": "document_judging",
+                                    "message": "Ranking documents...",
+                                    "execution_time_ms": (time.time() - start_time)
+                                    * 1000,
+                                }
+
+                                # COMPLETE event with data
                                 judged_docs = node_output.get("judged_documents", [])
                                 relevance_scores = node_output.get(
                                     "relevance_scores", []
@@ -242,7 +291,23 @@ async def get_response_stream_supervisor(
                                 relevant_count = len(
                                     [s for s in relevance_scores if s >= 0.5]
                                 )
-                                logger.debug(f"  Ranked {relevant_count} relevant documents")
+                                yield {
+                                    "type": "workflow_progress",
+                                    "stage": "document_judging_complete",
+                                    "message": f"Ranked {relevant_count} relevant documents",
+                                    "data": {
+                                        "total_documents": len(judged_docs),
+                                        "relevant_documents": relevant_count,
+                                        "avg_score": (
+                                            sum(relevance_scores)
+                                            / len(relevance_scores)
+                                            if relevance_scores
+                                            else 0
+                                        ),
+                                    },
+                                    "execution_time_ms": (time.time() - start_time)
+                                    * 1000,
+                                }
 
                 # Process RAG results and update state
                 from src.agents.common.agent_state import RAGContext
@@ -687,6 +752,7 @@ async def get_response_stream_rag(
         # Track stage completion to emit COMPLETE events
         stages_completed = set()
         query_enhancement_emitted = False  # Track if we've emitted query_enhancement START event
+        document_judging_emitted = False   # Track if we've emitted document_judging START event
         answer_generation_emitted = False  # Track if we've emitted response_generation START event
 
         async for chunk in stream_iterator:
@@ -725,13 +791,34 @@ async def get_response_stream_rag(
                 query_enhancement_emitted = True
                 last_stage = "query_enhancement"
 
+            # CRITICAL FIX 1b: document_judger might also be a silent node
+            # But judged_documents appears in the state after it runs
+            # Check if judged_documents exists and document_judging hasn't been emitted yet
+            if (not document_judging_emitted and
+                state_update.get("judged_documents") and
+                last_stage != "document_judging"):
+                logger.critical(f"🔴 [RAG HIDDEN NODE] Detected judged_documents in state but document_judging START not emitted!")
+                logger.critical(f"🔴 [RAG HIDDEN NODE] Emitting document_judging START event for missing/silent document_judger node")
+
+                # Emit START event for document_judging
+                start_event = {
+                    "type": "workflow_progress",
+                    "stage": "document_judging",
+                    "message": "Processing document_judging...",
+                    "execution_time_ms": execution_time_ms,
+                }
+                yield start_event
+                document_judging_emitted = True
+                last_stage = "document_judging"
+
             # CRITICAL FIX 2: answer_generator node also doesn't emit chunks to stream
             # But final_answer appears in the state after it runs
             # Check if final_answer exists and response_generation hasn't been emitted yet
+            # IMPORTANT: Only emit response_generation after document_judging is complete!
             if (not answer_generation_emitted and
                 state_update.get("final_answer") and
-                last_stage != "response_generation"):
-                logger.critical(f"🔴 [RAG HIDDEN NODE] Detected final_answer in state but no answer_generator node chunk received!")
+                last_stage == "document_judging"):
+                logger.critical(f"🔴 [RAG HIDDEN NODE] Detected final_answer in state after document_judging!")
                 logger.critical(f"🔴 [RAG HIDDEN NODE] Emitting response_generation START event for missing/silent answer_generator node")
 
                 # Emit START event for response_generation
@@ -838,17 +925,6 @@ async def get_response_stream_rag(
                         },
                         "execution_time_ms": execution_time_ms,
                     }
-
-                    # CRITICAL FIX: answer_generator node doesn't emit chunks, so emit response_generation START now
-                    # This prevents the frontend from getting stuck waiting for response_generation events
-                    logger.critical(f"🔴 [RAG ANSWER GEN] Emitting response_generation START immediately after document_retrieval_complete")
-                    yield {
-                        "type": "workflow_progress",
-                        "stage": "response_generation",
-                        "message": "Generating response with LLM...",
-                        "execution_time_ms": execution_time_ms,
-                    }
-                    answer_generation_emitted = True
 
                     # Skip the generic stream_chunk for this node since we already sent complete event
                     continue

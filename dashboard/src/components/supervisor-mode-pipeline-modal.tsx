@@ -22,9 +22,12 @@ import {
   IconFileSearch,
   IconLoader,
   IconMessageCircle,
+  IconRobot,
+  IconRoute,
   IconScale,
   IconSearch,
-  IconSparkles
+  IconSparkles,
+  IconTool
 } from '@tabler/icons-react';
 import React, { useMemo, useState } from 'react';
 
@@ -35,6 +38,8 @@ interface WorkflowStage {
   status: 'pending' | 'active' | 'completed' | 'skipped';
   icon: React.ReactNode;
   color: string;
+  startTime?: number;
+  endTime?: number;
   metadata?: {
     [key: string]: any;
   };
@@ -47,7 +52,7 @@ interface WorkflowSubstage {
   metric?: string;
 }
 
-interface RAGPipelineModalProps {
+interface SupervisorModePipelineModalProps {
   opened: boolean;
   onClose: () => void;
   currentStage: string | null;
@@ -56,19 +61,20 @@ interface RAGPipelineModalProps {
   enableLLMGeneration: boolean;
   metadata: {
     originalQuery?: string;
-    enhancedQueries?: string[];
+    enhancedQueries?: string[];  // ALWAYS an array - even for single queries
     strategy?: string;
     documentCount?: number;
     relevantCount?: number;
     indexType?: string;
     searchTime?: number;
     vectorDimension?: number;
-    stageDetails?: Record<string, any>;
-    ragSubstages?: string[];
+    intent?: string;  // Supervisor detected intent
+    stageDetails?: Record<string, any>;  // Detailed data for each completed stage
+    ragSubstages?: string[];  // Track completed RAG substages (query_enhancement, document_retrieval, document_judging)
   };
 }
 
-export function RAGPipelineModal({
+export function SupervisorModePipelineModal({
   opened,
   onClose,
   currentStage,
@@ -76,9 +82,23 @@ export function RAGPipelineModal({
   rerankingEnabled,
   enableLLMGeneration,
   metadata
-}: RAGPipelineModalProps) {
+}: SupervisorModePipelineModalProps) {
   const theme = useMantineTheme();
   const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set());
+
+  // Auto-expand RAG Agent Execution when it's active or has substages completing
+  React.useEffect(() => {
+    if (currentStage === 'rag_agent_executing' || (metadata.ragSubstages && metadata.ragSubstages.length > 0)) {
+      setExpandedStages((prev) => {
+        if (!prev.has('rag_agent_executing')) {
+          const next = new Set(prev);
+          next.add('rag_agent_executing');
+          return next;
+        }
+        return prev;
+      });
+    }
+  }, [currentStage, metadata.ragSubstages]);
 
   const toggleExpanded = (stageId: string) => {
     setExpandedStages((prev) => {
@@ -92,67 +112,99 @@ export function RAGPipelineModal({
     });
   };
 
+  // Helper function to render detailed information for each stage
   const renderStageDetails = (stageId: string) => {
     const details = metadata?.stageDetails?.[stageId];
     if (!details || !details.data) return null;
 
     const { data, message } = details;
 
+    // Render different details based on stage type
     switch (stageId) {
-      case 'query_enhancement':
+      case 'supervisor_init':
+        return (
+          <Card withBorder p="xs" mt="xs" style={{ backgroundColor: theme.colors.cyan[0], borderColor: theme.colors.cyan[3] }}>
+            <Stack gap="xs">
+              <Text size="xs" fw={500} c="cyan.7">✅ Initialization Complete</Text>
+              {data.agents_available && (
+                <Text size="xs" c="dimmed">
+                  <strong>Agents:</strong> {data.agents_available.join(', ')}
+                </Text>
+              )}
+              {data.initialization_time_ms && (
+                <Badge size="xs" variant="light" color="cyan">
+                  {Math.round(data.initialization_time_ms)}ms
+                </Badge>
+              )}
+            </Stack>
+          </Card>
+        );
+
+      case 'intent_detection':
         return (
           <Card withBorder p="xs" mt="xs" style={{ backgroundColor: theme.colors.violet[0], borderColor: theme.colors.violet[3] }}>
             <Stack gap="xs">
-              <Text size="xs" fw={500} c="violet.7">✨ Query Enhanced</Text>
-              {data.query_variants && (
-                <Text size="xs" c="dimmed">
-                  <strong>Variants:</strong> {data.query_variants.length}
+              <Text size="xs" fw={600} c="violet.7">
+                🎯 Intent: {data.intent || 'unknown'}
+              </Text>
+              {data.intent_description && (
+                <Text size="xs" c="dimmed" style={{ fontStyle: 'italic' }}>
+                  {data.intent_description}
                 </Text>
               )}
-              {data.strategy && (
-                <Badge size="xs" variant="light" color="violet">
-                  {data.strategy}
-                </Badge>
-              )}
+              <Group gap="xs">
+                {data.routing_decision && (
+                  <Badge size="xs" variant="light" color="violet">
+                    → {data.routing_decision}
+                  </Badge>
+                )}
+                {data.detection_time_ms && (
+                  <Badge size="xs" variant="light" color="grape">
+                    {Math.round(data.detection_time_ms)}ms
+                  </Badge>
+                )}
+              </Group>
             </Stack>
           </Card>
         );
 
-      case 'document_retrieval':
+      case 'rag_agent_executing':
         return (
           <Card withBorder p="xs" mt="xs" style={{ backgroundColor: theme.colors.blue[0], borderColor: theme.colors.blue[3] }}>
             <Stack gap="xs">
-              <Text size="xs" fw={500} c="blue.7">📚 Documents Retrieved</Text>
+              <Text size="xs" fw={500} c="blue.7">📚 RAG Agent Results</Text>
               <Group gap="xs">
                 <Badge size="xs" variant="filled" color="green">
-                  {data.document_count || 0} documents
+                  {data.documents_retrieved || 0} retrieved
                 </Badge>
+                {data.relevant_documents !== undefined && (
+                  <Badge size="xs" variant="filled" color="orange">
+                    {data.relevant_documents} relevant
+                  </Badge>
+                )}
               </Group>
-              {data.collection && (
+              {data.strategy_used && (
                 <Text size="xs" c="dimmed">
-                  <strong>Collection:</strong> {data.collection}
+                  <strong>Strategy:</strong> {data.strategy_used}
                 </Text>
               )}
             </Stack>
           </Card>
         );
 
-      case 'document_judging':
+      case 'task_agent_executing':
         return (
-          <Card withBorder p="xs" mt="xs" style={{ backgroundColor: theme.colors.orange[0], borderColor: theme.colors.orange[3] }}>
+          <Card withBorder p="xs" mt="xs" style={{ backgroundColor: theme.colors.indigo[0], borderColor: theme.colors.indigo[3] }}>
             <Stack gap="xs">
-              <Text size="xs" fw={500} c="orange.7">⚖️ Documents Ranked</Text>
-              <Group gap="xs">
-                <Badge size="xs" variant="filled" color="green">
-                  {data.total_documents || 0} total
+              <Text size="xs" fw={500} c="indigo.7">🔨 Task Execution Complete</Text>
+              {data.task_type && (
+                <Badge size="xs" variant="light" color="indigo">
+                  {data.task_type}
                 </Badge>
-                <Badge size="xs" variant="filled" color="orange">
-                  {data.relevant_documents || 0} relevant
-                </Badge>
-              </Group>
-              {data.avg_score !== undefined && (
+              )}
+              {data.used_rag_context && data.context_documents && (
                 <Text size="xs" c="dimmed">
-                  <strong>Avg Score:</strong> {(data.avg_score * 100).toFixed(1)}%
+                  Used context from <strong>{data.context_documents}</strong> documents
                 </Text>
               )}
             </Stack>
@@ -163,14 +215,24 @@ export function RAGPipelineModal({
         return (
           <Card withBorder p="xs" mt="xs" style={{ backgroundColor: theme.colors.teal[0], borderColor: theme.colors.teal[3] }}>
             <Stack gap="xs">
-              <Text size="xs" fw={500} c="teal.7">✅ Response Generated</Text>
+              <Text size="xs" fw={500} c="teal.7">✨ Response Generated</Text>
               <Group gap="xs">
-                {metadata && (
+                {data.response_length && (
                   <Badge size="xs" variant="light" color="teal">
-                    Complete
+                    {data.response_length} chars
+                  </Badge>
+                )}
+                {data.tokens_estimated && (
+                  <Badge size="xs" variant="light" color="cyan">
+                    ~{data.tokens_estimated} tokens
                   </Badge>
                 )}
               </Group>
+              {data.sources_used !== undefined && (
+                <Text size="xs" c="dimmed">
+                  From <strong>{data.sources_used}</strong> source{data.sources_used !== 1 ? 's' : ''}
+                </Text>
+              )}
             </Stack>
           </Card>
         );
@@ -180,100 +242,97 @@ export function RAGPipelineModal({
     }
   };
 
+  // Define workflow stages based on actual LangGraph flow - memoized to prevent infinite re-renders
   const stages: WorkflowStage[] = useMemo(() => {
+    console.log('🔧 [SUPERVISOR MODAL] Building supervisor stages with ragSubstages:', metadata.ragSubstages);
     const allStages: WorkflowStage[] = [];
 
-    // Stage 1: Query Enhancement
-    allStages.push({
-      id: 'query_enhancement',
-      name: 'Query Enhancement',
-      description: metadata.strategy && metadata.strategy !== 'native'
-        ? `Using ${getStrategyLabel(metadata.strategy)} strategy`
-        : 'Native query (no enhancement needed)',
-      status: getStageStatus('query_enhancement'),
-      icon: <IconSparkles size={20} />,
-      color: 'violet',
-      metadata: {
-        originalQuery: metadata.originalQuery,
-        enhancedQueries: metadata.enhancedQueries,
-        strategy: metadata.strategy
-      },
-      substages: metadata.strategy && metadata.strategy !== 'native' ? [
+    // Add supervisor stages (always enabled in this component)
+    allStages.push(
         {
-          name: 'Analyzing query intent',
-          status: getSubstageStatus('query_enhancement')
+          id: 'supervisor_init',
+          name: 'Supervisor Orchestration',
+          description: 'Initializing multi-agent supervisor',
+          status: getStageStatus('supervisor_init'),
+          icon: <IconRobot size={20} />,
+          color: 'grape',
+          substages: [
+            {
+              name: 'Supervisor agent initialized',
+              status: completedStages.includes('supervisor_init') ? 'completed' : 'active'
+            }
+          ]
         },
         {
-          name: getStrategySubstage(metadata.strategy),
-          status: getSubstageStatus('query_enhancement')
+          id: 'intent_detection',
+          name: 'Intent Detection',
+          description: 'Analyzing query to determine routing strategy',
+          status: getStageStatus('intent_detection'),
+          icon: <IconRoute size={20} />,
+          color: 'indigo',
+          metadata: {
+            intent: metadata.intent
+          },
+          substages: [
+            {
+              name: 'Analyzing user query intent',
+              status: completedStages.includes('intent_detection') ? 'completed' : 'active'
+            },
+            {
+              name: metadata.intent ? `Detected: ${metadata.intent}` : 'Determining routing path',
+              status: completedStages.includes('intent_detected') || completedStages.includes('intent_detection') ? 'completed' : 'active',
+              metric: metadata.intent
+            }
+          ]
+        },
+        {
+          id: 'rag_agent_executing',
+          name: 'RAG Agent Execution',
+          description: 'Retrieving and ranking relevant documents',
+          status: getStageStatus('rag_agent_executing'),
+          icon: <IconFileSearch size={20} />,
+          color: 'cyan',
+          substages: [
+            {
+              name: '✨ Query Enhancement',
+              status: (metadata.ragSubstages?.includes('query_enhancement') || completedStages.includes('rag_agent_executing')) ? 'completed' : 'active',
+              metric: metadata.strategy ? getStrategyLabel(metadata.strategy) : 'Native'
+            },
+            {
+              name: '🗄️ Document Retrieval',
+              status: (metadata.ragSubstages?.includes('document_retrieval') || completedStages.includes('rag_agent_executing')) ? 'completed' : 'active',
+              metric: metadata.documentCount ? `${metadata.documentCount} docs` : undefined
+            },
+            {
+              name: '⚖️ Judge Ranker',
+              status: (metadata.ragSubstages?.includes('document_judging') || completedStages.includes('rag_agent_executing')) ? 'completed' : 'active',
+              metric: metadata.relevantCount ? `${metadata.relevantCount} relevant` : undefined
+            }
+          ]
         }
-      ] : undefined
-    });
+      );
 
-    // Stage 2: Document Retrieval
-    allStages.push({
-      id: 'document_retrieval',
-      name: 'Document Retrieval',
-      description: `Searching ${metadata.documentCount || 0} documents with HNSW index`,
-      status: getStageStatus('document_retrieval'),
-      icon: <IconDatabase size={20} />,
-      color: 'blue',
-      metadata: {
-        documentCount: metadata.documentCount,
-        indexType: metadata.indexType || 'HNSW',
-        vectorDimension: metadata.vectorDimension,
-        searchTime: metadata.searchTime
-      },
-      substages: [
-        {
-          name: 'Converting query to embedding',
-          status: getSubstageStatus('document_retrieval'),
-          metric: metadata.vectorDimension ? `${metadata.vectorDimension}D vector` : undefined
-        },
-        {
-          name: 'Performing vector similarity search',
-          status: getSubstageStatus('document_retrieval'),
-          metric: metadata.indexType ? `${metadata.indexType} index` : undefined
-        },
-        {
-          name: 'Applying distance threshold filter',
-          status: getSubstageStatus('document_retrieval'),
-          metric: 'COSINE < 0.5'
-        },
-        {
-          name: 'Retrieved documents',
-          status: getSubstageStatus('document_retrieval'),
-          metric: metadata.documentCount ? `${metadata.documentCount} docs` : undefined
-        }
-      ]
-    });
+      // Only add Task Agent if intent is rag_then_task
+      if (metadata.intent === 'rag_then_task') {
+        allStages.push({
+          id: 'task_agent_executing',
+          name: 'Task Agent Execution',
+          description: 'Executing task with RAG context',
+          status: getStageStatus('task_agent_executing'),
+          icon: <IconTool size={20} />,
+          color: 'teal',
+          substages: [
+            {
+              name: 'Task agent processing with knowledge',
+              status: completedStages.includes('task_agent_executing') ? 'completed' : 'active'
+            }
+          ]
+        });
+      }
 
-    // Stage 3: Judge Ranker - ALWAYS show because backend always runs it
-    allStages.push({
-      id: 'document_judging',
-      name: 'Judge Ranker',
-      description: `Evaluating relevance of ${metadata.documentCount || 0} documents`,
-      status: getStageStatus('document_judging'),
-      icon: <IconScale size={20} />,
-      color: 'orange',
-      metadata: {
-        documentCount: metadata.documentCount,
-        relevantCount: metadata.relevantCount
-      },
-      substages: [
-        {
-          name: 'LLM-based relevance evaluation',
-          status: getSubstageStatus('document_judging')
-        },
-        {
-          name: 'Ranking and filtering documents',
-          status: getSubstageStatus('document_judging'),
-          metric: metadata.relevantCount ? `${metadata.relevantCount} relevant` : undefined
-        }
-      ]
-    });
+      // Detailed RAG stages are hidden in Supervisor mode - they're internal to RAG Agent
 
-    // Stage 4: Response Generation
+    // Add Response Generation stage (always last)
     allStages.push({
       id: 'response_generation',
       name: enableLLMGeneration ? 'Response Generation' : 'Raw Response Formatting',
@@ -286,34 +345,49 @@ export function RAGPipelineModal({
       substages: enableLLMGeneration ? [
         {
           name: 'Building context from documents',
-          status: getSubstageStatus('answer_generation')
+          status: completedStages.includes('response_generation') ? 'completed' :
+            currentStage === 'response_generation' ? 'active' : 'completed'
         },
         {
           name: 'Streaming LLM response',
-          status: getSubstageStatus('answer_generation')
+          status: completedStages.includes('response_generation') ? 'completed' : 'active'
         }
       ] : [
         {
           name: 'Structuring documents for display',
-          status: getSubstageStatus('answer_generation')
+          status: completedStages.includes('response_generation') ? 'completed' :
+            currentStage === 'response_generation' ? 'active' : 'completed'
         },
         {
           name: 'Formatting raw content',
-          status: getSubstageStatus('answer_generation')
+          status: completedStages.includes('response_generation') ? 'completed' : 'active'
         }
       ]
     });
 
     return allStages;
-  }, [metadata, currentStage, completedStages, rerankingEnabled, enableLLMGeneration]);
+  }, [
+    metadata,
+    currentStage,
+    completedStages,
+    rerankingEnabled,
+    enableLLMGeneration
+  ]);
 
   function getStageStatus(stageId: string): 'pending' | 'active' | 'completed' | 'skipped' {
     if (completedStages.includes(stageId)) return 'completed';
     if (currentStage === stageId) return 'active';
 
-    if (stageId === 'query_enhancement' && (!metadata.strategy || metadata.strategy === 'native')) return 'skipped';
+    // Build supervisor stage order (Knowledge Assistant mode)
+    const stageOrder: string[] = ['supervisor_init', 'intent_detection', 'rag_agent_executing'];
 
-    const stageOrder = ['query_enhancement', 'document_retrieval', 'document_judging', 'response_generation'];
+    // Only add task_agent to order if intent is rag_then_task
+    if (metadata.intent === 'rag_then_task') {
+      stageOrder.push('task_agent_executing');
+    }
+
+    stageOrder.push('response_generation');
+
     const currentIndex = currentStage ? stageOrder.indexOf(currentStage) : -1;
     const stageIndex = stageOrder.indexOf(stageId);
 
@@ -321,28 +395,6 @@ export function RAGPipelineModal({
     if (currentIndex === -1 && !completedStages.includes(stageId)) return 'pending';
 
     return 'pending';
-  }
-
-  function isSubstageCompleted(substageKey: string): boolean {
-    // Map substage keys to ragSubstages array values
-    const substageMapping: Record<string, string> = {
-      'query_enhancement': 'query_enhancement',
-      'document_retrieval': 'document_retrieval',
-      'document_judging': 'document_judging',
-      'answer_generation': 'answer_generation',
-    };
-
-    const mapped = substageMapping[substageKey];
-    return mapped ? (metadata?.ragSubstages?.includes(mapped) ?? false) : false;
-  }
-
-  function getSubstageStatus(substageKey: string): 'active' | 'completed' {
-    // Check if this substage is in the completed ragSubstages list
-    if (isSubstageCompleted(substageKey)) return 'completed';
-    // If currentStage matches this substage, it's active
-    if (currentStage === substageKey) return 'active';
-    // Otherwise it's pending (will be shown as active in the UI until marked complete)
-    return 'active';
   }
 
   function getStrategyLabel(strategy: string): string {
@@ -366,6 +418,7 @@ export function RAGPipelineModal({
     return substages[strategy] || 'Enhancing query';
   }
 
+  // Filter out skipped stages for accurate counting
   const activeStages = stages.filter(s => s.status !== 'skipped');
   const completedCount = activeStages.filter(s => s.status === 'completed').length;
   const totalStages = activeStages.length;
@@ -405,10 +458,11 @@ export function RAGPipelineModal({
               </ThemeIcon>
               <Box>
                 <Text size="lg" fw={600}>
-                  RAG Pipeline Processing
+                  Knowledge Assistant Processing
                 </Text>
                 <Text size="xs" c="dimmed">
                   {completedCount} of {totalStages} stages completed
+                  {metadata.intent && ` • Mode: ${metadata.intent}`}
                 </Text>
               </Box>
             </Group>
@@ -416,19 +470,17 @@ export function RAGPipelineModal({
               <Badge
                 size="lg"
                 variant="light"
-                color={currentStage ? 'blue' : completedCount > 0 ? 'green' : 'gray'}
+                color={currentStage ? 'blue' : 'green'}
                 style={{ paddingLeft: '10px', paddingRight: '10px' }}
               >
                 <Group gap={6}>
                   {currentStage ? (
                     <IconLoader size={14} className="animate-spin" />
-                  ) : completedCount > 0 ? (
-                    <IconCheck size={14} />
                   ) : (
-                    <IconCircleDot size={14} />
+                    <IconCheck size={14} />
                   )}
                   <Text size="sm" fw={500}>
-                    {currentStage ? 'Processing' : completedCount > 0 ? 'Completed' : 'Ready'}
+                    {currentStage ? 'Processing' : 'Completed'}
                   </Text>
                 </Group>
               </Badge>
@@ -450,15 +502,16 @@ export function RAGPipelineModal({
         {/* Query Comparison */}
         {metadata.originalQuery && (
           <Card
+            withBorder
             p="sm"
             radius="md"
             style={{
               backgroundColor: metadata.enhancedQueries && metadata.enhancedQueries.length > 0
                 ? theme.colors.violet[0]
                 : theme.colors.gray[0],
-              border: `1px solid ${metadata.enhancedQueries && metadata.enhancedQueries.length > 0
+              borderColor: metadata.enhancedQueries && metadata.enhancedQueries.length > 0
                 ? theme.colors.violet[3]
-                : theme.colors.gray[3]}`
+                : theme.colors.gray[3]
             }}
           >
             <Stack gap="xs">
@@ -472,11 +525,12 @@ export function RAGPipelineModal({
                 {metadata.originalQuery}
               </Text>
 
-              {metadata.enhancedQueries && metadata.enhancedQueries.length > 0 && (
+              {/* Show enhanced queries if available */}
+              {metadata.enhancedQueries && metadata.enhancedQueries && metadata.enhancedQueries.length > 0 && (
                 <>
                   <Divider my={6} label={
                     <Badge size="sm" variant="filled" color="violet">
-                      {metadata.enhancedQueries.length > 1
+                      {metadata.enhancedQueries && metadata.enhancedQueries.length > 1
                         ? `${metadata.enhancedQueries.length} Query Variants`
                         : 'Query Enhanced'}
                     </Badge>
@@ -495,13 +549,14 @@ export function RAGPipelineModal({
                     </Badge>
                   </Group>
                   <Text size="xs" c="violet.8" style={{ lineHeight: 1.5 }}>
-                    {metadata.enhancedQueries.map((query, index) => (
+                    {/* Show all enhanced queries with bullets */}
+                    {metadata.enhancedQueries && metadata.enhancedQueries.map((query, index) => (
                       <span key={index}>
                         <Text component="span" size="xs" fw={600} c="violet.6" style={{ marginRight: '4px' }}>
                           [{index + 1}]
                         </Text>
                         {query}
-                        {index < (metadata.enhancedQueries?.length || 0) - 1 && ' • '}
+                        {metadata.enhancedQueries && index < metadata.enhancedQueries.length - 1 && ' • '}
                       </span>
                     ))}
                   </Text>
@@ -511,16 +566,26 @@ export function RAGPipelineModal({
           </Card>
         )}
 
-        {/* Circular Node Flow */}
+        {/* Circular Node Flow - Visual Pipeline */}
         <Box style={{ overflowX: 'auto', padding: '12px 0' }}>
           <Group gap={4} wrap="nowrap" justify="center" style={{ minWidth: 'fit-content' }}>
             {activeStages.map((stage, index) => (
               <React.Fragment key={stage.id}>
+                {/* Node */}
                 <Stack
                   gap={6}
                   align="center"
-                  style={{ minWidth: '100px' }}
+                  style={{
+                    minWidth: '100px',
+                    cursor: stage.substages && stage.id === 'rag_agent_executing' ? 'pointer' : 'default'
+                  }}
+                  onClick={() => {
+                    if (stage.substages && stage.id === 'rag_agent_executing') {
+                      toggleExpanded(stage.id);
+                    }
+                  }}
                 >
+                  {/* Circular Icon */}
                   <Box
                     style={{
                       width: '48px',
@@ -529,48 +594,54 @@ export function RAGPipelineModal({
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      background: stage.status === 'active'
-                        ? 'linear-gradient(135deg, #339af0 0%, #1c7ed6 100%)'
-                        : '#e9ecef',
+                      background: stage.status === 'completed'
+                        ? 'linear-gradient(135deg, #51cf66 0%, #37b24d 100%)'
+                        : stage.status === 'active'
+                          ? 'linear-gradient(135deg, #339af0 0%, #1c7ed6 100%)'
+                          : '#e9ecef',
                       boxShadow: stage.status === 'active' || stage.status === 'completed'
                         ? '0 2px 8px rgba(0, 0, 0, 0.12)'
                         : 'none',
                       border: stage.status === 'pending' ? '2px dashed #adb5bd' : 'none',
                       transition: 'all 0.3s ease',
-                      position: 'relative',
+                      position: 'relative'
                     }}
                   >
-                    {stage.status === 'active' ? (
+                    {stage.status === 'completed' ? (
+                      <IconCheck size={24} style={{ color: 'white' }} />
+                    ) : stage.status === 'active' ? (
                       <IconLoader size={24} className="animate-spin" style={{ color: 'white' }} />
                     ) : (
                       React.cloneElement(stage.icon as React.ReactElement, {
-                        style: { color: stage.status === 'completed' ? '#51cf66' : '#868e96' }
+                        style: { color: '#868e96' }
                       } as any)
                     )}
-
-                    {/* Green checkmark overlay for completed stages */}
-                    {stage.status === 'completed' && (
+                    {/* Show expand indicator for RAG Agent */}
+                    {stage.substages && stage.id === 'rag_agent_executing' && (
                       <Box
                         style={{
                           position: 'absolute',
-                          bottom: '-2px',
-                          right: '-2px',
-                          width: '18px',
-                          height: '18px',
+                          bottom: '-4px',
+                          right: '-4px',
+                          background: 'white',
                           borderRadius: '50%',
-                          background: 'linear-gradient(135deg, #51cf66 0%, #37b24d 100%)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          boxShadow: '0 1px 4px rgba(0, 0, 0, 0.15)',
-                          border: '2px solid white',
+                          padding: '2px',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
                         }}
                       >
-                        <IconCheck size={12} style={{ color: 'white', strokeWidth: 3 }} />
+                        <IconChevronDown
+                          size={12}
+                          style={{
+                            transform: expandedStages.has(stage.id) ? 'rotate(180deg)' : 'rotate(0deg)',
+                            transition: 'transform 0.2s ease',
+                            color: theme.colors.cyan[6]
+                          }}
+                        />
                       </Box>
                     )}
                   </Box>
 
+                  {/* Node Label */}
                   <Text
                     size="xs"
                     fw={500}
@@ -585,6 +656,7 @@ export function RAGPipelineModal({
                   </Text>
                 </Stack>
 
+                {/* Connecting Arrow */}
                 {index < activeStages.length - 1 && (
                   <Box
                     style={{
@@ -615,11 +687,106 @@ export function RAGPipelineModal({
               </React.Fragment>
             ))}
           </Group>
+
+          {/* Expanded RAG Subflow (under RAG Agent Execution node) */}
+          {activeStages.find(s => s.id === 'rag_agent_executing' && s.substages) && expandedStages.has('rag_agent_executing') && (
+            <Box style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              {/* Vertical Arrow Connector */}
+              <Box
+                style={{
+                  width: '2px',
+                  height: '20px',
+                  background: theme.colors.cyan[4],
+                  position: 'relative',
+                  marginTop: '8px'
+                }}
+              >
+                <Box
+                  style={{
+                    position: 'absolute',
+                    bottom: '-5px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: 0,
+                    height: 0,
+                    borderLeft: '5px solid transparent',
+                    borderRight: '5px solid transparent',
+                    borderTop: `6px solid ${theme.colors.cyan[4]}`
+                  }}
+                />
+              </Box>
+
+              {/* Subflow Box */}
+              <Box
+                mt="xs"
+                p="md"
+                style={{
+                  background: 'linear-gradient(135deg, #e7f5ff 0%, #d0ebff 100%)',
+                  borderRadius: '12px',
+                  border: `2px solid ${theme.colors.cyan[3]}`,
+                  boxShadow: '0 4px 12px rgba(34, 139, 230, 0.15)',
+                  width: 'fit-content'
+                }}
+              >
+                <Group gap="xs" mb="sm" justify="center">
+                  <IconDatabase size={16} style={{ color: theme.colors.cyan[7] }} />
+                  <Text size="sm" fw={600} c="cyan.7">
+                    RAG Pipeline Stages
+                  </Text>
+                </Group>
+
+                <Group justify="center" gap="md" wrap="nowrap">
+                  <Box style={{ textAlign: 'center' }}>
+                    <ThemeIcon size={44} radius="xl" variant="light" color="violet">
+                      <IconSparkles size={22} />
+                    </ThemeIcon>
+                    <Text size="xs" mt={6} fw={500}>Query</Text>
+                    <Text size="xs" c="dimmed">Enhancement</Text>
+                    {completedStages.includes('rag_agent_executing') && (
+                      <ThemeIcon size={18} radius="xl" color="green" variant="filled" mt={4} mx="auto">
+                        <IconCheck size={12} />
+                      </ThemeIcon>
+                    )}
+                  </Box>
+
+                  <Text size="xl" c="cyan.6" fw={700}>→</Text>
+
+                  <Box style={{ textAlign: 'center' }}>
+                    <ThemeIcon size={44} radius="xl" variant="light" color="blue">
+                      <IconDatabase size={22} />
+                    </ThemeIcon>
+                    <Text size="xs" mt={6} fw={500}>Document</Text>
+                    <Text size="xs" c="dimmed">Retrieval</Text>
+                    {completedStages.includes('rag_agent_executing') && (
+                      <ThemeIcon size={18} radius="xl" color="green" variant="filled" mt={4} mx="auto">
+                        <IconCheck size={12} />
+                      </ThemeIcon>
+                    )}
+                  </Box>
+
+                  <Text size="xl" c="cyan.6" fw={700}>→</Text>
+
+                  <Box style={{ textAlign: 'center' }}>
+                    <ThemeIcon size={44} radius="xl" variant="light" color="orange">
+                      <IconScale size={22} />
+                    </ThemeIcon>
+                    <Text size="xs" mt={6} fw={500}>Judge</Text>
+                    <Text size="xs" c="dimmed">Ranker</Text>
+                    {completedStages.includes('rag_agent_executing') && (
+                      <ThemeIcon size={18} radius="xl" color="green" variant="filled" mt={4} mx="auto">
+                        <IconCheck size={12} />
+                      </ThemeIcon>
+                    )}
+                  </Box>
+                </Group>
+              </Box>
+            </Box>
+          )}
         </Box>
 
         <Divider label="Detailed Progress" labelPosition="center" />
 
-        {/* Timeline */}
+        {/* Timeline of Stages (kept for detailed view) */}
         <Timeline
           active={activeStages.findIndex(s => s.status === 'active')}
           bulletSize={32}
@@ -654,6 +821,7 @@ export function RAGPipelineModal({
                 </Group>
               }
             >
+              {/* Substages */}
               {stage.substages && stage.status !== 'skipped' && (
                 <Collapse in={expandedStages.has(stage.id) || stage.status === 'active'}>
                   <Card
@@ -699,12 +867,13 @@ export function RAGPipelineModal({
                 </Collapse>
               )}
 
+              {/* Detailed information for completed stages */}
               {stage.status === 'completed' && renderStageDetails(stage.id)}
             </Timeline.Item>
           ))}
         </Timeline>
 
-        {/* Technical Details */}
+        {/* Technical Details (Expandable) */}
         <Card withBorder p="xs" radius="md" style={{ backgroundColor: theme.colors.gray[0] }}>
           <Group gap="xs" style={{ cursor: 'pointer' }} onClick={() => toggleExpanded('technical')}>
             <ThemeIcon size="xs" variant="light" color="blue">
@@ -755,6 +924,7 @@ export function RAGPipelineModal({
         </Card>
       </Stack>
 
+      {/* CSS for animations */}
       <style>{`
         @keyframes spin {
           from { transform: rotate(0deg); }
@@ -767,3 +937,4 @@ export function RAGPipelineModal({
     </Modal>
   );
 }
+

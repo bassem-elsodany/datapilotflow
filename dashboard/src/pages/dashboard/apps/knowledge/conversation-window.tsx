@@ -1,8 +1,7 @@
 import { useDeleteConversation, useResetConversationMessages } from '@/api/resources/conversations';
 import { useGetActiveModelProviders } from '@/api/resources/model-providers';
 import { useGetCollections } from '@/api/resources/vectordb';
-import { KnowledgeAssistantModal } from '@/components/knowledge-assistant-modal';
-import { RAGPipelineModal } from '@/components/rag-pipeline-modal';
+import { WorkflowProgressModal } from '@/components/workflow-progress-modal';
 import { StreamingMessage } from '@/components/streaming-message';
 import { TypingIndicator } from '@/components/typing-indicator';
 import { apiEndpoints, apiUtils } from '@/config';
@@ -649,15 +648,25 @@ export default function ConversationWindow() {
 
         case 'query_enhancement':
         case 'query_enhancement_complete':
-          // GUARD: Skip if using supervisor/agent mode - only handle for RAG mode
-          if (messageMode === 'agent') {
-            console.log('⏭️ Skipping query_enhancement handler - using agent/supervisor mode instead');
-            break;
-          }
-
+          // Handle both RAG mode and Supervisor mode (Supervisor emits RAG sub-stage events)
           console.log('✨ QUERY ENHANCEMENT MESSAGE RECEIVED:', {
             enhanced_queries: data?.data?.enhanced_queries,
-            strategy: data?.data?.strategy || data?.strategy
+            strategy: data?.data?.strategy || data?.strategy,
+            messageMode
+          });
+
+          // In supervisor mode, track this as a RAG substage, not skip it
+          // Update workflow state to track RAG substages within rag_agent_executing
+          setWorkflowState(prev => {
+            const newRagSubstages = [...(prev.ragSubstages || [])];
+            const stageName = stage === 'query_enhancement_complete' ? 'query_enhancement' : stage;
+            if (!newRagSubstages.includes(stageName)) {
+              newRagSubstages.push(stageName);
+            }
+            return {
+              ...prev,
+              ragSubstages: newRagSubstages,
+            };
           });
 
           // Create or update the streaming message with query enhancement status
@@ -725,11 +734,19 @@ export default function ConversationWindow() {
 
         case 'document_retrieval':
         case 'document_retrieval_complete':
-          // GUARD: Skip if using supervisor/agent mode - only handle for RAG mode
-          if (messageMode === 'agent') {
-            console.log('⏭️ Skipping document_retrieval handler - using agent/supervisor mode instead');
-            break;
-          }
+          // Handle both RAG mode and Supervisor mode (Supervisor emits RAG sub-stage events)
+          // In supervisor mode, track this as a RAG substage
+          setWorkflowState(prev => {
+            const newRagSubstages = [...(prev.ragSubstages || [])];
+            const stageName = stage === 'document_retrieval_complete' ? 'document_retrieval' : stage;
+            if (!newRagSubstages.includes(stageName)) {
+              newRagSubstages.push(stageName);
+            }
+            return {
+              ...prev,
+              ragSubstages: newRagSubstages,
+            };
+          });
 
           // Create or update the streaming message with document retrieval status
           setMessages(prev => {
@@ -779,11 +796,19 @@ export default function ConversationWindow() {
 
         case 'document_judging':
         case 'document_reranking':
-          // GUARD: Skip if using supervisor/agent mode - only handle for RAG mode
-          if (messageMode === 'agent') {
-            console.log('⏭️ Skipping document_judging handler - using agent/supervisor mode instead');
-            break;
-          }
+          // Handle both RAG mode and Supervisor mode (Supervisor emits RAG sub-stage events)
+          // In supervisor mode, track this as a RAG substage
+          setWorkflowState(prev => {
+            const newRagSubstages = [...(prev.ragSubstages || [])];
+            const stageName = 'document_judging';
+            if (!newRagSubstages.includes(stageName)) {
+              newRagSubstages.push(stageName);
+            }
+            return {
+              ...prev,
+              ragSubstages: newRagSubstages,
+            };
+          });
 
           // Update the existing streaming message with document judging status
           setMessages(prev => {
@@ -2064,45 +2089,29 @@ export default function ConversationWindow() {
         </Stack>
       </Paper>
 
-      {/* Workflow Progress Modal - Show correct modal based on messageMode */}
-      {messageMode === 'agent' ? (
-        <KnowledgeAssistantModal
-          opened={workflowState.isActive}
-          onClose={() => { }}
-          currentStage={workflowState.currentStage}
-          completedStages={workflowState.completedStages}
-          enableLLMGeneration={enableLLMGeneration}
-          metadata={{
-            intent: workflowState.intent || undefined,
-            strategy: workflowState.strategy || undefined,
-            documentCount: workflowState.documentCount,
-            relevantCount: workflowState.relevantCount,
-            stageDetails: workflowState.stageDetails,
-            ragSubstages: workflowState.ragSubstages,
-          }}
-        />
-      ) : (
-        <RAGPipelineModal
-          opened={workflowState.isActive}
-          onClose={() => { }}
-          currentStage={workflowState.currentStage}
-          completedStages={workflowState.completedStages}
-          rerankingEnabled={enableReranking}
-          enableLLMGeneration={enableLLMGeneration}
-          metadata={{
-            originalQuery: workflowState.originalQuery || undefined,
-            enhancedQueries: workflowState.enhancedQueries || undefined,
-            strategy: workflowState.strategy || selectedStrategy || undefined,
-            documentCount: workflowState.documentCount,
-            relevantCount: workflowState.relevantCount,
-            indexType: workflowState.indexType,
-            vectorDimension: workflowState.vectorDimension,
-            searchTime: workflowState.searchTime,
-            stageDetails: workflowState.stageDetails,
-            ragSubstages: workflowState.ragSubstages,
-          }}
-        />
-      )}
+      {/* Workflow Progress Modal - Router dispatches to appropriate modal */}
+      <WorkflowProgressModal
+        opened={workflowState.isActive}
+        onClose={() => { }}
+        enableKnowledgeAssistant={messageMode === 'agent'}
+        currentStage={workflowState.currentStage}
+        completedStages={workflowState.completedStages}
+        rerankingEnabled={enableReranking}
+        enableLLMGeneration={enableLLMGeneration}
+        metadata={{
+          originalQuery: workflowState.originalQuery || undefined,
+          enhancedQueries: workflowState.enhancedQueries || undefined,
+          strategy: workflowState.strategy || selectedStrategy || undefined,
+          documentCount: workflowState.documentCount,
+          relevantCount: workflowState.relevantCount,
+          indexType: workflowState.indexType,
+          vectorDimension: workflowState.vectorDimension,
+          searchTime: workflowState.searchTime,
+          intent: workflowState.intent || undefined,
+          stageDetails: workflowState.stageDetails,
+          ragSubstages: workflowState.ragSubstages,
+        }}
+      />
 
       {/* Settings Modal */}
       <Modal
