@@ -57,6 +57,7 @@ class ConversationMessage:
     search_query: Optional[str] = None
     search_results: Optional[List[Dict[str, Any]]] = None
     source_urls: Optional[List[str]] = None
+    chunk_ids: Optional[List[str]] = None
     # Enhancement metadata
     enhancement_strategy_used: Optional[str] = None
     enhanced_queries: Optional[List[str]] = None

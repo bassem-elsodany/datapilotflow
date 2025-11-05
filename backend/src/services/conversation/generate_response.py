@@ -474,10 +474,14 @@ async def get_response_stream_supervisor(
             # SAVE messages to conversation history (same as RAG mode)
             try:
                 source_urls = []
+                chunk_ids = []
                 for doc in rag_documents:
                     if isinstance(doc, dict) and doc.get("source_url"):
                         if doc["source_url"] not in source_urls:
                             source_urls.append(doc["source_url"])
+                    if isinstance(doc, dict) and doc.get("chunk_id"):
+                        if doc["chunk_id"] not in chunk_ids:
+                            chunk_ids.append(doc["chunk_id"])
 
                 # Save user query message
                 user_message = ConversationMessage(
@@ -495,6 +499,7 @@ async def get_response_stream_supervisor(
                     content=final_response,
                     timestamp=datetime.now(timezone.utc),
                     source_urls=source_urls,
+                    chunk_ids=chunk_ids,
                     document_count=len(rag_documents),
                     processing_time_ms=int(execution_time_ms),
                 )
@@ -1061,10 +1066,13 @@ async def get_response_stream_rag(
 
                 # Extract metadata for the response message
                 source_urls = []
+                chunk_ids = []
                 retrieved_docs = last_state.get("retrieved_documents", [])
                 for doc in retrieved_docs:
                     if doc.get("source_url") and doc["source_url"] not in source_urls:
                         source_urls.append(doc["source_url"])
+                    if doc.get("chunk_id") and doc["chunk_id"] not in chunk_ids:
+                        chunk_ids.append(doc["chunk_id"])
 
                 enhanced_queries = query_info.get("enhanced_queries", []) if query_info else []
                 enhancement_strategy = query_info.get("strategy_used", "augmented") if query_info else "augmented"
@@ -1085,6 +1093,7 @@ async def get_response_stream_rag(
                     content=response,
                     timestamp=datetime.now(timezone.utc),
                     source_urls=source_urls,
+                    chunk_ids=chunk_ids,
                     enhancement_strategy_used=enhancement_strategy,
                     enhanced_queries=enhanced_queries,
                     document_count=len(retrieved_docs),
