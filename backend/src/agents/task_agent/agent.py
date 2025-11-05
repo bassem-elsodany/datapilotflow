@@ -160,12 +160,30 @@ class TaskAgentService(AgentService):
         logger.critical(f"🔴 [FORMAT_RAG_KNOWLEDGE] Processing {len(judged_docs)} judged documents")
         logger.critical(f"🔴 [FORMAT_RAG_KNOWLEDGE] Type of judged_docs: {type(judged_docs)}")
 
+        # Convert documents to dicts if they're not already (they might be Document objects)
+        judged_docs_normalized = []
         if judged_docs and len(judged_docs) > 0:
             logger.critical(f"🔴 [FORMAT_RAG_KNOWLEDGE] First doc type: {type(judged_docs[0])}")
             logger.critical(f"🔴 [FORMAT_RAG_KNOWLEDGE] First doc: {str(judged_docs[0])[:500]}")
 
+            for doc in judged_docs:
+                if isinstance(doc, dict):
+                    judged_docs_normalized.append(doc)
+                elif hasattr(doc, '__dict__'):
+                    judged_docs_normalized.append(vars(doc))
+                elif hasattr(doc, 'dict'):
+                    judged_docs_normalized.append(doc.dict())
+                else:
+                    judged_docs_normalized.append({"text": str(doc), "source": "unknown"})
+
+            logger.critical(f"🔴 [FORMAT_RAG_KNOWLEDGE] After normalization - First doc type: {type(judged_docs_normalized[0])}")
+            if judged_docs_normalized and isinstance(judged_docs_normalized[0], dict):
+                logger.critical(f"🔴 [FORMAT_RAG_KNOWLEDGE] After normalization - First doc keys: {list(judged_docs_normalized[0].keys())}")
+
+        judged_docs = judged_docs_normalized
+
         # Filter for relevant documents (label = 1)
-        relevant_docs = [doc for doc in judged_docs if doc.get('relevance_label', 0) == 1]
+        relevant_docs = [doc for doc in judged_docs if isinstance(doc, dict) and doc.get('relevance_label', 0) == 1]
         logger.critical(f"🔴 [FORMAT_RAG_KNOWLEDGE] Found {len(relevant_docs)} relevant documents (label=1)")
 
         # Use relevant docs, fallback to all if none marked as relevant
@@ -175,6 +193,11 @@ class TaskAgentService(AgentService):
         # Format top 10 documents for context
         docs_text_parts = []
         for i, doc in enumerate(docs_to_use[:10]):
+            # Skip if doc is not a dict (shouldn't happen after normalization)
+            if not isinstance(doc, dict):
+                logger.warning(f"🟡 [FORMAT_RAG_KNOWLEDGE] Doc {i+1} is not a dict: {type(doc)}")
+                continue
+
             # Log document structure
             if i == 0:
                 logger.critical(f"🔴 [FORMAT_RAG_KNOWLEDGE] First doc keys: {list(doc.keys())}")
