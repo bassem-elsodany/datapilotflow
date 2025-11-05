@@ -58,7 +58,7 @@ export function ColorfulVerticalStepper({
                       width: '2px',
                       height: '28px',
                       background: completed
-                        ? `linear-gradient(180deg, ${step.color} 0%, ${steps[index + 1].color} 100%)`
+                        ? `linear-gradient(180deg, #22c55e 0%, #22c55e 100%)`
                         : '#e9ecef',
                       transition: 'all 0.4s ease',
                       zIndex: 0
@@ -88,24 +88,24 @@ export function ColorfulVerticalStepper({
                           height: '38px',
                           borderRadius: '50%',
                           background: completed
-                            ? `linear-gradient(135deg, ${step.color} 0%, ${step.gradientTo || step.color} 100%)`
+                            ? `linear-gradient(135deg, #22c55e 0%, #16a34a 100%)`
                             : active
                               ? `linear-gradient(135deg, ${step.color}15 0%, ${step.gradientTo || step.color}25 100%)`
                               : `linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)`,
                           border: completed
-                            ? `2px solid ${step.color}`
+                            ? `2px solid #22c55e`
                             : active
                               ? `2px solid ${step.color}`
                               : '2px solid #dee2e6',
                           boxShadow: active
                             ? `0 4px 12px ${step.color}25, 0 0 0 3px ${step.color}08`
                             : completed
-                              ? `0 2px 8px ${step.color}15`
+                              ? `0 2px 8px #22c55e30`
                               : '0 1px 3px rgba(0,0,0,0.05)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          color: completed ? 'white' : active ? step.color : theme.colors.gray[5],
+                          color: completed ? '#22c55e' : active ? step.color : theme.colors.gray[5],
                           transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                           transform: active ? 'scale(1.08)' : 'scale(1)',
                           position: 'relative',
