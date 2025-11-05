@@ -1600,7 +1600,7 @@ function StepReviewAndCreate({ form, providers, collections }: StepProps) {
 
       {/* SUMMARY OF NESTED STRUCTURE */}
       <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light" title="Configuration Summary">
-        <Stack gap="xs" size="xs">
+        <Stack gap="xs">
           <Text size="xs">This conversation will be saved with the following nested configuration:</Text>
           <div style={{
             backgroundColor: '#f5f5f5',
