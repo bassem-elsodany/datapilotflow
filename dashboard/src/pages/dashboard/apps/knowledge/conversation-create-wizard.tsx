@@ -54,6 +54,7 @@ import {
   IconFilter,
   IconHelp,
   IconInfoCircle,
+  IconMessageCircle,
   IconRobot,
   IconScale,
   IconSettings,
@@ -228,6 +229,14 @@ const STEP_CONFIGS = [
     gradientTo: LOGO_COLORS.accent3,       // Yellow-Green
   },
   {
+    label: 'System Prompt',
+    description: 'Define task engine behavior',
+    icon: <IconMessageCircle size={20} />,
+    color: 'grape',
+    gradientFrom: '#a855f7',               // Purple
+    gradientTo: LOGO_COLORS.pilot,         // Purple (Pilot)
+  },
+  {
     label: 'Review & Create',
     description: 'Confirm and submit',
     icon: <IconCheck size={20} />,
@@ -317,6 +326,12 @@ export function ConversationCreateWizard() {
         }
         return true; // All optional if generative answer disabled
       case 6:
+        // System Prompt step - only for Assistant mode, always valid
+        if (form.values.agentType === 'assistant') {
+          return true; // System prompt configuration always valid (optional to select)
+        }
+        return true; // Not a real step for RAG mode
+      case 7:
         return true; // Review always valid
       default:
         return false;
@@ -333,12 +348,24 @@ export function ConversationCreateWizard() {
       return;
     }
     setCompletedSteps((prev) => [...new Set([...prev, activeStep])]);
-    setActiveStep((prev) => prev + 1);
+
+    // Skip Step 6 (System Prompt) for RAG mode
+    let nextStep = activeStep + 1;
+    if (activeStep === 5 && form.values.agentType === 'rag') {
+      nextStep = 7; // Skip to Review & Create for RAG mode
+    }
+
+    setActiveStep(nextStep);
   };
 
   const handlePreviousStep = () => {
     if (activeStep > 0) {
-      setActiveStep((prev) => prev - 1);
+      let prevStep = activeStep - 1;
+      // Skip Step 6 (System Prompt) when going back in RAG mode
+      if (activeStep === 7 && form.values.agentType === 'rag') {
+        prevStep = 5; // Skip from Review & Create back to Advanced Settings for RAG
+      }
+      setActiveStep(prevStep);
     }
   };
 
@@ -550,8 +577,20 @@ export function ConversationCreateWizard() {
           />
         )}
 
-        {/* STEP 6: REVIEW & CREATE */}
-        {activeStep === 6 && (
+        {/* STEP 6: SYSTEM PROMPT (only for Assistant mode) */}
+        {form.values.agentType === 'assistant' && activeStep === 6 && (
+          <StepSystemPromptConfiguration
+            form={form}
+            onPromptSelected={(prompt) => {
+              form.setFieldValue('selectedSystemPromptId', prompt.id);
+              setSelectedSystemPrompt(prompt);
+            }}
+            selectedSystemPrompt={selectedSystemPrompt}
+          />
+        )}
+
+        {/* STEP 6 or 7: REVIEW & CREATE (depends on agent type) */}
+        {activeStep === (form.values.agentType === 'assistant' ? 7 : 6) && (
           <StepReviewAndCreate
             form={form}
             providers={providers}
@@ -1391,28 +1430,32 @@ function StepAdvancedSettings({
           )}
         </>
       )}
+    </Stack>
+  );
+}
 
-      {form.values.agentType === 'assistant' && (
-        <>
-          <Divider label="System Prompt" labelPosition="left" />
+function StepSystemPromptConfiguration({
+  form,
+  onPromptSelected,
+  selectedSystemPrompt,
+}: StepProps) {
+  return (
+    <Stack gap="md">
+      <Alert icon={<IconInfoCircle size={16} />} color="grape" variant="light">
+        <Text size="sm">
+          Define how the task engine assistant should behave when performing tasks. You can create custom prompts or use built-in templates. This prompt will guide the supervisor agent's decision-making and task execution.
+        </Text>
+      </Alert>
 
-          <Alert icon={<IconInfoCircle size={16} />} color="grape" variant="light">
-            <Text size="sm">
-              Define how the assistant should behave when performing tasks. You can create custom prompts or use built-in templates.
-            </Text>
-          </Alert>
-
-          <SystemPromptManager
-            conversationId=""
-            selectedPromptId={form.values.selectedSystemPromptId}
-            selectedPromptData={selectedSystemPrompt}
-            onPromptSelected={(prompt) => {
-              form.setFieldValue('selectedSystemPromptId', prompt.id);
-              onPromptSelected?.(prompt);
-            }}
-          />
-        </>
-      )}
+      <SystemPromptManager
+        conversationId=""
+        selectedPromptId={form.values.selectedSystemPromptId}
+        selectedPromptData={selectedSystemPrompt}
+        onPromptSelected={(prompt) => {
+          form.setFieldValue('selectedSystemPromptId', prompt.id);
+          onPromptSelected?.(prompt);
+        }}
+      />
     </Stack>
   );
 }
