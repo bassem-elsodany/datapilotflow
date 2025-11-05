@@ -88,6 +88,9 @@ class CreateSessionRequest(BaseModel):
         True,
         description="Enable Knowledge Assistant for RAG→Task workflow (True = orchestration, False = RAG only)",
     )
+    selected_system_prompt_id: Optional[str] = Field(
+        None, description="ID of the selected system prompt for Knowledge Assistant"
+    )
     tags: Optional[str] = Field(None, description="Tags for organizing conversations")
 
 
@@ -227,6 +230,7 @@ async def create_conversation_session(
             enable_llm_generation=create_request.enable_llm_generation,
             top_k=create_request.top_k,
             enable_knowledge_assistant=create_request.enable_knowledge_assistant,
+            selected_system_prompt_id=create_request.selected_system_prompt_id,
             tags=create_request.tags,
         )
 

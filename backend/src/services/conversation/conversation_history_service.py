@@ -240,6 +240,7 @@ class ConversationHistoryService:
         enable_llm_generation: bool = False,
         top_k: int = 5,
         enable_knowledge_assistant: bool = True,
+        selected_system_prompt_id: Optional[str] = None,
         tags: Optional[List[str]] = None,
         description: Optional[str] = None,
     ) -> str:
@@ -337,6 +338,7 @@ class ConversationHistoryService:
             "enable_llm_generation": enable_llm_generation,
             "top_k": top_k,
             "enable_knowledge_assistant": enable_knowledge_assistant,
+            "selected_system_prompt_id": selected_system_prompt_id,
             "total_queries": 0,
             "total_documents_retrieved": 0,
             "average_response_time_ms": None,
