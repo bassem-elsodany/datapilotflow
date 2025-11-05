@@ -168,6 +168,35 @@ export function SystemPromptManager({
       return;
     }
 
+    // If no conversation ID, we're in conversation creation mode
+    // Just store the prompt locally and select it, don't call API
+    if (!conversationId) {
+      const tempPrompt: SystemPrompt = {
+        id: `temp-${Date.now()}`,
+        name: formData.name,
+        description: formData.description,
+        system_prompt: formData.system_prompt,
+        tags: [],
+        is_active: true,
+        usage_count: 0,
+        version: 1,
+      };
+
+      notifications.show({
+        title: 'Success',
+        message: 'Prompt saved! It will be created when you create the conversation.',
+        color: 'green',
+      });
+      onPromptSelected?.(tempPrompt);
+      setFormData({ name: '', description: '', system_prompt: '' });
+      setCreateModalOpen(false);
+      if (fromPreset) {
+        setFromPreset(false);
+        setManagerModalOpen(true);
+      }
+      return;
+    }
+
     try {
       const token = localStorage.getItem('jwt_token');
 
@@ -278,6 +307,30 @@ export function SystemPromptManager({
   };
 
   const handleUsePreset = async (preset: typeof QUICK_PRESETS[0]) => {
+    // If no conversation ID, we're in conversation creation mode
+    // Just select the preset without API call
+    if (!conversationId) {
+      const tempPrompt: SystemPrompt = {
+        id: `temp-${Date.now()}`,
+        name: preset.name,
+        description: preset.description,
+        system_prompt: preset.system_prompt,
+        tags: preset.tags,
+        is_active: true,
+        usage_count: 0,
+        version: 1,
+      };
+
+      notifications.show({
+        title: 'Success',
+        message: `${preset.name} preset selected! It will be created when you create the conversation.`,
+        color: 'green',
+      });
+      onPromptSelected?.(tempPrompt);
+      setManagerModalOpen(false);
+      return;
+    }
+
     try {
       const token = localStorage.getItem('jwt_token');
       const response = await fetch(
