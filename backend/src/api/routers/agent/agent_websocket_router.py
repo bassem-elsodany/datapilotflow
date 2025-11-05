@@ -267,47 +267,23 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
                         if conversation:
                             logger.debug(f"Conversation found: {conversation.name}")
 
-                            # Load ALL settings from conversation
-                            llm_provider_id = conversation.llm_provider_id
-                            llm_model_name = conversation.llm_model_name
-                            collection_name = conversation.collection_name
-
-                            # Load enhancement strategy
-                            if conversation.enhancement_config:
-                                selected_strategy = (
-                                    conversation.enhancement_config.strategy
-                                )
+                            # Load ALL settings from conversation using helper function
+                            config = extract_conversation_config(conversation)
+                            llm_provider_id = config["llm_provider_id"]
+                            llm_model_name = config["llm_model_name"]
+                            selected_strategy = config["selected_strategy"]
+                            collection_name = config["collection_name"]
+                            enhancement_config = config["enhancement_config"]
+                            enable_reranking = config["enable_reranking"]
+                            relevance_threshold = config["relevance_threshold"]
+                            enable_llm_generation = config["enable_llm_generation"]
+                            top_k = config["top_k"]
+                            conversation_description = config["conversation_description"]
+                            reranker_model_name = config["reranker_model_name"]
 
                             # Retrieval strategy is auto-detected at runtime based on query variants
                             retrieval_strategy = None
 
-                            # Load reranking settings
-                            enable_reranking = getattr(
-                                conversation, "enable_reranking", True
-                            )
-
-                            # Load relevance threshold for reranking
-                            relevance_threshold = getattr(
-                                conversation, "relevance_threshold", 0.5
-                            )
-
-                            # Load LLM generation setting
-                            enable_llm_generation = getattr(
-                                conversation, "enable_llm_generation", True
-                            )
-
-                            # Load top_k setting
-                            top_k = getattr(conversation, "top_k", None)
-                            if top_k is None:
-                                logger.warning(
-                                    f"⚠️ Conversation {conversation_id} has no top_k setting, using default 5"
-                                )
-                                top_k = 5
-
-                            # Load conversation description for query enhancement context
-                            conversation_description = getattr(
-                                conversation, "description", None
-                            )
                             if conversation_description:
                                 logger.debug(
                                     f"📝 Loaded conversation description: '{conversation_description[:50]}...'"
@@ -588,47 +564,23 @@ async def agent_query_supervisor_websocket(websocket: WebSocket, token: str = Qu
                         if conversation:
                             logger.debug(f"Conversation found: {conversation.name}")
 
-                            # Load ALL settings from conversation
-                            llm_provider_id = conversation.llm_provider_id
-                            llm_model_name = conversation.llm_model_name
-                            collection_name = conversation.collection_name
-
-                            # Load enhancement strategy
-                            if conversation.enhancement_config:
-                                selected_strategy = (
-                                    conversation.enhancement_config.strategy
-                                )
+                            # Load ALL settings from conversation using helper function
+                            config = extract_conversation_config(conversation)
+                            llm_provider_id = config["llm_provider_id"]
+                            llm_model_name = config["llm_model_name"]
+                            selected_strategy = config["selected_strategy"]
+                            collection_name = config["collection_name"]
+                            enhancement_config = config["enhancement_config"]
+                            enable_reranking = config["enable_reranking"]
+                            relevance_threshold = config["relevance_threshold"]
+                            enable_llm_generation = config["enable_llm_generation"]
+                            top_k = config["top_k"]
+                            conversation_description = config["conversation_description"]
+                            reranker_model_name = config["reranker_model_name"]
 
                             # Retrieval strategy is auto-detected at runtime based on query variants
                             retrieval_strategy = None
 
-                            # Load reranking settings
-                            enable_reranking = getattr(
-                                conversation, "enable_reranking", True
-                            )
-
-                            # Load relevance threshold for reranking
-                            relevance_threshold = getattr(
-                                conversation, "relevance_threshold", 0.5
-                            )
-
-                            # Load LLM generation setting
-                            enable_llm_generation = getattr(
-                                conversation, "enable_llm_generation", True
-                            )
-
-                            # Load top_k setting
-                            top_k = getattr(conversation, "top_k", None)
-                            if top_k is None:
-                                logger.warning(
-                                    f"⚠️ Conversation {conversation_id} has no top_k setting, using default 5"
-                                )
-                                top_k = 5
-
-                            # Load conversation description for query enhancement context
-                            conversation_description = getattr(
-                                conversation, "description", None
-                            )
                             if conversation_description:
                                 logger.debug(
                                     f"📝 Loaded conversation description: '{conversation_description[:50]}...'"
