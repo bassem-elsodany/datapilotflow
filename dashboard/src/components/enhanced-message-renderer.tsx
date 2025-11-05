@@ -195,7 +195,8 @@ export function EnhancedMessageRenderer({
 
   // Prepare sources data - memoized to prevent infinite re-renders
   const sources = useMemo(() => {
-    if (!metadata?.source_urls || !metadata?.chunk_ids) {
+    // Handle case where we have source_urls (with or without chunk_ids)
+    if (!metadata?.source_urls || metadata.source_urls.length === 0) {
       return [];
     }
 
