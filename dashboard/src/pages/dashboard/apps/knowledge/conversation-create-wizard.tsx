@@ -100,6 +100,10 @@ const ENHANCEMENT_STRATEGIES = [
     useCases: ['Simple lookups', 'Direct questions', 'Performance-critical scenarios', 'General purpose'],
     pros: ['Fastest performance', 'Most straightforward', 'No added complexity', 'Lowest cost'],
     cons: ['May miss relevant documents', 'Limited coverage', 'Depends on exact wording'],
+    example: {
+      original: 'How to configure SSL certificates in Apache?',
+      output: 'Searches directly with: "How to configure SSL certificates in Apache?"'
+    },
     color: 'blue',
   },
   {
@@ -110,6 +114,10 @@ const ENHANCEMENT_STRATEGIES = [
     useCases: ['Maximum coverage needed', 'Comprehensive search', 'Documents use varied styles', 'Critical queries'],
     pros: ['Systematic coverage', 'Fills retrieval gaps', 'Explores all angles', 'Context preserved'],
     cons: ['Slightly slower than Native', 'Uses more tokens', 'May be overkill for simple queries'],
+    example: {
+      original: 'SSL configuration in production',
+      output: 'Transforms systematically:\n1. Original: "SSL configuration in production"\n2. Synonym: "secure socket layer setup in production environment"\n3. Expanded: "SSL certificate configuration HTTPS production deployment"\n4. Contracted: "SSL production config"\n5. Technical: "TLS security settings live environment"'
+    },
     color: 'green',
   },
   {
@@ -120,6 +128,10 @@ const ENHANCEMENT_STRATEGIES = [
     useCases: ['Documents use varied terminology', 'Unknown exact terms', 'Vocabulary mismatches', 'Different doc styles'],
     pros: ['Linguistic flexibility', 'Handles synonyms', 'Matches varied writing styles', 'Simple approach'],
     cons: ['Same semantic space', 'May miss edge cases', 'Not as systematic as Augmented'],
+    example: {
+      original: 'Salesforce platform event listener config',
+      output: 'Rephrases in different ways:\n1. "How to configure Salesforce platform event listeners?"\n2. "Salesforce platform event subscription setup"\n3. "Setting up Salesforce platform event handlers"\n4. "Salesforce platform event listener configuration guide"\n5. "Steps to configure Salesforce event listeners"'
+    },
     color: 'cyan',
   },
   {
@@ -130,6 +142,10 @@ const ENHANCEMENT_STRATEGIES = [
     useCases: ['Answer-seeking queries', 'When you know what format you want', 'Semantic search'],
     pros: ['Excellent semantic matching', 'Finds answer-like docs', 'Good for how-to questions'],
     cons: ['Requires good LLM', 'May hallucinate', 'Slower performance'],
+    example: {
+      original: 'How to configure SSL certificates in Apache?',
+      output: 'Generates hypothetical answer:\n"To configure SSL in Apache, first install mod_ssl, then create a VirtualHost with SSLEngine on, SSLCertificateFile pointing to your cert, and SSLCertificateKeyFile for the private key. Restart Apache to apply changes."\n\nThen searches for documents similar to this answer.'
+    },
     color: 'grape',
   },
   {
@@ -140,6 +156,10 @@ const ENHANCEMENT_STRATEGIES = [
     useCases: ['Complex multi-part questions', 'Research tasks', 'Thorough analysis needed'],
     pros: ['Handles complexity', 'RRF merges sub-queries', 'Comprehensive results', 'Systematic approach'],
     cons: ['Slowest option', 'Most expensive', 'May over-complicate simple queries'],
+    example: {
+      original: 'How to configure SSL certificates in Apache?',
+      output: 'Breaks down into sub-questions:\n1. "What are the prerequisites for SSL in Apache?"\n2. "How to generate or obtain SSL certificates?"\n3. "What are the Apache SSL configuration directives?"\n4. "How to test and verify SSL configuration?"'
+    },
     color: 'violet',
   },
 ];
@@ -1058,6 +1078,31 @@ function StepEnhancementStrategy({ form, onLearnClick }: StepProps & { onLearnCl
                 </Stack>
               </Grid.Col>
             </Grid>
+
+            {selectedStrategyInfo.example && (
+              <Stack gap="xs" style={{
+                backgroundColor: '#f9fafb',
+                padding: '12px',
+                borderRadius: '6px',
+                border: '1px solid #e5e7eb'
+              }}>
+                <Text fw={600} size="xs" c="dimmed">
+                  Example
+                </Text>
+                <Stack gap="6px" style={{ fontSize: '12px' }}>
+                  <div>
+                    <Text size="xs" c="dimmed" fw={500}>Input Query:</Text>
+                    <Text size="xs" style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>"{selectedStrategyInfo.example.original}"</Text>
+                  </div>
+                  <div>
+                    <Text size="xs" c="dimmed" fw={500}>What Happens:</Text>
+                    <Text size="xs" style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', color: '#666' }}>
+                      {selectedStrategyInfo.example.output}
+                    </Text>
+                  </div>
+                </Stack>
+              </Stack>
+            )}
           </Stack>
         </Card>
       )}
