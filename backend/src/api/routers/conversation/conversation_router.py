@@ -17,10 +17,114 @@ from src.domain.user import User
 from src.services.conversation.conversation_history_service import (
     conversation_history_service,
     SystemPromptTask,
+    ProviderConfig,
+    EnhancementConfig,
+    VectorDatabaseConfig,
+    RerankerConfig,
+    AnswerGenerationConfig,
+    SystemPrompt,
 )
 
 # Create router
 router = APIRouter(prefix="/conversations", tags=["Conversations Management"])
+
+
+# ============================================================================
+# NEW PYDANTIC MODELS FOR RESTRUCTURED CONVERSATION SCHEMA
+# ============================================================================
+
+
+class ProviderConfigRequest(BaseModel):
+    """Request model for provider configuration."""
+
+    id: str = Field(..., description="Provider ID")
+    model_name: str = Field(..., description="Model name")
+
+
+class EnhancementConfigRequest(BaseModel):
+    """Request model for enhancement strategy configuration."""
+
+    strategy: str = Field(
+        ...,
+        description="Enhancement strategy (native, multi_query, augmented, hyde, decomposition)",
+    )
+    provider: Optional[ProviderConfigRequest] = Field(
+        None, description="Provider for enhancement"
+    )
+
+
+class VectorDatabaseConfigRequest(BaseModel):
+    """Request model for vector database configuration."""
+
+    collection_name: str = Field(
+        "LongTermMemory", description="Vector database collection name"
+    )
+    top_k: int = Field(
+        5, ge=5, le=30, description="Number of documents to retrieve"
+    )
+
+
+class RerankerConfigRequest(BaseModel):
+    """Request model for reranker configuration."""
+
+    provider: Optional[ProviderConfigRequest] = Field(
+        None, description="Reranker provider"
+    )
+    relevance_threshold: float = Field(
+        0.5,
+        ge=0.0,
+        le=1.0,
+        description="Relevance score threshold for filtering documents",
+    )
+
+
+class AnswerGenerationConfigRequest(BaseModel):
+    """Request model for answer generation configuration."""
+
+    provider: Optional[ProviderConfigRequest] = Field(
+        None, description="LLM provider for answer generation"
+    )
+
+
+class SystemPromptRequest(BaseModel):
+    """Request model for embedded system prompt."""
+
+    id: str = Field(..., description="System prompt ID")
+    title: str = Field(..., description="System prompt title")
+    content: str = Field(..., description="System prompt content")
+
+
+class CreateSessionRequest(BaseModel):
+    """Request model for creating a new conversation session with new structure."""
+
+    name: Optional[str] = Field(
+        None, max_length=100, description="Conversation name"
+    )
+    description: Optional[str] = Field(
+        None, max_length=500, description="Conversation description"
+    )
+    system_prompt: Optional[SystemPromptRequest] = Field(
+        None, description="Embedded system prompt"
+    )
+    enhancement: Optional[EnhancementConfigRequest] = Field(
+        None, description="Query enhancement configuration"
+    )
+    vector_database: Optional[VectorDatabaseConfigRequest] = Field(
+        None, description="Vector database configuration"
+    )
+    reranker: Optional[RerankerConfigRequest] = Field(
+        None, description="Document reranker configuration"
+    )
+    answer_generation: Optional[AnswerGenerationConfigRequest] = Field(
+        None, description="Answer generation configuration"
+    )
+    tags: Optional[List[str]] = Field(
+        None, description="Tags for organizing conversations"
+    )
+    enable_knowledge_assistant: bool = Field(
+        False,
+        description="Enable multi-agent supervisor (True=Supervisor, False=RAG)",
+    )
 
 
 class ChatMessage(BaseModel):
