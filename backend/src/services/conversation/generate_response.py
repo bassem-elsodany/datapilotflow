@@ -938,7 +938,7 @@ async def get_response_stream_rag(
             logger.critical(f"🔴 [RAG RESPONSE] Emitting streaming_response with final answer ({len(final_answer)} chars)")
             yield {
                 "type": "streaming_response",
-                "content": final_answer,
+                "chunk": final_answer,
                 "execution_time_ms": execution_time_ms,
             }
             logger.critical(f"✅ [RAG RESPONSE] EMITTED streaming_response with final answer")
