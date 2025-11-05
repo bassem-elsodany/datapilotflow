@@ -456,7 +456,7 @@ class ConversationHistoryService:
     def get_session_messages(
         self, session_id: str, user_id: str = None
     ) -> List[Dict[str, Any]]:
-        """Get messages for a specific session."""
+        """Get messages for a specific session with all metadata."""
         session = self.get_conversation(session_id, user_id)
         if not session:
             return []
@@ -468,10 +468,28 @@ class ConversationHistoryService:
                 "content": msg.content,
                 "timestamp": msg.timestamp.isoformat(),
             }
+
+            # Build metadata object with all available fields
+            metadata = {}
             if msg.search_query:
-                message_dict["search_query"] = msg.search_query
+                metadata["search_query"] = msg.search_query
             if msg.source_urls:
-                message_dict["source_urls"] = msg.source_urls
+                metadata["source_urls"] = msg.source_urls
+            if msg.chunk_ids:
+                metadata["chunk_ids"] = msg.chunk_ids
+            if msg.document_count is not None:
+                metadata["document_count"] = msg.document_count
+            if msg.enhancement_strategy_used:
+                metadata["enhancement_strategy"] = msg.enhancement_strategy_used
+            if msg.enhanced_queries:
+                metadata["enhanced_queries"] = msg.enhanced_queries
+            if msg.processing_time_ms is not None:
+                metadata["processing_time_ms"] = msg.processing_time_ms
+
+            # Only add metadata if it's not empty
+            if metadata:
+                message_dict["metadata"] = metadata
+
             messages.append(message_dict)
 
         return messages
