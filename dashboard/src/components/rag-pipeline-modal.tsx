@@ -563,13 +563,37 @@ export function RAGPipelineModal({
                     {(() => {
                       const isActive = stage.status === 'active';
                       console.log(`  ↳ [${stage.id}] isActive=${isActive}, will render loader=${isActive}`);
-                      return isActive ? (
-                        <IconLoader size={24} className="animate-spin" style={{ color: 'white' }} />
-                      ) : (
-                        React.cloneElement(stage.icon as React.ReactElement, {
-                          style: { color: stage.status === 'completed' ? '#51cf66' : '#868e96' }
-                        } as any)
-                      );
+                      if (isActive) {
+                        console.log(`    🌀 Rendering IconLoader for ${stage.id}`);
+                        return (
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: '24px',
+                              height: '24px',
+                              zIndex: 10,
+                              position: 'relative'
+                            }}
+                          >
+                            <IconLoader
+                              size={24}
+                              className="animate-spin"
+                              style={{
+                                color: 'white',
+                                display: 'block',
+                                width: '24px',
+                                height: '24px',
+                                animation: 'spin 1s linear infinite'
+                              }}
+                            />
+                          </div>
+                        );
+                      }
+                      return React.cloneElement(stage.icon as React.ReactElement, {
+                        style: { color: stage.status === 'completed' ? '#51cf66' : '#868e96' }
+                      } as any);
                     })()}
 
                     {/* Green checkmark overlay for completed stages */}
