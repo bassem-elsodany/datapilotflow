@@ -94,9 +94,15 @@ class TaskAgentService(AgentService):
                 logger.info(f"📚 [TASK AGENT] Formatted RAG knowledge length: {len(rag_knowledge_str)} chars")
                 logger.info(f"📚 [TASK AGENT] RAG knowledge preview: {rag_knowledge_str[:300]}...")
 
+            # Extract conversation description from state (passed from supervisor)
+            conversation_description = state.get("conversation_description")
+            if conversation_description:
+                logger.info(f"📝 [TASK AGENT] Conversation description: {conversation_description[:100]}...")
+
             task_state = create_initial_state(
                 user_request=user_request,
                 rag_knowledge=rag_knowledge_str,
+                conversation_description=conversation_description,
             )
 
             # Add llm_client to config (same pattern as RAG Agent)

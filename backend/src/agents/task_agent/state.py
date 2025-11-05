@@ -15,6 +15,7 @@ class TaskAgentState(TypedDict):
 
     # RAG context (optional, injected from supervisor if available)
     rag_knowledge: Optional[str]
+    conversation_description: Optional[str]  # Knowledge base/collection description
 
     # Task execution
     task_result: Optional[str]
@@ -33,6 +34,7 @@ class TaskAgentState(TypedDict):
 def create_initial_state(
     user_request: str,
     rag_knowledge: Optional[str] = None,
+    conversation_description: Optional[str] = None,
     config: Optional[Dict[str, Any]] = None,
 ) -> TaskAgentState:
     """
@@ -40,7 +42,8 @@ def create_initial_state(
 
     Args:
         user_request: User's task request
-        rag_knowledge: Optional RAG knowledge injection
+        rag_knowledge: Optional RAG knowledge injection from retrieved documents
+        conversation_description: Optional knowledge base/collection description for context enrichment
         config: Optional configuration dictionary
 
     Returns:
@@ -50,6 +53,7 @@ def create_initial_state(
         user_request=user_request,
         conversation_history=None,
         rag_knowledge=rag_knowledge,
+        conversation_description=conversation_description,
         task_result=None,
         task_details=None,
         execution_steps=None,

@@ -151,7 +151,11 @@ async def get_response_stream_supervisor(
             conversation_id=conversation_id,
             user_id=user_id,
             config=workflow_config,
+            conversation_description=conversation_description,  # Pass collection description for Task Agent enrichment
         )
+
+        if conversation_description:
+            logger.info(f"📝 [SUPERVISOR] Conversation description included: {conversation_description[:100]}...")
 
         # Yield supervisor initialization COMPLETE event
         yield {
