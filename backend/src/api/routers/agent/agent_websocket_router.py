@@ -33,6 +33,61 @@ from src.services.model_provider.model_provider_service import (
 router = APIRouter(tags=["Agent WebSocket"])
 
 
+def extract_conversation_config(conversation) -> dict:
+    """
+    Extract configuration from conversation object with new nested structure.
+
+    Args:
+        conversation: ConversationSession object with nested configuration
+
+    Returns:
+        Dictionary with extracted configuration values
+    """
+    config = {
+        "llm_provider_id": None,
+        "llm_model_name": None,
+        "selected_strategy": "native",
+        "collection_name": None,
+        "enhancement_config": {},
+        "enable_reranking": False,
+        "relevance_threshold": 0.5,
+        "enable_llm_generation": False,
+        "top_k": 5,
+        "conversation_description": None,
+        "reranker_model_name": None,
+    }
+
+    if not conversation:
+        return config
+
+    # Load answer generation settings (LLM provider and model)
+    if conversation.answer_generation and conversation.answer_generation.provider:
+        config["llm_provider_id"] = conversation.answer_generation.provider.id
+        config["llm_model_name"] = conversation.answer_generation.provider.model_name
+        config["enable_llm_generation"] = True
+
+    # Load vector database settings
+    if conversation.vector_database:
+        config["collection_name"] = conversation.vector_database.collection_name
+        config["top_k"] = conversation.vector_database.top_k
+
+    # Load enhancement strategy
+    if conversation.enhancement:
+        config["selected_strategy"] = conversation.enhancement.strategy
+
+    # Load reranking settings
+    if conversation.reranker and conversation.reranker.provider:
+        config["enable_reranking"] = True
+        config["relevance_threshold"] = conversation.reranker.relevance_threshold
+        config["reranker_model_name"] = conversation.reranker.provider.model_name
+
+    # Load conversation description for query enhancement context
+    if conversation.description:
+        config["conversation_description"] = conversation.description
+
+    return config
+
+
 def extract_enhanced_query_text(enhanced_query_dict: dict, strategy: str = None) -> str:
     """
     Extract the actual enhanced query text from the enhanced_query dictionary.
