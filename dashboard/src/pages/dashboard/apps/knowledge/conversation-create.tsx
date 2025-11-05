@@ -2,6 +2,7 @@ import { useGetActiveModelProviders } from '@/api/resources/model-providers';
 import { useGetCollections } from '@/api/resources/vectordb';
 import { Page } from '@/components/page';
 import { PageHeader } from '@/components/page-header';
+import { SystemPromptManager } from '@/components/system-prompt-manager';
 import { apiUtils } from '@/config';
 import { paths } from '@/routes/paths';
 import {
@@ -400,6 +401,7 @@ function ConversationWizard() {
   const [enableLLMGeneration, setEnableLLMGeneration] = useState(true);
   const [topK, setTopK] = useState(5);
   const [enableKnowledgeAssistant, setEnableKnowledgeAssistant] = useState(true);
+  const [selectedSystemPromptId, setSelectedSystemPromptId] = useState<string | undefined>();
   const [isCreating, setIsCreating] = useState(false);
 
   // Strategies info modal state
@@ -520,6 +522,9 @@ function ConversationWizard() {
 
       // Multi-agent orchestration configuration
       payload.enable_knowledge_assistant = enableKnowledgeAssistant;
+      if (enableKnowledgeAssistant && selectedSystemPromptId) {
+        payload.selected_system_prompt_id = selectedSystemPromptId;
+      }
 
       const response = await fetch(buildApiUrl('/conversations'), {
         method: 'POST',
@@ -960,15 +965,23 @@ function ConversationWizard() {
                 />
 
                 {enableKnowledgeAssistant ? (
-                  <Alert icon={<IconInfoCircle size={16} />} color="grape" variant="light">
-                    <Text size="sm">
-                      <strong>Knowledge Assistant Mode:</strong> AI searches your knowledge base AND performs tasks using what it finds.
-                      <br />
-                      <strong>How it works:</strong> Finds relevant info from your docs → Uses it to complete your task
-                      <br />
-                      <strong>Best for:</strong> "Write a summary based on...", "Generate code using our docs", "Create a plan from..."
-                    </Text>
-                  </Alert>
+                  <>
+                    <Alert icon={<IconInfoCircle size={16} />} color="grape" variant="light">
+                      <Text size="sm">
+                        <strong>Knowledge Assistant Mode:</strong> AI searches your knowledge base AND performs tasks using what it finds.
+                        <br />
+                        <strong>How it works:</strong> Finds relevant info from your docs → Uses it to complete your task
+                        <br />
+                        <strong>Best for:</strong> "Write a summary based on...", "Generate code using our docs", "Create a plan from..."
+                      </Text>
+                    </Alert>
+
+                    <SystemPromptManager
+                      conversationId=""
+                      selectedPromptId={selectedSystemPromptId}
+                      onPromptSelected={(prompt) => setSelectedSystemPromptId(prompt.id)}
+                    />
+                  </>
                 ) : (
                   <Alert icon={<IconInfoCircle size={16} />} color="yellow" variant="light">
                     <Text size="sm">
