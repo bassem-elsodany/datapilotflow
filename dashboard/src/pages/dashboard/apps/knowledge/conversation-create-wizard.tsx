@@ -4,10 +4,11 @@
  * Multi-step wizard for creating conversations with:
  * Step 0: Agent Type Selection (RAG vs Assistant)
  * Step 1: Conversation Settings (Name, Description)
- * Step 2: Vector Database Selection
- * Step 3: Enhancement Strategy (Query enhancement options)
- * Step 4: Advanced Settings (Reranking, LLM, System Prompt)
- * Step 5: Review & Create
+ * Step 2: Enhancement Strategy (Query enhancement options)
+ * Step 3: Vector Database Selection
+ * Step 4: Judge Ranker (Document ranking - optional)
+ * Step 5: Generative Answer (LLM configuration, System Prompt)
+ * Step 6: Review & Create
  */
 
 import { useGetActiveModelProviders } from '@/api/resources/model-providers';
@@ -218,7 +219,7 @@ const STEP_CONFIGS = [
     gradientTo: '#ea580c',                  // Dark Orange
   },
   {
-    label: 'Advanced Settings',
+    label: 'Generative Answer',
     description: 'Answer generation mode',
     icon: <IconWand size={20} />,
     color: 'violet',
