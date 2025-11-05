@@ -930,8 +930,13 @@ export default function ConversationWindow() {
           break;
 
         case 'workflow_complete':
-          // Handle workflow completion - close the modal
+          // Handle workflow completion - close the modal and finalize streaming message
           console.log('✅ [WORKFLOW COMPLETE] Closing RAG pipeline modal');
+
+          // Finalize the streaming message to apply markdown formatting
+          finalizeStreamingMessages();
+
+          // Close the modal
           setWorkflowState(prev => ({
             ...prev,
             isActive: false,
