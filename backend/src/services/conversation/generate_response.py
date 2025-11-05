@@ -8,6 +8,7 @@ AI responses with query enhancement capabilities.
 import time
 import traceback
 import uuid
+from datetime import datetime, timezone
 from typing import Any, AsyncGenerator, Dict, Optional
 
 import litellm
@@ -22,6 +23,10 @@ from src.agents.rag_agent.state import RAGWorkflowState as WorkflowState
 from src.agents.rag_agent.state import create_initial_state
 from src.config import settings
 from src.orchestration.orchestrator import create_multi_agent_orchestrator
+from src.services.conversation.conversation_history_service import (
+    ConversationMessage,
+    conversation_history_service,
+)
 from src.services.model_provider.model_provider_service import (
     get_model_provider_service,
 )
@@ -465,6 +470,39 @@ async def get_response_stream_supervisor(
                 f"✅ Supervisor orchestration completed in {execution_time_ms:.2f}ms "
                 f"for query: '{query[:50]}...'"
             )
+
+            # SAVE messages to conversation history (same as RAG mode)
+            try:
+                source_urls = []
+                for doc in rag_documents:
+                    if isinstance(doc, dict) and doc.get("source_url"):
+                        if doc["source_url"] not in source_urls:
+                            source_urls.append(doc["source_url"])
+
+                # Save user query message
+                user_message = ConversationMessage(
+                    role="user",
+                    content=query,
+                    timestamp=datetime.now(timezone.utc),
+                    search_query=query,
+                )
+                conversation_history_service.add_message(conversation_id, user_message)
+                logger.info(f"✅ [CONVERSATION] Saved user query to conversation {conversation_id}")
+
+                # Save assistant response message with metadata
+                assistant_message = ConversationMessage(
+                    role="assistant",
+                    content=final_response,
+                    timestamp=datetime.now(timezone.utc),
+                    source_urls=source_urls,
+                    document_count=len(rag_documents),
+                    processing_time_ms=int(execution_time_ms),
+                )
+                conversation_history_service.add_message(conversation_id, assistant_message)
+                logger.info(f"✅ [CONVERSATION] Saved assistant response to conversation {conversation_id}")
+
+            except Exception as e:
+                logger.error(f"❌ [CONVERSATION] Failed to save messages to conversation: {e}")
 
             yield final_result
             return
@@ -955,7 +993,12 @@ async def get_response_stream_rag(
                         if doc.get("chunk_id") and doc["chunk_id"] not in chunk_ids:
                             chunk_ids.append(doc["chunk_id"])
 
-                    logger.critical(f"🔴 [RAG RESPONSE] Emitting first chunk with metadata: {len(source_urls)} sources, {len(chunk_ids)} chunks")
+                    # Extract enhanced queries from query_info (set by answer_generator)
+                    query_info = last_state.get("query_info", {})
+                    enhanced_queries = query_info.get("enhanced_queries", []) if query_info else []
+                    strategy_used = query_info.get("strategy_used", "augmented") if query_info else "augmented"
+
+                    logger.critical(f"🔴 [RAG RESPONSE] Emitting first chunk with metadata: {len(source_urls)} sources, {len(chunk_ids)} chunks, {len(enhanced_queries)} enhanced queries")
                     yield {
                         "type": "streaming_response",
                         "chunk": chunk,
@@ -963,8 +1006,8 @@ async def get_response_stream_rag(
                             "source_urls": source_urls,
                             "chunk_ids": chunk_ids,
                             "document_count": len(retrieved_docs),
-                            "enhancement_strategy": last_state.get("enhancement_strategies_applied", "augmented"),
-                            "enhanced_queries": last_state.get("enhanced_query", {}).get("variants", []),
+                            "enhancement_strategy": strategy_used,
+                            "enhanced_queries": enhanced_queries,
                         },
                         "execution_time_ms": execution_time_ms,
                     }
@@ -1011,6 +1054,47 @@ async def get_response_stream_rag(
 
             response = final_result.get("response", "")
             logger.debug(f"Response generated: {len(response)} characters")
+
+            # SAVE messages to conversation history
+            try:
+                query_info = last_state.get("query_info", {})
+
+                # Extract metadata for the response message
+                source_urls = []
+                retrieved_docs = last_state.get("retrieved_documents", [])
+                for doc in retrieved_docs:
+                    if doc.get("source_url") and doc["source_url"] not in source_urls:
+                        source_urls.append(doc["source_url"])
+
+                enhanced_queries = query_info.get("enhanced_queries", []) if query_info else []
+                enhancement_strategy = query_info.get("strategy_used", "augmented") if query_info else "augmented"
+
+                # Save user query message
+                user_message = ConversationMessage(
+                    role="user",
+                    content=query,
+                    timestamp=datetime.now(timezone.utc),
+                    search_query=query,
+                )
+                conversation_history_service.add_message(conversation_id, user_message)
+                logger.info(f"✅ [CONVERSATION] Saved user query to conversation {conversation_id}")
+
+                # Save assistant response message with metadata
+                assistant_message = ConversationMessage(
+                    role="assistant",
+                    content=response,
+                    timestamp=datetime.now(timezone.utc),
+                    source_urls=source_urls,
+                    enhancement_strategy_used=enhancement_strategy,
+                    enhanced_queries=enhanced_queries,
+                    document_count=len(retrieved_docs),
+                    processing_time_ms=int(execution_time_ms),
+                )
+                conversation_history_service.add_message(conversation_id, assistant_message)
+                logger.info(f"✅ [CONVERSATION] Saved assistant response to conversation {conversation_id}")
+
+            except Exception as e:
+                logger.error(f"❌ [CONVERSATION] Failed to save messages to conversation: {e}")
 
             yield final_result
         else:

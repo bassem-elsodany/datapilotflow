@@ -135,9 +135,7 @@ export function EnhancedMetadataSection({
                       <Badge size="xs" color="blue" variant="light">RRF Fusion</Badge>
                     )}
                 </Group>
-                <Text
-                  size="xs"
-                  c="dimmed"
+                <Box
                   p="xs"
                   style={{
                     backgroundColor: 'var(--mantine-color-gray-0)',
@@ -147,15 +145,16 @@ export function EnhancedMetadataSection({
                   }}
                 >
                   {enhancedQueries.map((query, qIdx) => (
-                    <span key={qIdx}>
-                      <Badge size="xs" color="grape" variant="dot" style={{ marginRight: '4px' }}>
+                    <Group key={qIdx} gap={4} mb={qIdx < enhancedQueries.length - 1 ? 6 : 0}>
+                      <Badge size="xs" color="grape" variant="dot">
                         {qIdx + 1}
                       </Badge>
-                      {query}
-                      {qIdx < enhancedQueries.length - 1 && ' • '}
-                    </span>
+                      <Text size="xs" c="dimmed" style={{ flex: 1 }}>
+                        {query}
+                      </Text>
+                    </Group>
                   ))}
-                </Text>
+                </Box>
               </Box>
             )}
 

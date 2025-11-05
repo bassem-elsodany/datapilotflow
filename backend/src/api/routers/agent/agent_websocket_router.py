@@ -380,19 +380,13 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
                         )
 
                 logger.info("✅ RAG query processing completed")
+                await websocket.close(code=1000, reason="Response processed, connection closed")
+                return
 
             except asyncio.TimeoutError:
-                logger.warning(f"⚠️ WebSocket receive timeout after {timeout}s")
-                await websocket.send_text(
-                    json.dumps(
-                        {
-                            "type": "error",
-                            "stage": "error",
-                            "message": f"Request timeout after {timeout}s",
-                            "timestamp": time.time(),
-                        }
-                    )
-                )
+                logger.debug(f"⏱️ WebSocket receive timeout after {timeout}s - closing connection")
+                await websocket.close(code=1000, reason="Connection idle timeout")
+                return
             except json.JSONDecodeError:
                 logger.error("❌ Invalid JSON received")
                 await websocket.send_text(
@@ -696,19 +690,13 @@ async def agent_query_supervisor_websocket(websocket: WebSocket, token: str = Qu
                         )
 
                 logger.info("✅ Supervisor query processing completed")
+                await websocket.close(code=1000, reason="Response processed, connection closed")
+                return
 
             except asyncio.TimeoutError:
-                logger.warning(f"⚠️ WebSocket receive timeout after {timeout}s")
-                await websocket.send_text(
-                    json.dumps(
-                        {
-                            "type": "error",
-                            "stage": "error",
-                            "message": f"Request timeout after {timeout}s",
-                            "timestamp": time.time(),
-                        }
-                    )
-                )
+                logger.debug(f"⏱️ WebSocket receive timeout after {timeout}s - closing connection")
+                await websocket.close(code=1000, reason="Connection idle timeout")
+                return
             except json.JSONDecodeError:
                 logger.error("❌ Invalid JSON received")
                 await websocket.send_text(
