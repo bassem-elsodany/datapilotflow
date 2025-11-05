@@ -207,69 +207,6 @@ class ChatMessage(BaseModel):
     domain: str
 
 
-class ConversationSessionResponse(BaseModel):
-    id: str
-    name: str
-    created_at: str
-    message_count: int
-    topics_discussed: List[str]
-    knowledge_sources_used: List[str]
-
-
-class CreateSessionRequest(BaseModel):
-    name: Optional[str] = Field(
-        None, max_length=100, description="Optional name for the conversation"
-    )
-    description: Optional[str] = Field(
-        None, max_length=500, description="Optional description"
-    )
-    llm_provider_id: Optional[str] = Field(
-        None, description="LLM provider ID to use for this conversation"
-    )
-    llm_model_name: Optional[str] = Field(
-        None,
-        description="Specific model name (optional, uses provider default if not specified)",
-    )
-    enhancement_strategy: Optional[str] = Field(
-        None,
-        description="Query enhancement strategy (none, multi_query, hyde, decomposition, augmented)",
-    )
-    collection_name: Optional[str] = Field(
-        "LongTermMemory", description="Vector DB collection name"
-    )
-    enable_reranking: bool = Field(
-        True, description="Enable document reranking/judging for better relevance"
-    )
-    relevance_threshold: float = Field(
-        0.5,
-        ge=0.0,
-        le=1.0,
-        description="Relevance score threshold for filtering documents (0.0-1.0). Documents below this threshold are filtered out.",
-    )
-    reranker_provider_id: Optional[str] = Field(
-        None, description="Dedicated reranker provider ID (Cohere/Voyage AI)"
-    )
-    reranker_model_name: Optional[str] = Field(None, description="Reranker model name")
-    enable_llm_generation: bool = Field(
-        False,
-        description="Enable LLM answer generation (False = raw results by default, True = generated)",
-    )
-    top_k: int = Field(
-        5,
-        ge=5,
-        le=30,
-        description="Number of documents to retrieve from vector database",
-    )
-    enable_knowledge_assistant: bool = Field(
-        True,
-        description="Enable Knowledge Assistant for RAG→Task workflow (True = orchestration, False = RAG only)",
-    )
-    selected_system_prompt_id: Optional[str] = Field(
-        None, description="ID of the selected system prompt for Knowledge Assistant"
-    )
-    tags: Optional[str] = Field(None, description="Tags for organizing conversations")
-
-
 class RenameSessionRequest(BaseModel):
     new_name: str = Field(
         ..., min_length=1, max_length=100, description="New name for the conversation"

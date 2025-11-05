@@ -408,8 +408,8 @@ export function ConversationCreateWizard() {
             model_name: form.values.selectedModel,
           },
         } : null,
-        // System prompt (will be set separately if needed)
-        system_prompt: form.values.selectedSystemPromptId && !form.values.selectedSystemPromptId.startsWith('temp-') ? {
+        // System prompt (only for Assistant/Supervisor mode)
+        system_prompt: form.values.agentType === 'assistant' && form.values.selectedSystemPromptId && !form.values.selectedSystemPromptId.startsWith('temp-') ? {
           id: form.values.selectedSystemPromptId,
           title: 'Selected System Prompt',
           content: '',
