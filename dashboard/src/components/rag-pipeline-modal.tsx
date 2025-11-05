@@ -530,8 +530,8 @@ export function RAGPipelineModal({
           console.log(`🔄 [CIRCULAR NODES] Rendering ${activeStages.length} stages:`, activeStages.map(s => `${s.id}=${s.status}`).join(', '));
           return null;
         })()}
-        <Box style={{ overflowX: 'auto', padding: '12px 0', position: 'relative', zIndex: 1 }}>
-          <Group gap={4} wrap="nowrap" justify="center" style={{ minWidth: 'fit-content', position: 'relative', zIndex: 1 }}>
+        <Box style={{ overflowX: 'auto', padding: '12px 0' }}>
+          <Group gap={4} wrap="nowrap" justify="center" style={{ minWidth: 'fit-content' }}>
             {activeStages.map((stage, index) => {
               const shouldShowLoader = stage.status === 'active';
               const stageOrder = ['query_enhancement', 'document_retrieval', 'document_judging', 'response_generation'];
@@ -551,8 +551,6 @@ export function RAGPipelineModal({
                     gap: '6px',
                     alignItems: 'center',
                     minWidth: '100px',
-                    position: 'relative',
-                    zIndex: stage.status === 'active' ? 100 : 1,
                   }}
                 >
                   <div
@@ -571,8 +569,6 @@ export function RAGPipelineModal({
                         : 'none',
                       border: stage.status === 'pending' ? '2px dashed #adb5bd' : 'none',
                       transition: 'all 0.3s ease',
-                      position: 'relative',
-                      zIndex: stage.status === 'active' ? 1000 : 1,
                     }}
                   >
                     {(() => { console.log(`🔵 [DIV RENDER] ${stage.id} - bg=${stage.status === 'active' ? 'blue' : 'gray'}, will render children...`); return null; })()}
@@ -582,25 +578,21 @@ export function RAGPipelineModal({
                       if (isActive) {
                         console.log(`    🌀 Rendering IconLoader for ${stage.id}`);
                         return (
-                          <div style={{ position: 'relative', width: '24px', height: '24px' }}>
-                            <IconLoader
-                              size={24}
-                              stroke={2}
-                              className="animate-spin"
-                              style={{
-                                color: 'white',
-                                display: 'block',
-                                width: '24px',
-                                height: '24px',
-                                animation: 'spin 1s linear infinite',
-                                opacity: 1,
-                                visibility: 'visible',
-                                flex: '0 0 auto',
-                                position: 'relative',
-                                zIndex: 9999
-                              }}
-                            />
-                          </div>
+                          <IconLoader
+                            size={24}
+                            stroke={2}
+                            className="animate-spin"
+                            style={{
+                              color: 'white',
+                              display: 'block',
+                              width: '24px',
+                              height: '24px',
+                              animation: 'spin 1s linear infinite',
+                              opacity: 1,
+                              visibility: 'visible',
+                              pointerEvents: 'none'
+                            }}
+                          />
                         );
                       }
                       console.log(`    🖼️ Rendering cloned icon for ${stage.id}, color will be ${stage.status === 'completed' ? '#51cf66' : '#868e96'}`);
