@@ -530,16 +530,30 @@ export function RAGPipelineModal({
           console.log(`🔄 [CIRCULAR NODES] Rendering ${activeStages.length} stages:`, activeStages.map(s => `${s.id}=${s.status}`).join(', '));
           return null;
         })()}
-        <Box style={{ overflowX: 'auto', padding: '12px 0' }}>
-          <Group gap={4} wrap="nowrap" justify="center" style={{ minWidth: 'fit-content' }}>
+        <Box style={{ overflowX: 'auto', padding: '12px 0', position: 'relative', zIndex: 1 }}>
+          <Group gap={4} wrap="nowrap" justify="center" style={{ minWidth: 'fit-content', position: 'relative', zIndex: 1 }}>
             {activeStages.map((stage, index) => {
-              console.log(`🎯 [NODE RENDER] ${stage.id}: status='${stage.status}', should show loader? ${stage.status === 'active'}`);
+              const shouldShowLoader = stage.status === 'active';
+              const stageOrder = ['query_enhancement', 'document_retrieval', 'document_judging', 'response_generation'];
+              const stageNumber = stageOrder.indexOf(stage.id) + 1;
+              console.log(`🎯 [STAGE #${stageNumber}] ${stage.id}: status='${stage.status}', shouldShowLoader=${shouldShowLoader}`);
+              if (shouldShowLoader) {
+                console.log(`  ✅✅✅ STAGE #${stageNumber} SHOULD SHOW LOADER! ✅✅✅`);
+              } else {
+                console.log(`  ❌ Stage #${stageNumber} will NOT show loader (status is '${stage.status}')`);
+              }
               return (
               <React.Fragment key={stage.id}>
-                <Stack
-                  gap={6}
-                  align="center"
-                  style={{ minWidth: '100px' }}
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px',
+                    alignItems: 'center',
+                    minWidth: '100px',
+                    position: 'relative',
+                    zIndex: stage.status === 'active' ? 100 : 1,
+                  }}
                 >
                   <div
                     style={{
@@ -558,31 +572,35 @@ export function RAGPipelineModal({
                       border: stage.status === 'pending' ? '2px dashed #adb5bd' : 'none',
                       transition: 'all 0.3s ease',
                       position: 'relative',
-                      zIndex: stage.status === 'active' ? 10 : 1,
+                      zIndex: stage.status === 'active' ? 1000 : 1,
                     }}
                   >
-                    {console.log(`🔵 [DIV RENDER] ${stage.id} - bg=${stage.status === 'active' ? 'blue' : 'gray'}, will render children...`)}
+                    {(() => { console.log(`🔵 [DIV RENDER] ${stage.id} - bg=${stage.status === 'active' ? 'blue' : 'gray'}, will render children...`); return null; })()}
                     {(() => {
                       const isActive = stage.status === 'active';
                       console.log(`  ↳ [${stage.id}] isActive=${isActive}, stage.icon=`, stage.icon, `type=${typeof stage.icon}`);
                       if (isActive) {
                         console.log(`    🌀 Rendering IconLoader for ${stage.id}`);
                         return (
-                          <IconLoader
-                            size={24}
-                            stroke={2}
-                            className="animate-spin"
-                            style={{
-                              color: 'white',
-                              display: 'block',
-                              width: '24px',
-                              height: '24px',
-                              animation: 'spin 1s linear infinite',
-                              opacity: 1,
-                              visibility: 'visible',
-                              flex: '0 0 auto'
-                            }}
-                          />
+                          <div style={{ position: 'relative', width: '24px', height: '24px' }}>
+                            <IconLoader
+                              size={24}
+                              stroke={2}
+                              className="animate-spin"
+                              style={{
+                                color: 'white',
+                                display: 'block',
+                                width: '24px',
+                                height: '24px',
+                                animation: 'spin 1s linear infinite',
+                                opacity: 1,
+                                visibility: 'visible',
+                                flex: '0 0 auto',
+                                position: 'relative',
+                                zIndex: 9999
+                              }}
+                            />
+                          </div>
                         );
                       }
                       console.log(`    🖼️ Rendering cloned icon for ${stage.id}, color will be ${stage.status === 'completed' ? '#51cf66' : '#868e96'}`);
@@ -614,19 +632,19 @@ export function RAGPipelineModal({
                     )}
                   </div>
 
-                  <Text
-                    size="xs"
-                    fw={500}
-                    ta="center"
+                  <div
                     style={{
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      textAlign: 'center',
                       color: stage.status === 'pending' ? '#868e96' : '#212529',
                       maxWidth: '90px',
                       lineHeight: 1.3
                     }}
                   >
                     {stage.name}
-                  </Text>
-                </Stack>
+                  </div>
+                </div>
 
                 {index < activeStages.length - 1 && (
                   <Box

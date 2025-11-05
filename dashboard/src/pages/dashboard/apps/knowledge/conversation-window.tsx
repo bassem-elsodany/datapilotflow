@@ -1084,18 +1084,16 @@ export default function ConversationWindow() {
 
               return hasChanges ? newState : prev;
             } else {
-              // START event - check if stage actually changed
-              if (prev.currentStage !== mappedStage) {
-                console.log(`▶️ Starting stage:`, mappedStage);
-                return {
-                  ...prev,
-                  currentStage: mappedStage,
-                  ragSubstages: newRagSubstages,
-                };
-              }
+              // START event - Always update to ensure rendering, even if stage hasn't "changed"
+              console.log(`▶️ START event for stage: ${mappedStage} (prev was: ${prev.currentStage})`);
+              return {
+                ...prev,
+                currentStage: mappedStage,
+                ragSubstages: newRagSubstages,
+              };
             }
 
-            // Return prev if no changes (don't call setState)
+            // Should never reach here for START events, but just in case
             return prev;
           });
           break;
