@@ -1598,30 +1598,6 @@ function StepReviewAndCreate({ form, providers, collections }: StepProps) {
         </Stack>
       </Card>
 
-      {/* SUMMARY OF NESTED STRUCTURE */}
-      <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light" title="Configuration Summary">
-        <Stack gap="xs">
-          <Text size="xs">This conversation will be saved with the following nested configuration:</Text>
-          <div style={{
-            backgroundColor: '#f5f5f5',
-            padding: '8px 12px',
-            borderRadius: '4px',
-            fontFamily: 'monospace',
-            fontSize: '11px',
-            lineHeight: '1.4'
-          }}>
-            <div>{'{'}</div>
-            <div>&nbsp;&nbsp;name: "{form.values.conversationName}",</div>
-            <div>&nbsp;&nbsp;enhancement: {'{'}strategy: "{form.values.selectedStrategy}"{form.values.selectedStrategy !== 'native' ? ', provider: {id, model}' : ''}{'}'},</div>
-            <div>&nbsp;&nbsp;vector_database: {'{'}collection_name: "{form.values.collectionName}", top_k: {form.values.topK}{'}'},</div>
-            {form.values.enableReranking && <div>&nbsp;&nbsp;reranker: {'{'}provider: {'{'}id, model{'}'}, relevance_threshold: {form.values.relevanceThreshold}{'}'},</div>}
-            {form.values.enableLLMGeneration && <div>&nbsp;&nbsp;answer_generation: {'{'}provider: {'{'}id: "{form.values.selectedProviderId}", model: "{form.values.selectedModel}"{'}'}{'}'}{','},</div>}
-            {form.values.agentType === 'assistant' && <div>&nbsp;&nbsp;system_prompt: {form.values.selectedSystemPromptId ? '{id, title, content}' : 'null'}{','},</div>}
-            <div>&nbsp;&nbsp;enable_knowledge_assistant: {form.values.enableKnowledgeAssistant ? 'true' : 'false'}</div>
-            <div>{'}'}</div>
-          </div>
-        </Stack>
-      </Alert>
     </Stack>
   );
 }
