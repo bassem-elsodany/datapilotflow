@@ -77,6 +77,7 @@ export function RAGPipelineModal({
   enableLLMGeneration,
   metadata
 }: RAGPipelineModalProps) {
+  console.log(`🎬 [RAG MODAL COMPONENT] Render - opened=${opened}, currentStage='${currentStage}', completed=[${completedStages.join(',')}]`);
   const theme = useMantineTheme();
   const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set());
 
@@ -181,6 +182,31 @@ export function RAGPipelineModal({
   };
 
   const stages: WorkflowStage[] = useMemo(() => {
+    console.log(`🔧 [RAG MODAL] Building stages with currentStage='${currentStage}', completedStages=[${completedStages.join(',')}]`);
+
+    // Define getStageStatus inside useMemo to ensure fresh closure
+    const getLocalStageStatus = (stageId: string): 'pending' | 'active' | 'completed' | 'skipped' => {
+      if (completedStages.includes(stageId)) {
+        console.log(`🎯 [RAG MODAL] getLocalStageStatus('${stageId}') = COMPLETED`);
+        return 'completed';
+      }
+      if (currentStage === stageId) {
+        console.log(`🎯 [RAG MODAL] getLocalStageStatus('${stageId}') = ACTIVE (currentStage='${currentStage}')`);
+        return 'active';
+      }
+
+      if (stageId === 'query_enhancement' && (!metadata.strategy || metadata.strategy === 'native')) return 'skipped';
+
+      const stageOrder = ['query_enhancement', 'document_retrieval', 'document_judging', 'response_generation'];
+      const currentIndex = currentStage ? stageOrder.indexOf(currentStage) : -1;
+      const stageIndex = stageOrder.indexOf(stageId);
+
+      if (currentIndex >= 0 && stageIndex > currentIndex) return 'pending';
+      if (currentIndex === -1 && !completedStages.includes(stageId)) return 'pending';
+
+      return 'pending';
+    };
+
     const allStages: WorkflowStage[] = [];
 
     // Stage 1: Query Enhancement
@@ -190,7 +216,7 @@ export function RAGPipelineModal({
       description: metadata.strategy && metadata.strategy !== 'native'
         ? `Using ${getStrategyLabel(metadata.strategy)} strategy`
         : 'Native query (no enhancement needed)',
-      status: getStageStatus('query_enhancement'),
+      status: getLocalStageStatus('query_enhancement'),
       icon: <IconSparkles size={20} />,
       color: 'violet',
       metadata: {
@@ -215,7 +241,7 @@ export function RAGPipelineModal({
       id: 'document_retrieval',
       name: 'Document Retrieval',
       description: `Searching ${metadata.documentCount || 0} documents with HNSW index`,
-      status: getStageStatus('document_retrieval'),
+      status: getLocalStageStatus('document_retrieval'),
       icon: <IconDatabase size={20} />,
       color: 'blue',
       metadata: {
@@ -253,7 +279,7 @@ export function RAGPipelineModal({
       id: 'document_judging',
       name: 'Judge Ranker',
       description: `Evaluating relevance of ${metadata.documentCount || 0} documents`,
-      status: getStageStatus('document_judging'),
+      status: getLocalStageStatus('document_judging'),
       icon: <IconScale size={20} />,
       color: 'orange',
       metadata: {
@@ -280,7 +306,7 @@ export function RAGPipelineModal({
       description: enableLLMGeneration
         ? 'Generating AI response from context'
         : 'Formatting raw documents without LLM processing',
-      status: getStageStatus('response_generation'),
+      status: getLocalStageStatus('response_generation'),
       icon: enableLLMGeneration ? <IconBrain size={20} /> : <IconFileSearch size={20} />,
       color: 'green',
       substages: enableLLMGeneration ? [
@@ -304,24 +330,9 @@ export function RAGPipelineModal({
       ]
     });
 
+    console.log(`✅ [RAG MODAL] Built ${allStages.length} stages:`, allStages.map(s => `${s.id}(${s.status})`).join(' → '));
     return allStages;
   }, [metadata, currentStage, completedStages, rerankingEnabled, enableLLMGeneration]);
-
-  function getStageStatus(stageId: string): 'pending' | 'active' | 'completed' | 'skipped' {
-    if (completedStages.includes(stageId)) return 'completed';
-    if (currentStage === stageId) return 'active';
-
-    if (stageId === 'query_enhancement' && (!metadata.strategy || metadata.strategy === 'native')) return 'skipped';
-
-    const stageOrder = ['query_enhancement', 'document_retrieval', 'document_judging', 'response_generation'];
-    const currentIndex = currentStage ? stageOrder.indexOf(currentStage) : -1;
-    const stageIndex = stageOrder.indexOf(stageId);
-
-    if (currentIndex >= 0 && stageIndex > currentIndex) return 'pending';
-    if (currentIndex === -1 && !completedStages.includes(stageId)) return 'pending';
-
-    return 'pending';
-  }
 
   function isSubstageCompleted(substageKey: string): boolean {
     // Map substage keys to ragSubstages array values (MUST match backend stage names)
@@ -367,9 +378,12 @@ export function RAGPipelineModal({
   }
 
   const activeStages = stages.filter(s => s.status !== 'skipped');
+  console.log(`🎨 [RAG MODAL] activeStages (${activeStages.length}):`, activeStages.map(s => `${s.id}(${s.status})`).join(' → '));
   const completedCount = activeStages.filter(s => s.status === 'completed').length;
   const totalStages = activeStages.length;
   const progress = totalStages > 0 ? (completedCount / totalStages) * 100 : 0;
+
+  console.log(`📱 [RAG MODAL RENDER] opened=${opened}, currentStage=${currentStage}, completedCount=${completedCount}/${totalStages}`);
 
   return (
     <Modal
@@ -512,9 +526,15 @@ export function RAGPipelineModal({
         )}
 
         {/* Circular Node Flow */}
+        {(() => {
+          console.log(`🔄 [CIRCULAR NODES] Rendering ${activeStages.length} stages:`, activeStages.map(s => `${s.id}=${s.status}`).join(', '));
+          return null;
+        })()}
         <Box style={{ overflowX: 'auto', padding: '12px 0' }}>
           <Group gap={4} wrap="nowrap" justify="center" style={{ minWidth: 'fit-content' }}>
-            {activeStages.map((stage, index) => (
+            {activeStages.map((stage, index) => {
+              console.log(`🎯 [NODE RENDER] ${stage.id}: status='${stage.status}', should show loader? ${stage.status === 'active'}`);
+              return (
               <React.Fragment key={stage.id}>
                 <Stack
                   gap={6}
@@ -540,13 +560,17 @@ export function RAGPipelineModal({
                       position: 'relative',
                     }}
                   >
-                    {stage.status === 'active' ? (
-                      <IconLoader size={24} className="animate-spin" style={{ color: 'white' }} />
-                    ) : (
-                      React.cloneElement(stage.icon as React.ReactElement, {
-                        style: { color: stage.status === 'completed' ? '#51cf66' : '#868e96' }
-                      } as any)
-                    )}
+                    {(() => {
+                      const isActive = stage.status === 'active';
+                      console.log(`  ↳ [${stage.id}] isActive=${isActive}, will render loader=${isActive}`);
+                      return isActive ? (
+                        <IconLoader size={24} className="animate-spin" style={{ color: 'white' }} />
+                      ) : (
+                        React.cloneElement(stage.icon as React.ReactElement, {
+                          style: { color: stage.status === 'completed' ? '#51cf66' : '#868e96' }
+                        } as any)
+                      );
+                    })()}
 
                     {/* Green checkmark overlay for completed stages */}
                     {stage.status === 'completed' && (
@@ -613,7 +637,8 @@ export function RAGPipelineModal({
                   </Box>
                 )}
               </React.Fragment>
-            ))}
+            );
+            })}
           </Group>
         </Box>
 
