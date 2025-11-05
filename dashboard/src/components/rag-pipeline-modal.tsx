@@ -566,29 +566,20 @@ export function RAGPipelineModal({
                       if (isActive) {
                         console.log(`    🌀 Rendering IconLoader for ${stage.id}`);
                         return (
-                          <div
+                          <IconLoader
+                            size={24}
+                            stroke={2}
+                            className="animate-spin"
                             style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
+                              color: 'white',
+                              display: 'block',
                               width: '24px',
                               height: '24px',
-                              zIndex: 10,
-                              position: 'relative'
+                              animation: 'spin 1s linear infinite',
+                              opacity: 1,
+                              visibility: 'visible'
                             }}
-                          >
-                            <IconLoader
-                              size={24}
-                              className="animate-spin"
-                              style={{
-                                color: 'white',
-                                display: 'block',
-                                width: '24px',
-                                height: '24px',
-                                animation: 'spin 1s linear infinite'
-                              }}
-                            />
-                          </div>
+                          />
                         );
                       }
                       return React.cloneElement(stage.icon as React.ReactElement, {
