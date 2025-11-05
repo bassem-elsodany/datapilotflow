@@ -914,10 +914,31 @@ function StepVectorDatabase({ form, collections, collectionsLoading }: StepProps
         description="How many relevant documents to retrieve (5-30)"
       />
 
-      {form.values.selectedStrategy !== 'native' && (
-        <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
-          <Text size="sm">
-            <strong>Multi-Variant Retrieval:</strong> This strategy generates multiple query variations, searches the knowledge base with each, and merges results using Reciprocal Rank Fusion (RRF).
+      {form.values.selectedStrategy !== 'native' &&
+        form.values.selectedStrategy !== 'hyde' && (
+          <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+            <Stack gap="xs">
+              <Text size="xs">
+                <strong>Multi-Variant Retrieval:</strong> This strategy generates multiple query variations to comprehensively search your knowledge base.
+              </Text>
+              <List size="xs">
+                <List.Item>Generate {form.values.selectedStrategy === 'augmented' ? '4' : '3-5'} query variants ({form.values.selectedStrategy === 'augmented' ? 'via transformations' : 'via rephrasing'})</List.Item>
+                <List.Item>Search the knowledge base with each variant</List.Item>
+                <List.Item>Merge results using RRF algorithm (documents appearing in multiple searches rank higher)</List.Item>
+                <List.Item>Return your configured Top K documents (the best matches after merging)</List.Item>
+              </List>
+              <Text size="xs" c="dimmed">
+                Example: With {form.values.selectedStrategy === 'augmented' ? '4' : '5'} query variants and Top K={form.values.topK}, the system retrieves ~{Math.ceil((form.values.topK * 1.5) / 5) * 5} documents per variant, merges them via RRF, and returns your final {form.values.topK} best documents.
+              </Text>
+            </Stack>
+          </Alert>
+        )}
+
+      {form.values.selectedStrategy === 'hyde' && (
+        <Alert icon={<IconInfoCircle size={16} />} color="gray" variant="light">
+          <Text size="xs">
+            <strong>Single Enhanced Query:</strong> This strategy generates one enhanced query variant.
+            The system will search using this single enhanced query (no RRF merging needed).
           </Text>
         </Alert>
       )}
