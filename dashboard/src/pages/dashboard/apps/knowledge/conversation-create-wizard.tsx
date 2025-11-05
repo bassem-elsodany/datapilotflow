@@ -271,7 +271,7 @@ export function ConversationCreateWizard() {
       selectedRerankerId: null,
       selectedRerankerModel: null,
       enableLLMGeneration: true,
-      enableKnowledgeAssistant: true,
+      enableKnowledgeAssistant: false, // RAG mode (default) - false, switched to true when Assistant selected
       selectedSystemPromptId: undefined,
     },
     validate: {
@@ -820,7 +820,10 @@ function StepAgentType({ form }: StepProps) {
                   ? `${LOGO_COLORS.data}15`
                   : undefined,
             }}
-            onClick={() => form.setFieldValue('agentType', 'rag')}
+            onClick={() => {
+              form.setFieldValue('agentType', 'rag');
+              form.setFieldValue('enableKnowledgeAssistant', false);
+            }}
           >
             <Group gap="sm" mb="md">
               <ThemeIcon size="lg" variant="light" radius="md" style={{ backgroundColor: `${LOGO_COLORS.data}20`, color: LOGO_COLORS.data }}>
@@ -864,7 +867,10 @@ function StepAgentType({ form }: StepProps) {
                   ? `${LOGO_COLORS.pilot}15`
                   : undefined,
             }}
-            onClick={() => form.setFieldValue('agentType', 'assistant')}
+            onClick={() => {
+              form.setFieldValue('agentType', 'assistant');
+              form.setFieldValue('enableKnowledgeAssistant', true);
+            }}
           >
             <Group gap="sm" mb="md">
               <ThemeIcon size="lg" variant="light" radius="md" style={{ backgroundColor: `${LOGO_COLORS.pilot}20`, color: LOGO_COLORS.pilot }}>
