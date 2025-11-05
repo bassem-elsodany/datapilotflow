@@ -929,6 +929,16 @@ export default function ConversationWindow() {
           }
           break;
 
+        case 'workflow_complete':
+          // Handle workflow completion - close the modal
+          console.log('✅ [WORKFLOW COMPLETE] Closing RAG pipeline modal');
+          setWorkflowState(prev => ({
+            ...prev,
+            isActive: false,
+            currentStage: null,
+          }));
+          break;
+
         case 'workflow_progress': {
           // Handle RAG substage progress events from LangGraph node execution
           // Backend sends current_node and stage (start and complete events)
