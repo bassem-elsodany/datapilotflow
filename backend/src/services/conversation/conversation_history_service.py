@@ -791,6 +791,7 @@ class ConversationHistoryService:
         top_k: Optional[int] = None,
         tags: Optional[List[str]] = None,
         enable_knowledge_assistant: Optional[bool] = None,
+        selected_system_prompt_id: Optional[str] = None,
     ) -> bool:
         """Update conversation configuration."""
         from bson import ObjectId
@@ -900,6 +901,10 @@ class ConversationHistoryService:
             # Update enable_knowledge_assistant (Enable Knowledge Assistant)
             if enable_knowledge_assistant is not None:
                 update_data["$set"]["enable_knowledge_assistant"] = enable_knowledge_assistant
+
+            # Update selected system prompt ID
+            if selected_system_prompt_id is not None:
+                update_data["$set"]["selected_system_prompt_id"] = selected_system_prompt_id
 
             result = self.collection.update_one(
                 {"_id": ObjectId(conversation_id), "user_id": user_id}, update_data

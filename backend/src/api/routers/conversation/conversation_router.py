@@ -132,6 +132,9 @@ class UpdateSessionConfigRequest(BaseModel):
     enable_knowledge_assistant: Optional[bool] = Field(
         None, description="Enable Knowledge Assistant (multi-agent supervisor with intent routing)"
     )
+    selected_system_prompt_id: Optional[str] = Field(
+        None, description="ID of the selected system prompt for Knowledge Assistant"
+    )
 
 
 # ============================================================================
@@ -571,6 +574,7 @@ async def update_conversation_session(
             top_k=config_request.top_k,
             tags=config_request.tags,
             enable_knowledge_assistant=config_request.enable_knowledge_assistant,
+            selected_system_prompt_id=config_request.selected_system_prompt_id,
         )
 
         if not success:
