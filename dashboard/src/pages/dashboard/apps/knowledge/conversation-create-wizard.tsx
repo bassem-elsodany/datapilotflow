@@ -4,7 +4,7 @@
  * Multi-step wizard for creating conversations with:
  * Step 0: Agent Type Selection (RAG vs Assistant)
  * Step 1: Conversation Settings (Name, Description)
- * Step 2: Enhancement Strategy (Query enhancement options)
+ * Step 2: Enhancement Strategy (Query enhancement options - requires LLM provider if non-native strategy selected)
  * Step 3: Vector Database Selection
  * Step 4: Judge Ranker (Document ranking - optional)
  * Step 5: Generative Answer (LLM configuration, System Prompt)
@@ -301,7 +301,11 @@ export function ConversationCreateWizard() {
       case 1:
         return !!form.values.conversationName.trim(); // Conversation name required
       case 2:
-        return true; // Enhancement strategy always valid
+        // If non-native enhancement strategy is selected, LLM provider & model are required for generating variants
+        if (form.values.selectedStrategy !== 'native') {
+          return !!form.values.selectedProviderId && !!form.values.selectedModel;
+        }
+        return true; // Native strategy doesn't need LLM provider
       case 3:
         return !!form.values.collectionName && form.values.topK >= 5; // Collection & topK required
       case 4:
@@ -509,6 +513,8 @@ export function ConversationCreateWizard() {
           <StepEnhancementStrategy
             form={form}
             onLearnClick={() => setStrategiesInfoModalOpen(true)}
+            providers={providers}
+            providersLoading={providersLoading}
           />
         )}
 
@@ -999,8 +1005,9 @@ function StepVectorDatabase({ form, collections, collectionsLoading }: StepProps
   );
 }
 
-function StepEnhancementStrategy({ form, onLearnClick }: StepProps & { onLearnClick: () => void }) {
+function StepEnhancementStrategy({ form, onLearnClick, providers, providersLoading }: StepProps & { onLearnClick: () => void; providers?: any; providersLoading?: boolean }) {
   const selectedStrategyInfo = ENHANCEMENT_STRATEGIES.find((s) => s.value === form.values.selectedStrategy);
+  const isNonNativeStrategy = form.values.selectedStrategy !== 'native';
 
   return (
     <Stack gap="md">
@@ -1036,6 +1043,60 @@ function StepEnhancementStrategy({ form, onLearnClick }: StepProps & { onLearnCl
           Learn & Compare
         </Button>
       </Group>
+
+      {isNonNativeStrategy && (
+        <>
+          <Alert icon={<IconInfoCircle size={16} />} color="cyan" variant="light">
+            <Text size="sm">
+              <strong>LLM Required:</strong> Query enhancement strategies need an LLM to generate query variants. Please select an LLM provider and model below.
+            </Text>
+          </Alert>
+
+          <Divider my="sm" />
+
+          <Select
+            label="LLM Provider for Query Enhancement"
+            placeholder={providersLoading ? 'Loading providers...' : 'Select a provider'}
+            data={
+              providers?.map((p: any) => ({
+                value: p.id,
+                label: `${p.name} (${p.provider_type})`,
+              })) || []
+            }
+            {...form.getInputProps('selectedProviderId')}
+            searchable
+            disabled={providersLoading}
+            required
+            description="Choose an LLM provider to generate query variants"
+          />
+
+          {form.values.selectedProviderId && providers ? (
+            <Select
+              label="Model for Query Enhancement"
+              placeholder="Select a model"
+              data={
+                providers
+                  .find((p: any) => p.id === form.values.selectedProviderId)
+                  ?.generative?.models.map((m: string) => ({
+                    value: m,
+                    label: m,
+                  })) || []
+              }
+              {...form.getInputProps('selectedModel')}
+              searchable
+              required
+              description="This model will be used to generate query variants"
+            />
+          ) : (
+            <Select
+              label="Model for Query Enhancement"
+              placeholder="Select provider first"
+              disabled
+              required
+            />
+          )}
+        </>
+      )}
 
       {selectedStrategyInfo && (
         <Card
