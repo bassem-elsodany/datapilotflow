@@ -541,7 +541,7 @@ export function RAGPipelineModal({
                   align="center"
                   style={{ minWidth: '100px' }}
                 >
-                  <Box
+                  <div
                     style={{
                       width: '48px',
                       height: '48px',
@@ -560,7 +560,7 @@ export function RAGPipelineModal({
                       position: 'relative',
                     }}
                   >
-                    {console.log(`🔵 [BOX RENDER] ${stage.id} - bg=${stage.status === 'active' ? 'blue' : 'gray'}, will render children...`)}
+                    {console.log(`🔵 [DIV RENDER] ${stage.id} - bg=${stage.status === 'active' ? 'blue' : 'gray'}, will render children...`)}
                     {(() => {
                       const isActive = stage.status === 'active';
                       console.log(`  ↳ [${stage.id}] isActive=${isActive}, stage.icon=`, stage.icon, `type=${typeof stage.icon}`);
@@ -578,7 +578,8 @@ export function RAGPipelineModal({
                               height: '24px',
                               animation: 'spin 1s linear infinite',
                               opacity: 1,
-                              visibility: 'visible'
+                              visibility: 'visible',
+                              flex: '0 0 auto'
                             }}
                           />
                         );
@@ -591,7 +592,7 @@ export function RAGPipelineModal({
 
                     {/* Green checkmark overlay for completed stages */}
                     {stage.status === 'completed' && (
-                      <Box
+                      <div
                         style={{
                           position: 'absolute',
                           bottom: '-2px',
@@ -608,9 +609,9 @@ export function RAGPipelineModal({
                         }}
                       >
                         <IconCheck size={12} style={{ color: 'white', strokeWidth: 3 }} />
-                      </Box>
+                      </div>
                     )}
-                  </Box>
+                  </div>
 
                   <Text
                     size="xs"
