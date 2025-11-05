@@ -919,7 +919,7 @@ function StepVectorDatabase({ form, collections, collectionsLoading }: StepProps
           <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
             <Stack gap="xs">
               <Text size="xs">
-                <strong>Since the selected strategy is not Native:</strong> This strategy generates multiple query variations to comprehensively search your knowledge base.
+                <strong>{ENHANCEMENT_STRATEGIES.find((s) => s.value === form.values.selectedStrategy)?.label}:</strong> This strategy generates multiple query variations to comprehensively search your knowledge base.
               </Text>
               <List size="xs">
                 <List.Item>Generate {form.values.selectedStrategy === 'augmented' ? '4' : '3-5'} query variants ({form.values.selectedStrategy === 'augmented' ? 'via transformations' : 'via rephrasing'})</List.Item>
@@ -937,7 +937,7 @@ function StepVectorDatabase({ form, collections, collectionsLoading }: StepProps
       {form.values.selectedStrategy === 'hyde' && (
         <Alert icon={<IconInfoCircle size={16} />} color="gray" variant="light">
           <Text size="xs">
-            <strong>Single Enhanced Query:</strong> This strategy generates one enhanced query variant.
+            <strong>{ENHANCEMENT_STRATEGIES.find((s) => s.value === 'hyde')?.label}:</strong> This strategy generates one enhanced query variant.
             The system will search using this single enhanced query (no RRF merging needed).
           </Text>
         </Alert>
