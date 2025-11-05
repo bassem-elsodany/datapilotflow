@@ -38,6 +38,55 @@ class RetrievalStrategy(str, Enum):
 
 
 @dataclass
+class ProviderConfig:
+    """Provider and model configuration."""
+
+    id: str  # Provider ID
+    model_name: str  # Model name
+
+
+@dataclass
+class EnhancementConfig:
+    """Query enhancement configuration for a conversation."""
+
+    strategy: str  # "native", "multi_query", "augmented", "hyde", "decomposition"
+    provider: Optional[ProviderConfig] = None  # Provider for enhancement (e.g., embedding model)
+
+
+@dataclass
+class VectorDatabaseConfig:
+    """Vector database configuration."""
+
+    collection_name: str = "LongTermMemory"
+    top_k: int = 5  # Number of documents to retrieve
+
+
+@dataclass
+class RerankerConfig:
+    """Document reranker configuration."""
+
+    provider: Optional[ProviderConfig] = None  # Reranker provider
+    relevance_threshold: float = 0.5  # Relevance score threshold (0-1)
+
+
+@dataclass
+class AnswerGenerationConfig:
+    """Answer generation configuration."""
+
+    provider: Optional[ProviderConfig] = None  # LLM provider for answer generation
+
+
+@dataclass
+class SystemPrompt:
+    """Embedded system prompt for a conversation."""
+
+    id: str  # UUID identifier
+    title: str  # Prompt title
+    content: str  # Actual prompt content
+
+
+# Legacy class kept for backwards compatibility during migration
+@dataclass
 class EnhancementConfiguration:
     """Query enhancement configuration for a conversation."""
 
@@ -113,52 +162,22 @@ class ConversationSession:
     messages: List[ConversationMessage]
     name: Optional[str] = None
     description: Optional[str] = None
-    context_summary: Optional[str] = None
-    topics_discussed: Optional[List[str]] = None
-    knowledge_sources_used: Optional[List[str]] = None
-    # LLM Provider reference
-    llm_provider_id: Optional[str] = None
-    llm_model_name: Optional[str] = None
-    # Query Enhancement configuration
-    enhancement_config: Optional[EnhancementConfiguration] = None
-    # Collection configuration
-    collection_name: str = "LongTermMemory"
-    # Reranking configuration
-    enable_reranking: bool = False  # Enable document judging/reranking by default
-    relevance_threshold: float = 0.5  # Relevance score threshold for filtering documents
-    reranker_provider_id: Optional[str] = (
-        None  # Dedicated reranker provider (Cohere/Voyage)
-    )
-    reranker_model_name: Optional[str] = None  # Reranker model name
-    # Answer generation configuration
-    enable_llm_generation: bool = (
-        False  # Enable LLM answer generation (False = raw results by default, True = generated answers)
-    )
-    # Vector search configuration
-    top_k: int = 5  # Number of documents to retrieve from vector database
-    # Multi-agent orchestration configuration
-    enable_knowledge_assistant: bool = (
-        True  # Enable Knowledge Assistant for RAG→Task workflow (True = multi-agent orchestration, False = RAG only)
-    )
-    # Session statistics
-    total_queries: int = 0
-    total_documents_retrieved: int = 0
-    average_response_time_ms: Optional[float] = None
+    # Nested configuration structures
+    system_prompt: Optional[SystemPrompt] = None  # Embedded system prompt
+    enhancement: Optional[EnhancementConfig] = None  # Query enhancement configuration
+    vector_database: Optional[VectorDatabaseConfig] = None  # Vector database configuration
+    reranker: Optional[RerankerConfig] = None  # Document reranker configuration
+    answer_generation: Optional[AnswerGenerationConfig] = None  # Answer generation configuration
     # Tags for organization
     tags: Optional[List[str]] = None
-    # System Prompt Tasks configuration (Phase 1 - Core system prompts)
-    system_prompt_tasks: Optional[List[SystemPromptTask]] = None  # List of available system prompts for this conversation
-    selected_system_prompt_id: Optional[str] = None  # Currently selected system prompt ID
+    # Multi-agent orchestration configuration
+    # True = Supervisor Agent (multi-agent orchestration)
+    # False = RAG Agent (retrieval + generation only)
+    enable_knowledge_assistant: bool = False
 
     def __post_init__(self):
-        if self.topics_discussed is None:
-            self.topics_discussed = []
-        if self.knowledge_sources_used is None:
-            self.knowledge_sources_used = []
         if self.tags is None:
             self.tags = []
-        if self.system_prompt_tasks is None:
-            self.system_prompt_tasks = []
         # Generate default name if none provided
         if self.name is None:
             self.name = f"Session {self.created_at.strftime('%Y-%m-%d %H:%M')}"
@@ -169,43 +188,36 @@ class ConversationSession:
         return len(self.messages)
 
     @property
-    def has_llm_provider(self) -> bool:
-        """Check if LLM provider is configured."""
-        return self.llm_provider_id is not None
+    def agent_type(self) -> str:
+        """Get agent type based on enable_knowledge_assistant flag."""
+        return "supervisor" if self.enable_knowledge_assistant else "rag"
 
     @property
-    def has_enhancement_config(self) -> bool:
+    def has_answer_generation(self) -> bool:
+        """Check if answer generation is configured."""
+        return self.answer_generation is not None and self.answer_generation.provider is not None
+
+    @property
+    def has_enhancement(self) -> bool:
         """Check if enhancement configuration is set."""
-        return self.enhancement_config is not None
+        return self.enhancement is not None and self.enhancement.strategy != "native"
 
     @property
     def current_strategy(self) -> str:
         """Get current enhancement strategy."""
-        if self.enhancement_config and self.enhancement_config.enabled:
-            return self.enhancement_config.strategy
-        return "none"
+        if self.enhancement:
+            return self.enhancement.strategy
+        return "native"
 
     @property
-    def selected_system_prompt(self) -> Optional[SystemPromptTask]:
-        """Get the currently selected system prompt task."""
-        if not self.selected_system_prompt_id or not self.system_prompt_tasks:
-            return None
-        for task in self.system_prompt_tasks:
-            if task.id == self.selected_system_prompt_id:
-                return task
-        return None
+    def has_system_prompt(self) -> bool:
+        """Check if system prompt is configured."""
+        return self.system_prompt is not None and bool(self.system_prompt.content.strip())
 
     @property
-    def has_system_prompts(self) -> bool:
-        """Check if any system prompts are available."""
-        return bool(self.system_prompt_tasks and len(self.system_prompt_tasks) > 0)
-
-    @property
-    def active_system_prompts(self) -> List[SystemPromptTask]:
-        """Get all active system prompts."""
-        if not self.system_prompt_tasks:
-            return []
-        return [task for task in self.system_prompt_tasks if task.is_active]
+    def has_reranker(self) -> bool:
+        """Check if reranker is configured."""
+        return self.reranker is not None and self.reranker.provider is not None
 
 
 class ConversationHistoryService:
