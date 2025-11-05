@@ -120,6 +120,8 @@ export function SystemPromptManager({
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editingPrompt, setEditingPrompt] = useState<SystemPrompt | null>(null);
   const [formData, setFormData] = useState({ name: '', description: '', system_prompt: '' });
+  const [expandedPresetIndex, setExpandedPresetIndex] = useState<number | null>(null);
+  const [fromPreset, setFromPreset] = useState(false);
 
   // Load prompts when manager opens
   useEffect(() => {
@@ -228,6 +230,10 @@ export function SystemPromptManager({
           await loadPrompts();
           setFormData({ name: '', description: '', system_prompt: '' });
           setCreateModalOpen(false);
+          if (fromPreset) {
+            setFromPreset(false);
+            setManagerModalOpen(true);
+          }
         }
       }
     } catch (error) {
@@ -428,13 +434,13 @@ export function SystemPromptManager({
           <Tabs.Panel value="presets" pt="md">
             <Stack gap="md">
               <Text size="sm" c="dimmed">
-                Quick presets for common use cases
+                Quick presets for common use cases. Click "Expand" to view full content, or "Customize & Save" to modify before adding.
               </Text>
 
-              {QUICK_PRESETS.map((preset) => (
+              {QUICK_PRESETS.map((preset, index) => (
                 <Card key={preset.name} p="md" withBorder>
                   <Group justify="space-between" align="flex-start" mb="xs">
-                    <div>
+                    <div style={{ flex: 1 }}>
                       <Text fw={600} size="sm">{preset.name}</Text>
                       <Text size="xs" c="dimmed">{preset.description}</Text>
                     </div>
@@ -445,11 +451,14 @@ export function SystemPromptManager({
                     </ThemeIcon>
                   </Group>
 
-                  <Text size="xs" c="dimmed" lineClamp={2} mb="sm">
-                    {preset.system_prompt}
+                  {/* Preview or Full Content */}
+                  <Text size="xs" c="dimmed" mb="sm" style={{ whiteSpace: 'pre-wrap' }}>
+                    {expandedPresetIndex === index
+                      ? preset.system_prompt
+                      : preset.system_prompt.substring(0, 150) + '...'}
                   </Text>
 
-                  <Group gap="xs">
+                  <Group gap="xs" mb="sm">
                     {preset.tags.map((tag) => (
                       <Badge key={tag} size="xs" variant="dot">
                         {tag}
@@ -457,14 +466,45 @@ export function SystemPromptManager({
                     ))}
                   </Group>
 
-                  <Button
-                    size="xs"
-                    variant="light"
-                    mt="md"
-                    onClick={() => handleUsePreset(preset)}
-                  >
-                    Use this Preset
-                  </Button>
+                  <Group gap="xs">
+                    <Button
+                      size="xs"
+                      variant="light"
+                      onClick={() =>
+                        setExpandedPresetIndex(
+                          expandedPresetIndex === index ? null : index
+                        )
+                      }
+                    >
+                      {expandedPresetIndex === index ? 'Collapse' : 'Expand'}
+                    </Button>
+
+                    <Button
+                      size="xs"
+                      variant="light"
+                      color="blue"
+                      onClick={() => {
+                        setEditingPrompt(null);
+                        setFormData({
+                          name: preset.name,
+                          description: preset.description,
+                          system_prompt: preset.system_prompt,
+                        });
+                        setFromPreset(true);
+                        setCreateModalOpen(true);
+                      }}
+                    >
+                      Customize & Save
+                    </Button>
+
+                    <Button
+                      size="xs"
+                      variant="light"
+                      onClick={() => handleUsePreset(preset)}
+                    >
+                      Use as-is
+                    </Button>
+                  </Group>
                 </Card>
               ))}
             </Stack>
@@ -477,8 +517,12 @@ export function SystemPromptManager({
         onClose={() => {
           setCreateModalOpen(false);
           setEditingPrompt(null);
+          if (fromPreset) {
+            setFromPreset(false);
+            setManagerModalOpen(true);
+          }
         }}
-        title={editingPrompt ? 'Edit System Prompt' : 'Create System Prompt'}
+        title={editingPrompt ? 'Edit System Prompt' : (fromPreset ? 'Customize Preset' : 'Create System Prompt')}
         size="lg"
       >
         <Stack gap="md">
