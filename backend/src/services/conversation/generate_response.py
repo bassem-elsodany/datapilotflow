@@ -244,6 +244,7 @@ async def get_response_stream_supervisor(
             )
 
             rag_result = None
+            logger.info(f"🔍 [SUPERVISOR RAG] Starting RAG graph streaming...")
 
             # Only emit query enhancement if a strategy is configured (not native)
             if selected_strategy and selected_strategy != "native":
@@ -284,13 +285,18 @@ async def get_response_stream_supervisor(
 
                 # Capture final state when workflow completes
                 if event_type == "__end__":
-                    logger.debug(f"📋 [SUPERVISOR RAG] Capturing final state from event")
+                    logger.critical(f"🔴 [SUPERVISOR RAG] __end__ event received!")
+                    logger.critical(f"🔴 [SUPERVISOR RAG] event_data type: {type(event_data)}")
                     if isinstance(event_data, dict):
                         rag_result = event_data
+                        logger.critical(f"🔴 [SUPERVISOR RAG] event_data is dict with keys: {list(event_data.keys())}")
                     elif hasattr(event_data, 'state'):
                         rag_result = event_data.state
+                        logger.critical(f"🔴 [SUPERVISOR RAG] event_data has .state, assigned to rag_result")
                     else:
                         rag_result = {}
+                        logger.critical(f"🔴 [SUPERVISOR RAG] event_data is unknown type, setting rag_result to empty dict")
+                    logger.critical(f"🔴 [SUPERVISOR RAG] rag_result is now: {str(rag_result)[:300]}")
                     continue
 
                 # Handle node END events to extract output data
@@ -451,6 +457,13 @@ async def get_response_stream_supervisor(
             logger.info(f"✅ RAG Agent completed in {rag_time_ms:.2f}ms")
 
             # Extract RAG results from final chunk
+            logger.critical(f"🔴 [RAG RESULT CHECK] rag_result is None: {rag_result is None}")
+            if rag_result:
+                logger.critical(f"🔴 [RAG RESULT CHECK] rag_result keys: {list(rag_result.keys()) if isinstance(rag_result, dict) else 'NOT A DICT'}")
+                logger.critical(f"🔴 [RAG RESULT CHECK] rag_result type: {type(rag_result)}")
+            else:
+                logger.critical(f"🔴 [RAG RESULT CHECK] rag_result is empty or None!")
+
             if rag_result:
                 retrieved_docs = rag_result.get("retrieved_documents", [])
                 judged_docs = rag_result.get("judged_documents", [])
