@@ -5,6 +5,7 @@ This module handles the execution of the LangGraph workflow for generating
 AI responses with query enhancement capabilities.
 """
 
+import asyncio
 import time
 import traceback
 import uuid
@@ -36,7 +37,6 @@ from src.services.model_provider.model_provider_service import (
 litellm.drop_params = True
 
 
-
 async def get_response_stream_supervisor(
     query: str,
     user_id: str,
@@ -66,494 +66,673 @@ async def get_response_stream_supervisor(
 
     try:
 
-            # Yield supervisor initialization START event
+        # Yield supervisor initialization START event
+        yield {
+            "type": "supervisor_started",
+            "stage": "supervisor_init",
+            "message": "Initializing supervisor agent orchestration",
+            "execution_time_ms": (time.time() - start_time) * 1000,
+        }
+
+        supervisor_init_start = time.time()
+
+        # Initialize workflow config (same as RAG function)
+        top_k_per_query = max(5, int(top_k * 1.5))  # 50% more to account for RRF deduplication
+
+        workflow_config = {
+            "collection_name": collection_name,
+            "user_id": user_id,
+            "llm_provider_id": llm_provider_id,
+            "llm_model_name": llm_model_name,
+            "enhancement_config": enhancement_config or {},
+            "conversation_id": conversation_id,
+            "enable_reranking": enable_reranking,
+            "reranking_config": {
+                "relevance_threshold": relevance_threshold,
+                "use_score_based": True,
+            },
+            "enable_llm_generation": enable_llm_generation,
+            "top_k": top_k,
+            "retrieval_config": {
+                "top_k_per_query": top_k_per_query,
+                "rrf_k": 60,
+            },
+        }
+
+        logger.info(
+            f"🔧 Supervisor Config: enable_reranking={enable_reranking}, enable_llm_generation={enable_llm_generation}, collection={collection_name}, strategy={selected_strategy}"
+        )
+
+        # Get provider configuration to create LLM client
+        provider_service = get_model_provider_service()
+        provider = provider_service.get_model_provider(llm_provider_id, user_id)
+
+        if not provider:
+            raise ValueError(f"Provider not found: {llm_provider_id}")
+
+        if not provider.is_active:
+            raise ValueError(f"Provider is not active: {provider.name}")
+
+        # Get temperature and max_tokens from provider's generative config
+        generative_config = provider.generative.config if provider.generative else {}
+        temperature = generative_config.get("temperature", 0.7)
+        max_tokens = generative_config.get("max_tokens", 4096)
+
+        # Create LLM client using ChatLiteLLM with provider's config
+        model_string = f"{provider.provider_type}/{llm_model_name}"
+        llm_client = ChatLiteLLM(
+            model=model_string,
+            api_key=provider.api_key,
+            api_base=provider.endpoint if provider.endpoint else None,
+            timeout=provider.timeout if provider.timeout else 60,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+        logger.info(
+            f"✅ Created LLM client: {model_string} (temperature={temperature}, max_tokens={max_tokens})"
+        )
+
+        # Add LLM client to workflow config
+        workflow_config["llm_client"] = llm_client
+
+        logger.info("🤖 Using Supervisor orchestration with multi-agent routing")
+
+        # Create multi-agent orchestrator
+        supervisor = create_multi_agent_orchestrator(
+            llm_client=llm_client,
+            rag_graph=workflow,
+            conversation_service=None,  # Optional conversation service
+        )
+
+        # Create initial state for supervisor
+        supervisor_initial_state = AgentState(
+            messages=[{"role": "user", "content": query}],
+            conversation_id=conversation_id,
+            user_id=user_id,
+            config=workflow_config,
+        )
+
+        # Yield supervisor initialization COMPLETE event
+        yield {
+            "type": "supervisor_progress",
+            "stage": "supervisor_init_complete",
+            "message": "Supervisor orchestration initialized successfully",
+            "data": {
+                "orchestrator_type": "multi_agent",
+                "agents_available": ["rag_agent", "task_agent"],
+                "initialization_time_ms": (time.time() - supervisor_init_start) * 1000,
+            },
+            "execution_time_ms": (time.time() - start_time) * 1000,
+        }
+
+        logger.info("📊 Supervisor: Detecting user intent...")
+
+        # Yield intent detection START event
+        yield {
+            "type": "supervisor_progress",
+            "stage": "intent_detection",
+            "message": "Analyzing user query to determine routing strategy",
+            "execution_time_ms": (time.time() - start_time) * 1000,
+        }
+
+        intent_detection_start = time.time()
+
+        # Detect intent first (fast, separate from execution)
+        detected_intent = await supervisor._detect_intent(supervisor_initial_state)
+        logger.info(f"✅ Supervisor: Intent detected as '{detected_intent}'")
+
+        # Map intent to human-readable description
+        intent_descriptions = {
+            "rag_only": "Knowledge retrieval only - User needs information from documents",
+            "rag_then_task": "Knowledge retrieval + Task execution - User needs information and action",
+            "task_only": "Direct task execution - User needs action without prior knowledge",
+        }
+
+        # Yield intent detection COMPLETE event
+        yield {
+            "type": "supervisor_progress",
+            "stage": "intent_detection_complete",
+            "message": f"Intent detected: {detected_intent}",
+            "data": {
+                "intent": detected_intent,
+                "intent_description": intent_descriptions.get(
+                    detected_intent, "Unknown intent"
+                ),
+                "routing_decision": (
+                    "rag_agent"
+                    if detected_intent in ["rag_only", "rag_then_task"]
+                    else "task_agent"
+                ),
+                "detection_time_ms": (time.time() - intent_detection_start) * 1000,
+            },
+            "execution_time_ms": (time.time() - start_time) * 1000,
+        }
+
+        # Set intent in state
+        supervisor_initial_state["intent"] = detected_intent
+
+        # Execute agents based on detected intent
+        result_state = supervisor_initial_state
+
+        # Execute RAG Agent if needed
+        if detected_intent in ["rag_only", "rag_then_task"]:
+            logger.info("📚 Supervisor: Routing to RAG Agent...")
+
+            # Yield RAG Agent START event
             yield {
-                "type": "supervisor_started",
-                "stage": "supervisor_init",
-                "message": "Initializing supervisor agent orchestration",
+                "type": "supervisor_progress",
+                "stage": "rag_agent_executing",
+                "message": "Executing RAG Agent - retrieving and ranking documents",
                 "execution_time_ms": (time.time() - start_time) * 1000,
             }
 
-            supervisor_init_start = time.time()
+            rag_start = time.time()
 
-            # Create multi-agent orchestrator
-            supervisor = create_multi_agent_orchestrator(
-                llm_client=llm_client,
-                rag_graph=workflow,
-                conversation_service=None,  # Optional conversation service
+            # Stream RAG graph execution to emit node progress in real-time
+            rag_config = result_state.get("config", {}) or {}
+            rag_state_input = create_initial_state(
+                query=result_state.get("messages", [])[-1].get("content", ""),
+                top_k=rag_config.get("top_k", 5),
+                config=rag_config,
+                selected_strategy=selected_strategy,  # FIX: Pass the strategy explicitly!
+                conversation_description=result_state.get("conversation_description"),
             )
 
-            # Create initial state for supervisor
-            supervisor_initial_state = AgentState(
-                messages=[{"role": "user", "content": query}],
-                conversation_id=conversation_id,
-                user_id=user_id,
-                config=workflow_config,
-            )
+            rag_result = None
 
-            # Yield supervisor initialization COMPLETE event
-            yield {
-                "type": "supervisor_progress",
-                "stage": "supervisor_init_complete",
-                "message": "Supervisor orchestration initialized successfully",
-                "data": {
-                    "orchestrator_type": "multi_agent",
-                    "agents_available": ["rag_agent", "task_agent"],
-                    "initialization_time_ms": (time.time() - supervisor_init_start)
-                    * 1000,
-                },
-                "execution_time_ms": (time.time() - start_time) * 1000,
-            }
-
-            logger.info("📊 Supervisor: Detecting user intent...")
-
-            # Yield intent detection START event
-            yield {
-                "type": "supervisor_progress",
-                "stage": "intent_detection",
-                "message": "Analyzing user query to determine routing strategy",
-                "execution_time_ms": (time.time() - start_time) * 1000,
-            }
-
-            intent_detection_start = time.time()
-
-            # Detect intent first (fast, separate from execution)
-            detected_intent = await supervisor._detect_intent(supervisor_initial_state)
-            logger.info(f"✅ Supervisor: Intent detected as '{detected_intent}'")
-
-            # Map intent to human-readable description
-            intent_descriptions = {
-                "rag_only": "Knowledge retrieval only - User needs information from documents",
-                "rag_then_task": "Knowledge retrieval + Task execution - User needs information and action",
-                "task_only": "Direct task execution - User needs action without prior knowledge",
-            }
-
-            # Yield intent detection COMPLETE event
-            yield {
-                "type": "supervisor_progress",
-                "stage": "intent_detection_complete",
-                "message": f"Intent detected: {detected_intent}",
-                "data": {
-                    "intent": detected_intent,
-                    "intent_description": intent_descriptions.get(
-                        detected_intent, "Unknown intent"
-                    ),
-                    "routing_decision": (
-                        "rag_agent"
-                        if detected_intent in ["rag_only", "rag_then_task"]
-                        else "task_agent"
-                    ),
-                    "detection_time_ms": (time.time() - intent_detection_start) * 1000,
-                },
-                "execution_time_ms": (time.time() - start_time) * 1000,
-            }
-
-            # Set intent in state
-            supervisor_initial_state["intent"] = detected_intent
-
-            # Execute agents based on detected intent
-            result_state = supervisor_initial_state
-
-            # Execute RAG Agent if needed
-            if detected_intent in ["rag_only", "rag_then_task"]:
-                logger.info("📚 Supervisor: Routing to RAG Agent...")
-                
-                # Yield RAG Agent START event
+            # Only emit query enhancement if a strategy is configured (not native)
+            if selected_strategy and selected_strategy != "native":
                 yield {
-                    "type": "supervisor_progress",
-                    "stage": "rag_agent_executing",
-                    "message": "Executing RAG Agent - retrieving and ranking documents",
+                    "type": "workflow_progress",
+                    "stage": "query_enhancement",
+                    "message": "Enhancing query...",
                     "execution_time_ms": (time.time() - start_time) * 1000,
                 }
-                
-                rag_start = time.time()
 
-                # Stream RAG graph execution to emit node progress in real-time
-                rag_config = result_state.get("config", {}) or {}
-                rag_state_input = create_initial_state(
-                    query=result_state.get("messages", [])[-1].get("content", ""),
-                    top_k=rag_config.get("top_k", 5),
-                    config=rag_config,
-                    selected_strategy=selected_strategy,  # FIX: Pass the strategy explicitly!
-                    conversation_description=result_state.get(
-                        "conversation_description"
-                    ),
+            # Track RAG execution details to include in complete event
+            rag_enhanced_queries = []
+            rag_enhancement_strategy = selected_strategy or "native"
+
+            # Track emitted stages to avoid duplicates
+            rag_stages_emitted = set()
+
+            # Initialize document counts (will be updated from events)
+            total_docs = 0
+            relevant_docs = 0
+
+            # Stream through RAG graph events - emit START and COMPLETE events
+            # Using astream_events() gives us better event metadata like in RAG mode
+            rag_config_for_events = {
+                "configurable": {"thread_id": str(start_time)}
+            }
+
+            async for event in supervisor.rag_agent.rag_graph.astream_events(
+                input=rag_state_input,
+                config=rag_config_for_events,
+                version="v2"
+            ):
+                event_type = event.get("event", "")
+                node_name = event.get("name", "")
+                event_data = event.get("data", {})
+
+                logger.debug(f"📡 [SUPERVISOR RAG EVENT] type={event_type}, node={node_name}")
+
+                # Capture final state when workflow completes
+                if event_type == "__end__":
+                    logger.debug(f"📋 [SUPERVISOR RAG] Capturing final state from event")
+                    if isinstance(event_data, dict):
+                        rag_result = event_data
+                    elif hasattr(event_data, 'state'):
+                        rag_result = event_data.state
+                    else:
+                        rag_result = {}
+                    continue
+
+                # Handle node END events to extract output data
+                if event_type == "on_chain_end":
+                    logger.info(f"📊 [SUPERVISOR RAG] Node completed: {node_name}")
+
+                    # Extract the node output from the event
+                    if hasattr(event_data, 'output'):
+                        node_output = event_data.output
+                    elif isinstance(event_data, dict) and 'output' in event_data:
+                        node_output = event_data['output']
+                    else:
+                        node_output = event_data
+
+                    # Log node output for debugging
+                    if isinstance(node_output, dict):
+                        logger.debug(f"🔍 [SUPERVISOR RAG NODE OUTPUT] {node_name} keys: {list(node_output.keys())}")
+
+                    # Map node names to substage events
+                    if node_name in [
+                        "multi_query_strategy_node",
+                        "hyde_strategy_node",
+                        "decomposition_strategy_node",
+                        "augmented_strategy_node",
+                    ]:
+                        if "query_enhancement" not in rag_stages_emitted:
+                            # START event
+                            yield {
+                                "type": "workflow_progress",
+                                "stage": "query_enhancement",
+                                "message": "Enhancing query...",
+                                "execution_time_ms": (time.time() - start_time) * 1000,
+                            }
+                            rag_stages_emitted.add("query_enhancement")
+
+                            # COMPLETE event with data
+                            if isinstance(node_output, dict):
+                                # Try multiple possible structures for enhanced queries
+                                enhanced_queries = node_output.get("enhanced_query", {}).get("variants", [])
+
+                                # If not found, try direct variants key
+                                if not enhanced_queries:
+                                    enhanced_queries = node_output.get("variants", [])
+
+                                # If still not found, try augmented_queries (used by some strategies)
+                                if not enhanced_queries:
+                                    enhanced_queries = node_output.get("augmented_queries", [])
+
+                                logger.info(f"📊 [SUPERVISOR] Query enhancement output: {node_output.keys()}")
+                                logger.info(f"📊 [SUPERVISOR] Extracted {len(enhanced_queries)} enhanced queries: {enhanced_queries[:2] if enhanced_queries else 'NONE'}")
+                            else:
+                                enhanced_queries = []
+
+                            strategy_name = node_name.replace("_strategy_node", "")
+
+                            # Store for later inclusion in rag_agent_executing_complete event
+                            rag_enhanced_queries = enhanced_queries
+                            rag_enhancement_strategy = strategy_name
+
+                            yield {
+                                "type": "workflow_progress",
+                                "stage": "query_enhancement_complete",
+                                "message": f"Query enhanced with {len(enhanced_queries)} variants",
+                                "data": {
+                                    "strategy": strategy_name,
+                                    "query_variants": enhanced_queries,
+                                    "variant_count": len(enhanced_queries),
+                                },
+                                "execution_time_ms": (time.time() - start_time) * 1000,
+                            }
+
+                    elif node_name == "document_retriever":
+                        if "document_retrieval" not in rag_stages_emitted:
+                            # START event
+                            yield {
+                                "type": "workflow_progress",
+                                "stage": "document_retrieval",
+                                "message": "Retrieving documents...",
+                                "execution_time_ms": (time.time() - start_time) * 1000,
+                            }
+                            rag_stages_emitted.add("document_retrieval")
+
+                            # COMPLETE event with data
+                            if isinstance(node_output, dict):
+                                retrieved_docs = node_output.get("retrieved_documents", [])
+                            else:
+                                retrieved_docs = []
+
+                            # Update total_docs count
+                            total_docs = len(retrieved_docs)
+
+                            yield {
+                                "type": "workflow_progress",
+                                "stage": "document_retrieval_complete",
+                                "message": f"Retrieved {len(retrieved_docs)} documents",
+                                "data": {
+                                    "document_count": len(retrieved_docs),
+                                    "collection": rag_config.get(
+                                        "collection_name", "unknown"
+                                    ),
+                                },
+                                "execution_time_ms": (time.time() - start_time) * 1000,
+                            }
+
+                    elif node_name == "document_judger":
+                        # Only emit if reranking is enabled
+                        if enable_reranking and "document_judging" not in rag_stages_emitted:
+                            # START event
+                            yield {
+                                "type": "workflow_progress",
+                                "stage": "document_judging",
+                                "message": "Ranking documents...",
+                                "execution_time_ms": (time.time() - start_time) * 1000,
+                            }
+                            rag_stages_emitted.add("document_judging")
+
+                            # COMPLETE event with data
+                            if isinstance(node_output, dict):
+                                judged_docs = node_output.get("judged_documents", [])
+                                relevance_scores = node_output.get("relevance_scores", [])
+                            else:
+                                judged_docs = []
+                                relevance_scores = []
+
+                            relevant_count = len(
+                                [s for s in relevance_scores if s >= 0.5]
+                            )
+
+                            # Update relevant_docs count
+                            relevant_docs = relevant_count
+
+                            yield {
+                                "type": "workflow_progress",
+                                "stage": "document_judging_complete",
+                                "message": f"Ranked {relevant_count} relevant documents",
+                                "data": {
+                                    "total_documents": len(judged_docs),
+                                    "relevant_documents": relevant_count,
+                                    "avg_score": (
+                                        sum(relevance_scores)
+                                        / len(relevance_scores)
+                                        if relevance_scores
+                                        else 0
+                                    ),
+                                },
+                                "execution_time_ms": (time.time() - start_time) * 1000,
+                            }
+                        elif not enable_reranking and "document_judging_skipped" not in rag_stages_emitted:
+                            logger.info(
+                                f"⚠️ [SUPERVISOR] Skipping document_judger event emission - reranking is disabled"
+                            )
+                            rag_stages_emitted.add("document_judging_skipped")
+
+            # Process RAG results and update state
+            from src.agents.common.agent_state import RAGContext
+
+            rag_time_ms = (time.time() - rag_start) * 1000
+            logger.info(f"✅ RAG Agent completed in {rag_time_ms:.2f}ms")
+
+            # Extract RAG results from final chunk
+            if rag_result:
+                retrieved_docs = rag_result.get("retrieved_documents", [])
+                judged_docs = rag_result.get("judged_documents", [])
+                relevance_scores = rag_result.get("relevance_scores", [])
+                relevance_threshold = rag_config.get("reranking_config", {}).get(
+                    "relevance_threshold", 0.5
                 )
 
-                last_rag_node = None
-                rag_result = None
-
-                # Only emit query enhancement if a strategy is configured (not native)
-                if selected_strategy and selected_strategy != "native":
-                    yield {
-                        "type": "workflow_progress",
-                        "stage": "query_enhancement",
-                        "message": "Enhancing query...",
-                        "execution_time_ms": (time.time() - start_time) * 1000,
-                    }
-
-                # Stream through RAG graph nodes - emit START and COMPLETE events
-                async for chunk in supervisor.rag_agent.rag_graph.astream(
-                    rag_state_input
-                ):
-                    rag_result = chunk
-                    # Detect node changes and emit START + COMPLETE events
-                    for node_name, node_output in chunk.items():
-                        if (
-                            node_name != last_rag_node
-                            and node_name != "__start__"
-                            and node_name != "__end__"
-                        ):
-                            last_rag_node = node_name
-                            logger.info(f"📊 RAG Node: {node_name}")
-
-                            # Map node names to substage events
-                            # 1. Emit START event (no data)
-                            # 2. Emit COMPLETE event (with actual output data)
-
-                            if node_name in [
-                                "multi_query_strategy_node",
-                                "hyde_strategy_node",
-                                "decomposition_strategy_node",
-                                "augmented_strategy_node",
-                            ]:
-                                # START event
-                                yield {
-                                    "type": "workflow_progress",
-                                    "stage": "query_enhancement",
-                                    "message": "Enhancing query...",
-                                    "execution_time_ms": (time.time() - start_time)
-                                    * 1000,
-                                }
-
-                                # COMPLETE event with data
-                                enhanced_queries = node_output.get(
-                                    "enhanced_query", {}
-                                ).get("variants", [])
-                                yield {
-                                    "type": "workflow_progress",
-                                    "stage": "query_enhancement_complete",
-                                    "message": f"Query enhanced with {len(enhanced_queries)} variants",
-                                    "data": {
-                                        "strategy": node_name.replace(
-                                            "_strategy_node", ""
-                                        ),
-                                        "query_variants": enhanced_queries,
-                                        "variant_count": len(enhanced_queries),
-                                    },
-                                    "execution_time_ms": (time.time() - start_time)
-                                    * 1000,
-                                }
-
-                            elif node_name == "document_retriever":
-                                # START event
-                                yield {
-                                    "type": "workflow_progress",
-                                    "stage": "document_retrieval",
-                                    "message": "Retrieving documents...",
-                                    "execution_time_ms": (time.time() - start_time)
-                                    * 1000,
-                                }
-
-                                # COMPLETE event with data
-                                retrieved_docs = node_output.get(
-                                    "retrieved_documents", []
-                                )
-                                yield {
-                                    "type": "workflow_progress",
-                                    "stage": "document_retrieval_complete",
-                                    "message": f"Retrieved {len(retrieved_docs)} documents",
-                                    "data": {
-                                        "document_count": len(retrieved_docs),
-                                        "collection": rag_config.get(
-                                            "collection_name", "unknown"
-                                        ),
-                                    },
-                                    "execution_time_ms": (time.time() - start_time)
-                                    * 1000,
-                                }
-
-                            elif node_name == "document_judger":
-                                # START event
-                                yield {
-                                    "type": "workflow_progress",
-                                    "stage": "document_judging",
-                                    "message": "Ranking documents...",
-                                    "execution_time_ms": (time.time() - start_time)
-                                    * 1000,
-                                }
-
-                                # COMPLETE event with data
-                                judged_docs = node_output.get("judged_documents", [])
-                                relevance_scores = node_output.get(
-                                    "relevance_scores", []
-                                )
-                                relevant_count = len(
-                                    [s for s in relevance_scores if s >= 0.5]
-                                )
-                                yield {
-                                    "type": "workflow_progress",
-                                    "stage": "document_judging_complete",
-                                    "message": f"Ranked {relevant_count} relevant documents",
-                                    "data": {
-                                        "total_documents": len(judged_docs),
-                                        "relevant_documents": relevant_count,
-                                        "avg_score": (
-                                            sum(relevance_scores)
-                                            / len(relevance_scores)
-                                            if relevance_scores
-                                            else 0
-                                        ),
-                                    },
-                                    "execution_time_ms": (time.time() - start_time)
-                                    * 1000,
-                                }
-
-                # Process RAG results and update state
-                from src.agents.common.agent_state import RAGContext
-
-                rag_time_ms = (time.time() - rag_start) * 1000
-                logger.info(f"✅ RAG Agent completed in {rag_time_ms:.2f}ms")
-
-                # Extract RAG results from final chunk
-                if rag_result:
-                    retrieved_docs = rag_result.get("retrieved_documents", [])
-                    judged_docs = rag_result.get("judged_documents", [])
-                    relevance_scores = rag_result.get("relevance_scores", [])
-                    relevance_threshold = rag_config.get("reranking_config", {}).get(
-                        "relevance_threshold", 0.5
-                    )
-
-                    # Create RAGContext
-                    rag_context = RAGContext(
-                        query=query,
-                        original_documents=retrieved_docs,
-                        judged_documents=judged_docs,
-                        relevance_scores=relevance_scores,
-                        relevance_threshold=relevance_threshold,
-                        retrieved_count=len(retrieved_docs),
-                        relevant_count=len(
-                            [
-                                doc
-                                for doc in judged_docs
-                                if getattr(doc, "is_relevant", True)
-                            ]
-                        ),
-                        execution_time_ms=(time.time() - start_time) * 1000,
-                    )
-
-                    result_state["rag_context"] = rag_context
-
-                    # Add response message
-                    response_content = rag_result.get("response", "")
-                    if response_content:
-                        result_state["messages"] = result_state.get("messages", []) + [
-                            {"role": "assistant", "content": response_content}
-                        ]
-
-                    total_docs = len(retrieved_docs)
-                    relevant_docs = len(
+                # Create RAGContext
+                rag_context = RAGContext(
+                    query=query,
+                    original_documents=retrieved_docs,
+                    judged_documents=judged_docs,
+                    relevance_scores=relevance_scores,
+                    relevance_threshold=relevance_threshold,
+                    retrieved_count=len(retrieved_docs),
+                    relevant_count=len(
                         [
                             doc
                             for doc in judged_docs
                             if getattr(doc, "is_relevant", True)
                         ]
-                    )
-
-                # Emit RAG agent COMPLETE event
-                yield {
-                    "type": "supervisor_progress",
-                    "stage": "rag_agent_executing_complete",
-                    "message": f"RAG Agent completed - Retrieved {total_docs} documents",
-                        "data": {
-                            "documents_retrieved": total_docs,
-                            "relevant_documents": relevant_docs,
-                            "strategy_used": selected_strategy or "native",
-                            "rag_execution_time_ms": rag_time_ms,
-                        },
-                        "execution_time_ms": (time.time() - start_time) * 1000,
-                    }
-
-            # Execute Task Agent if needed
-            if detected_intent == "rag_then_task":
-                logger.info("🔨 Supervisor: Routing to Task Agent...")
-                
-                # Yield Task Agent START event
-                yield {
-                    "type": "supervisor_progress",
-                    "stage": "task_agent_executing",
-                    "message": "Executing Task Agent with RAG context",
-                    "execution_time_ms": (time.time() - start_time) * 1000,
-                }
-                
-                task_start = time.time()
-                result_state = await supervisor.task_agent.execute(result_state)
-                task_time_ms = (time.time() - task_start) * 1000
-                logger.info(f"✅ Task Agent completed in {task_time_ms:.2f}ms")
-
-                # Emit Task agent COMPLETE event immediately
-                task_result = result_state.get("task_result", {})
-                task_details = result_state.get("task_details", {})
-                yield {
-                    "type": "supervisor_progress",
-                    "stage": "task_agent_executing_complete",
-                    "message": "Task Agent execution completed successfully",
-                    "data": {
-                        "task_type": task_details.get("type", "unknown"),
-                        "task_status": "completed",
-                        "used_rag_context": task_details.get("used_rag_context", False),
-                        "task_execution_time_ms": task_time_ms,
-                    },
-                    "execution_time_ms": (time.time() - start_time) * 1000,
-                }
-
-            # Extract results from agent execution
-            execution_time_ms = (time.time() - start_time) * 1000
-
-            # Get RAG context documents if available
-            rag_documents = []
-            relevant_doc_count = 0
-            total_doc_count = 0
-            if result_state.get("rag_context"):
-                rag_context = result_state["rag_context"]
-                rag_documents = (
-                    rag_context.judged_documents
-                    if hasattr(rag_context, "judged_documents")
-                    else []
-                )
-                total_doc_count = len(rag_documents)
-                relevant_doc_count = len(
-                    [doc for doc in rag_documents if getattr(doc, "is_relevant", True)]
+                    ),
+                    execution_time_ms=(time.time() - start_time) * 1000,
                 )
 
-            # NOTE: RAG and Task agent COMPLETE events are already emitted immediately after execution above
+                result_state["rag_context"] = rag_context
 
-            # Yield response generation START event
+                # Add response message from RAG agent's final_answer
+                # RAG nodes set final_answer in their state, not response
+                response_content = rag_result.get("final_answer", "")
+                if response_content:
+                    result_state["messages"] = result_state.get("messages", []) + [
+                        {"role": "assistant", "content": response_content}
+                    ]
+
+                total_docs = len(retrieved_docs)
+                relevant_docs = len(
+                    [doc for doc in judged_docs if getattr(doc, "is_relevant", True)]
+                )
+
+            # Emit RAG agent COMPLETE event
+            rag_complete_data = {
+                "documents_retrieved": total_docs,
+                "relevant_documents": relevant_docs,
+                "strategy_used": rag_enhancement_strategy,
+                "rag_execution_time_ms": rag_time_ms,
+            }
+
+            # Include enhanced queries if available
+            if rag_enhanced_queries:
+                rag_complete_data["query_variants"] = rag_enhanced_queries
+                rag_complete_data["variant_count"] = len(rag_enhanced_queries)
+
             yield {
                 "type": "supervisor_progress",
-                "stage": "response_generation",
-                "message": "Generating final response",
+                "stage": "rag_agent_executing_complete",
+                "message": f"RAG Agent completed - Retrieved {total_docs} documents",
+                "data": rag_complete_data,
                 "execution_time_ms": (time.time() - start_time) * 1000,
             }
 
-            # Yield response generation COMPLETE event
-            final_response = (
-                result_state.get("messages", [])[-1].get("content", "")
-                if result_state.get("messages")
-                else ""
-            )
+        # Execute Task Agent if needed
+        if detected_intent == "rag_then_task":
+            logger.info("🔨 Supervisor: Routing to Task Agent...")
+
+            # Yield Task Agent START event
             yield {
                 "type": "supervisor_progress",
-                "stage": "response_generation_complete",
-                "message": "Final response generated successfully",
+                "stage": "task_agent_executing",
+                "message": "Executing Task Agent with RAG context",
+                "execution_time_ms": (time.time() - start_time) * 1000,
+            }
+
+            task_start = time.time()
+            result_state = await supervisor.task_agent.execute(result_state)
+            task_time_ms = (time.time() - task_start) * 1000
+            logger.info(f"✅ Task Agent completed in {task_time_ms:.2f}ms")
+
+            # Add task result to messages for consistent response extraction
+            task_result = result_state.get("task_result", "")
+            if task_result:
+                result_state["messages"] = result_state.get("messages", []) + [
+                    {"role": "assistant", "content": task_result}
+                ]
+                logger.info(f"📝 Added task_result to messages ({len(task_result)} chars)")
+
+            # Emit Task agent COMPLETE event immediately
+            task_details = result_state.get("task_details", {})
+            yield {
+                "type": "supervisor_progress",
+                "stage": "task_agent_executing_complete",
+                "message": "Task Agent execution completed successfully",
                 "data": {
-                    "response_length": len(final_response),
-                    "tokens_estimated": len(final_response.split()),
-                    "generation_time_ms": execution_time_ms,
-                    "sources_used": total_doc_count,
+                    "task_type": task_details.get("type", "unknown"),
+                    "task_status": "completed",
+                    "used_rag_context": task_details.get("used_rag_context", False),
+                    "task_execution_time_ms": task_time_ms,
                 },
                 "execution_time_ms": (time.time() - start_time) * 1000,
             }
 
-            # Stream response in chunks for Supervisor mode (same as RAG mode)
-            if final_response:
-                logger.critical(f"🔴 [SUPERVISOR RESPONSE] Emitting streaming_response with final answer ({len(final_response)} chars)")
+        # Extract results from agent execution
+        execution_time_ms = (time.time() - start_time) * 1000
 
-                # Stream response in chunks (every 50 characters for smooth streaming effect)
-                chunk_size = 50
-                for i in range(0, len(final_response), chunk_size):
-                    chunk = final_response[i:i + chunk_size]
+        # Log result_state.messages to debug response
+        logger.info(f"📋 [SUPERVISOR] result_state.messages length: {len(result_state.get('messages', []))}")
+        if result_state.get("messages"):
+            logger.info(f"📋 [SUPERVISOR] Last message: {result_state['messages'][-1].get('content', '')[:100]}")
 
-                    # Emit metadata ONLY on the first chunk
-                    if i == 0:
-                        # Build metadata from retrieved documents
-                        source_urls = []
-                        chunk_ids = []
-                        for doc in rag_documents:
-                            if isinstance(doc, dict) and doc.get("source_url"):
-                                if doc["source_url"] not in source_urls:
-                                    source_urls.append(doc["source_url"])
-                            if isinstance(doc, dict) and doc.get("chunk_id"):
-                                if doc["chunk_id"] not in chunk_ids:
-                                    chunk_ids.append(doc["chunk_id"])
-
-                        logger.critical(f"🔴 [SUPERVISOR RESPONSE] Emitting first chunk with metadata: {len(source_urls)} sources, {len(chunk_ids)} chunks")
-                        yield {
-                            "type": "streaming_response",
-                            "chunk": chunk,
-                            "metadata": {
-                                "source_urls": source_urls,
-                                "chunk_ids": chunk_ids,
-                                "document_count": len(rag_documents),
-                            },
-                            "execution_time_ms": execution_time_ms,
-                        }
-                    else:
-                        # Subsequent chunks don't include metadata
-                        yield {
-                            "type": "streaming_response",
-                            "chunk": chunk,
-                            "execution_time_ms": execution_time_ms,
-                        }
-
-                logger.critical(f"✅ [SUPERVISOR RESPONSE] EMITTED all streaming_response chunks for {len(final_response)} chars")
-
-            final_result = {
-                "type": "workflow_complete",
-                "execution_time_ms": execution_time_ms,
-                "workflow_completed": True,
-                "query": query,
-                "response": final_response,
-                "documents": rag_documents,
-                "intent": detected_intent,
-                "total_chunks": 1,
-            }
-
-            logger.info(
-                f"✅ Supervisor orchestration completed in {execution_time_ms:.2f}ms "
-                f"for query: '{query[:50]}...'"
+        # Get RAG context documents if available
+        rag_documents = []
+        relevant_doc_count = 0
+        total_doc_count = 0
+        if result_state.get("rag_context"):
+            rag_context = result_state["rag_context"]
+            rag_documents = (
+                rag_context.judged_documents
+                if hasattr(rag_context, "judged_documents")
+                else []
+            )
+            total_doc_count = len(rag_documents)
+            relevant_doc_count = len(
+                [doc for doc in rag_documents if getattr(doc, "is_relevant", True)]
             )
 
-            # SAVE messages to conversation history (same as RAG mode)
-            try:
-                source_urls = []
-                chunk_ids = []
-                for doc in rag_documents:
-                    if isinstance(doc, dict) and doc.get("source_url"):
-                        if doc["source_url"] not in source_urls:
-                            source_urls.append(doc["source_url"])
-                    if isinstance(doc, dict) and doc.get("chunk_id"):
-                        if doc["chunk_id"] not in chunk_ids:
-                            chunk_ids.append(doc["chunk_id"])
+        # NOTE: RAG and Task agent COMPLETE events are already emitted immediately after execution above
 
-                # Save user query message
-                user_message = ConversationMessage(
-                    role="user",
-                    content=query,
-                    timestamp=datetime.now(timezone.utc),
-                    search_query=query,
-                )
-                conversation_history_service.add_message(conversation_id, user_message)
-                logger.info(f"✅ [CONVERSATION] Saved user query to conversation {conversation_id}")
+        # Yield response generation START event
+        yield {
+            "type": "supervisor_progress",
+            "stage": "response_generation",
+            "message": "Generating final response",
+            "execution_time_ms": (time.time() - start_time) * 1000,
+        }
 
-                # Save assistant response message with metadata
-                assistant_message = ConversationMessage(
-                    role="assistant",
-                    content=final_response,
-                    timestamp=datetime.now(timezone.utc),
-                    source_urls=source_urls,
-                    chunk_ids=chunk_ids,
-                    document_count=len(rag_documents),
-                    processing_time_ms=int(execution_time_ms),
-                )
-                conversation_history_service.add_message(conversation_id, assistant_message)
-                logger.info(f"✅ [CONVERSATION] Saved assistant response to conversation {conversation_id}")
+        # Yield response generation COMPLETE event
+        # Try to extract response from multiple possible locations
+        final_response = ""
 
-            except Exception as e:
-                logger.error(f"❌ [CONVERSATION] Failed to save messages to conversation: {e}")
+        # First, try from messages (set by agents)
+        if result_state.get("messages"):
+            final_response = result_state["messages"][-1].get("content", "")
 
-            yield final_result
-            return
+        # If no response from messages, try from task_result (for task agent)
+        if not final_response and result_state.get("task_result"):
+            task_result = result_state["task_result"]
+            if isinstance(task_result, dict):
+                final_response = task_result.get("response", "") or task_result.get("result", "")
+            elif isinstance(task_result, str):
+                final_response = task_result
+
+        # If still no response, try from final_answer (for RAG-only mode)
+        if not final_response and result_state.get("final_answer"):
+            final_response = result_state["final_answer"]
+
+        yield {
+            "type": "supervisor_progress",
+            "stage": "response_generation_complete",
+            "message": "Final response generated successfully",
+            "data": {
+                "response_length": len(final_response),
+                "tokens_estimated": len(final_response.split()),
+                "generation_time_ms": execution_time_ms,
+                "sources_used": total_doc_count,
+            },
+            "execution_time_ms": (time.time() - start_time) * 1000,
+        }
+
+        # Stream response in chunks for Supervisor mode (same as RAG mode)
+        logger.info(f"📝 [SUPERVISOR] Checking messages: {len(result_state.get('messages', []))} messages")
+        logger.info(f"📝 [SUPERVISOR] Task result: {result_state.get('task_result', 'NONE')}")
+        logger.info(f"📝 [SUPERVISOR] Final answer: {result_state.get('final_answer', 'NONE')[:100] if result_state.get('final_answer') else 'NONE'}")
+        logger.info(f"📝 [SUPERVISOR] final_response length: {len(final_response) if final_response else 0}")
+        logger.info(f"📝 [SUPERVISOR] final_response content: {final_response[:100] if final_response else 'EMPTY'}")
+
+        if final_response:
+            logger.critical(
+                f"🔴 [SUPERVISOR RESPONSE] Emitting streaming_response with final answer ({len(final_response)} chars)"
+            )
+
+            # Stream response in chunks (every 500 characters, matching RAG mode)
+            chunk_size = 500
+            for i in range(0, len(final_response), chunk_size):
+                chunk = final_response[i : i + chunk_size]
+
+                # Emit metadata ONLY on the first chunk
+                if i == 0:
+                    # Build metadata from retrieved documents
+                    source_urls = []
+                    chunk_ids = []
+                    for doc in rag_documents:
+                        if isinstance(doc, dict) and doc.get("source_url"):
+                            if doc["source_url"] not in source_urls:
+                                source_urls.append(doc["source_url"])
+                        if isinstance(doc, dict) and doc.get("chunk_id"):
+                            if doc["chunk_id"] not in chunk_ids:
+                                chunk_ids.append(doc["chunk_id"])
+
+                    logger.critical(
+                        f"🔴 [SUPERVISOR RESPONSE] Emitting first chunk with metadata: {len(source_urls)} sources, {len(chunk_ids)} chunks"
+                    )
+                    yield {
+                        "type": "streaming_response",
+                        "chunk": chunk,
+                        "metadata": {
+                            "source_urls": source_urls,
+                            "chunk_ids": chunk_ids,
+                            "document_count": len(rag_documents),
+                        },
+                        "execution_time_ms": execution_time_ms,
+                    }
+                else:
+                    # Subsequent chunks don't include metadata
+                    yield {
+                        "type": "streaming_response",
+                        "chunk": chunk,
+                        "execution_time_ms": execution_time_ms,
+                    }
+
+            logger.critical(
+                f"✅ [SUPERVISOR RESPONSE] EMITTED all streaming_response chunks for {len(final_response)} chars"
+            )
+
+        final_result = {
+            "type": "workflow_complete",
+            "execution_time_ms": execution_time_ms,
+            "workflow_completed": True,
+            "query": query,
+            "response": final_response,
+            "documents": rag_documents,
+            "intent": detected_intent,
+            "total_chunks": 1,
+        }
+
+        logger.info(
+            f"✅ Supervisor orchestration completed in {execution_time_ms:.2f}ms "
+            f"for query: '{query[:50]}...'"
+        )
+
+        # SAVE messages to conversation history (same as RAG mode)
+        try:
+            source_urls = []
+            chunk_ids = []
+            for doc in rag_documents:
+                if isinstance(doc, dict) and doc.get("source_url"):
+                    if doc["source_url"] not in source_urls:
+                        source_urls.append(doc["source_url"])
+                if isinstance(doc, dict) and doc.get("chunk_id"):
+                    if doc["chunk_id"] not in chunk_ids:
+                        chunk_ids.append(doc["chunk_id"])
+
+            # Save user query message
+            user_message = ConversationMessage(
+                role="user",
+                content=query,
+                timestamp=datetime.now(timezone.utc),
+                search_query=query,
+            )
+            conversation_history_service.add_message(conversation_id, user_message)
+            logger.info(
+                f"✅ [CONVERSATION] Saved user query to conversation {conversation_id}"
+            )
+
+            # Save assistant response message with metadata
+            assistant_message = ConversationMessage(
+                role="assistant",
+                content=final_response,
+                timestamp=datetime.now(timezone.utc),
+                source_urls=source_urls,
+                chunk_ids=chunk_ids,
+                document_count=len(rag_documents),
+                processing_time_ms=int(execution_time_ms),
+            )
+            conversation_history_service.add_message(conversation_id, assistant_message)
+            logger.info(
+                f"✅ [CONVERSATION] Saved assistant response to conversation {conversation_id}"
+            )
+
+        except Exception as e:
+            logger.error(
+                f"❌ [CONVERSATION] Failed to save messages to conversation: {e}"
+            )
+
+        yield final_result
+        return
 
     except Exception as e:
         execution_time_ms = (time.time() - start_time) * 1000
@@ -572,7 +751,6 @@ async def get_response_stream_supervisor(
             "response": f"I encountered an error while processing your query: {str(e)}",
             "documents": [],
         }
-
 
 
 async def get_response_stream_rag(
@@ -725,11 +903,11 @@ async def get_response_stream_rag(
         # Execute LangGraph workflow with streaming
         logger.info("🔄 Executing LangGraph workflow (streaming mode)...")
 
-        # Create the async stream iterator
-        stream_iterator = workflow.astream(
+        # Create the async stream iterator with events mode to get START and END events
+        stream_iterator = workflow.astream_events(
             input=WorkflowState(**initial_state),
             config=config,
-            stream_mode="updates",  # Stream node updates to track which node is running
+            version="v2",  # Use v2 for better event tracking
         )
 
         # Track the last complete state for final result
@@ -751,19 +929,137 @@ async def get_response_stream_rag(
 
         # Track stage completion to emit COMPLETE events
         stages_completed = set()
-        query_enhancement_emitted = False  # Track if we've emitted query_enhancement START event
-        document_judging_emitted = False   # Track if we've emitted document_judging START event
-        answer_generation_emitted = False  # Track if we've emitted response_generation START event
+        query_enhancement_emitted = (
+            False  # Track if we've emitted query_enhancement START event
+        )
+        document_judging_emitted = (
+            False  # Track if we've emitted document_judging START event
+        )
+        answer_generation_emitted = (
+            False  # Track if we've emitted response_generation START event
+        )
+        first_llm_chunk_emitted = (
+            False  # Track if we've emitted the first LLM chunk with metadata
+        )
 
-        async for chunk in stream_iterator:
-            logger.critical(f"🔴 [RAG CHUNK] Received chunk with keys: {list(chunk.keys())}")
+        # Store enable_reranking flag to avoid emitting judging events when disabled
+        is_reranking_enabled = enable_reranking
+
+        # CRITICAL: Determine the actual last step based on what's enabled
+        # Pipeline order: query_enhancement → document_retrieval → document_judging → response_generation
+        # Last step depends on enabled flags:
+        # - If enable_llm_generation=True: last step is response_generation
+        # - If enable_llm_generation=False AND enable_reranking=True: last step is document_judging
+        # - If enable_llm_generation=False AND enable_reranking=False: last step is document_retrieval
+        if enable_llm_generation:
+            last_step_for_streaming = "response_generation"
+        elif enable_reranking:
+            last_step_for_streaming = "document_judging"
+        else:
+            last_step_for_streaming = "document_retrieval"
+
+        logger.critical(
+            f"🎯 [STREAMING CONFIG] Last step for streaming: {last_step_for_streaming} "
+            f"(enable_llm_generation={enable_llm_generation}, enable_reranking={enable_reranking})"
+        )
+
+        async for event in stream_iterator:
+            logger.debug(
+                f"🔴 [RAG EVENT] Received event: {event.get('event', 'unknown')}, name: {event.get('name', 'unknown')}"
+            )
             chunk_count += 1
 
-            # With stream_mode="updates", chunk is {node_name: state_update}
-            # Extract the node name and state
-            node_name = list(chunk.keys())[0] if chunk else "unknown"
-            state_update = chunk.get(node_name, {}) if chunk else {}
-            logger.critical(f"🔴 [RAG NODE] node_name={node_name}, state_keys={list(state_update.keys())[:5]}")
+            # With astream_events, we get events with 'event', 'name', 'data' fields
+            event_type = event.get("event", "")
+            node_name = event.get("name", "")
+            event_data = event.get("data", {})
+
+            # Handle LLM streaming chunks - ONLY FROM THE LAST STEP
+            if event_type == "on_chat_model_stream":
+                # CRITICAL: Only stream responses from the actual last step
+                # Use last_stage which is tracked as nodes execute
+                # Note: on_chat_model_stream events don't have the node name, so we track by last_stage
+
+                # Only stream if we're in the actual last step
+                if last_stage != last_step_for_streaming:
+                    logger.debug(f"⏭️ [LLM STREAM SKIP] Skipping stream from {node_name} (current stage: {last_stage}) - last step is {last_step_for_streaming}")
+                    continue
+
+                chunk_data = event_data.get("chunk", {})
+                if hasattr(chunk_data, "content"):
+                    content = chunk_data.content
+                elif isinstance(chunk_data, dict):
+                    content = chunk_data.get("content", "")
+                else:
+                    content = str(chunk_data) if chunk_data else ""
+
+                if content:
+                    logger.debug(f"📤 [LLM STREAM - RESPONSE] Emitting chunk from response_generation: {content[:50]}...")
+
+                    # Emit metadata ONLY on the first chunk
+                    if not first_llm_chunk_emitted:
+                        first_llm_chunk_emitted = True
+
+                        # Build metadata from retrieved documents (may be empty if not yet populated)
+                        retrieved_docs = last_state.get("retrieved_documents") or []
+                        source_urls = []
+                        chunk_ids = []
+
+                        if retrieved_docs:
+                            for doc in retrieved_docs:
+                                if (
+                                    doc.get("source_url")
+                                    and doc["source_url"] not in source_urls
+                                ):
+                                    source_urls.append(doc["source_url"])
+                                if (
+                                    doc.get("chunk_id")
+                                    and doc["chunk_id"] not in chunk_ids
+                                ):
+                                    chunk_ids.append(doc["chunk_id"])
+
+                        # Extract enhanced queries from query_info
+                        query_info = last_state.get("query_info") or {}
+                        enhanced_queries = query_info.get("enhanced_queries", [])
+                        strategy_used = query_info.get("strategy_used", "augmented")
+
+                        logger.critical(
+                            f"📤 [FIRST CHUNK - RESPONSE] Emitting with metadata: {len(source_urls)} sources, {len(retrieved_docs)} docs"
+                        )
+                        yield {
+                            "type": "streaming_response",
+                            "chunk": content,
+                            "metadata": {
+                                "source_urls": source_urls,
+                                "chunk_ids": chunk_ids,
+                                "document_count": len(retrieved_docs),
+                                "enhancement_strategy": strategy_used,
+                                "enhanced_queries": enhanced_queries,
+                            },
+                            "execution_time_ms": execution_time_ms,
+                        }
+                    else:
+                        # Subsequent chunks don't include metadata
+                        yield {
+                            "type": "streaming_response",
+                            "chunk": content,
+                            "execution_time_ms": execution_time_ms,
+                        }
+                continue
+
+            # Skip non-node events
+            if not event_type.startswith("on_chain"):
+                continue
+
+            logger.critical(f"🔴 [RAG NODE EVENT] type={event_type}, node={node_name}")
+
+            # Get state from output if available
+            state_update = {}
+            if event_type == "on_chain_end":
+                output = event_data.get("output", {})
+                if isinstance(output, dict):
+                    state_update = output
+                    last_state = {**last_state, **state_update}
 
             # Merge state updates to accumulate all fields
             last_state = {**last_state, **state_update}
@@ -774,11 +1070,17 @@ async def get_response_stream_rag(
             # CRITICAL FIX: Some strategy nodes may not emit chunks to the stream
             # But their output appears in subsequent nodes' state
             # Check if enhanced_query exists and query_enhancement hasn't been emitted yet
-            if (not query_enhancement_emitted and
-                state_update.get("enhanced_query") and
-                last_stage is None):  # Haven't emitted any stage yet
-                logger.critical(f"🔴 [RAG HIDDEN NODE] Detected enhanced_query in state but no strategy node chunk received!")
-                logger.critical(f"🔴 [RAG HIDDEN NODE] Emitting query_enhancement START event for missing/silent strategy node")
+            if (
+                not query_enhancement_emitted
+                and state_update.get("enhanced_query")
+                and last_stage is None
+            ):  # Haven't emitted any stage yet
+                logger.critical(
+                    f"🔴 [RAG HIDDEN NODE] Detected enhanced_query in state but no strategy node chunk received!"
+                )
+                logger.critical(
+                    f"🔴 [RAG HIDDEN NODE] Emitting query_enhancement START event for missing/silent strategy node"
+                )
 
                 # Emit START event for query_enhancement
                 start_event = {
@@ -794,11 +1096,19 @@ async def get_response_stream_rag(
             # CRITICAL FIX 1b: document_judger might also be a silent node
             # But judged_documents appears in the state after it runs
             # Check if judged_documents exists and document_judging hasn't been emitted yet
-            if (not document_judging_emitted and
-                state_update.get("judged_documents") and
-                last_stage != "document_judging"):
-                logger.critical(f"🔴 [RAG HIDDEN NODE] Detected judged_documents in state but document_judging START not emitted!")
-                logger.critical(f"🔴 [RAG HIDDEN NODE] Emitting document_judging START event for missing/silent document_judger node")
+            # ONLY emit if reranking is actually enabled
+            if (
+                is_reranking_enabled
+                and not document_judging_emitted
+                and state_update.get("judged_documents")
+                and last_stage != "document_judging"
+            ):
+                logger.critical(
+                    f"🔴 [RAG HIDDEN NODE] Detected judged_documents in state but document_judging START not emitted!"
+                )
+                logger.critical(
+                    f"🔴 [RAG HIDDEN NODE] Emitting document_judging START event for missing/silent document_judger node"
+                )
 
                 # Emit START event for document_judging
                 start_event = {
@@ -814,12 +1124,18 @@ async def get_response_stream_rag(
             # CRITICAL FIX 2: answer_generator node also doesn't emit chunks to stream
             # But final_answer appears in the state after it runs
             # Check if final_answer exists and response_generation hasn't been emitted yet
-            # IMPORTANT: Only emit response_generation after document_judging is complete!
-            if (not answer_generation_emitted and
-                state_update.get("final_answer") and
-                last_stage == "document_judging"):
-                logger.critical(f"🔴 [RAG HIDDEN NODE] Detected final_answer in state after document_judging!")
-                logger.critical(f"🔴 [RAG HIDDEN NODE] Emitting response_generation START event for missing/silent answer_generator node")
+            # IMPORTANT: Emit after document_retrieval OR document_judging (depending on if reranking is enabled)
+            if (
+                not answer_generation_emitted
+                and state_update.get("final_answer")
+                and last_stage in ["document_retrieval", "document_judging"]
+            ):
+                logger.critical(
+                    f"🔴 [RAG HIDDEN NODE] Detected final_answer in state after {last_stage}!"
+                )
+                logger.critical(
+                    f"🔴 [RAG HIDDEN NODE] Emitting response_generation START event for missing/silent answer_generator node"
+                )
 
                 # Emit START event for response_generation
                 start_event = {
@@ -834,30 +1150,50 @@ async def get_response_stream_rag(
 
             # Map node to stage for consistency with supervisor path
             current_stage = stage_mapping.get(node_name, node_name)
-            logger.critical(f"🔴 [RAG MAPPING] node_name={node_name} -> current_stage={current_stage}, last_stage={last_stage}")
+            logger.critical(
+                f"🔴 [RAG MAPPING] node_name={node_name} -> current_stage={current_stage}, event_type={event_type}"
+            )
 
             # Skip special nodes
-            if node_name in ["__start__", "__end__"]:
-                logger.critical(f"🔴 [RAG SKIP] Skipping special node: {node_name}")
+            if node_name in ["__start__", "__end__", ""] or not node_name:
+                logger.critical(
+                    f"🔴 [RAG SKIP] Skipping special/empty node: {node_name}"
+                )
                 continue
 
-            # Emit START event when we transition to a new stage
-            if current_stage != last_stage and current_stage in stage_mapping.values():
-                last_stage = current_stage
-                start_event = {
-                    "type": "workflow_progress",
-                    "stage": current_stage,
-                    "message": f"Processing {current_stage}...",
-                    "execution_time_ms": execution_time_ms,
-                }
-                logger.critical(f"🚀 [RAG START EVENT] EMITTING START: stage={current_stage}, node={node_name}")
-                yield start_event
-                logger.critical(f"✅ [RAG START EVENT] YIELDED START event for {current_stage}")
+            # Handle START events (on_chain_start)
+            if event_type == "on_chain_start":
+                if (
+                    current_stage in stage_mapping.values()
+                    and current_stage != last_stage
+                ):
+                    last_stage = current_stage
+                    start_event = {
+                        "type": "workflow_progress",
+                        "stage": current_stage,
+                        "message": f"Processing {current_stage}...",
+                        "execution_time_ms": execution_time_ms,
+                    }
+                    logger.critical(
+                        f"🚀 [RAG START EVENT] Node {node_name} started -> Emitting START for stage={current_stage}"
+                    )
+                    yield start_event
 
-            # Emit COMPLETE events with detailed data based on stage
-            # Only emit completion event once per node (not repeatedly)
-            if node_name not in stages_completed:
-                stages_completed.add(node_name)
+                    # Mark response_generation as emitted if this is that stage
+                    # (prevents double-emission at end of stream)
+                    if current_stage == "response_generation":
+                        answer_generation_emitted = True
+                        logger.critical(
+                            f"🔴 [RAG START EVENT] Marked answer_generation_emitted=True to prevent double-emission"
+                        )
+
+                continue  # Done with START event, wait for END event
+
+            # Handle END events (on_chain_end) - emit COMPLETE
+            if event_type == "on_chain_end":
+                # Only emit completion event once per node (not repeatedly)
+                if node_name not in stages_completed:
+                    stages_completed.add(node_name)
 
                 # Handle stage-specific completion events
                 if node_name in [
@@ -874,7 +1210,9 @@ async def get_response_stream_rag(
                     if isinstance(enhanced_query_dict, dict):
                         if "augmented_queries" in enhanced_query_dict:
                             # Augmented: get all except first (which is original)
-                            all_queries = enhanced_query_dict.get("augmented_queries", [])
+                            all_queries = enhanced_query_dict.get(
+                                "augmented_queries", []
+                            )
                             enhanced_queries = (
                                 all_queries[1:] if len(all_queries) > 1 else []
                             )
@@ -892,7 +1230,9 @@ async def get_response_stream_rag(
 
                     strategy = node_name.replace("_strategy_node", "")
 
-                    logger.info(f"✅ [RAG COMPLETE EVENT] Emitting COMPLETE event for query_enhancement_complete with {len(enhanced_queries)} variants")
+                    logger.info(
+                        f"✅ [RAG COMPLETE EVENT] Emitting COMPLETE event for query_enhancement_complete with {len(enhanced_queries)} variants"
+                    )
                     yield {
                         "type": "workflow_progress",
                         "stage": "query_enhancement_complete",
@@ -912,7 +1252,9 @@ async def get_response_stream_rag(
                     retrieved_docs = state_update.get("retrieved_documents", [])
                     document_count = len(retrieved_docs)
 
-                    logger.info(f"✅ [RAG COMPLETE EVENT] Emitting COMPLETE event for document_retrieval_complete with {document_count} documents")
+                    logger.info(
+                        f"✅ [RAG COMPLETE EVENT] Emitting COMPLETE event for document_retrieval_complete with {document_count} documents"
+                    )
                     yield {
                         "type": "workflow_progress",
                         "stage": "document_retrieval_complete",
@@ -930,6 +1272,13 @@ async def get_response_stream_rag(
                     continue
 
                 elif node_name == "document_judger":
+                    # Document Judging - Only emit if reranking is enabled
+                    if not is_reranking_enabled:
+                        logger.warning(
+                            f"⚠️ Skipping document_judger event emission - reranking is disabled"
+                        )
+                        continue
+
                     # Document Judging - count relevant documents
                     judged_docs = state_update.get("judged_documents", [])
                     relevance_scores = state_update.get("relevance_scores", [])
@@ -947,7 +1296,9 @@ async def get_response_stream_rag(
                         else 0
                     )
 
-                    logger.info(f"✅ [RAG COMPLETE EVENT] Emitting COMPLETE event for document_judging_complete with {relevant_count}/{len(judged_docs)} relevant")
+                    logger.info(
+                        f"✅ [RAG COMPLETE EVENT] Emitting COMPLETE event for document_judging_complete with {relevant_count}/{len(judged_docs)} relevant"
+                    )
                     yield {
                         "type": "workflow_progress",
                         "stage": "document_judging_complete",
@@ -964,45 +1315,39 @@ async def get_response_stream_rag(
 
                 elif node_name in ["answer_generator", "raw_response_formatter"]:
                     # Response Generation / Raw Formatting
-                    final_answer = state_update.get("final_answer", "")
-
-                    # Emit COMPLETE event for response generation
-                    logger.info(f"✅ [RAG COMPLETE EVENT] Emitting COMPLETE event for response_generation_complete with {len(final_answer)} characters")
-                    yield {
-                        "type": "workflow_progress",
-                        "stage": "response_generation_complete",
-                        "message": f"Generated response: {len(final_answer)} characters",
-                        "data": {
-                            "response_length": len(final_answer),
-                            "generation_mode": (
-                                "llm" if node_name == "answer_generator" else "raw"
-                            ),
-                        },
-                        "execution_time_ms": execution_time_ms,
-                    }
-                    # Skip the generic stream_chunk for this node since we already sent complete event
+                    # DON'T emit COMPLETE yet - streaming will happen after this
+                    # We'll emit COMPLETE after streaming is done
+                    logger.info(
+                        f"✅ [RAG NODE DONE] answer_generator finished, will stream response and then mark complete"
+                    )
+                    # Skip emitting completion here - we'll do it after streaming
                     continue
-
-            # Only yield generic stream_chunk for nodes that don't have explicit completion events
-            # This prevents duplicate events for query enhancement, document retrieval, etc.
-            logger.debug(
-                f"📦 Streaming chunk {chunk_count}: node={node_name}, stage={current_stage}, "
-                f"retrieved={len(state_update.get('retrieved_documents', []))}, "
-                f"judged={len(state_update.get('judged_documents', []))}, "
-                f"answer_len={len(state_update.get('final_answer', ''))}"
-            )
 
         # Calculate final execution time
         execution_time_ms = (time.time() - start_time) * 1000
 
-        logger.critical(f"🔴 [RAG STREAM ENDED] Stream finished after {chunk_count} chunks")
-        logger.critical(f"🔴 [RAG STREAM ENDED] answer_generation_emitted={answer_generation_emitted}, has_final_answer={bool(last_state.get('final_answer'))}")
-        logger.critical(f"🔴 [RAG STREAM ENDED] final_answer length={len(last_state.get('final_answer', ''))}")
+        logger.critical(
+            f"🔴 [RAG STREAM ENDED] Stream finished after {chunk_count} chunks"
+        )
+        logger.critical(
+            f"🔴 [RAG STREAM ENDED] answer_generation_emitted={answer_generation_emitted}, has_final_answer={bool(last_state.get('final_answer'))}"
+        )
+        logger.critical(
+            f"🔴 [RAG STREAM ENDED] final_answer length={len(last_state.get('final_answer', ''))}"
+        )
 
         # CRITICAL FIX 3: If response_generation wasn't emitted but we have final_answer, emit it now
         if not answer_generation_emitted and last_state.get("final_answer"):
-            logger.critical(f"🔴 [RAG END STATE] Detected final_answer at end of stream but response_generation never emitted!")
-            logger.critical(f"🔴 [RAG END STATE] Emitting response_generation START and COMPLETE events now")
+            # Determine if this is from raw_response_formatter or answer_generator
+            is_raw_response = not enable_llm_generation and "Raw Results Mode" in last_state.get("final_answer", "")
+            response_source = "raw_response_formatter" if is_raw_response else "answer_generator/unknown"
+
+            logger.critical(
+                f"🔴 [RAG END STATE] Detected final_answer from {response_source} at end of stream!"
+            )
+            logger.critical(
+                f"🔴 [RAG END STATE] Emitting response_generation START and COMPLETE events now"
+            )
 
             # Emit START event
             start_event = {
@@ -1016,69 +1361,63 @@ async def get_response_stream_rag(
 
             # Emit COMPLETE event with answer data
             final_answer = last_state.get("final_answer", "")
+            generation_mode = "raw_response" if is_raw_response else "llm"
+
             complete_event = {
                 "type": "workflow_progress",
                 "stage": "response_generation_complete",
                 "message": f"Generated response: {len(final_answer)} characters",
                 "data": {
                     "response_length": len(final_answer),
-                    "generation_mode": "llm",
+                    "generation_mode": generation_mode,
                 },
                 "execution_time_ms": execution_time_ms,
             }
             yield complete_event
-            logger.critical(f"✅ [RAG END STATE] EMITTED response_generation_complete with {len(final_answer)} chars")
+            logger.critical(
+                f"✅ [RAG END STATE] EMITTED response_generation_complete with {len(final_answer)} chars (mode: {generation_mode})"
+            )
 
-        # CRITICAL FIX: Stream the final answer in chunks so frontend displays it with streaming effect
+        # Emit the final_answer as streaming_response so frontend can display it
         final_answer = last_state.get("final_answer", "") if last_state else ""
-        retrieved_docs = last_state.get("retrieved_documents", []) if last_state else []
-
         if final_answer:
-            logger.critical(f"🔴 [RAG RESPONSE] Emitting streaming_response with final answer ({len(final_answer)} chars)")
+            logger.critical(
+                f"🔴 [RAG EMIT RESPONSE] Emitting final_answer as streaming_response ({len(final_answer)} chars)"
+            )
 
-            # Stream response in chunks (every 50 characters for smooth streaming effect)
-            chunk_size = 50
+            # Emit metadata on first chunk only
+            retrieved_docs = last_state.get("retrieved_documents", []) or []
+            source_urls = [doc.get("source_url") for doc in retrieved_docs if doc.get("source_url")]
+            chunk_ids = [doc.get("chunk_id") for doc in retrieved_docs if doc.get("chunk_id")]
+
+            # Extract enhanced queries from query_info
+            query_info = last_state.get("query_info") or {}
+            enhanced_queries = query_info.get("enhanced_queries", [])
+            strategy_used = query_info.get("strategy_used", "augmented")
+
+            # Break response into chunks to avoid React update depth issues
+            # Emit chunks of ~500 chars at a time
+            chunk_size = 500
             for i in range(0, len(final_answer), chunk_size):
                 chunk = final_answer[i:i + chunk_size]
 
-                # Emit metadata ONLY on the first chunk
+                response_event = {
+                    "type": "streaming_response",
+                    "chunk": chunk,
+                }
+
+                # Add metadata only on first chunk
                 if i == 0:
-                    # Build metadata from retrieved documents
-                    source_urls = []
-                    chunk_ids = []
-                    for doc in retrieved_docs:
-                        if doc.get("source_url") and doc["source_url"] not in source_urls:
-                            source_urls.append(doc["source_url"])
-                        if doc.get("chunk_id") and doc["chunk_id"] not in chunk_ids:
-                            chunk_ids.append(doc["chunk_id"])
-
-                    # Extract enhanced queries from query_info (set by answer_generator)
-                    query_info = last_state.get("query_info", {})
-                    enhanced_queries = query_info.get("enhanced_queries", []) if query_info else []
-                    strategy_used = query_info.get("strategy_used", "augmented") if query_info else "augmented"
-
-                    logger.critical(f"🔴 [RAG RESPONSE] Emitting first chunk with metadata: {len(source_urls)} sources, {len(chunk_ids)} chunks, {len(enhanced_queries)} enhanced queries")
-                    yield {
-                        "type": "streaming_response",
-                        "chunk": chunk,
-                        "metadata": {
-                            "source_urls": source_urls,
-                            "chunk_ids": chunk_ids,
-                            "document_count": len(retrieved_docs),
-                            "enhancement_strategy": strategy_used,
-                            "enhanced_queries": enhanced_queries,
-                        },
-                        "execution_time_ms": execution_time_ms,
-                    }
-                else:
-                    # Subsequent chunks don't include metadata
-                    yield {
-                        "type": "streaming_response",
-                        "chunk": chunk,
-                        "execution_time_ms": execution_time_ms,
+                    response_event["metadata"] = {
+                        "source_urls": source_urls,
+                        "chunk_ids": chunk_ids,
+                        "document_count": len(retrieved_docs),
+                        "enhancement_strategy": strategy_used,
+                        "enhanced_queries": enhanced_queries,
                     }
 
-            logger.critical(f"✅ [RAG RESPONSE] EMITTED all streaming_response chunks for {len(final_answer)} chars")
+                logger.debug(f"📤 [RAG RESPONSE CHUNK] Emitting chunk {i//chunk_size + 1} ({len(chunk)} chars)")
+                yield response_event
 
         # Yield final result with complete state
         if last_state:
@@ -1128,8 +1467,14 @@ async def get_response_stream_rag(
                     if doc.get("chunk_id") and doc["chunk_id"] not in chunk_ids:
                         chunk_ids.append(doc["chunk_id"])
 
-                enhanced_queries = query_info.get("enhanced_queries", []) if query_info else []
-                enhancement_strategy = query_info.get("strategy_used", "augmented") if query_info else "augmented"
+                enhanced_queries = (
+                    query_info.get("enhanced_queries", []) if query_info else []
+                )
+                enhancement_strategy = (
+                    query_info.get("strategy_used", "augmented")
+                    if query_info
+                    else "augmented"
+                )
 
                 # Save user query message
                 user_message = ConversationMessage(
@@ -1139,7 +1484,9 @@ async def get_response_stream_rag(
                     search_query=query,
                 )
                 conversation_history_service.add_message(conversation_id, user_message)
-                logger.info(f"✅ [CONVERSATION] Saved user query to conversation {conversation_id}")
+                logger.info(
+                    f"✅ [CONVERSATION] Saved user query to conversation {conversation_id}"
+                )
 
                 # Save assistant response message with metadata
                 assistant_message = ConversationMessage(
@@ -1153,11 +1500,17 @@ async def get_response_stream_rag(
                     document_count=len(retrieved_docs),
                     processing_time_ms=int(execution_time_ms),
                 )
-                conversation_history_service.add_message(conversation_id, assistant_message)
-                logger.info(f"✅ [CONVERSATION] Saved assistant response to conversation {conversation_id}")
+                conversation_history_service.add_message(
+                    conversation_id, assistant_message
+                )
+                logger.info(
+                    f"✅ [CONVERSATION] Saved assistant response to conversation {conversation_id}"
+                )
 
             except Exception as e:
-                logger.error(f"❌ [CONVERSATION] Failed to save messages to conversation: {e}")
+                logger.error(
+                    f"❌ [CONVERSATION] Failed to save messages to conversation: {e}"
+                )
 
             yield final_result
         else:
@@ -1192,7 +1545,6 @@ async def get_response_stream_rag(
             "documents": [],
             "enhanced_query": None,
         }
-
 
     except Exception as e:
         execution_time_ms = (time.time() - start_time) * 1000
