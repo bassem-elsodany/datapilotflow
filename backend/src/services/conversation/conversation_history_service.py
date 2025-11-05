@@ -478,6 +478,64 @@ class ConversationHistoryService:
         )
         return conversation_id
 
+    @staticmethod
+    def _deserialize_nested_config(doc: Dict[str, Any]) -> tuple:
+        """
+        Deserialize nested configuration from MongoDB document.
+
+        Returns: (system_prompt, enhancement, vector_database, reranker, answer_generation)
+        """
+        system_prompt = None
+        if doc.get("system_prompt"):
+            sp = doc["system_prompt"]
+            system_prompt = SystemPrompt(
+                id=sp.get("id"),
+                title=sp.get("title"),
+                content=sp.get("content"),
+            )
+
+        enhancement = None
+        if doc.get("enhancement"):
+            enh = doc["enhancement"]
+            provider = None
+            if enh.get("provider"):
+                p = enh["provider"]
+                provider = ProviderConfig(id=p.get("id"), model_name=p.get("model_name"))
+            enhancement = EnhancementConfig(
+                strategy=enh.get("strategy", "native"), provider=provider
+            )
+
+        vector_database = None
+        if doc.get("vector_database"):
+            vdb = doc["vector_database"]
+            vector_database = VectorDatabaseConfig(
+                collection_name=vdb.get("collection_name", "LongTermMemory"),
+                top_k=vdb.get("top_k", 5),
+            )
+
+        reranker = None
+        if doc.get("reranker"):
+            rer = doc["reranker"]
+            provider = None
+            if rer.get("provider"):
+                p = rer["provider"]
+                provider = ProviderConfig(id=p.get("id"), model_name=p.get("model_name"))
+            reranker = RerankerConfig(
+                provider=provider,
+                relevance_threshold=rer.get("relevance_threshold", 0.5),
+            )
+
+        answer_generation = None
+        if doc.get("answer_generation"):
+            ag = doc["answer_generation"]
+            provider = None
+            if ag.get("provider"):
+                p = ag["provider"]
+                provider = ProviderConfig(id=p.get("id"), model_name=p.get("model_name"))
+            answer_generation = AnswerGenerationConfig(provider=provider)
+
+        return system_prompt, enhancement, vector_database, reranker, answer_generation
+
     def get_conversation(
         self, conversation_id: str, user_id: str = None
     ) -> Optional[ConversationSession]:
@@ -492,7 +550,7 @@ class ConversationHistoryService:
 
             doc = self.collection.find_one(query)
             if doc:
-                # Convert back to ConversationSession
+                # Convert messages
                 messages = []
                 for msg_doc in doc.get("messages", []):
                     msg = ConversationMessage(
@@ -502,6 +560,7 @@ class ConversationHistoryService:
                         search_query=msg_doc.get("search_query"),
                         search_results=msg_doc.get("search_results"),
                         source_urls=msg_doc.get("source_urls"),
+                        chunk_ids=msg_doc.get("chunk_ids"),
                         enhancement_strategy_used=msg_doc.get(
                             "enhancement_strategy_used"
                         ),
@@ -511,16 +570,10 @@ class ConversationHistoryService:
                     )
                     messages.append(msg)
 
-                # Parse enhancement config
-                enhancement_config = None
-                if doc.get("enhancement_config"):
-                    ec = doc["enhancement_config"]
-                    enhancement_config = EnhancementConfiguration(
-                        strategy=ec.get("strategy", "none"),
-                        enabled=ec.get("enabled", False),
-                        config=ec.get("config"),
-                        configured_at=ec.get("configured_at"),
-                    )
+                # Deserialize nested configuration
+                system_prompt, enhancement, vector_database, reranker, answer_generation = (
+                    self._deserialize_nested_config(doc)
+                )
 
                 session = ConversationSession(
                     _id=str(doc["_id"]),
@@ -530,28 +583,18 @@ class ConversationHistoryService:
                     messages=messages,
                     name=doc.get("name"),
                     description=doc.get("description"),
-                    context_summary=doc.get("context_summary"),
-                    topics_discussed=doc.get("topics_discussed", []),
-                    knowledge_sources_used=doc.get("knowledge_sources_used", []),
-                    llm_provider_id=doc.get("llm_provider_id"),
-                    llm_model_name=doc.get("llm_model_name"),
-                    enhancement_config=enhancement_config,
-                    collection_name=doc.get("collection_name", "LongTermMemory"),
-                    enable_reranking=doc.get("enable_reranking", False),
-                    reranker_provider_id=doc.get("reranker_provider_id"),
-                    reranker_model_name=doc.get("reranker_model_name"),
-                    enable_llm_generation=doc.get("enable_llm_generation", False),
-                    total_queries=doc.get("total_queries", 0),
-                    total_documents_retrieved=doc.get("total_documents_retrieved", 0),
-                    average_response_time_ms=doc.get("average_response_time_ms"),
+                    system_prompt=system_prompt,
+                    enhancement=enhancement,
+                    vector_database=vector_database,
+                    reranker=reranker,
+                    answer_generation=answer_generation,
                     tags=doc.get("tags", []),
-                    top_k=doc.get("top_k", 5),
-                    enable_knowledge_assistant=doc.get("enable_knowledge_assistant", True),
+                    enable_knowledge_assistant=doc.get("enable_knowledge_assistant", False),
                 )
                 return session
             return None
         except Exception as e:
-            logger.error(f"Error retrieving conversation {conversation_id}: {e}")
+            logger.error(f"Error retrieving conversation {conversation_id}: {e}", exc_info=True)
             return None
 
     def get_conversation_messages(
@@ -600,6 +643,7 @@ class ConversationHistoryService:
                     search_query=msg_doc.get("search_query"),
                     search_results=msg_doc.get("search_results"),
                     source_urls=msg_doc.get("source_urls"),
+                    chunk_ids=msg_doc.get("chunk_ids"),
                     enhancement_strategy_used=msg_doc.get("enhancement_strategy_used"),
                     enhanced_queries=msg_doc.get("enhanced_queries"),
                     processing_time_ms=msg_doc.get("processing_time_ms"),
@@ -607,16 +651,10 @@ class ConversationHistoryService:
                 )
                 messages.append(msg)
 
-            # Parse enhancement config
-            enhancement_config = None
-            if doc.get("enhancement_config"):
-                ec = doc["enhancement_config"]
-                enhancement_config = EnhancementConfiguration(
-                    strategy=ec.get("strategy", "none"),
-                    enabled=ec.get("enabled", False),
-                    config=ec.get("config"),
-                    configured_at=ec.get("configured_at"),
-                )
+            # Deserialize nested configuration
+            system_prompt, enhancement, vector_database, reranker, answer_generation = (
+                self._deserialize_nested_config(doc)
+            )
 
             session = ConversationSession(
                 _id=str(doc["_id"]),
@@ -626,17 +664,13 @@ class ConversationHistoryService:
                 messages=messages,
                 name=doc.get("name"),
                 description=doc.get("description"),
-                context_summary=doc.get("context_summary"),
-                topics_discussed=doc.get("topics_discussed", []),
-                knowledge_sources_used=doc.get("knowledge_sources_used", []),
-                llm_provider_id=doc.get("llm_provider_id"),
-                llm_model_name=doc.get("llm_model_name"),
-                enhancement_config=enhancement_config,
-                collection_name=doc.get("collection_name", "LongTermMemory"),
-                total_queries=doc.get("total_queries", 0),
-                total_documents_retrieved=doc.get("total_documents_retrieved", 0),
-                average_response_time_ms=doc.get("average_response_time_ms"),
+                system_prompt=system_prompt,
+                enhancement=enhancement,
+                vector_database=vector_database,
+                reranker=reranker,
+                answer_generation=answer_generation,
                 tags=doc.get("tags", []),
+                enable_knowledge_assistant=doc.get("enable_knowledge_assistant", False),
             )
             sessions.append(session)
 
