@@ -52,6 +52,9 @@ def task_executor_node(state: TaskAgentState) -> Dict[str, Any]:
     rag_knowledge_content = state.get("rag_knowledge", "")
     conversation_description = state.get("conversation_description", "")
 
+    # Check if system prompt task is available (Phase 1)
+    system_prompt_task = config.get("system_prompt_task")
+
     logger.info(f"📚 [TASK EXECUTOR] RAG Knowledge Available: {has_rag_context}")
     if has_rag_context:
         logger.info(f"📚 [TASK EXECUTOR] RAG Knowledge length: {len(rag_knowledge_content)} chars")
@@ -61,6 +64,10 @@ def task_executor_node(state: TaskAgentState) -> Dict[str, Any]:
 
     if conversation_description:
         logger.info(f"📝 [TASK EXECUTOR] Conversation Description: {conversation_description[:100]}...")
+
+    if system_prompt_task:
+        logger.info(f"📝 [TASK EXECUTOR] System Prompt Selected: '{system_prompt_task.name}'")
+        logger.debug(f"📝 [TASK EXECUTOR] System Prompt: {system_prompt_task.system_prompt[:100]}...")
 
     # Get task execution chain
     chain = get_task_execution_chain(llm_client, use_rag_context=has_rag_context)
@@ -77,6 +84,10 @@ def task_executor_node(state: TaskAgentState) -> Dict[str, Any]:
             chain_input["conversation_description"] = conversation_description
             logger.info(f"📝 [TASK EXECUTOR] Injected conversation description into chain input")
 
+        if system_prompt_task:
+            chain_input["system_prompt"] = system_prompt_task.system_prompt
+            logger.info(f"📝 [TASK EXECUTOR] Injected system prompt into chain input")
+
         logger.critical(f"🔴 [TASK EXECUTOR] About to invoke chain with input keys: {list(chain_input.keys())}")
         if has_rag_context:
             logger.critical(f"🔴 [TASK EXECUTOR] RAG context length in input: {len(chain_input.get('rag_context', ''))}")
@@ -89,13 +100,21 @@ def task_executor_node(state: TaskAgentState) -> Dict[str, Any]:
 
         logger.info(f"✅ Task Executor: Generated result ({len(task_result)} chars)")
 
+        task_details = {
+            "type": "task_execution",
+            "used_rag_context": has_rag_context,
+            "execution_status": "success",
+        }
+
+        # Add system prompt metadata if used (Phase 1)
+        if system_prompt_task:
+            task_details["used_system_prompt"] = True
+            task_details["system_prompt_id"] = system_prompt_task.id
+            task_details["system_prompt_name"] = system_prompt_task.name
+
         return {
             "task_result": task_result,
-            "task_details": {
-                "type": "task_execution",
-                "used_rag_context": has_rag_context,
-                "execution_status": "success",
-            },
+            "task_details": task_details,
         }
 
     except Exception as e:

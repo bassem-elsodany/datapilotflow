@@ -99,6 +99,13 @@ class TaskAgentService(AgentService):
             if conversation_description:
                 logger.info(f"📝 [TASK AGENT] Conversation description: {conversation_description[:100]}...")
 
+            # Extract system prompt task if available (Phase 1 integration)
+            system_prompt_task = state.get("system_prompt_task")
+            if system_prompt_task:
+                logger.info(f"📝 [TASK AGENT] System prompt selected: '{system_prompt_task.name}'")
+            else:
+                logger.debug("📝 [TASK AGENT] No system prompt selected")
+
             task_state = create_initial_state(
                 user_request=user_request,
                 rag_knowledge=rag_knowledge_str,
@@ -108,6 +115,10 @@ class TaskAgentService(AgentService):
             # Add llm_client to config (same pattern as RAG Agent)
             config = state.get("config", {}) or {}
             task_state["config"] = {**config, "llm_client": self.llm_client}
+
+            # Add system prompt task to config for task executor (Phase 1)
+            if system_prompt_task:
+                task_state["config"]["system_prompt_task"] = system_prompt_task
 
             logger.debug("⚙️  Task Agent: Running task graph")
 

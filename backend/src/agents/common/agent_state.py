@@ -49,5 +49,11 @@ class AgentState(MessagesState):
     conversation_id: str = ""
     intent: str = "unknown"
 
+    # System Prompt Integration (Phase 1)
+    system_prompt_task: Optional[Any] = None  # SystemPromptTask object if selected
+
+    # Conversation enrichment
+    conversation_description: Optional[str] = None  # Knowledge base/collection description
+
     # Tracking
     execution_log: List[str] = field(default_factory=list)

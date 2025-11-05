@@ -52,6 +52,7 @@ async def get_response_stream_supervisor(
     enable_llm_generation: bool = True,
     top_k: int = 5,
     conversation_description: Optional[str] = None,
+    selected_system_prompt_id: Optional[str] = None,
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
     Generate AI response using Supervisor Agent for intent routing (streaming).
@@ -103,6 +104,28 @@ async def get_response_stream_supervisor(
             f"🔧 Supervisor Config: enable_reranking={enable_reranking}, enable_llm_generation={enable_llm_generation}, collection={collection_name}, strategy={selected_strategy}"
         )
 
+        # Retrieve selected system prompt if provided (Phase 1)
+        selected_system_prompt = None
+        if selected_system_prompt_id:
+            try:
+                selected_system_prompt = conversation_history_service.get_system_prompt(
+                    conversation_id=conversation_id,
+                    prompt_id=selected_system_prompt_id,
+                    user_id=user_id,
+                )
+                if selected_system_prompt:
+                    logger.info(
+                        f"📝 [SUPERVISOR] Using system prompt: '{selected_system_prompt.name}'"
+                    )
+                    # Add to workflow config for agent access
+                    workflow_config["selected_system_prompt"] = selected_system_prompt
+                else:
+                    logger.warning(
+                        f"⚠️ [SUPERVISOR] System prompt not found: {selected_system_prompt_id}"
+                    )
+            except Exception as e:
+                logger.error(f"⚠️ [SUPERVISOR] Error retrieving system prompt: {e}")
+
         # Get provider configuration to create LLM client
         provider_service = get_model_provider_service()
         provider = provider_service.get_model_provider(llm_provider_id, user_id)
@@ -153,6 +176,13 @@ async def get_response_stream_supervisor(
             config=workflow_config,
             conversation_description=conversation_description,  # Pass collection description for Task Agent enrichment
         )
+
+        # Add system prompt to state if selected (Phase 1 integration)
+        if selected_system_prompt:
+            supervisor_initial_state["system_prompt_task"] = selected_system_prompt
+            logger.info(
+                f"📝 [SUPERVISOR] System prompt added to state: '{selected_system_prompt.name}'"
+            )
 
         if conversation_description:
             logger.info(f"📝 [SUPERVISOR] Conversation description included: {conversation_description[:100]}...")
