@@ -474,28 +474,36 @@ async def get_response_stream_supervisor(
                 logger.critical(f"🔴 [RAG RESULT CHECK] rag_result is empty or None!")
 
             if rag_result:
-                retrieved_docs = rag_result.get("retrieved_documents", [])
-                judged_docs = rag_result.get("judged_documents", [])
+                retrieved_docs = rag_result.get("retrieved_documents", []) or []
+                judged_docs = rag_result.get("judged_documents", []) or []
+                logger.critical(f"🔴 [RAG DOCS EXTRACTED] retrieved_docs type: {type(retrieved_docs)}, count: {len(retrieved_docs) if retrieved_docs else 0}")
+                logger.critical(f"🔴 [RAG DOCS EXTRACTED] judged_docs type: {type(judged_docs)}, count: {len(judged_docs) if judged_docs else 0}")
                 relevance_scores = rag_result.get("relevance_scores", [])
                 relevance_threshold = rag_config.get("reranking_config", {}).get(
                     "relevance_threshold", 0.5
                 )
 
                 # Create RAGContext
+                # Safety check: ensure judged_docs is a list
+                if not judged_docs:
+                    judged_docs = []
+
+                relevant_count = len(
+                    [
+                        doc
+                        for doc in (judged_docs or [])
+                        if getattr(doc, "is_relevant", True)
+                    ]
+                ) if judged_docs else 0
+
                 rag_context = RAGContext(
                     query=query,
-                    original_documents=retrieved_docs,
-                    judged_documents=judged_docs,
-                    relevance_scores=relevance_scores,
+                    original_documents=retrieved_docs or [],
+                    judged_documents=judged_docs or [],
+                    relevance_scores=relevance_scores or [],
                     relevance_threshold=relevance_threshold,
-                    retrieved_count=len(retrieved_docs),
-                    relevant_count=len(
-                        [
-                            doc
-                            for doc in judged_docs
-                            if getattr(doc, "is_relevant", True)
-                        ]
-                    ),
+                    retrieved_count=len(retrieved_docs or []),
+                    relevant_count=relevant_count,
                     execution_time_ms=(time.time() - start_time) * 1000,
                 )
 
