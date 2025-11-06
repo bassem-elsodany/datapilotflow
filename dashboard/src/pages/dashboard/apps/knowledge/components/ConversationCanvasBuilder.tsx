@@ -49,8 +49,8 @@ import { ConversationNode } from './ConversationNode';
 import { ConversationNodeConfigPanel } from './ConversationNodeConfigPanel';
 import { ConversationTemplate } from './conversationTemplates';
 import { ConversationTemplateSelector } from './ConversationTemplateSelector';
-import { RAGSubflowConfig, generateRAGSubflowNodes, generateRAGSubflowEdges } from './RAGSubflow';
-import { TaskAgentSubflowConfig, generateTaskAgentSubflowNodes, generateTaskAgentSubflowEdges } from './TaskAgentSubflow';
+import { RAGSubflowConfig, generateRAGSubflowEdges, generateRAGSubflowNodes } from './RAGSubflow';
+import { TaskAgentSubflowConfig, generateTaskAgentSubflowEdges, generateTaskAgentSubflowNodes } from './TaskAgentSubflow';
 
 const breadcrumbs = [
   { label: 'Dashboard', href: paths.dashboard.root },
@@ -538,8 +538,7 @@ function ConversationCanvasContent() {
 
   const handleSaveNodeConfig = (nodeId: string, nodeConfig: any) => {
     setConfig(prev => ({
-      ...prev,
-      ...nodeConfig, // Merge new config values into existing config
+      ...nodeConfig,
       configuredNodes: {
         ...prev.configuredNodes,
         [nodeId]: true, // Mark this node as configured when user saves
@@ -887,15 +886,6 @@ function ConversationCanvasContent() {
               color="green"
               leftSection={<IconCheck size={16} />}
               onClick={() => {
-                // Debug logging
-                console.log('[DEBUG Create Conversation] Current config:', {
-                  selectedStrategy: config.selectedStrategy,
-                  collectionName: config.collectionName,
-                  topK: config.topK,
-                  enableReranking: config.enableReranking,
-                  enableLLMGeneration: config.enableLLMGeneration,
-                });
-
                 // Validate all required nodes are configured BEFORE opening modal
                 if (!config.selectedStrategy) {
                   notifications.show({
@@ -908,9 +898,11 @@ function ConversationCanvasContent() {
                 }
 
                 if (!config.collectionName || !config.topK) {
-                  console.log('[DEBUG] Collection validation failed:', {
+                  console.error('[ERROR] Validation failed:', {
                     collectionName: config.collectionName,
+                    collectionNameEmpty: !config.collectionName,
                     topK: config.topK,
+                    topKEmpty: !config.topK,
                   });
                   notifications.show({
                     title: 'Configuration Incomplete',
@@ -956,25 +948,25 @@ function ConversationCanvasContent() {
       <Modal
         opened={basicInfoModalOpen}
         onClose={() => setBasicInfoModalOpen(false)}
-        title="Conversation Details"
+        title="Conversation Agent Pipeline Details"
         size="sm"
         centered
       >
         <Stack gap="md">
           <TextInput
-            label="Conversation Name"
-            placeholder="e.g., SSL Configuration Help"
+            label="Conversation Agent Pipeline Name"
+            placeholder="e.g., SSL Configuration Help Conversation Agent Pipeline"
             value={config.conversationName}
             onChange={(e) => setConfig({ ...config, conversationName: e.currentTarget.value })}
             required
             withAsterisk
-            description="Give your conversation a descriptive name"
+            description="Give your conversation agent pipeline a descriptive name"
           />
 
           <Textarea
             label={config.selectedStrategy !== 'native' ? "Description (Required for Query Enhancement)" : "Description (Optional)"}
             placeholder={config.selectedStrategy !== 'native'
-              ? "Describe the domain/topic to help enhance queries (e.g., 'MuleSoft API documentation')"
+              ? "Describe the domain/topic to help enhance queries (e.g., 'MuleSoft API documentation conversation agent pipeline')"
               : "Brief description of what this conversation is about..."}
             value={config.conversationDescription}
             onChange={(e) => setConfig({ ...config, conversationDescription: e.currentTarget.value })}
@@ -982,7 +974,7 @@ function ConversationCanvasContent() {
             maxRows={4}
             required={config.selectedStrategy !== 'native'}
             withAsterisk={config.selectedStrategy !== 'native'}
-            error={config.selectedStrategy !== 'native' && !config.conversationDescription.trim() ? 'Description is required when using query enhancement' : undefined}
+            error={config.selectedStrategy !== 'native' && !config.conversationDescription.trim() ? 'Description is required when using query enhancement conversation agent pipeline' : undefined}
             description={config.selectedStrategy !== 'native' ? "This helps the AI understand the domain and provide better query enhancements" : "Optional description for context"}
           />
 
