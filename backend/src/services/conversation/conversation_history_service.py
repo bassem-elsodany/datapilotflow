@@ -1081,14 +1081,14 @@ class ConversationHistoryService:
             )
 
             if result.modified_count > 0:
-                logger.info(f"Updated configuration (v2) for conversation {conversation_id}")
+                logger.info(f"Updated configuration for conversation {conversation_id}")
                 return True
             else:
                 logger.warning(f"No changes made to conversation {conversation_id}")
                 return False
 
         except Exception as e:
-            logger.error(f"Error updating conversation config v2 {conversation_id}: {e}")
+            logger.error(f"Error updating conversation configuration {conversation_id}: {e}")
             return False
 
     def get_conversation_with_provider(
