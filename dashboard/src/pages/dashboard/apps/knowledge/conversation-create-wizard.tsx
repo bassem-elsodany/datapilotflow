@@ -492,10 +492,6 @@ export function ConversationCreateWizard() {
       const payload: any = {
         name: form.values.conversationName.trim(),
         description: form.values.conversationDescription.trim() || null,
-        enable_knowledge_assistant:
-          form.values.agentType === 'assistant'
-            ? true
-            : form.values.enableKnowledgeAssistant,
         // Enhancement configuration
         enhancement: form.values.selectedStrategy !== 'native' && form.values.selectedProviderId && form.values.selectedModel ? {
           strategy: form.values.selectedStrategy,
@@ -529,12 +525,6 @@ export function ConversationCreateWizard() {
             model_name: form.values.selectedModel,
           } : null,
         },
-        // System prompt (only for Assistant/Supervisor mode)
-        system_prompt: form.values.agentType === 'assistant' && form.values.selectedSystemPromptId && !form.values.selectedSystemPromptId.startsWith('temp-') ? {
-          id: form.values.selectedSystemPromptId,
-          title: 'Selected System Prompt',
-          content: '',
-        } : null,
         // Complex nested assistant configuration
         // RAG mode: assistant_config = { enabled: false }
         // Assistant mode: assistant_config = { enabled: true, system_prompt_tasks: [...] }
