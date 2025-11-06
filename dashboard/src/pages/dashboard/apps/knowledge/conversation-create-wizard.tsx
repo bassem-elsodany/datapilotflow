@@ -1521,111 +1521,139 @@ function StepAdvancedSettings({
   onPromptSelected,
   selectedSystemPrompt,
 }: StepProps) {
+  const isSupervisorMode = form.values.enableKnowledgeAssistant;
+
   return (
     <Stack gap="md">
-      <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+      <Alert icon={<IconInfoCircle size={16} />} color={isSupervisorMode ? 'grape' : 'blue'} variant="light">
         <Text size="sm">
-          Configure how answers are generated. You can either enable AI-powered responses or use raw document results.
+          {isSupervisorMode
+            ? 'In Supervisor Agent mode, RAG returns raw documents without LLM generation. The Task Engine receives full document context for powerful task execution.'
+            : 'Configure how answers are generated. You can either enable AI-powered responses or use raw document results.'}
         </Text>
       </Alert>
 
-      <Switch
-        label="Enable Generative Answer"
-        description="Generate natural language answers using LLM"
-        {...form.getInputProps('enableLLMGeneration', {
-          type: 'checkbox',
-        })}
-      />
+      {!isSupervisorMode && (
+        <Switch
+          label="Enable Generative Answer"
+          description="Generate natural language answers using LLM"
+          {...form.getInputProps('enableLLMGeneration', {
+            type: 'checkbox',
+          })}
+        />
+      )}
 
-      {form.values.enableLLMGeneration ? (
+      {isSupervisorMode && (
+        <Alert icon={<IconAlertCircle size={16} />} color="violet" variant="light">
+          <Stack gap="xs">
+            <Group justify="space-between">
+              <Text size="sm" fw={600}>
+                Generative Answer
+              </Text>
+              <Badge color="violet" variant="filled">
+                Disabled in Supervisor Mode
+              </Badge>
+            </Group>
+            <Text size="sm" c="dimmed">
+              Task Engine receives raw retrieval results for maximum context and flexibility in task execution.
+            </Text>
+          </Stack>
+        </Alert>
+      )}
+
+      {!isSupervisorMode && (
         <>
-          {form.values.selectedStrategy !== 'native' ? (
+          {form.values.enableLLMGeneration ? (
             <>
-              <Alert icon={<IconInfoCircle size={16} />} color="cyan" variant="light">
-                <Text size="sm">
-                  <strong>Using Enhancement Strategy LLM:</strong> Since you selected a non-native enhancement strategy, the same LLM provider and model from Step 2 will be used for both query enhancement and answer generation. To use a different LLM, please go back to Step 2 and change the strategy to "Native" or select a different provider.
-                </Text>
-              </Alert>
-
-              {form.values.selectedProviderId && form.values.selectedModel && (
-                <Card withBorder p="md" bg="cyan.0">
-                  <Stack gap="xs">
-                    <Text size="sm" fw={600} c="cyan.9">
-                      LLM Configuration (from Enhancement Step)
+              {form.values.selectedStrategy !== 'native' ? (
+                <>
+                  <Alert icon={<IconInfoCircle size={16} />} color="cyan" variant="light">
+                    <Text size="sm">
+                      <strong>Using Enhancement Strategy LLM:</strong> Since you selected a non-native enhancement strategy, the same LLM provider and model from Step 2 will be used for both query enhancement and answer generation. To use a different LLM, please go back to Step 2 and change the strategy to "Native" or select a different provider.
                     </Text>
-                    <Group gap="xs">
-                      <Badge size="lg" color="cyan" variant="filled">
-                        Provider: {providers?.find((p: any) => p.id === form.values.selectedProviderId)?.name || form.values.selectedProviderId}
-                      </Badge>
-                      <Badge size="lg" color="cyan" variant="filled">
-                        Model: {form.values.selectedModel}
-                      </Badge>
-                    </Group>
-                  </Stack>
-                </Card>
+                  </Alert>
+
+                  {form.values.selectedProviderId && form.values.selectedModel && (
+                    <Card withBorder p="md" bg="cyan.0">
+                      <Stack gap="xs">
+                        <Text size="sm" fw={600} c="cyan.9">
+                          LLM Configuration (from Enhancement Step)
+                        </Text>
+                        <Group gap="xs">
+                          <Badge size="lg" color="cyan" variant="filled">
+                            Provider: {providers?.find((p: any) => p.id === form.values.selectedProviderId)?.name || form.values.selectedProviderId}
+                          </Badge>
+                          <Badge size="lg" color="cyan" variant="filled">
+                            Model: {form.values.selectedModel}
+                          </Badge>
+                        </Group>
+                      </Stack>
+                    </Card>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+                    <Text size="sm">
+                      AI will generate natural language answers based on retrieved documents. Uses tokens but provides polished responses.
+                    </Text>
+                  </Alert>
+
+                  <Divider my="sm" />
+
+                  <Select
+                    label="LLM Provider"
+                    placeholder={providersLoading ? 'Loading providers...' : 'Select a provider'}
+                    data={
+                      providers?.map((p) => ({
+                        value: p.id,
+                        label: `${p.name} (${p.provider_type})`,
+                      })) || []
+                    }
+                    {...form.getInputProps('selectedProviderId')}
+                    searchable
+                    disabled={providersLoading}
+                    required
+                  />
+
+                  {form.values.selectedProviderId && providers ? (
+                    <Select
+                      label="Model"
+                      placeholder="Select a model"
+                      data={
+                        providers
+                          .find((p) => p.id === form.values.selectedProviderId)
+                          ?.generative?.models.map((m: string) => ({
+                            value: m,
+                            label: m,
+                          })) || []
+                      }
+                      {...form.getInputProps('selectedModel')}
+                      searchable
+                      required
+                    />
+                  ) : (
+                    <Select label="Model" placeholder="Select provider first" disabled />
+                  )}
+                </>
               )}
             </>
           ) : (
             <>
-              <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+              <Alert icon={<IconInfoCircle size={16} />} color="yellow" variant="light">
                 <Text size="sm">
-                  AI will generate natural language answers based on retrieved documents. Uses tokens but provides polished responses.
+                  Raw results mode. Shows retrieved documents as-is without LLM processing. Faster and more cost-effective.
                 </Text>
               </Alert>
 
-              <Divider my="sm" />
-
-              <Select
-                label="LLM Provider"
-                placeholder={providersLoading ? 'Loading providers...' : 'Select a provider'}
-                data={
-                  providers?.map((p) => ({
-                    value: p.id,
-                    label: `${p.name} (${p.provider_type})`,
-                  })) || []
-                }
-                {...form.getInputProps('selectedProviderId')}
-                searchable
-                disabled={providersLoading}
-                required
-              />
-
-              {form.values.selectedProviderId && providers ? (
-                <Select
-                  label="Model"
-                  placeholder="Select a model"
-                  data={
-                    providers
-                      .find((p) => p.id === form.values.selectedProviderId)
-                      ?.generative?.models.map((m: string) => ({
-                        value: m,
-                        label: m,
-                      })) || []
-                  }
-                  {...form.getInputProps('selectedModel')}
-                  searchable
-                  required
-                />
-              ) : (
-                <Select label="Model" placeholder="Select provider first" disabled />
+              {form.values.selectedStrategy !== 'native' && (
+                <Alert icon={<IconAlertCircle size={16} />} color="orange" variant="light">
+                  <Text size="sm">
+                    <strong>Note:</strong> You've selected a query enhancement strategy ({form.values.selectedStrategy}) but disabled generative answers. The multi-variant retrieval results will be merged and ranked, but returned as raw documents. Consider enabling generative answers to better utilize the enhanced retrieval results.
+                  </Text>
+                </Alert>
               )}
             </>
-          )}
-        </>
-      ) : (
-        <>
-          <Alert icon={<IconInfoCircle size={16} />} color="yellow" variant="light">
-            <Text size="sm">
-              Raw results mode. Shows retrieved documents as-is without LLM processing. Faster and more cost-effective.
-            </Text>
-          </Alert>
-
-          {form.values.selectedStrategy !== 'native' && (
-            <Alert icon={<IconAlertCircle size={16} />} color="orange" variant="light">
-              <Text size="sm">
-                <strong>Note:</strong> You've selected a query enhancement strategy ({form.values.selectedStrategy}) but disabled generative answers. The multi-variant retrieval results will be merged and ranked, but returned as raw documents. Consider enabling generative answers to better utilize the enhanced retrieval results.
-              </Text>
-            </Alert>
           )}
         </>
       )}

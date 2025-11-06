@@ -1488,6 +1488,7 @@ export default function ConversationWindow() {
     mode?: 'agent' | 'rag',
     strategy?: string,
     model?: string,
+    disableLLMGeneration?: boolean,
   }) => {
     if (!sessionId) return;
 
@@ -1544,8 +1545,8 @@ export default function ConversationWindow() {
         },
         // Answer generation configuration - uses the same provider as enhancement
         answer_generation: {
-          enabled: enableLLMGeneration && providerToUse ? true : false,
-          provider: enableLLMGeneration && providerToUse ? providerToUse : null,
+          enabled: updates.disableLLMGeneration === true ? false : (enableLLMGeneration && providerToUse ? true : false),
+          provider: updates.disableLLMGeneration === true ? null : (enableLLMGeneration && providerToUse ? providerToUse : null),
         },
         // Assistant config - preserve existing system_prompt_tasks
         assistant_config: {
@@ -2094,28 +2095,58 @@ export default function ConversationWindow() {
                   setEnableKnowledgeAssistant(newEnableKA);
                   console.log(`🔄 [MODE CHANGED] User selected: ${newMode} → enableKnowledgeAssistant=${newEnableKA}`);
                   
-                  // Auto-set strategy to decomposition for Assistant Agent mode
+                  // Auto-configure settings for Assistant Agent mode
                   let strategyUpdate = undefined;
-                  if (newMode === 'agent' && selectedStrategy !== 'decomposition') {
-                    const previousStrategy = selectedStrategy;
-                    setSelectedStrategy('decomposition');
-                    strategyUpdate = 'decomposition';
+                  let disableLLM = false;
+                  let changesMessage = [];
+                  
+                  if (newMode === 'agent') {
+                    // 1. Set strategy to decomposition
+                    if (selectedStrategy !== 'decomposition') {
+                      const previousStrategy = selectedStrategy;
+                      setSelectedStrategy('decomposition');
+                      strategyUpdate = 'decomposition';
+                      changesMessage.push(`• Strategy: "${previousStrategy || 'native'}" → "decomposition"`);
+                      console.log(`🔄 [STRATEGY AUTO-CHANGED] ${previousStrategy || 'native'} → decomposition (Assistant Agent mode)`);
+                    }
                     
-                    notifications.show({
-                      title: 'Strategy Auto-Updated',
-                      message: `Enhancement strategy changed from "${previousStrategy || 'native'}" to "decomposition" for optimal multi-concept query handling in Assistant Agent mode.`,
-                      color: 'blue',
-                      icon: <IconInfoCircle size={16} />,
-                      autoClose: 8000,
-                    });
+                    // 2. Disable LLM generation (supervisor handles everything)
+                    if (enableLLMGeneration) {
+                      setEnableLLMGeneration(false);
+                      disableLLM = true;
+                      changesMessage.push(`• LLM Generation: "enabled" → "disabled"`);
+                      console.log(`🔄 [LLM GENERATION DISABLED] Supervisor agent handles response generation (Assistant Agent mode)`);
+                    }
                     
-                    console.log(`🔄 [STRATEGY AUTO-CHANGED] ${previousStrategy || 'native'} → decomposition (Assistant Agent mode)`);
+                    // Show notification if any changes were made
+                    if (changesMessage.length > 0) {
+                      notifications.show({
+                        title: 'Settings Auto-Optimized for Assistant Agent',
+                        message: (
+                          <div>
+                            <div style={{ marginBottom: '8px' }}>
+                              Configuration automatically adjusted for optimal performance:
+                            </div>
+                            {changesMessage.map((msg, idx) => (
+                              <div key={idx} style={{ fontSize: '12px', marginLeft: '4px' }}>{msg}</div>
+                            ))}
+                            <div style={{ marginTop: '8px', fontSize: '11px', opacity: 0.8 }}>
+                              Assistant Agent uses full context from vector search and handles response generation internally.
+                            </div>
+                          </div>
+                        ),
+                        color: 'blue',
+                        icon: <IconInfoCircle size={16} />,
+                        autoClose: 10000,
+                      });
+                    }
                   }
                   
-                  // Save to database (include strategy if it was changed)
+                  // Save to database (include strategy and LLM generation settings if changed)
                   handleQuickUpdate({ 
                     mode: newMode,
-                    ...(strategyUpdate && { strategy: strategyUpdate })
+                    ...(strategyUpdate && { strategy: strategyUpdate }),
+                    ...(disableLLM && { disableLLMGeneration: true })
                   });
                 }}
                 data={[
