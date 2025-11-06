@@ -366,9 +366,9 @@ function ConversationCanvasContent() {
         target: nodeIds[i + 1],
         type: 'default',
         animated: true,
-        markerEnd: { type: 'arrowclosed', color: '#228be6', scale: 0.5 },
+        markerEnd: { type: 'arrowclosed', color: '#51cf66', scale: 0.5 },
         style: {
-          stroke: '#228be6',
+          stroke: '#51cf66',
           strokeWidth: 2,
         },
       });
