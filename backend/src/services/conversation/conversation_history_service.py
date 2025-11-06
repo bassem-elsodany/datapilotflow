@@ -556,7 +556,7 @@ class ConversationHistoryService:
             "enable_knowledge_assistant": enable_knowledge_assistant,
         }
 
-        # Add assistant_config if provided (complex nested structure for Assistant mode)
+        # Always include assistant_config (never null) - enable_knowledge_assistant determines mode
         if assistant_config:
             assistant_config_dict = {
                 "enable_knowledge_assistant": assistant_config.enable_knowledge_assistant,
@@ -569,7 +569,11 @@ class ConversationHistoryService:
                 assistant_config_dict["system_prompt_tasks"] = None
             conversation_data["assistant_config"] = assistant_config_dict
         else:
-            conversation_data["assistant_config"] = None
+            # When no assistant_config provided, create with enable_knowledge_assistant flag
+            conversation_data["assistant_config"] = {
+                "enable_knowledge_assistant": enable_knowledge_assistant,
+                "system_prompt_tasks": None,
+            }
 
         # Insert and get the MongoDB _id
         result = self.collection.insert_one(conversation_data)
