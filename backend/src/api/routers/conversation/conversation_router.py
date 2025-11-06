@@ -894,13 +894,11 @@ async def create_system_prompt(
             "success": True,
             "data": {
                 "id": prompt.id,
-                "name": prompt.name,
-                "description": prompt.description,
-                "system_prompt": prompt.system_prompt,
-                "tags": prompt.tags,
+                "title": prompt.name,  # API uses 'title', domain uses 'name'
+                "content": prompt.system_prompt,  # API uses 'content', domain uses 'system_prompt'
                 "is_active": prompt.is_active,
-                "usage_count": prompt.usage_count,
-                "version": prompt.version,
+                "created_at": prompt.created_at.isoformat() if prompt.created_at else None,
+                "updated_at": prompt.updated_at.isoformat() if prompt.updated_at else None,
             },
         }
 
@@ -934,12 +932,11 @@ async def list_system_prompts(
             "data": [
                 {
                     "id": p.id,
-                    "name": p.name,
-                    "description": p.description,
-                    "tags": p.tags,
+                    "title": p.name,  # API uses 'title', domain uses 'name'
+                    "content": p.system_prompt,  # API uses 'content', domain uses 'system_prompt'
                     "is_active": p.is_active,
-                    "usage_count": p.usage_count,
-                    "version": p.version,
+                    "created_at": p.created_at.isoformat() if p.created_at else None,
+                    "updated_at": p.updated_at.isoformat() if p.updated_at else None,
                 }
                 for p in prompts
             ],
@@ -972,15 +969,11 @@ async def get_system_prompt(
             "success": True,
             "data": {
                 "id": prompt.id,
-                "name": prompt.name,
-                "description": prompt.description,
-                "system_prompt": prompt.system_prompt,
-                "tags": prompt.tags,
+                "title": prompt.name,  # API uses 'title', domain uses 'name'
+                "content": prompt.system_prompt,  # API uses 'content', domain uses 'system_prompt'
                 "is_active": prompt.is_active,
-                "usage_count": prompt.usage_count,
                 "created_at": prompt.created_at.isoformat() if prompt.created_at else None,
                 "updated_at": prompt.updated_at.isoformat() if prompt.updated_at else None,
-                "version": prompt.version,
             },
         }
 
@@ -1032,13 +1025,11 @@ async def update_system_prompt(
             "success": True,
             "data": {
                 "id": prompt.id,
-                "name": prompt.name,
-                "description": prompt.description,
-                "system_prompt": prompt.system_prompt,
-                "tags": prompt.tags,
+                "title": prompt.name,  # API uses 'title', domain uses 'name'
+                "content": prompt.system_prompt,  # API uses 'content', domain uses 'system_prompt'
                 "is_active": prompt.is_active,
-                "usage_count": prompt.usage_count,
-                "version": prompt.version,
+                "created_at": prompt.created_at.isoformat() if prompt.created_at else None,
+                "updated_at": prompt.updated_at.isoformat() if prompt.updated_at else None,
             },
         }
 
