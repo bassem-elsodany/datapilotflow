@@ -233,4 +233,50 @@ export const CONVERSATION_TEMPLATES: ConversationTemplate[] = [
       enableLLMGeneration: true,
     },
   },
+
+  {
+    id: 'supervisor-agent',
+    name: 'Supervisor Agent (Multi-Task Orchestration)',
+    description: 'Intelligent agent orchestrator for handling complex multi-step tasks with knowledge assistant capabilities',
+    icon: '🤖',
+    requiredNodes: [
+      {
+        id: 'config',
+        name: 'Agent Settings',
+        description: 'Name, description & agent mode',
+      },
+      {
+        id: 'assistant',
+        name: 'Assistant Configuration',
+        description: 'Enable knowledge assistant & system prompts',
+      },
+      {
+        id: 'supervisor',
+        name: 'Supervisor Orchestrator',
+        description: 'Multi-agent task orchestration',
+      },
+    ],
+    optionalNodes: [
+      {
+        id: 'enhancement',
+        name: 'Query Enhancement',
+        description: 'Optional query transformation',
+      },
+      {
+        id: 'retrieval',
+        name: 'Knowledge Retrieval',
+        description: 'Optional knowledge base search',
+      },
+      {
+        id: 'reranking',
+        name: 'Document Reranking',
+        description: 'Optional result ranking',
+      },
+    ],
+    defaultConfig: {
+      selectedStrategy: 'native',
+      enableReranking: false,
+      enableLLMGeneration: true,
+    },
+  },
 ];
