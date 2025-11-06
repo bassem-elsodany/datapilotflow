@@ -336,6 +336,60 @@ export function ConversationNodeConfigPanel({
                 size="sm"
               />
 
+              {/* LLM Configuration - Show when non-native strategy is selected */}
+              {localConfig.selectedStrategy && localConfig.selectedStrategy !== 'native' && (
+                <>
+                  <Box p="xs" bg="cyan.0" style={{ borderRadius: '6px', border: '1px solid var(--mantine-color-cyan-2)' }}>
+                    <Stack gap={2}>
+                      <Text size="xs" fw={600} c="cyan.7">⚠️ LLM Required</Text>
+                      <Text size="xs" c="dimmed">
+                        This enhancement strategy requires an LLM to generate query variants. Select a provider and model below.
+                      </Text>
+                    </Stack>
+                  </Box>
+
+                  <Select
+                    label="LLM Provider for Query Enhancement"
+                    placeholder="Select a provider"
+                    data={config?.providers?.map((p: any) => ({
+                      value: p.id,
+                      label: `${p.name} (${p.provider_type})`,
+                    })) || []}
+                    value={localConfig.selectedProviderId}
+                    onChange={(value) => setLocalConfig({ ...localConfig, selectedProviderId: value })}
+                    size="sm"
+                    searchable
+                    clearable
+                  />
+
+                  {localConfig.selectedProviderId && config?.providers ? (
+                    <Select
+                      label="Model for Query Enhancement"
+                      placeholder="Select a model"
+                      data={
+                        config.providers
+                          .find((p: any) => p.id === localConfig.selectedProviderId)
+                          ?.generative?.models.map((m: string) => ({
+                            value: m,
+                            label: m,
+                          })) || []
+                      }
+                      value={localConfig.selectedModel}
+                      onChange={(value) => setLocalConfig({ ...localConfig, selectedModel: value })}
+                      size="sm"
+                      searchable
+                    />
+                  ) : (
+                    <Select
+                      label="Model for Query Enhancement"
+                      placeholder="Select provider first"
+                      disabled
+                      size="sm"
+                    />
+                  )}
+                </>
+              )}
+
               {/* Strategy Information Card */}
               {selectedStrategyInfo && (
                 <Box p="sm" style={{
