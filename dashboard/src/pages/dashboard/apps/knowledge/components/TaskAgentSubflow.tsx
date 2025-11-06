@@ -60,6 +60,7 @@ export function generateTaskAgentSubflowEdges(parentId: string): Edge[] {
       source: `${parentId}-prompts`,
       target: `${parentId}-execution`,
       animated: true,
+      markerEnd: { type: 'arrowclosed', color: '#228be6' },
     },
   ];
 }
