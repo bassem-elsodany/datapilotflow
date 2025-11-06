@@ -283,7 +283,7 @@ export const CONVERSATION_TEMPLATES: ConversationTemplate[] = [
     defaultConfig: {
       selectedStrategy: 'native',
       enableReranking: false,
-      enableLLMGeneration: true,
+      enableLLMGeneration: false, // Disabled in Supervisor mode - Task Agent gets raw results for powerful execution
     },
   },
 ];
