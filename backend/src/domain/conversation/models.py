@@ -167,7 +167,6 @@ class ConversationSession:
     name: Optional[str] = None
     description: Optional[str] = None
     # Nested configuration structures
-    system_prompt: Optional[SystemPrompt] = None  # Embedded system prompt
     enhancement: Optional[EnhancementConfig] = None  # Query enhancement configuration
     vector_database: Optional[VectorDatabaseConfig] = None  # Vector database configuration
     reranker: Optional[RerankerConfig] = None  # Document reranker configuration

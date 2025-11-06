@@ -74,7 +74,6 @@ from src.domain.conversation import (
     EnhancementConfig,
     ProviderConfig,
     RerankerConfig,
-    SystemPrompt,
     SystemPromptTask,
     VectorDatabaseConfig,
 )
@@ -102,7 +101,6 @@ class ConversationHistoryService:
         user_id: str,
         name: Optional[str] = None,
         description: Optional[str] = None,
-        system_prompt: Optional[SystemPrompt] = None,
         enhancement: Optional[EnhancementConfig] = None,
         vector_database: Optional[VectorDatabaseConfig] = None,
         reranker: Optional[RerankerConfig] = None,
@@ -116,7 +114,6 @@ class ConversationHistoryService:
             user_id: User ID
             name: Conversation name
             description: Conversation description
-            system_prompt: System prompt (deprecated - use assistant_config for Assistant mode)
             enhancement: Enhancement configuration
             vector_database: Vector database configuration
             reranker: Reranker configuration
@@ -202,7 +199,6 @@ class ConversationHistoryService:
             "messages": [],
             "name": name,
             "description": description,
-            "system_prompt": asdict(system_prompt) if system_prompt else None,
             "enhancement": asdict(enhancement) if enhancement else None,
             "vector_database": asdict(vector_database) if vector_database else None,
             "reranker": asdict(reranker) if reranker else None,
@@ -274,16 +270,6 @@ class ConversationHistoryService:
                     )
                     messages.append(msg)
 
-                # Deserialize system prompt
-                system_prompt = None
-                if doc.get("system_prompt"):
-                    sp = doc["system_prompt"]
-                    system_prompt = SystemPrompt(
-                        id=sp.get("id"),
-                        title=sp.get("title"),
-                        content=sp.get("content"),
-                    )
-
                 # Deserialize enhancement config
                 enhancement = None
                 if doc.get("enhancement"):
@@ -351,7 +337,6 @@ class ConversationHistoryService:
                     messages=messages,
                     name=doc.get("name"),
                     description=doc.get("description"),
-                    system_prompt=system_prompt,
                     enhancement=enhancement,
                     vector_database=vector_database,
                     reranker=reranker,
@@ -418,16 +403,6 @@ class ConversationHistoryService:
                     document_count=msg_doc.get("document_count"),
                 )
                 messages.append(msg)
-
-            # Deserialize system prompt
-            system_prompt = None
-            if doc.get("system_prompt"):
-                sp = doc["system_prompt"]
-                system_prompt = SystemPrompt(
-                    id=sp.get("id"),
-                    title=sp.get("title"),
-                    content=sp.get("content"),
-                )
 
             # Deserialize enhancement config
             enhancement = None
@@ -496,7 +471,6 @@ class ConversationHistoryService:
                 messages=messages,
                 name=doc.get("name"),
                 description=doc.get("description"),
-                system_prompt=system_prompt,
                 enhancement=enhancement,
                 vector_database=vector_database,
                 reranker=reranker,
@@ -770,7 +744,6 @@ class ConversationHistoryService:
         self,
         conversation_id: str,
         user_id: str,
-        system_prompt: Optional[SystemPrompt] = None,
         enhancement: Optional[EnhancementConfig] = None,
         vector_database: Optional[VectorDatabaseConfig] = None,
         reranker: Optional[RerankerConfig] = None,
@@ -785,7 +758,6 @@ class ConversationHistoryService:
         Args:
             conversation_id: Conversation ID
             user_id: User ID
-            system_prompt: System prompt (deprecated - use assistant_config for Assistant mode)
             enhancement: Enhancement configuration
             vector_database: Vector database configuration
             reranker: Reranker configuration
@@ -807,10 +779,6 @@ class ConversationHistoryService:
                 update_data["$set"]["description"] = description
             if tags is not None:
                 update_data["$set"]["tags"] = tags
-
-            # Update system prompt (embedded)
-            if system_prompt is not None:
-                update_data["$set"]["system_prompt"] = asdict(system_prompt)
 
             # Update enhancement configuration
             if enhancement is not None:
