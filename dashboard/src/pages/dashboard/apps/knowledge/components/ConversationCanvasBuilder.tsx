@@ -887,6 +887,15 @@ function ConversationCanvasContent() {
               color="green"
               leftSection={<IconCheck size={16} />}
               onClick={() => {
+                // Debug logging
+                console.log('[DEBUG Create Conversation] Current config:', {
+                  selectedStrategy: config.selectedStrategy,
+                  collectionName: config.collectionName,
+                  topK: config.topK,
+                  enableReranking: config.enableReranking,
+                  enableLLMGeneration: config.enableLLMGeneration,
+                });
+
                 // Validate all required nodes are configured BEFORE opening modal
                 if (!config.selectedStrategy) {
                   notifications.show({
@@ -899,6 +908,10 @@ function ConversationCanvasContent() {
                 }
 
                 if (!config.collectionName || !config.topK) {
+                  console.log('[DEBUG] Collection validation failed:', {
+                    collectionName: config.collectionName,
+                    topK: config.topK,
+                  });
                   notifications.show({
                     title: 'Configuration Incomplete',
                     message: 'Document Search must be configured (select collection and Top K)',
