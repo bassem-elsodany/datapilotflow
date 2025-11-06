@@ -10,6 +10,7 @@ import { IconChevronDown, IconChevronUp, IconX, IconHelp, IconCheck, IconAlertCi
 import { useState, useEffect } from 'react';
 import { Node } from 'reactflow';
 import { notifications } from '@mantine/notifications';
+import { SystemPromptManager } from '@/components/system-prompt-manager';
 
 interface ConversationNodeData {
   id: string;
@@ -778,24 +779,38 @@ export function ConversationNodeConfigPanel({
                 </Text>
               </div>
 
-              <Box p="xs" bg="grape.0" style={{ borderRadius: '6px', border: '1px solid var(--mantine-color-grape-2)' }}>
-                <Text size="xs" fw={600} mb={3} c="grape.7">📋 System Prompts:</Text>
-                <Stack gap={2}>
-                  <Text size="xs" c="dimmed">
-                    • Define custom instructions for task execution
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    • Each prompt guides how to process knowledge base results
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    • Prompts are applied before task engine processes retrieved documents
-                  </Text>
-                </Stack>
-              </Box>
+              <SystemPromptManager
+                conversationId=""
+                selectedPromptId={localConfig.selectedSystemPromptId}
+                selectedPromptData={localConfig.selectedSystemPrompt}
+                existingPrompts={localConfig.systemPromptTasks || []}
+                onPromptSelected={(prompt) => {
+                  setLocalConfig({
+                    ...localConfig,
+                    selectedSystemPromptId: prompt?.id || null,
+                    selectedSystemPrompt: prompt
+                  });
+                }}
+                onPromptsChanged={(prompts) => {
+                  setLocalConfig({
+                    ...localConfig,
+                    systemPromptTasks: prompts
+                  });
+                }}
+              />
 
-              <Text size="xs" c="gray.6">
-                System prompts are managed in the conversation settings and applied during task execution.
-              </Text>
+              {localConfig.selectedSystemPrompt && (
+                <Paper p="sm" bg="grape.1" style={{ borderRadius: '6px', border: '1px solid var(--mantine-color-grape-2)' }}>
+                  <Stack gap="xs">
+                    <Text size="xs" fw={600} c="grape">
+                      Selected Prompt: {localConfig.selectedSystemPrompt.title || localConfig.selectedSystemPrompt.name}
+                    </Text>
+                    <Text size="xs" c="dimmed" style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', maxHeight: '150px', overflow: 'auto' }}>
+                      {localConfig.selectedSystemPrompt.content || localConfig.selectedSystemPrompt.system_prompt}
+                    </Text>
+                  </Stack>
+                </Paper>
+              )}
             </Stack>
           </div>
         );
