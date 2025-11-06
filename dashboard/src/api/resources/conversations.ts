@@ -54,6 +54,26 @@ export const AnswerGenerationConfigSchema = z.object({
 
 export type AnswerGenerationConfig = z.infer<typeof AnswerGenerationConfigSchema>;
 
+// System Prompt Task Schema (for assistant_config)
+export const SystemPromptTaskSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  content: z.string(),
+  created_at: z.string().optional().nullable(),
+  updated_at: z.string().optional().nullable(),
+  is_active: z.boolean(),
+});
+
+export type SystemPromptTask = z.infer<typeof SystemPromptTaskSchema>;
+
+// Assistant Configuration Schema (complex nested structure)
+export const AssistantConfigSchema = z.object({
+  enable_knowledge_assistant: z.boolean(),
+  system_prompt_tasks: z.array(SystemPromptTaskSchema).optional().nullable(),
+}).optional().nullable();
+
+export type AssistantConfig = z.infer<typeof AssistantConfigSchema>;
+
 // ============================================================================
 // CONVERSATION SCHEMAS
 // ============================================================================
@@ -73,6 +93,8 @@ export const ConversationSchema = z.object({
   vector_database: VectorDatabaseConfigSchema,
   reranker: RerankerConfigSchema,
   answer_generation: AnswerGenerationConfigSchema,
+  // Complex nested assistant configuration (for Assistant mode)
+  assistant_config: AssistantConfigSchema,
   enable_knowledge_assistant: z.boolean().optional(),
   tags: z.array(z.string()).optional(),
 });
@@ -176,6 +198,15 @@ export const CreateConversationRequestSchema = z.object({
   reranker: RerankerConfigSchema.optional(),
   answer_generation: AnswerGenerationConfigSchema.optional(),
   enable_knowledge_assistant: z.boolean().optional(),
+  // Complex nested assistant configuration (for Assistant mode)
+  assistant_config: z.object({
+    enable_knowledge_assistant: z.boolean(),
+    system_prompt_tasks: z.array(z.object({
+      title: z.string(),
+      content: z.string(),
+      is_active: z.boolean(),
+    })).optional().nullable(),
+  }).optional().nullable(),
   tags: z.array(z.string()).optional(),
 });
 
@@ -191,6 +222,15 @@ export const UpdateConversationRequestSchema = z.object({
   reranker: RerankerConfigSchema.optional(),
   answer_generation: AnswerGenerationConfigSchema.optional(),
   enable_knowledge_assistant: z.boolean().optional(),
+  // Complex nested assistant configuration (for Assistant mode)
+  assistant_config: z.object({
+    enable_knowledge_assistant: z.boolean(),
+    system_prompt_tasks: z.array(z.object({
+      title: z.string(),
+      content: z.string(),
+      is_active: z.boolean(),
+    })).optional().nullable(),
+  }).optional().nullable(),
   tags: z.array(z.string()).optional(),
 });
 

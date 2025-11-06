@@ -90,8 +90,11 @@ interface ConversationFormData {
   enableLLMGeneration: boolean;
   enableKnowledgeAssistant: boolean;
 
-  // System Prompt
-  selectedSystemPromptId?: string;
+  // Step 6 - System Prompt (Assistant mode only)
+  systemPromptTitle: string;
+  systemPromptContent: string;
+  selectedSystemPromptId: string | null;
+  systemPromptTasks: any[];
 }
 
 const ENHANCEMENT_STRATEGIES = [
@@ -440,6 +443,19 @@ export function ConversationCreateWizard() {
           id: form.values.selectedSystemPromptId,
           title: 'Selected System Prompt',
           content: '',
+        } : null,
+        // Complex nested assistant configuration (for Assistant mode)
+        // RAG mode: assistant_config is null
+        // Assistant mode: assistant_config contains enable_knowledge_assistant and system_prompt_tasks
+        assistant_config: form.values.agentType === 'assistant' ? {
+          enable_knowledge_assistant: true,
+          system_prompt_tasks: form.values.systemPromptTasks && form.values.systemPromptTasks.length > 0 ?
+            form.values.systemPromptTasks.map((task: any) => ({
+              title: task.title || task.name || '',
+              content: task.content || task.system_prompt || '',
+              is_active: task.is_active !== false,
+            }))
+            : null,
         } : null,
       };
 

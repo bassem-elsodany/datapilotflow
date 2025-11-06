@@ -23,6 +23,7 @@ from src.services.conversation.conversation_history_service import (
     RerankerConfig,
     AnswerGenerationConfig,
     SystemPrompt,
+    AssistantConfig,
 )
 
 # Create router
@@ -94,6 +95,25 @@ class SystemPromptRequest(BaseModel):
     content: str = Field(..., description="System prompt content")
 
 
+class SystemPromptTaskRequest(BaseModel):
+    """Request model for system prompt task (for assistant_config)."""
+
+    title: str = Field(..., min_length=1, max_length=100, description="System prompt task title")
+    content: str = Field(..., min_length=10, description="System prompt task content")
+    is_active: bool = Field(True, description="Whether this prompt is active")
+
+
+class AssistantConfigRequest(BaseModel):
+    """Request model for complex nested Assistant mode configuration."""
+
+    enable_knowledge_assistant: bool = Field(
+        True, description="Enable knowledge assistant for multi-agent orchestration"
+    )
+    system_prompt_tasks: Optional[List[SystemPromptTaskRequest]] = Field(
+        None, description="System prompt tasks for the assistant"
+    )
+
+
 class CreateSessionRequest(BaseModel):
     """Request model for creating a new conversation session with new structure."""
 
@@ -104,7 +124,7 @@ class CreateSessionRequest(BaseModel):
         None, max_length=500, description="Conversation description"
     )
     system_prompt: Optional[SystemPromptRequest] = Field(
-        None, description="Embedded system prompt"
+        None, description="Embedded system prompt (deprecated - use assistant_config for Assistant mode)"
     )
     enhancement: Optional[EnhancementConfigRequest] = Field(
         None, description="Query enhancement configuration"
@@ -123,7 +143,10 @@ class CreateSessionRequest(BaseModel):
     )
     enable_knowledge_assistant: bool = Field(
         False,
-        description="Enable multi-agent supervisor (True=Supervisor, False=RAG)",
+        description="Enable multi-agent supervisor (deprecated - use assistant_config)",
+    )
+    assistant_config: Optional[AssistantConfigRequest] = Field(
+        None, description="Complex nested configuration for Assistant mode (RAG=null, Assistant=object)"
     )
 
 
@@ -196,6 +219,26 @@ def _serialize_conversation_to_response(session: 'ConversationSession') -> dict:
             )
         }
 
+    # Assistant configuration (complex nested structure)
+    if session.assistant_config:
+        response["assistant_config"] = {
+            "enable_knowledge_assistant": session.assistant_config.enable_knowledge_assistant,
+        }
+        if session.assistant_config.system_prompt_tasks:
+            response["assistant_config"]["system_prompt_tasks"] = [
+                {
+                    "id": task.id,
+                    "title": task.name,  # SystemPromptTask uses 'name', map to 'title' for API
+                    "content": task.system_prompt,  # SystemPromptTask uses 'system_prompt', map to 'content' for API
+                    "created_at": task.created_at.isoformat() if task.created_at else None,
+                    "updated_at": task.updated_at.isoformat() if task.updated_at else None,
+                    "is_active": task.is_active,
+                }
+                for task in session.assistant_config.system_prompt_tasks
+            ]
+        else:
+            response["assistant_config"]["system_prompt_tasks"] = None
+
     return response
 
 
@@ -223,7 +266,7 @@ class UpdateSessionConfigRequest(BaseModel):
         None, max_length=500, description="Conversation description"
     )
     system_prompt: Optional[SystemPromptRequest] = Field(
-        None, description="Embedded system prompt"
+        None, description="Embedded system prompt (deprecated - use assistant_config for Assistant mode)"
     )
     enhancement: Optional[EnhancementConfigRequest] = Field(
         None, description="Query enhancement configuration"
@@ -242,7 +285,32 @@ class UpdateSessionConfigRequest(BaseModel):
     )
     enable_knowledge_assistant: Optional[bool] = Field(
         None,
-        description="Enable multi-agent supervisor (True=Supervisor, False=RAG)",
+        description="Enable multi-agent supervisor (deprecated - use assistant_config)",
+    )
+    assistant_config: Optional[AssistantConfigRequest] = Field(
+        None, description="Complex nested configuration for Assistant mode (RAG=null, Assistant=object)"
+    )
+
+
+class SystemPromptTaskResponse(BaseModel):
+    """Response model for a system prompt task in assistant_config."""
+
+    id: str = Field(..., description="System prompt task ID")
+    title: str = Field(..., description="System prompt task title")
+    content: str = Field(..., description="System prompt task content")
+    created_at: Optional[str] = Field(None, description="Creation timestamp")
+    updated_at: Optional[str] = Field(None, description="Last update timestamp")
+    is_active: bool = Field(True, description="Whether this prompt is active")
+
+
+class AssistantConfigResponse(BaseModel):
+    """Response model for complex nested Assistant mode configuration."""
+
+    enable_knowledge_assistant: bool = Field(
+        ..., description="Enable knowledge assistant for multi-agent orchestration"
+    )
+    system_prompt_tasks: Optional[List[SystemPromptTaskResponse]] = Field(
+        None, description="System prompt tasks for the assistant"
     )
 
 
@@ -251,8 +319,8 @@ class UpdateSessionConfigRequest(BaseModel):
 # ============================================================================
 
 
-class SystemPromptTaskResponse(BaseModel):
-    """Response model for a system prompt task."""
+class SystemPromptTaskManagementResponse(BaseModel):
+    """Response model for a system prompt task (for management endpoints)."""
 
     id: str
     name: str
@@ -396,6 +464,27 @@ async def create_conversation_session(
                 )
             answer_generation = AnswerGenerationConfig(provider=provider)
 
+        # Build assistant_config if provided
+        assistant_config = None
+        if create_request.assistant_config:
+            system_prompt_tasks = None
+            if create_request.assistant_config.system_prompt_tasks:
+                system_prompt_tasks = [
+                    SystemPromptTask(
+                        id="",  # Will be generated in __post_init__
+                        user_id=current_user.id,
+                        conversation_id="",  # Will be set after conversation creation
+                        name=task.title,  # API uses 'title', SystemPromptTask uses 'name'
+                        system_prompt=task.content,  # API uses 'content', SystemPromptTask uses 'system_prompt'
+                        is_active=task.is_active,
+                    )
+                    for task in create_request.assistant_config.system_prompt_tasks
+                ]
+            assistant_config = AssistantConfig(
+                enable_knowledge_assistant=create_request.assistant_config.enable_knowledge_assistant,
+                system_prompt_tasks=system_prompt_tasks,
+            )
+
         session_id = conversation_history_service.create_conversation_v2(
             user_id=current_user.id,
             name=create_request.name,
@@ -407,9 +496,14 @@ async def create_conversation_session(
             answer_generation=answer_generation,
             tags=create_request.tags,
             enable_knowledge_assistant=create_request.enable_knowledge_assistant,
+            assistant_config=assistant_config,
         )
 
-        agent_type = "supervisor" if create_request.enable_knowledge_assistant else "rag"
+        # Determine agent type from assistant_config or legacy enable_knowledge_assistant
+        if assistant_config:
+            agent_type = "supervisor" if assistant_config.enable_knowledge_assistant else "rag"
+        else:
+            agent_type = "supervisor" if create_request.enable_knowledge_assistant else "rag"
         return {
             "success": True,
             "id": session_id,
@@ -745,6 +839,24 @@ async def update_conversation_session(
                     "model_name": config_request.answer_generation.provider.model_name,
                 }
             update_doc["answer_generation"] = {"provider": provider}
+
+        # Assistant configuration (complex nested structure)
+        if config_request.assistant_config is not None:
+            assistant_config_dict = {
+                "enable_knowledge_assistant": config_request.assistant_config.enable_knowledge_assistant,
+            }
+            if config_request.assistant_config.system_prompt_tasks:
+                assistant_config_dict["system_prompt_tasks"] = [
+                    {
+                        "title": task.title,
+                        "content": task.content,
+                        "is_active": task.is_active,
+                    }
+                    for task in config_request.assistant_config.system_prompt_tasks
+                ]
+            else:
+                assistant_config_dict["system_prompt_tasks"] = None
+            update_doc["assistant_config"] = assistant_config_dict
 
         if not update_doc:
             raise HTTPException(

@@ -140,6 +140,23 @@ class SystemPrompt:
     content: str  # Actual prompt content
 
 
+@dataclass
+class AssistantConfig:
+    """Complex nested structure for Assistant mode configuration."""
+
+    enable_knowledge_assistant: bool  # Enable knowledge assistant for multi-agent orchestration
+    system_prompt_tasks: Optional[List['SystemPromptTask']] = None  # System prompt tasks for the assistant
+
+    def get_active_prompt(self) -> Optional['SystemPromptTask']:
+        """Get the active system prompt task."""
+        if not self.system_prompt_tasks:
+            return None
+        for task in self.system_prompt_tasks:
+            if task.is_active:
+                return task
+        return None
+
+
 # Legacy class kept for backwards compatibility during migration
 @dataclass
 class EnhancementConfiguration:
@@ -225,9 +242,11 @@ class ConversationSession:
     answer_generation: Optional[AnswerGenerationConfig] = None  # Answer generation configuration
     # Tags for organization
     tags: Optional[List[str]] = None
-    # Multi-agent orchestration configuration
-    # True = Supervisor Agent (multi-agent orchestration)
-    # False = RAG Agent (retrieval + generation only)
+    # Assistant mode configuration (complex nested structure)
+    # Contains enable_knowledge_assistant and system_prompt_tasks
+    # null for RAG mode, object for Assistant mode
+    assistant_config: Optional[AssistantConfig] = None
+    # Legacy field for backwards compatibility (deprecated - use assistant_config.enable_knowledge_assistant)
     enable_knowledge_assistant: bool = False
 
     def __post_init__(self):
@@ -434,8 +453,23 @@ class ConversationHistoryService:
         answer_generation: Optional[AnswerGenerationConfig] = None,
         tags: Optional[List[str]] = None,
         enable_knowledge_assistant: bool = False,
+        assistant_config: Optional[AssistantConfig] = None,
     ) -> str:
-        """Create a new conversation with nested configuration structure."""
+        """Create a new conversation with nested configuration structure.
+
+        Args:
+            user_id: User ID
+            name: Conversation name
+            description: Conversation description
+            system_prompt: System prompt (deprecated - use assistant_config for Assistant mode)
+            enhancement: Enhancement configuration
+            vector_database: Vector database configuration
+            reranker: Reranker configuration
+            answer_generation: Answer generation configuration
+            tags: Tags for organization
+            enable_knowledge_assistant: Enable knowledge assistant (deprecated - use assistant_config)
+            assistant_config: Complex nested configuration for Assistant mode
+        """
 
         # Validate enhancement provider if provided
         if enhancement and enhancement.provider:
@@ -522,13 +556,31 @@ class ConversationHistoryService:
             "enable_knowledge_assistant": enable_knowledge_assistant,
         }
 
+        # Add assistant_config if provided (complex nested structure for Assistant mode)
+        if assistant_config:
+            assistant_config_dict = {
+                "enable_knowledge_assistant": assistant_config.enable_knowledge_assistant,
+            }
+            if assistant_config.system_prompt_tasks:
+                assistant_config_dict["system_prompt_tasks"] = [
+                    asdict(task) for task in assistant_config.system_prompt_tasks
+                ]
+            else:
+                assistant_config_dict["system_prompt_tasks"] = None
+            conversation_data["assistant_config"] = assistant_config_dict
+        else:
+            conversation_data["assistant_config"] = None
+
         # Insert and get the MongoDB _id
         result = self.collection.insert_one(conversation_data)
         conversation_id = str(result.inserted_id)
 
+        # Determine agent type from assistant_config or legacy enable_knowledge_assistant
+        agent_type = "supervisor" if (assistant_config and assistant_config.enable_knowledge_assistant) else ("supervisor" if enable_knowledge_assistant else "rag")
+
         logger.info(
             f"Created conversation {conversation_id} for user {user_id} "
-            f"with agent_type: {'supervisor' if enable_knowledge_assistant else 'rag'}, "
+            f"with agent_type: {agent_type}, "
             f"strategy: {enhancement.strategy if enhancement else 'native'}"
         )
         return conversation_id
@@ -538,7 +590,7 @@ class ConversationHistoryService:
         """
         Deserialize nested configuration from MongoDB document.
 
-        Returns: (system_prompt, enhancement, vector_database, reranker, answer_generation)
+        Returns: (system_prompt, enhancement, vector_database, reranker, answer_generation, assistant_config)
         """
         system_prompt = None
         if doc.get("system_prompt"):
@@ -589,7 +641,22 @@ class ConversationHistoryService:
                 provider = ProviderConfig(id=p.get("id"), model_name=p.get("model_name"))
             answer_generation = AnswerGenerationConfig(provider=provider)
 
-        return system_prompt, enhancement, vector_database, reranker, answer_generation
+        # Deserialize assistant_config (complex nested structure)
+        assistant_config = None
+        if doc.get("assistant_config"):
+            ac = doc["assistant_config"]
+            system_prompt_tasks = None
+            if ac.get("system_prompt_tasks"):
+                system_prompt_tasks = []
+                for spt_dict in ac["system_prompt_tasks"]:
+                    spt = ConversationHistoryService._dict_to_system_prompt_task(spt_dict)
+                    system_prompt_tasks.append(spt)
+            assistant_config = AssistantConfig(
+                enable_knowledge_assistant=ac.get("enable_knowledge_assistant", False),
+                system_prompt_tasks=system_prompt_tasks,
+            )
+
+        return system_prompt, enhancement, vector_database, reranker, answer_generation, assistant_config
 
     def get_conversation(
         self, conversation_id: str, user_id: str = None
@@ -626,7 +693,7 @@ class ConversationHistoryService:
                     messages.append(msg)
 
                 # Deserialize nested configuration
-                system_prompt, enhancement, vector_database, reranker, answer_generation = (
+                system_prompt, enhancement, vector_database, reranker, answer_generation, assistant_config = (
                     self._deserialize_nested_config(doc)
                 )
 
@@ -644,6 +711,7 @@ class ConversationHistoryService:
                     reranker=reranker,
                     answer_generation=answer_generation,
                     tags=doc.get("tags", []),
+                    assistant_config=assistant_config,
                     enable_knowledge_assistant=doc.get("enable_knowledge_assistant", False),
                 )
                 return session
@@ -707,7 +775,7 @@ class ConversationHistoryService:
                 messages.append(msg)
 
             # Deserialize nested configuration
-            system_prompt, enhancement, vector_database, reranker, answer_generation = (
+            system_prompt, enhancement, vector_database, reranker, answer_generation, assistant_config = (
                 self._deserialize_nested_config(doc)
             )
 
@@ -725,6 +793,7 @@ class ConversationHistoryService:
                 reranker=reranker,
                 answer_generation=answer_generation,
                 tags=doc.get("tags", []),
+                assistant_config=assistant_config,
                 enable_knowledge_assistant=doc.get("enable_knowledge_assistant", False),
             )
             sessions.append(session)
@@ -1148,8 +1217,24 @@ class ConversationHistoryService:
         enable_knowledge_assistant: Optional[bool] = None,
         name: Optional[str] = None,
         description: Optional[str] = None,
+        assistant_config: Optional[AssistantConfig] = None,
     ) -> bool:
-        """Update conversation configuration with nested structure support."""
+        """Update conversation configuration with nested structure support.
+
+        Args:
+            conversation_id: Conversation ID
+            user_id: User ID
+            system_prompt: System prompt (deprecated - use assistant_config for Assistant mode)
+            enhancement: Enhancement configuration
+            vector_database: Vector database configuration
+            reranker: Reranker configuration
+            answer_generation: Answer generation configuration
+            tags: Tags for organization
+            enable_knowledge_assistant: Enable knowledge assistant (deprecated - use assistant_config)
+            name: Conversation name
+            description: Conversation description
+            assistant_config: Complex nested configuration for Assistant mode
+        """
         from bson import ObjectId
 
         try:
@@ -1195,6 +1280,19 @@ class ConversationHistoryService:
                     "provider": asdict(answer_generation.provider) if answer_generation.provider else None,
                 }
                 update_data["$set"]["answer_generation"] = answer_gen_dict
+
+            # Update assistant_config (complex nested structure for Assistant mode)
+            if assistant_config is not None:
+                assistant_config_dict = {
+                    "enable_knowledge_assistant": assistant_config.enable_knowledge_assistant,
+                }
+                if assistant_config.system_prompt_tasks:
+                    assistant_config_dict["system_prompt_tasks"] = [
+                        asdict(task) for task in assistant_config.system_prompt_tasks
+                    ]
+                else:
+                    assistant_config_dict["system_prompt_tasks"] = None
+                update_data["$set"]["assistant_config"] = assistant_config_dict
 
             result = self.collection.update_one(
                 {"_id": ObjectId(conversation_id), "user_id": user_id}, update_data
@@ -1659,6 +1757,11 @@ class ConversationHistoryService:
             created_by=prompt_dict.get("created_by"),
             version=prompt_dict.get("version", 1),
         )
+
+    @staticmethod
+    def _dict_to_system_prompt_task(prompt_dict: Dict[str, Any]) -> SystemPromptTask:
+        """Convert a dictionary to SystemPromptTask object (alias for _dict_to_system_prompt)."""
+        return ConversationHistoryService._dict_to_system_prompt(prompt_dict)
 
 
 # Global instance
