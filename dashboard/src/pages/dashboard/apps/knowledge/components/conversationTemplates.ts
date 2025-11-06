@@ -11,6 +11,7 @@ export interface ConversationTemplate {
   name: string;
   description: string;
   icon: string;
+  type: 'rag' | 'supervisor'; // Template type: RAG or Supervisor Agent
   requiredNodes: Array<{
     id: string;
     name: string;
@@ -34,6 +35,7 @@ export const CONVERSATION_TEMPLATES: ConversationTemplate[] = [
     name: 'Basic RAG Conversation Agent Pipeline',
     description: 'Simple retrieval with optional reranking & LLM generation',
     icon: '📦',
+    type: 'rag',
     requiredNodes: [
       {
         id: 'config',
@@ -75,6 +77,7 @@ export const CONVERSATION_TEMPLATES: ConversationTemplate[] = [
     name: 'Augmented RAG Conversation Agent',
     description: 'Comprehensive query transformation with 4 variants + optional reranking & LLM',
     icon: '✨',
+    type: 'rag',
     requiredNodes: [
       {
         id: 'config',
@@ -116,6 +119,7 @@ export const CONVERSATION_TEMPLATES: ConversationTemplate[] = [
     name: 'Advanced RAG Conversation Agent',
     description: 'Multi-query enhancement with optional reranking & LLM generation',
     icon: '⚙️',
+    type: 'rag',
     requiredNodes: [
       {
         id: 'config',
@@ -157,6 +161,7 @@ export const CONVERSATION_TEMPLATES: ConversationTemplate[] = [
     name: 'Decomposition Conversation Agent Pipeline',
     description: 'Break complex queries into sub-questions for better retrieval',
     icon: '🧩',
+    type: 'rag',
     requiredNodes: [
       {
         id: 'config',
@@ -198,6 +203,7 @@ export const CONVERSATION_TEMPLATES: ConversationTemplate[] = [
     name: 'HyDE Conversation Agent Pipeline',
     description: 'Generate hypothetical answers to guide document retrieval',
     icon: '🔮',
+    type: 'rag',
     requiredNodes: [
       {
         id: 'config',
@@ -239,6 +245,7 @@ export const CONVERSATION_TEMPLATES: ConversationTemplate[] = [
     name: 'Supervisor Agent (Multi-Task Orchestration)',
     description: 'Intelligent agent orchestrator for handling complex multi-step tasks with knowledge assistant capabilities',
     icon: '🤖',
+    type: 'supervisor',
     requiredNodes: [
       {
         id: 'config',
