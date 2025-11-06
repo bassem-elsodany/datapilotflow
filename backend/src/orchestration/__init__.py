@@ -1,11 +1,13 @@
-# Orchestration package
+# Orchestration package (deprecated)
 #
 # Multi-agent orchestration now uses official langgraph-supervisor library
-# See generate_response_supervisor.py for implementation
+# See: src/services/conversation/generate_response_supervisor.py
 #
-# Official pattern:
+# Direct usage pattern:
 # supervisor_graph = create_supervisor(
-#     agents=[agent1, agent2],
+#     agents=[agent1_graph, agent2_graph],
 #     model=llm_client,
 #     prompt="System instructions..."
 # )
+#
+# Reference: https://github.com/langchain-ai/langgraph-supervisor-py
