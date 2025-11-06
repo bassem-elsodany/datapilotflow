@@ -48,7 +48,9 @@ class EnhancementConfig:
     """Query enhancement configuration for a conversation."""
 
     strategy: str  # "native", "multi_query", "augmented", "hyde", "decomposition"
-    provider: Optional[ProviderConfig] = None  # Provider for enhancement (e.g., embedding model)
+    provider: Optional[ProviderConfig] = (
+        None  # Provider for enhancement (e.g., embedding model)
+    )
 
 
 @dataclass
@@ -90,18 +92,13 @@ class SystemPromptTask:
     """Represents a reusable system prompt template for a conversation."""
 
     id: str  # UUID identifier
-    user_id: str
-    conversation_id: str
     name: str  # e.g., "Code Reviewer", "Document Summarizer", "Technical Writer"
-    description: Optional[str] = None  # Description of what this prompt does
     system_prompt: str = ""  # The actual system prompt template
+    description: Optional[str] = None  # Description of what this prompt does
     tags: Optional[List[str]] = None  # Tags for organization and filtering
     is_active: bool = True  # Whether this prompt is active and available for use
-    usage_count: int = 0  # Number of times this prompt has been used
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
-    created_by: Optional[str] = None  # User who created this prompt
-    version: int = 1  # Version number for tracking changes
 
     def __post_init__(self):
         if self.id is None or self.id == "":
@@ -112,8 +109,6 @@ class SystemPromptTask:
             self.updated_at = datetime.utcnow()
         if self.tags is None:
             self.tags = []
-        if self.created_by is None:
-            self.created_by = self.user_id
 
     @property
     def is_empty(self) -> bool:
@@ -126,7 +121,9 @@ class AssistantConfig:
     """Complex nested structure for Assistant mode configuration."""
 
     enabled: bool  # Whether Assistant mode is enabled (true) or RAG mode (false)
-    system_prompt_tasks: Optional[List[SystemPromptTask]] = None  # System prompt tasks for the assistant
+    system_prompt_tasks: Optional[List[SystemPromptTask]] = (
+        None  # System prompt tasks for the assistant
+    )
 
     def get_active_prompt(self) -> Optional[SystemPromptTask]:
         """Get the active system prompt task."""
@@ -170,9 +167,13 @@ class ConversationSession:
     description: Optional[str] = None
     # Nested configuration structures
     enhancement: Optional[EnhancementConfig] = None  # Query enhancement configuration
-    vector_database: Optional[VectorDatabaseConfig] = None  # Vector database configuration
+    vector_database: Optional[VectorDatabaseConfig] = (
+        None  # Vector database configuration
+    )
     reranker: Optional[RerankerConfig] = None  # Document reranker configuration
-    answer_generation: Optional[AnswerGenerationConfig] = None  # Answer generation configuration
+    answer_generation: Optional[AnswerGenerationConfig] = (
+        None  # Answer generation configuration
+    )
     # Tags for organization
     tags: Optional[List[str]] = None
     # Assistant mode configuration (complex nested structure)
@@ -194,13 +195,20 @@ class ConversationSession:
 
     @property
     def agent_type(self) -> str:
-        """Get agent type based on enable_knowledge_assistant flag."""
-        return "supervisor" if self.enable_knowledge_assistant else "rag"
+        """Get agent type based on assistant_config.enabled flag."""
+        return (
+            "supervisor"
+            if (self.assistant_config and self.assistant_config.enabled)
+            else "rag"
+        )
 
     @property
     def has_answer_generation(self) -> bool:
         """Check if answer generation is configured."""
-        return self.answer_generation is not None and self.answer_generation.provider is not None
+        return (
+            self.answer_generation is not None
+            and self.answer_generation.provider is not None
+        )
 
     @property
     def has_enhancement(self) -> bool:
@@ -217,7 +225,13 @@ class ConversationSession:
     @property
     def has_system_prompt(self) -> bool:
         """Check if system prompt is configured."""
-        return self.system_prompt is not None and bool(self.system_prompt.content.strip())
+        if not self.assistant_config or not self.assistant_config.system_prompt_tasks:
+            return False
+        # Check if any system prompt task is active
+        return any(
+            task.is_active and not task.is_empty
+            for task in self.assistant_config.system_prompt_tasks
+        )
 
     @property
     def has_reranker(self) -> bool:

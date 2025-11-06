@@ -23,8 +23,8 @@ from src.agents.rag_agent.graph import graph_dev as workflow
 from src.agents.rag_agent.state import RAGWorkflowState as WorkflowState
 from src.agents.rag_agent.state import create_initial_state
 from src.config import settings
-from src.orchestration.orchestrator import create_multi_agent_orchestrator
 from src.domain.conversation import ConversationMessage
+from src.orchestration.orchestrator import create_multi_agent_orchestrator
 from src.services.conversation.conversation_history_service import (
     conversation_history_service,
 )
@@ -78,7 +78,9 @@ async def get_response_stream_supervisor(
         supervisor_init_start = time.time()
 
         # Initialize workflow config (same as RAG function)
-        top_k_per_query = max(5, int(top_k * 1.5))  # 50% more to account for RRF deduplication
+        top_k_per_query = max(
+            5, int(top_k * 1.5)
+        )  # 50% more to account for RRF deduplication
 
         workflow_config = {
             "collection_name": collection_name,
@@ -103,6 +105,31 @@ async def get_response_stream_supervisor(
         logger.info(
             f"🔧 Supervisor Config: enable_reranking={enable_reranking}, enable_llm_generation={enable_llm_generation}, collection={collection_name}, strategy={selected_strategy}"
         )
+
+        # Auto-set strategy to decomposition for supervisor mode
+        # Decomposition breaks complex queries into sub-queries for comprehensive knowledge retrieval
+        original_strategy = selected_strategy
+        if selected_strategy != "decomposition":
+            selected_strategy = "decomposition"
+            logger.info(
+                f"🔄 [SUPERVISOR MODE] Auto-changing enhancement strategy: '{original_strategy or 'native'}' → 'decomposition'"
+            )
+            logger.info(
+                "📋 [SUPERVISOR MODE] Reason: Decomposition provides optimal query breakdown for multi-concept task execution"
+            )
+            
+            # Notify user about strategy change
+            yield {
+                "type": "supervisor_progress",
+                "stage": "strategy_auto_adjusted",
+                "message": f"Enhancement strategy automatically set to 'decomposition' for optimal multi-concept query handling (original: '{original_strategy or 'native'}')",
+                "data": {
+                    "original_strategy": original_strategy or "native",
+                    "new_strategy": "decomposition",
+                    "reason": "Supervisor mode benefits from query decomposition to identify and retrieve all relevant concepts before task execution"
+                },
+                "execution_time_ms": (time.time() - start_time) * 1000,
+            }
 
         # Retrieve selected system prompt if provided (Phase 1)
         selected_system_prompt = None
@@ -185,7 +212,9 @@ async def get_response_stream_supervisor(
             )
 
         if conversation_description:
-            logger.info(f"📝 [SUPERVISOR] Conversation description included: {conversation_description[:100]}...")
+            logger.info(
+                f"📝 [SUPERVISOR] Conversation description included: {conversation_description[:100]}..."
+            )
 
         # Yield supervisor initialization COMPLETE event
         yield {
@@ -298,44 +327,54 @@ async def get_response_stream_supervisor(
 
             # Stream through RAG graph events - emit START and COMPLETE events
             # Using astream_events() gives us better event metadata like in RAG mode
-            rag_config_for_events = {
-                "configurable": {"thread_id": str(start_time)}
-            }
+            rag_config_for_events = {"configurable": {"thread_id": str(start_time)}}
 
             async for event in supervisor.rag_agent.rag_graph.astream_events(
-                input=rag_state_input,
-                config=rag_config_for_events,
-                version="v2"
+                input=rag_state_input, config=rag_config_for_events, version="v2"
             ):
                 event_type = event.get("event", "")
                 node_name = event.get("name", "")
                 event_data = event.get("data", {})
 
-                logger.debug(f"📡 [SUPERVISOR RAG EVENT] type={event_type}, node={node_name}")
-
                 # Capture final state when workflow completes
                 # With version="v2", the final state comes from on_chain_end for LangGraph node
                 if event_type == "on_chain_end" and node_name == "LangGraph":
-                    logger.critical(f"🔴 [SUPERVISOR RAG] LangGraph on_chain_end event received - THIS IS THE FINAL STATE!")
-                    logger.critical(f"🔴 [SUPERVISOR RAG] event_data type: {type(event_data)}")
+                    logger.critical(
+                        f"🔴 [SUPERVISOR RAG] LangGraph on_chain_end event received - THIS IS THE FINAL STATE!"
+                    )
+                    logger.critical(
+                        f"🔴 [SUPERVISOR RAG] event_data type: {type(event_data)}"
+                    )
 
                     # Extract output from event_data
-                    if hasattr(event_data, 'output'):
+                    if hasattr(event_data, "output"):
                         rag_result = event_data.output
-                        logger.critical(f"🔴 [SUPERVISOR RAG] Extracted from event_data.output")
-                    elif isinstance(event_data, dict) and 'output' in event_data:
-                        rag_result = event_data['output']
-                        logger.critical(f"🔴 [SUPERVISOR RAG] Extracted from event_data['output']")
+                        logger.critical(
+                            f"🔴 [SUPERVISOR RAG] Extracted from event_data.output"
+                        )
+                    elif isinstance(event_data, dict) and "output" in event_data:
+                        rag_result = event_data["output"]
+                        logger.critical(
+                            f"🔴 [SUPERVISOR RAG] Extracted from event_data['output']"
+                        )
                     elif isinstance(event_data, dict):
                         rag_result = event_data
-                        logger.critical(f"🔴 [SUPERVISOR RAG] Using event_data directly as dict")
+                        logger.critical(
+                            f"🔴 [SUPERVISOR RAG] Using event_data directly as dict"
+                        )
                     else:
                         rag_result = {}
-                        logger.critical(f"🔴 [SUPERVISOR RAG] Could not extract output, using empty dict")
+                        logger.critical(
+                            f"🔴 [SUPERVISOR RAG] Could not extract output, using empty dict"
+                        )
 
-                    logger.critical(f"🔴 [SUPERVISOR RAG] rag_result type: {type(rag_result)}")
+                    logger.critical(
+                        f"🔴 [SUPERVISOR RAG] rag_result type: {type(rag_result)}"
+                    )
                     if isinstance(rag_result, dict):
-                        logger.critical(f"🔴 [SUPERVISOR RAG] rag_result has {len(rag_result)} keys: {list(rag_result.keys())[:10]}")
+                        logger.critical(
+                            f"🔴 [SUPERVISOR RAG] rag_result has {len(rag_result)} keys: {list(rag_result.keys())[:10]}"
+                        )
                     continue
 
                 # Handle node END events to extract output data
@@ -343,16 +382,18 @@ async def get_response_stream_supervisor(
                     logger.info(f"📊 [SUPERVISOR RAG] Node completed: {node_name}")
 
                     # Extract the node output from the event
-                    if hasattr(event_data, 'output'):
+                    if hasattr(event_data, "output"):
                         node_output = event_data.output
-                    elif isinstance(event_data, dict) and 'output' in event_data:
-                        node_output = event_data['output']
+                    elif isinstance(event_data, dict) and "output" in event_data:
+                        node_output = event_data["output"]
                     else:
                         node_output = event_data
 
                     # Log node output for debugging
                     if isinstance(node_output, dict):
-                        logger.debug(f"🔍 [SUPERVISOR RAG NODE OUTPUT] {node_name} keys: {list(node_output.keys())}")
+                        logger.debug(
+                            f"🔍 [SUPERVISOR RAG NODE OUTPUT] {node_name} keys: {list(node_output.keys())}"
+                        )
 
                     # Map node names to substage events
                     if node_name in [
@@ -374,7 +415,9 @@ async def get_response_stream_supervisor(
                             # COMPLETE event with data
                             if isinstance(node_output, dict):
                                 # Try multiple possible structures for enhanced queries
-                                enhanced_queries = node_output.get("enhanced_query", {}).get("variants", [])
+                                enhanced_queries = node_output.get(
+                                    "enhanced_query", {}
+                                ).get("variants", [])
 
                                 # If not found, try direct variants key
                                 if not enhanced_queries:
@@ -382,10 +425,16 @@ async def get_response_stream_supervisor(
 
                                 # If still not found, try augmented_queries (used by some strategies)
                                 if not enhanced_queries:
-                                    enhanced_queries = node_output.get("augmented_queries", [])
+                                    enhanced_queries = node_output.get(
+                                        "augmented_queries", []
+                                    )
 
-                                logger.info(f"📊 [SUPERVISOR] Query enhancement output: {node_output.keys()}")
-                                logger.info(f"📊 [SUPERVISOR] Extracted {len(enhanced_queries)} enhanced queries: {enhanced_queries[:2] if enhanced_queries else 'NONE'}")
+                                logger.info(
+                                    f"📊 [SUPERVISOR] Query enhancement output: {node_output.keys()}"
+                                )
+                                logger.info(
+                                    f"📊 [SUPERVISOR] Extracted {len(enhanced_queries)} enhanced queries: {enhanced_queries[:2] if enhanced_queries else 'NONE'}"
+                                )
                             else:
                                 enhanced_queries = []
 
@@ -420,7 +469,9 @@ async def get_response_stream_supervisor(
 
                             # COMPLETE event with data
                             if isinstance(node_output, dict):
-                                retrieved_docs = node_output.get("retrieved_documents", [])
+                                retrieved_docs = node_output.get(
+                                    "retrieved_documents", []
+                                )
                             else:
                                 retrieved_docs = []
 
@@ -442,7 +493,10 @@ async def get_response_stream_supervisor(
 
                     elif node_name == "document_judger":
                         # Only emit if reranking is enabled
-                        if enable_reranking and "document_judging" not in rag_stages_emitted:
+                        if (
+                            enable_reranking
+                            and "document_judging" not in rag_stages_emitted
+                        ):
                             # START event
                             yield {
                                 "type": "workflow_progress",
@@ -455,7 +509,9 @@ async def get_response_stream_supervisor(
                             # COMPLETE event with data
                             if isinstance(node_output, dict):
                                 judged_docs = node_output.get("judged_documents", [])
-                                relevance_scores = node_output.get("relevance_scores", [])
+                                relevance_scores = node_output.get(
+                                    "relevance_scores", []
+                                )
                             else:
                                 judged_docs = []
                                 relevance_scores = []
@@ -475,15 +531,17 @@ async def get_response_stream_supervisor(
                                     "total_documents": len(judged_docs),
                                     "relevant_documents": relevant_count,
                                     "avg_score": (
-                                        sum(relevance_scores)
-                                        / len(relevance_scores)
+                                        sum(relevance_scores) / len(relevance_scores)
                                         if relevance_scores
                                         else 0
                                     ),
                                 },
                                 "execution_time_ms": (time.time() - start_time) * 1000,
                             }
-                        elif not enable_reranking and "document_judging_skipped" not in rag_stages_emitted:
+                        elif (
+                            not enable_reranking
+                            and "document_judging_skipped" not in rag_stages_emitted
+                        ):
                             logger.info(
                                 f"⚠️ [SUPERVISOR] Skipping document_judger event emission - reranking is disabled"
                             )
@@ -496,18 +554,28 @@ async def get_response_stream_supervisor(
             logger.info(f"✅ RAG Agent completed in {rag_time_ms:.2f}ms")
 
             # Extract RAG results from final chunk
-            logger.critical(f"🔴 [RAG RESULT CHECK] rag_result is None: {rag_result is None}")
+            logger.critical(
+                f"🔴 [RAG RESULT CHECK] rag_result is None: {rag_result is None}"
+            )
             if rag_result:
-                logger.critical(f"🔴 [RAG RESULT CHECK] rag_result keys: {list(rag_result.keys()) if isinstance(rag_result, dict) else 'NOT A DICT'}")
-                logger.critical(f"🔴 [RAG RESULT CHECK] rag_result type: {type(rag_result)}")
+                logger.critical(
+                    f"🔴 [RAG RESULT CHECK] rag_result keys: {list(rag_result.keys()) if isinstance(rag_result, dict) else 'NOT A DICT'}"
+                )
+                logger.critical(
+                    f"🔴 [RAG RESULT CHECK] rag_result type: {type(rag_result)}"
+                )
             else:
                 logger.critical(f"🔴 [RAG RESULT CHECK] rag_result is empty or None!")
 
             if rag_result:
                 retrieved_docs = rag_result.get("retrieved_documents", []) or []
                 judged_docs = rag_result.get("judged_documents", []) or []
-                logger.critical(f"🔴 [RAG DOCS EXTRACTED] retrieved_docs type: {type(retrieved_docs)}, count: {len(retrieved_docs) if retrieved_docs else 0}")
-                logger.critical(f"🔴 [RAG DOCS EXTRACTED] judged_docs type: {type(judged_docs)}, count: {len(judged_docs) if judged_docs else 0}")
+                logger.critical(
+                    f"🔴 [RAG DOCS EXTRACTED] retrieved_docs type: {type(retrieved_docs)}, count: {len(retrieved_docs) if retrieved_docs else 0}"
+                )
+                logger.critical(
+                    f"🔴 [RAG DOCS EXTRACTED] judged_docs type: {type(judged_docs)}, count: {len(judged_docs) if judged_docs else 0}"
+                )
                 relevance_scores = rag_result.get("relevance_scores", [])
                 relevance_threshold = rag_config.get("reranking_config", {}).get(
                     "relevance_threshold", 0.5
@@ -518,13 +586,17 @@ async def get_response_stream_supervisor(
                 if not judged_docs:
                     judged_docs = []
 
-                relevant_count = len(
-                    [
-                        doc
-                        for doc in (judged_docs or [])
-                        if getattr(doc, "is_relevant", True)
-                    ]
-                ) if judged_docs else 0
+                relevant_count = (
+                    len(
+                        [
+                            doc
+                            for doc in (judged_docs or [])
+                            if getattr(doc, "is_relevant", True)
+                        ]
+                    )
+                    if judged_docs
+                    else 0
+                )
 
                 rag_context = RAGContext(
                     query=query,
@@ -541,12 +613,22 @@ async def get_response_stream_supervisor(
 
                 # Log RAG context for debugging
                 logger.critical(f"🔴 [RAG CONTEXT] Stored in result_state")
-                logger.critical(f"🔴 [RAG CONTEXT] Retrieved count: {rag_context.retrieved_count}")
-                logger.critical(f"🔴 [RAG CONTEXT] Relevant count: {rag_context.relevant_count}")
-                logger.critical(f"🔴 [RAG CONTEXT] Judged docs count: {len(rag_context.judged_documents)}")
+                logger.critical(
+                    f"🔴 [RAG CONTEXT] Retrieved count: {rag_context.retrieved_count}"
+                )
+                logger.critical(
+                    f"🔴 [RAG CONTEXT] Relevant count: {rag_context.relevant_count}"
+                )
+                logger.critical(
+                    f"🔴 [RAG CONTEXT] Judged docs count: {len(rag_context.judged_documents)}"
+                )
                 if rag_context.judged_documents:
-                    logger.critical(f"🔴 [RAG CONTEXT] First doc type: {type(rag_context.judged_documents[0])}")
-                    logger.critical(f"🔴 [RAG CONTEXT] First doc: {str(rag_context.judged_documents[0])[:300]}")
+                    logger.critical(
+                        f"🔴 [RAG CONTEXT] First doc type: {type(rag_context.judged_documents[0])}"
+                    )
+                    logger.critical(
+                        f"🔴 [RAG CONTEXT] First doc: {str(rag_context.judged_documents[0])[:300]}"
+                    )
 
                 # Add response message from RAG agent's final_answer
                 # RAG nodes set final_answer in their state, not response
@@ -605,7 +687,9 @@ async def get_response_stream_supervisor(
                 result_state["messages"] = result_state.get("messages", []) + [
                     {"role": "assistant", "content": task_result}
                 ]
-                logger.info(f"📝 Added task_result to messages ({len(task_result)} chars)")
+                logger.info(
+                    f"📝 Added task_result to messages ({len(task_result)} chars)"
+                )
 
             # Emit Task agent COMPLETE event immediately
             task_details = result_state.get("task_details", {})
@@ -626,9 +710,13 @@ async def get_response_stream_supervisor(
         execution_time_ms = (time.time() - start_time) * 1000
 
         # Log result_state.messages to debug response
-        logger.info(f"📋 [SUPERVISOR] result_state.messages length: {len(result_state.get('messages', []))}")
+        logger.info(
+            f"📋 [SUPERVISOR] result_state.messages length: {len(result_state.get('messages', []))}"
+        )
         if result_state.get("messages"):
-            logger.info(f"📋 [SUPERVISOR] Last message: {result_state['messages'][-1].get('content', '')[:100]}")
+            logger.info(
+                f"📋 [SUPERVISOR] Last message: {result_state['messages'][-1].get('content', '')[:100]}"
+            )
 
         # Get RAG context documents if available
         rag_documents = []
@@ -668,7 +756,9 @@ async def get_response_stream_supervisor(
         if not final_response and result_state.get("task_result"):
             task_result = result_state["task_result"]
             if isinstance(task_result, dict):
-                final_response = task_result.get("response", "") or task_result.get("result", "")
+                final_response = task_result.get("response", "") or task_result.get(
+                    "result", ""
+                )
             elif isinstance(task_result, str):
                 final_response = task_result
 
@@ -690,11 +780,21 @@ async def get_response_stream_supervisor(
         }
 
         # Stream response in chunks for Supervisor mode (same as RAG mode)
-        logger.info(f"📝 [SUPERVISOR] Checking messages: {len(result_state.get('messages', []))} messages")
-        logger.info(f"📝 [SUPERVISOR] Task result: {result_state.get('task_result', 'NONE')}")
-        logger.info(f"📝 [SUPERVISOR] Final answer: {result_state.get('final_answer', 'NONE')[:100] if result_state.get('final_answer') else 'NONE'}")
-        logger.info(f"📝 [SUPERVISOR] final_response length: {len(final_response) if final_response else 0}")
-        logger.info(f"📝 [SUPERVISOR] final_response content: {final_response[:100] if final_response else 'EMPTY'}")
+        logger.info(
+            f"📝 [SUPERVISOR] Checking messages: {len(result_state.get('messages', []))} messages"
+        )
+        logger.info(
+            f"📝 [SUPERVISOR] Task result: {result_state.get('task_result', 'NONE')}"
+        )
+        logger.info(
+            f"📝 [SUPERVISOR] Final answer: {result_state.get('final_answer', 'NONE')[:100] if result_state.get('final_answer') else 'NONE'}"
+        )
+        logger.info(
+            f"📝 [SUPERVISOR] final_response length: {len(final_response) if final_response else 0}"
+        )
+        logger.info(
+            f"📝 [SUPERVISOR] final_response content: {final_response[:100] if final_response else 'EMPTY'}"
+        )
 
         if final_response:
             logger.critical(
@@ -1037,9 +1137,6 @@ async def get_response_stream_rag(
         )
 
         async for event in stream_iterator:
-            logger.debug(
-                f"🔴 [RAG EVENT] Received event: {event.get('event', 'unknown')}, name: {event.get('name', 'unknown')}"
-            )
             chunk_count += 1
 
             # With astream_events, we get events with 'event', 'name', 'data' fields
@@ -1055,7 +1152,6 @@ async def get_response_stream_rag(
 
                 # Only stream if we're in the actual last step
                 if last_stage != last_step_for_streaming:
-                    logger.debug(f"⏭️ [LLM STREAM SKIP] Skipping stream from {node_name} (current stage: {last_stage}) - last step is {last_step_for_streaming}")
                     continue
 
                 chunk_data = event_data.get("chunk", {})
@@ -1067,8 +1163,6 @@ async def get_response_stream_rag(
                     content = str(chunk_data) if chunk_data else ""
 
                 if content:
-                    logger.debug(f"📤 [LLM STREAM - RESPONSE] Emitting chunk from response_generation: {content[:50]}...")
-
                     # Emit metadata ONLY on the first chunk
                     if not first_llm_chunk_emitted:
                         first_llm_chunk_emitted = True
@@ -1096,9 +1190,6 @@ async def get_response_stream_rag(
                         enhanced_queries = query_info.get("enhanced_queries", [])
                         strategy_used = query_info.get("strategy_used", "augmented")
 
-                        logger.critical(
-                            f"📤 [FIRST CHUNK - RESPONSE] Emitting with metadata: {len(source_urls)} sources, {len(retrieved_docs)} docs"
-                        )
                         yield {
                             "type": "streaming_response",
                             "chunk": content,
@@ -1412,8 +1503,15 @@ async def get_response_stream_rag(
         # CRITICAL FIX 3: If response_generation wasn't emitted but we have final_answer, emit it now
         if not answer_generation_emitted and last_state.get("final_answer"):
             # Determine if this is from raw_response_formatter or answer_generator
-            is_raw_response = not enable_llm_generation and "Raw Results Mode" in last_state.get("final_answer", "")
-            response_source = "raw_response_formatter" if is_raw_response else "answer_generator/unknown"
+            is_raw_response = (
+                not enable_llm_generation
+                and "Raw Results Mode" in last_state.get("final_answer", "")
+            )
+            response_source = (
+                "raw_response_formatter"
+                if is_raw_response
+                else "answer_generator/unknown"
+            )
 
             logger.critical(
                 f"🔴 [RAG END STATE] Detected final_answer from {response_source} at end of stream!"
@@ -1460,8 +1558,12 @@ async def get_response_stream_rag(
 
             # Emit metadata on first chunk only
             retrieved_docs = last_state.get("retrieved_documents", []) or []
-            source_urls = [doc.get("source_url") for doc in retrieved_docs if doc.get("source_url")]
-            chunk_ids = [doc.get("chunk_id") for doc in retrieved_docs if doc.get("chunk_id")]
+            source_urls = [
+                doc.get("source_url") for doc in retrieved_docs if doc.get("source_url")
+            ]
+            chunk_ids = [
+                doc.get("chunk_id") for doc in retrieved_docs if doc.get("chunk_id")
+            ]
 
             # Extract enhanced queries from query_info
             query_info = last_state.get("query_info") or {}
@@ -1472,7 +1574,7 @@ async def get_response_stream_rag(
             # Emit chunks of ~500 chars at a time
             chunk_size = 500
             for i in range(0, len(final_answer), chunk_size):
-                chunk = final_answer[i:i + chunk_size]
+                chunk = final_answer[i : i + chunk_size]
 
                 response_event = {
                     "type": "streaming_response",
@@ -1489,7 +1591,9 @@ async def get_response_stream_rag(
                         "enhanced_queries": enhanced_queries,
                     }
 
-                logger.debug(f"📤 [RAG RESPONSE CHUNK] Emitting chunk {i//chunk_size + 1} ({len(chunk)} chars)")
+                logger.debug(
+                    f"📤 [RAG RESPONSE CHUNK] Emitting chunk {i//chunk_size + 1} ({len(chunk)} chars)"
+                )
                 yield response_event
 
         # Yield final result with complete state

@@ -1,11 +1,13 @@
 import { useDeleteConversation, useResetConversationMessages } from '@/api/resources/conversations';
 import { useGetActiveModelProviders } from '@/api/resources/model-providers';
 import { useGetCollections } from '@/api/resources/vectordb';
-import { WorkflowProgressModal } from '@/components/workflow-progress-modal';
 import { StreamingMessage } from '@/components/streaming-message';
-import { TypingIndicator } from '@/components/typing-indicator';
 import { SystemPromptManager } from '@/components/system-prompt-manager';
+import { TypingIndicator } from '@/components/typing-indicator';
+import { WorkflowProgressModal } from '@/components/workflow-progress-modal';
 import { apiEndpoints, apiUtils } from '@/config';
+import { useRAGWorkflowProgress } from '@/hooks/useRAGWorkflowProgress';
+import { useSupervisorWorkflowProgress } from '@/hooks/useSupervisorWorkflowProgress';
 import { paths } from '@/routes/paths';
 import {
   Accordion,
@@ -53,10 +55,8 @@ import {
   IconTrash,
   IconX
 } from '@tabler/icons-react';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useRAGWorkflowProgress } from '@/hooks/useRAGWorkflowProgress';
-import { useSupervisorWorkflowProgress } from '@/hooks/useSupervisorWorkflowProgress';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -246,6 +246,8 @@ export default function ConversationWindow() {
   const [topK, setTopK] = useState<number | undefined>(undefined);
   const [enableKnowledgeAssistant, setEnableKnowledgeAssistant] = useState(true);
   const [selectedSystemPromptId, setSelectedSystemPromptId] = useState<string | undefined>();
+  const [systemPromptTasks, setSystemPromptTasks] = useState<any[]>([]);
+  const [savedEnhancementProvider, setSavedEnhancementProvider] = useState<{ id: string, model_name: string } | null>(null);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [expandedMetadata, setExpandedMetadata] = useState<Set<number>>(new Set());
 
@@ -428,6 +430,12 @@ export default function ConversationWindow() {
 
           // Extract from nested enhancement config
           setSelectedStrategy(data.session.enhancement?.strategy || 'native');
+          if (data.session.enhancement?.provider) {
+            setSavedEnhancementProvider({
+              id: data.session.enhancement.provider.id,
+              model_name: data.session.enhancement.provider.model_name
+            });
+          }
 
           // Extract from nested vector_database config
           setCollectionName(data.session.vector_database?.collection_name || 'LongTermMemory');
@@ -448,6 +456,10 @@ export default function ConversationWindow() {
           if (data.session.assistant_config) {
             // Use nested assistant_config structure
             newEnableKnowledgeAssistant = data.session.assistant_config.enabled ?? false;
+            // Load system_prompt_tasks
+            if (data.session.assistant_config.system_prompt_tasks) {
+              setSystemPromptTasks(data.session.assistant_config.system_prompt_tasks);
+            }
           }
           setEnableKnowledgeAssistant(newEnableKnowledgeAssistant);
         }
@@ -615,7 +627,7 @@ export default function ConversationWindow() {
         setIsConnected(false); // Mark as disconnected when connection closes
         setIsLoading(false);
         finalizeStreamingMessages();
-        
+
         // Log close reason for debugging
         console.log(`🔌 WebSocket closed: code=${event.code}, reason=${event.reason || 'No reason provided'}`);
       };
@@ -1420,11 +1432,9 @@ export default function ConversationWindow() {
           } : null,
         },
         enable_knowledge_assistant: enableKnowledgeAssistant,
-        // Complex nested assistant configuration (always present, never null)
-        assistant_config: {
-          enabled: enableKnowledgeAssistant,
-          system_prompt_tasks: null, // Keep existing prompts
-        },
+        // NOTE: assistant_config intentionally NOT included in manual save
+        // We only update it explicitly when user edits system prompts in the wizard
+        // Including it with null would overwrite existing system_prompt_tasks
       };
 
 
@@ -1473,27 +1483,50 @@ export default function ConversationWindow() {
     }
   };
 
-  // Auto-save settings with debounce when user changes badges
-  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const autoSaveSettings = useCallback(async () => {
+  const handleQuickUpdate = async (updates: {
+    mode?: 'agent' | 'rag',
+    strategy?: string,
+    model?: string,
+  }) => {
     if (!sessionId) return;
 
     try {
       const token = localStorage.getItem('jwt_token');
 
-      // Build nested configuration structure
+      // Determine the provider ID from the model
+      let providerId = selectedProviderId;
+      let modelName = selectedModel;
+      if (updates.model) {
+        const provider = providers?.find(p =>
+          p.generative?.models?.includes(updates.model!)
+        );
+        if (provider) {
+          providerId = provider.id;
+          modelName = updates.model;
+        }
+      }
+
+      // When model/provider changes, update the saved enhancement provider
+      if (updates.model && providerId && modelName) {
+        const newProvider = { id: providerId, model_name: modelName };
+        setSavedEnhancementProvider(newProvider);
+      }
+
+      // Determine which provider to use - when model changes, use the new provider for BOTH enhancement and answer_generation
+      let providerToUse = providerId && modelName ? { id: providerId, model_name: modelName } : null;
+
+      // If model is NOT being updated, use the saved enhancement provider
+      if (!updates.model && savedEnhancementProvider) {
+        providerToUse = savedEnhancementProvider;
+      }
+
+      // Build nested configuration structure with current values + updates
       const payload: any = {
-        // Enhancement configuration
-        enhancement: selectedStrategy !== 'native' && selectedProviderId && selectedModel ? {
-          strategy: selectedStrategy,
-          provider: {
-            id: selectedProviderId,
-            model_name: selectedModel,
-          },
-        } : {
-          strategy: 'native',
-          provider: null,
+        // Enhancement configuration - uses the same provider as answer_generation
+        enhancement: {
+          strategy: updates.strategy || selectedStrategy,
+          provider: providerToUse,
         },
         // Vector database configuration
         vector_database: {
@@ -1509,21 +1542,21 @@ export default function ConversationWindow() {
           } : null,
           relevance_threshold: relevanceThreshold,
         },
-        // Answer generation configuration
+        // Answer generation configuration - uses the same provider as enhancement
         answer_generation: {
-          enabled: enableLLMGeneration && selectedProviderId && selectedModel ? true : false,
-          provider: enableLLMGeneration && selectedProviderId && selectedModel ? {
-            id: selectedProviderId,
-            model_name: selectedModel,
-          } : null,
+          enabled: enableLLMGeneration && providerToUse ? true : false,
+          provider: enableLLMGeneration && providerToUse ? providerToUse : null,
         },
-        enable_knowledge_assistant: enableKnowledgeAssistant,
-        // Complex nested assistant configuration (always present, never null)
+        // Assistant config - preserve existing system_prompt_tasks
         assistant_config: {
-          enabled: enableKnowledgeAssistant,
-          system_prompt_tasks: null, // Keep existing prompts
+          enabled: updates.mode === 'agent' ? true : (updates.mode === 'rag' ? false : enableKnowledgeAssistant),
+          system_prompt_tasks: systemPromptTasks.length > 0 ? systemPromptTasks : null,
         },
       };
+
+      console.log('🔄 [QUICK UPDATE] Payload:', JSON.stringify(payload, null, 2));
+      console.log('🔄 [QUICK UPDATE] System Prompt Tasks:', systemPromptTasks);
+      console.log('🔄 [QUICK UPDATE] Provider (Enhancement & Answer Gen):', providerToUse);
 
       const response = await fetch(apiUtils.buildApiUrl(`/conversations/${sessionId}`), {
         method: 'PUT',
@@ -1534,33 +1567,16 @@ export default function ConversationWindow() {
         body: JSON.stringify(payload),
       });
 
-      if (!response.ok) {
-        console.error('Failed to auto-save conversation settings');
+      if (response.ok) {
+        console.log('✅ Quick update saved successfully');
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ Failed to save quick update:', errorData);
       }
     } catch (error) {
-      console.error('Error auto-saving conversation settings:', error);
+      console.error('❌ Error saving quick update:', error);
     }
-  }, [sessionId, selectedProviderId, selectedModel, selectedStrategy, collectionName, enableReranking, relevanceThreshold, selectedRerankerId, selectedRerankerModel, enableLLMGeneration, topK, enableKnowledgeAssistant]);
-
-  // Debounced auto-save when settings change
-  useEffect(() => {
-    if (autoSaveTimeoutRef.current) {
-      clearTimeout(autoSaveTimeoutRef.current);
-    }
-
-    // Only auto-save if settings modal is NOT open (to avoid conflicts with manual save)
-    if (!settingsModalOpen && sessionId) {
-      autoSaveTimeoutRef.current = setTimeout(() => {
-        autoSaveSettings();
-      }, 1000); // 1 second debounce
-    }
-
-    return () => {
-      if (autoSaveTimeoutRef.current) {
-        clearTimeout(autoSaveTimeoutRef.current);
-      }
-    };
-  }, [selectedProviderId, selectedModel, selectedStrategy, collectionName, enableReranking, relevanceThreshold, selectedRerankerId, selectedRerankerModel, enableLLMGeneration, topK, enableKnowledgeAssistant, settingsModalOpen, sessionId, autoSaveSettings]);
+  };
 
   const handleBack = () => {
     navigate(paths.dashboard.apps.knowledgeSearch);
@@ -2077,6 +2093,30 @@ export default function ConversationWindow() {
                   const newEnableKA = newMode === 'agent';
                   setEnableKnowledgeAssistant(newEnableKA);
                   console.log(`🔄 [MODE CHANGED] User selected: ${newMode} → enableKnowledgeAssistant=${newEnableKA}`);
+                  
+                  // Auto-set strategy to decomposition for Assistant Agent mode
+                  let strategyUpdate = undefined;
+                  if (newMode === 'agent' && selectedStrategy !== 'decomposition') {
+                    const previousStrategy = selectedStrategy;
+                    setSelectedStrategy('decomposition');
+                    strategyUpdate = 'decomposition';
+                    
+                    notifications.show({
+                      title: 'Strategy Auto-Updated',
+                      message: `Enhancement strategy changed from "${previousStrategy || 'native'}" to "decomposition" for optimal multi-concept query handling in Assistant Agent mode.`,
+                      color: 'blue',
+                      icon: <IconInfoCircle size={16} />,
+                      autoClose: 8000,
+                    });
+                    
+                    console.log(`🔄 [STRATEGY AUTO-CHANGED] ${previousStrategy || 'native'} → decomposition (Assistant Agent mode)`);
+                  }
+                  
+                  // Save to database (include strategy if it was changed)
+                  handleQuickUpdate({ 
+                    mode: newMode,
+                    ...(strategyUpdate && { strategy: strategyUpdate })
+                  });
                 }}
                 data={[
                   { value: 'agent', label: '∞ Assistant Agent' },
@@ -2110,7 +2150,12 @@ export default function ConversationWindow() {
               <Select
                 placeholder="Strategy"
                 value={selectedStrategy}
-                onChange={(value) => setSelectedStrategy(value || 'native')}
+                onChange={(value) => {
+                  const newStrategy = value || 'native';
+                  setSelectedStrategy(newStrategy);
+                  // Save to database
+                  handleQuickUpdate({ strategy: newStrategy });
+                }}
                 data={ENHANCEMENT_STRATEGIES.map(s => ({
                   value: s.value,
                   label: s.label
@@ -2143,7 +2188,20 @@ export default function ConversationWindow() {
               <Select
                 placeholder="Model"
                 value={selectedModel}
-                onChange={(value) => setSelectedModel(value)}
+                onChange={(value) => {
+                  setSelectedModel(value);
+                  // Update provider ID based on selected model
+                  if (value) {
+                    const provider = providers?.find(p =>
+                      p.generative?.models?.includes(value)
+                    );
+                    if (provider) {
+                      setSelectedProviderId(provider.id);
+                    }
+                    // Save to database
+                    handleQuickUpdate({ model: value });
+                  }
+                }}
                 data={providers?.flatMap(p =>
                   p.generative?.models?.map((m: string) => ({
                     value: m,
@@ -2178,13 +2236,14 @@ export default function ConversationWindow() {
               <Box style={{ flex: 1 }} />
 
               {/* Settings Icon */}
-              <Tooltip label="Advanced Settings">
+              <Tooltip label="Edit Conversation Settings">
                 <ActionIcon
                   size="md"
                   variant="light"
-                  onClick={async () => {
-                    await loadConversationHistory();
-                    setSettingsModalOpen(true);
+                  onClick={() => {
+                    navigate(paths.dashboard.apps.conversationCreate, {
+                      state: { editingConversationId: sessionId }
+                    });
                   }}
                   disabled={isLoading || isLoadingHistory}
                 >

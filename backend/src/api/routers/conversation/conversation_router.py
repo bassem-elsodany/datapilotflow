@@ -14,16 +14,17 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 from src.api.routers.auth.auth_router import get_current_user
-from src.domain.user import User
 from src.domain.conversation import (
     AnswerGenerationConfig,
     AssistantConfig,
+    ConversationSession,
     EnhancementConfig,
     ProviderConfig,
     RerankerConfig,
     SystemPromptTask,
     VectorDatabaseConfig,
 )
+from src.domain.user import User
 from src.services.conversation.conversation_history_service import (
     conversation_history_service,
 )
@@ -62,17 +63,13 @@ class VectorDatabaseConfigRequest(BaseModel):
     collection_name: str = Field(
         "LongTermMemory", description="Vector database collection name"
     )
-    top_k: int = Field(
-        5, ge=5, le=30, description="Number of documents to retrieve"
-    )
+    top_k: int = Field(5, ge=5, le=30, description="Number of documents to retrieve")
 
 
 class RerankerConfigRequest(BaseModel):
     """Request model for reranker configuration."""
 
-    enabled: bool = Field(
-        False, description="Whether reranking is enabled"
-    )
+    enabled: bool = Field(False, description="Whether reranking is enabled")
     provider: Optional[ProviderConfigRequest] = Field(
         None, description="Reranker provider"
     )
@@ -87,9 +84,7 @@ class RerankerConfigRequest(BaseModel):
 class AnswerGenerationConfigRequest(BaseModel):
     """Request model for answer generation configuration."""
 
-    enabled: bool = Field(
-        False, description="Whether answer generation is enabled"
-    )
+    enabled: bool = Field(False, description="Whether answer generation is enabled")
     provider: Optional[ProviderConfigRequest] = Field(
         None, description="LLM provider for answer generation"
     )
@@ -106,8 +101,12 @@ class SystemPromptRequest(BaseModel):
 class SystemPromptTaskRequest(BaseModel):
     """Request model for system prompt task (for assistant_config)."""
 
-    id: Optional[str] = Field(None, description="System prompt task ID (auto-generated if not provided)")
-    title: str = Field(..., min_length=1, max_length=100, description="System prompt task title")
+    id: Optional[str] = Field(
+        None, description="System prompt task ID (auto-generated if not provided)"
+    )
+    title: str = Field(
+        ..., min_length=1, max_length=100, description="System prompt task title"
+    )
     content: str = Field(..., min_length=10, description="System prompt task content")
     is_active: bool = Field(True, description="Whether this prompt is active")
 
@@ -126,14 +125,13 @@ class AssistantConfigRequest(BaseModel):
 class CreateSessionRequest(BaseModel):
     """Request model for creating a new conversation session with new structure."""
 
-    name: Optional[str] = Field(
-        None, max_length=100, description="Conversation name"
-    )
+    name: Optional[str] = Field(None, max_length=100, description="Conversation name")
     description: Optional[str] = Field(
         None, max_length=500, description="Conversation description"
     )
     system_prompt: Optional[SystemPromptRequest] = Field(
-        None, description="Embedded system prompt (deprecated - use assistant_config for Assistant mode)"
+        None,
+        description="Embedded system prompt (deprecated - use assistant_config for Assistant mode)",
     )
     enhancement: Optional[EnhancementConfigRequest] = Field(
         None, description="Query enhancement configuration"
@@ -155,11 +153,12 @@ class CreateSessionRequest(BaseModel):
         description="Enable multi-agent supervisor (deprecated - use assistant_config)",
     )
     assistant_config: Optional[AssistantConfigRequest] = Field(
-        None, description="Complex nested configuration for Assistant mode (RAG=null, Assistant=object)"
+        None,
+        description="Complex nested configuration for Assistant mode (RAG=null, Assistant=object)",
     )
 
 
-def _serialize_conversation_to_response(session: 'ConversationSession') -> dict:
+def _serialize_conversation_to_response(session: "ConversationSession") -> dict:
     """Serialize ConversationSession to API response format (new nested structure)."""
     response = {
         "id": session._id,
@@ -218,7 +217,7 @@ def _serialize_conversation_to_response(session: 'ConversationSession') -> dict:
                 }
                 if session.answer_generation.provider
                 else None
-            )
+            ),
         }
 
     # Assistant configuration (complex nested structure)
@@ -232,8 +231,12 @@ def _serialize_conversation_to_response(session: 'ConversationSession') -> dict:
                     "id": task.id,
                     "title": task.name,  # SystemPromptTask uses 'name', map to 'title' for API
                     "content": task.system_prompt,  # SystemPromptTask uses 'system_prompt', map to 'content' for API
-                    "created_at": task.created_at.isoformat() if task.created_at else None,
-                    "updated_at": task.updated_at.isoformat() if task.updated_at else None,
+                    "created_at": (
+                        task.created_at.isoformat() if task.created_at else None
+                    ),
+                    "updated_at": (
+                        task.updated_at.isoformat() if task.updated_at else None
+                    ),
                     "is_active": task.is_active,
                 }
                 for task in session.assistant_config.system_prompt_tasks
@@ -261,14 +264,13 @@ class RenameSessionRequest(BaseModel):
 class UpdateSessionConfigRequest(BaseModel):
     """Request model for updating conversation configuration with new nested structure."""
 
-    name: Optional[str] = Field(
-        None, max_length=100, description="Conversation name"
-    )
+    name: Optional[str] = Field(None, max_length=100, description="Conversation name")
     description: Optional[str] = Field(
         None, max_length=500, description="Conversation description"
     )
     system_prompt: Optional[SystemPromptRequest] = Field(
-        None, description="Embedded system prompt (deprecated - use assistant_config for Assistant mode)"
+        None,
+        description="Embedded system prompt (deprecated - use assistant_config for Assistant mode)",
     )
     enhancement: Optional[EnhancementConfigRequest] = Field(
         None, description="Query enhancement configuration"
@@ -290,7 +292,8 @@ class UpdateSessionConfigRequest(BaseModel):
         description="Enable multi-agent supervisor (deprecated - use assistant_config)",
     )
     assistant_config: Optional[AssistantConfigRequest] = Field(
-        None, description="Complex nested configuration for Assistant mode (RAG=null, Assistant=object)"
+        None,
+        description="Complex nested configuration for Assistant mode (RAG=null, Assistant=object)",
     )
 
 
@@ -313,67 +316,6 @@ class AssistantConfigResponse(BaseModel):
     )
     system_prompt_tasks: Optional[List[SystemPromptTaskResponse]] = Field(
         None, description="System prompt tasks for the assistant"
-    )
-
-
-# ============================================================================
-# SYSTEM PROMPT MANAGEMENT MODELS (Phase 1 - Core CRUD)
-# ============================================================================
-
-
-class SystemPromptTaskManagementResponse(BaseModel):
-    """Response model for a system prompt task (for management endpoints)."""
-
-    id: str
-    name: str
-    description: Optional[str] = None
-    system_prompt: str
-    tags: List[str]
-    is_active: bool
-    usage_count: int
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
-    version: int
-
-
-class CreateSystemPromptRequest(BaseModel):
-    """Request to create a new system prompt."""
-
-    name: str = Field(
-        ..., min_length=1, max_length=100, description="Name of the system prompt"
-    )
-    system_prompt: str = Field(
-        ...,
-        min_length=10,
-        description="The actual system prompt content (e.g., instructions for code review, summarization, etc.)",
-    )
-    description: Optional[str] = Field(
-        None, max_length=500, description="Description of what this prompt does"
-    )
-    tags: Optional[List[str]] = Field(
-        None, description="Tags for organization (e.g., ['code-review', 'python'])"
-    )
-
-
-class UpdateSystemPromptRequest(BaseModel):
-    """Request to update a system prompt."""
-
-    name: Optional[str] = Field(
-        None, min_length=1, max_length=100, description="Updated name"
-    )
-    system_prompt: Optional[str] = Field(
-        None, min_length=10, description="Updated prompt content"
-    )
-    description: Optional[str] = Field(None, max_length=500, description="Updated description")
-    tags: Optional[List[str]] = Field(None, description="Updated tags")
-    is_active: Optional[bool] = Field(None, description="Updated active status")
-
-
-class SelectSystemPromptRequest(BaseModel):
-    """Request to select a system prompt for a conversation."""
-
-    prompt_id: Optional[str] = Field(
-        None, description="System prompt ID to select (None to deselect)"
     )
 
 
@@ -464,40 +406,60 @@ async def create_conversation_session(
                     model_name=create_request.answer_generation.provider.model_name,
                 )
             answer_generation = AnswerGenerationConfig(
-                enabled=create_request.answer_generation.enabled,
-                provider=provider
+                enabled=create_request.answer_generation.enabled, provider=provider
             )
 
         # Build assistant_config if provided
-        logger.info(f"[DEBUG] create_request.assistant_config: {create_request.assistant_config}")
+        logger.info(
+            f"[DEBUG] create_request.assistant_config: {create_request.assistant_config}"
+        )
         if create_request.assistant_config:
-            logger.info(f"[DEBUG] assistant_config exists: enabled={create_request.assistant_config.enabled}")
-            logger.info(f"[DEBUG] system_prompt_tasks from request: {create_request.assistant_config.system_prompt_tasks}")
+            logger.info(
+                f"[DEBUG] assistant_config exists: enabled={create_request.assistant_config.enabled}"
+            )
+            logger.info(
+                f"[DEBUG] system_prompt_tasks from request: {create_request.assistant_config.system_prompt_tasks}"
+            )
 
         assistant_config = None
         if create_request.assistant_config:
             system_prompt_tasks = None
             if create_request.assistant_config.system_prompt_tasks:
-                logger.info(f"[DEBUG] Found {len(create_request.assistant_config.system_prompt_tasks)} system_prompt_tasks")
+                logger.info(
+                    f"[DEBUG] Found {len(create_request.assistant_config.system_prompt_tasks)} system_prompt_tasks in request"
+                )
+                # Log each task for debugging
+                for i, task in enumerate(
+                    create_request.assistant_config.system_prompt_tasks
+                ):
+                    logger.info(
+                        f"[DEBUG] Task {i}: id={task.id}, title={task.title[:50] if task.title else 'None'}..., content_length={len(task.content) if task.content else 0}"
+                    )
+
                 system_prompt_tasks = [
                     SystemPromptTask(
-                        id=task.id or "",  # Use provided ID if exists, otherwise will be generated in __post_init__
-                        user_id=current_user.id,
-                        conversation_id="",  # Will be set after conversation creation
+                        id=task.id
+                        or "",  # Use provided ID if exists, otherwise will be generated in __post_init__
                         name=task.title,  # API uses 'title', SystemPromptTask uses 'name'
                         system_prompt=task.content,  # API uses 'content', SystemPromptTask uses 'system_prompt'
                         is_active=task.is_active,
                     )
                     for task in create_request.assistant_config.system_prompt_tasks
                 ]
-                logger.info(f"[DEBUG] Created {len(system_prompt_tasks)} SystemPromptTask objects")
+                logger.info(
+                    f"[DEBUG] Created {len(system_prompt_tasks)} SystemPromptTask objects successfully"
+                )
             else:
-                logger.info("[DEBUG] system_prompt_tasks is None or empty")
+                logger.warning(
+                    f"[DEBUG] system_prompt_tasks is None or empty in request! assistant_config.enabled={create_request.assistant_config.enabled}, assistant_config.system_prompt_tasks={create_request.assistant_config.system_prompt_tasks}"
+                )
             assistant_config = AssistantConfig(
                 enabled=create_request.assistant_config.enabled,
                 system_prompt_tasks=system_prompt_tasks,
             )
-            logger.info(f"[DEBUG] Created AssistantConfig with {len(system_prompt_tasks) if system_prompt_tasks else 0} tasks")
+            logger.info(
+                f"[DEBUG] Created AssistantConfig: enabled={assistant_config.enabled}, tasks_count={len(system_prompt_tasks) if system_prompt_tasks else 0}"
+            )
 
         session_id = conversation_history_service.create_conversation(
             user_id=current_user.id,
@@ -511,42 +473,31 @@ async def create_conversation_session(
             assistant_config=assistant_config,
         )
 
-        # Update system_prompt_tasks with the actual conversation_id
-        if assistant_config and assistant_config.system_prompt_tasks:
-            logger.info(f"[DEBUG] Updating system_prompt_tasks with conversation_id: {session_id}")
-            try:
-                from bson import ObjectId
-                # Update each system prompt task with the correct conversation_id
-                conversation_history_service.collection.update_one(
-                    {"_id": ObjectId(session_id)},
-                    {
-                        "$set": {
-                            "assistant_config.system_prompt_tasks": [
-                                {
-                                    **asdict(task),
-                                    "conversation_id": session_id
-                                }
-                                for task in assistant_config.system_prompt_tasks
-                            ]
-                        }
-                    }
-                )
-                logger.info(f"[DEBUG] Successfully updated system_prompt_tasks with conversation_id")
-            except Exception as e:
-                logger.error(f"[DEBUG] Failed to update system_prompt_tasks conversation_id: {e}")
-
         # Determine agent type from assistant_config
         if assistant_config:
             agent_type = "supervisor" if assistant_config.enabled else "rag"
         else:
             agent_type = "rag"  # Default to RAG if no assistant_config
+
+        # Fetch the created conversation and return the full session
+        created_session = conversation_history_service.get_conversation(
+            session_id, current_user.id
+        )
+
         return {
             "success": True,
             "id": session_id,
+            "session": (
+                _serialize_conversation_to_response(created_session)
+                if created_session
+                else None
+            ),
             "name": create_request.name or f"Session {session_id[:8]}",
             "agent_type": agent_type,
             "enhancement_strategy": (
-                create_request.enhancement.strategy if create_request.enhancement else None
+                create_request.enhancement.strategy
+                if create_request.enhancement
+                else None
             ),
             "message": "Conversation session created successfully",
         }
@@ -556,41 +507,18 @@ async def create_conversation_session(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/{conversation_id}/messages", status_code=status.HTTP_200_OK)
-async def send_chat_message(
-    conversation_id: str,
-    chat_message: ChatMessage,
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Send a chat message to a specific conversation session.
-
-    This endpoint uses the traditional approach with predefined role, seniority, and domain
-    parameters to conduct interviews without resume/job description analysis.
-
-    Parameters:
-    - conversation_id: The conversation session ID
-    - message: The chat message/question
-    - candidate_id: Unique candidate identifier
-    - role: Job role (e.g., "Software Engineer", "Data Scientist")
-    - seniority: Experience level (e.g., "Junior", "Senior", "Lead")
-    - domain: Technical domain (e.g., "Python", "JavaScript", "DevOps")
-    """
-    try:
-        response, _ = await get_response(
-            messages=chat_message.message,
-            candidate_id=chat_message.candidate_id,
-            interview_context={
-                "role": chat_message.role,
-                "seniority": chat_message.seniority,
-                "domain": chat_message.domain,
-            },
-            user_id=current_user.id,
-        )
-        return {"response": response}
-    except Exception as e:
-        logger.error(f"Chat error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+# Legacy endpoint - commented out as get_response function no longer exists
+# @router.post("/{conversation_id}/messages", status_code=status.HTTP_200_OK)
+# async def send_chat_message(
+#     conversation_id: str,
+#     chat_message: ChatMessage,
+#     current_user: User = Depends(get_current_user),
+# ):
+#     """
+#     Send a chat message to a specific conversation session.
+#     """
+#     # This endpoint used a legacy get_response function that no longer exists
+#     raise HTTPException(status_code=501, detail="Endpoint not implemented")
 
 
 @router.delete("/{conversation_id}/messages", status_code=status.HTTP_204_NO_CONTENT)
@@ -840,39 +768,67 @@ async def update_conversation_session(
                 }
             update_doc["answer_generation"] = {
                 "enabled": config_request.answer_generation.enabled,
-                "provider": provider
+                "provider": provider,
             }
 
         # Assistant configuration (complex nested structure)
         if config_request.assistant_config is not None:
+            logger.info(
+                f"[DEBUG UPDATE] assistant_config exists: enabled={config_request.assistant_config.enabled}"
+            )
+            logger.info(
+                f"[DEBUG UPDATE] system_prompt_tasks from request: {config_request.assistant_config.system_prompt_tasks}"
+            )
+
             assistant_config_dict = {
                 "enabled": config_request.assistant_config.enabled,
             }
             if config_request.assistant_config.system_prompt_tasks:
-                assistant_config_dict["system_prompt_tasks"] = [
-                    {
-                        "id": task.id,
-                        "title": task.title,
-                        "content": task.content,
-                        "is_active": task.is_active,
-                    }
+                logger.info(
+                    f"[DEBUG UPDATE] Found {len(config_request.assistant_config.system_prompt_tasks)} system_prompt_tasks in request"
+                )
+                # Log each task for debugging
+                for i, task in enumerate(
+                    config_request.assistant_config.system_prompt_tasks
+                ):
+                    logger.info(
+                        f"[DEBUG UPDATE] Task {i}: id={task.id}, title={task.title[:50] if task.title else 'None'}..., content_length={len(task.content) if task.content else 0}"
+                    )
+
+                # Create proper SystemPromptTask objects and serialize them
+                system_prompt_tasks = [
+                    SystemPromptTask(
+                        id=task.id or "",
+                        name=task.title,  # API uses 'title', SystemPromptTask uses 'name'
+                        system_prompt=task.content,  # API uses 'content', SystemPromptTask uses 'system_prompt'
+                        is_active=task.is_active,
+                    )
                     for task in config_request.assistant_config.system_prompt_tasks
                 ]
+                assistant_config_dict["system_prompt_tasks"] = [
+                    asdict(task) for task in system_prompt_tasks
+                ]
+                logger.info(
+                    f"[DEBUG UPDATE] Created and serialized {len(system_prompt_tasks)} SystemPromptTask objects"
+                )
             else:
+                logger.warning(
+                    f"[DEBUG UPDATE] system_prompt_tasks is None or empty in request! assistant_config.enabled={config_request.assistant_config.enabled}, system_prompt_tasks={config_request.assistant_config.system_prompt_tasks}"
+                )
                 assistant_config_dict["system_prompt_tasks"] = None
             update_doc["assistant_config"] = assistant_config_dict
 
         if not update_doc:
-            raise HTTPException(
-                status_code=400, detail="No fields to update"
-            )
+            raise HTTPException(status_code=400, detail="No fields to update")
 
         # Update last_updated timestamp
         from datetime import datetime
+
         update_doc["last_updated"] = datetime.utcnow()
 
         # Update MongoDB document
         from bson import ObjectId
+
         result = conversation_history_service.collection.update_one(
             {"_id": ObjectId(conversation_id), "user_id": current_user.id},
             {"$set": update_doc},
@@ -891,249 +847,4 @@ async def update_conversation_session(
         raise
     except Exception as e:
         logger.error(f"Error updating conversation: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ============================================================================
-# SYSTEM PROMPT TASKS MANAGEMENT ENDPOINTS (Phase 1 - Core CRUD)
-# ============================================================================
-
-
-@router.post("/{conversation_id}/system-prompts", status_code=status.HTTP_201_CREATED)
-async def create_system_prompt(
-    conversation_id: str,
-    request: CreateSystemPromptRequest,
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Create a new system prompt task for a conversation.
-
-    This allows users to define reusable system prompts that can be applied to queries
-    to provide custom instructions and context to the LLM.
-    """
-    try:
-        prompt = conversation_history_service.create_system_prompt(
-            user_id=current_user.id,
-            conversation_id=conversation_id,
-            name=request.name,
-            system_prompt=request.system_prompt,
-            description=request.description,
-            tags=request.tags,
-        )
-
-        if not prompt:
-            raise HTTPException(
-                status_code=404,
-                detail="Conversation not found or failed to create system prompt",
-            )
-
-        return {
-            "success": True,
-            "data": {
-                "id": prompt.id,
-                "title": prompt.name,  # API uses 'title', domain uses 'name'
-                "content": prompt.system_prompt,  # API uses 'content', domain uses 'system_prompt'
-                "is_active": prompt.is_active,
-                "created_at": prompt.created_at.isoformat() if prompt.created_at else None,
-                "updated_at": prompt.updated_at.isoformat() if prompt.updated_at else None,
-            },
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error creating system prompt: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/{conversation_id}/system-prompts")
-async def list_system_prompts(
-    conversation_id: str,
-    active_only: bool = Query(False, description="Return only active prompts"),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    List all system prompts for a conversation.
-
-    Returns a list of all available system prompts, optionally filtered to active only.
-    """
-    try:
-        prompts = conversation_history_service.list_system_prompts(
-            conversation_id=conversation_id,
-            user_id=current_user.id,
-            active_only=active_only,
-        )
-
-        return {
-            "success": True,
-            "data": [
-                {
-                    "id": p.id,
-                    "title": p.name,  # API uses 'title', domain uses 'name'
-                    "content": p.system_prompt,  # API uses 'content', domain uses 'system_prompt'
-                    "is_active": p.is_active,
-                    "created_at": p.created_at.isoformat() if p.created_at else None,
-                    "updated_at": p.updated_at.isoformat() if p.updated_at else None,
-                }
-                for p in prompts
-            ],
-            "total": len(prompts),
-        }
-
-    except Exception as e:
-        logger.error(f"Error listing system prompts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/{conversation_id}/system-prompts/{prompt_id}")
-async def get_system_prompt(
-    conversation_id: str,
-    prompt_id: str,
-    current_user: User = Depends(get_current_user),
-):
-    """Get a specific system prompt by ID."""
-    try:
-        prompt = conversation_history_service.get_system_prompt(
-            conversation_id=conversation_id,
-            prompt_id=prompt_id,
-            user_id=current_user.id,
-        )
-
-        if not prompt:
-            raise HTTPException(status_code=404, detail="System prompt not found")
-
-        return {
-            "success": True,
-            "data": {
-                "id": prompt.id,
-                "title": prompt.name,  # API uses 'title', domain uses 'name'
-                "content": prompt.system_prompt,  # API uses 'content', domain uses 'system_prompt'
-                "is_active": prompt.is_active,
-                "created_at": prompt.created_at.isoformat() if prompt.created_at else None,
-                "updated_at": prompt.updated_at.isoformat() if prompt.updated_at else None,
-            },
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error retrieving system prompt: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.put("/{conversation_id}/system-prompts/{prompt_id}")
-async def update_system_prompt(
-    conversation_id: str,
-    prompt_id: str,
-    request: UpdateSystemPromptRequest,
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Update a system prompt.
-
-    Allows updating the prompt name, content, description, tags, and active status.
-    """
-    try:
-        success = conversation_history_service.update_system_prompt(
-            conversation_id=conversation_id,
-            prompt_id=prompt_id,
-            user_id=current_user.id,
-            name=request.name,
-            system_prompt=request.system_prompt,
-            description=request.description,
-            tags=request.tags,
-            is_active=request.is_active,
-        )
-
-        if not success:
-            raise HTTPException(
-                status_code=404,
-                detail="System prompt not found or update failed",
-            )
-
-        # Fetch and return the updated prompt
-        prompt = conversation_history_service.get_system_prompt(
-            conversation_id=conversation_id,
-            prompt_id=prompt_id,
-            user_id=current_user.id,
-        )
-
-        return {
-            "success": True,
-            "data": {
-                "id": prompt.id,
-                "title": prompt.name,  # API uses 'title', domain uses 'name'
-                "content": prompt.system_prompt,  # API uses 'content', domain uses 'system_prompt'
-                "is_active": prompt.is_active,
-                "created_at": prompt.created_at.isoformat() if prompt.created_at else None,
-                "updated_at": prompt.updated_at.isoformat() if prompt.updated_at else None,
-            },
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error updating system prompt: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.delete("/{conversation_id}/system-prompts/{prompt_id}")
-async def delete_system_prompt(
-    conversation_id: str,
-    prompt_id: str,
-    current_user: User = Depends(get_current_user),
-):
-    """Delete a system prompt."""
-    try:
-        success = conversation_history_service.delete_system_prompt(
-            conversation_id=conversation_id,
-            prompt_id=prompt_id,
-            user_id=current_user.id,
-        )
-
-        if not success:
-            raise HTTPException(status_code=404, detail="System prompt not found")
-
-        return {"success": True, "message": "System prompt deleted successfully"}
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting system prompt: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.patch("/{conversation_id}/system-prompts/{prompt_id}/select")
-async def select_system_prompt(
-    conversation_id: str,
-    prompt_id: str,
-    request: SelectSystemPromptRequest,
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Select (or deselect) a system prompt for the conversation.
-
-    This sets the active system prompt that will be used for subsequent queries.
-    Pass prompt_id as None in the request to deselect the current prompt.
-    """
-    try:
-        success = conversation_history_service.select_system_prompt(
-            conversation_id=conversation_id,
-            prompt_id=request.prompt_id,
-            user_id=current_user.id,
-        )
-
-        if not success:
-            raise HTTPException(status_code=404, detail="Conversation not found")
-
-        return {
-            "success": True,
-            "message": f"System prompt {'selected' if request.prompt_id else 'deselected'} successfully",
-            "selected_prompt_id": request.prompt_id,
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error selecting system prompt: {e}")
         raise HTTPException(status_code=500, detail=str(e))

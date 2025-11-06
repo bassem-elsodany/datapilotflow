@@ -202,7 +202,9 @@ class ConversationHistoryService:
             "enhancement": asdict(enhancement) if enhancement else None,
             "vector_database": asdict(vector_database) if vector_database else None,
             "reranker": asdict(reranker) if reranker else None,
-            "answer_generation": asdict(answer_generation) if answer_generation else None,
+            "answer_generation": (
+                asdict(answer_generation) if answer_generation else None
+            ),
             "tags": tags or [],
         }
 
@@ -217,7 +219,9 @@ class ConversationHistoryService:
             assistant_config_dict["system_prompt_tasks"] = [
                 asdict(task) for task in assistant_config.system_prompt_tasks
             ]
-            logger.info(f"[DEBUG] System prompt tasks being saved: {assistant_config_dict['system_prompt_tasks']}")
+            logger.info(
+                f"[DEBUG] System prompt tasks being saved: {assistant_config_dict['system_prompt_tasks']}"
+            )
         else:
             assistant_config_dict["system_prompt_tasks"] = None
             logger.info("[DEBUG] No system prompt tasks to save")
@@ -236,7 +240,6 @@ class ConversationHistoryService:
             f"strategy: {enhancement.strategy if enhancement else 'native'}"
         )
         return conversation_id
-
 
     def get_conversation(
         self, conversation_id: str, user_id: str = None
@@ -279,7 +282,9 @@ class ConversationHistoryService:
                     provider = None
                     if enh.get("provider"):
                         p = enh["provider"]
-                        provider = ProviderConfig(id=p.get("id"), model_name=p.get("model_name"))
+                        provider = ProviderConfig(
+                            id=p.get("id"), model_name=p.get("model_name")
+                        )
                     enhancement = EnhancementConfig(
                         strategy=enh.get("strategy", "native"), provider=provider
                     )
@@ -300,9 +305,13 @@ class ConversationHistoryService:
                     provider = None
                     if rer.get("provider"):
                         p = rer["provider"]
-                        provider = ProviderConfig(id=p.get("id"), model_name=p.get("model_name"))
+                        provider = ProviderConfig(
+                            id=p.get("id"), model_name=p.get("model_name")
+                        )
                     reranker = RerankerConfig(
-                        enabled=rer.get("enabled", bool(provider)),  # Enabled if provider is set
+                        enabled=rer.get(
+                            "enabled", bool(provider)
+                        ),  # Enabled if provider is set
                         provider=provider,
                         relevance_threshold=rer.get("relevance_threshold", 0.5),
                     )
@@ -314,10 +323,14 @@ class ConversationHistoryService:
                     provider = None
                     if ag.get("provider"):
                         p = ag["provider"]
-                        provider = ProviderConfig(id=p.get("id"), model_name=p.get("model_name"))
+                        provider = ProviderConfig(
+                            id=p.get("id"), model_name=p.get("model_name")
+                        )
                     answer_generation = AnswerGenerationConfig(
-                        enabled=ag.get("enabled", bool(provider)),  # Enabled if provider is set
-                        provider=provider
+                        enabled=ag.get(
+                            "enabled", bool(provider)
+                        ),  # Enabled if provider is set
+                        provider=provider,
                     )
 
                 # Deserialize assistant config
@@ -353,7 +366,9 @@ class ConversationHistoryService:
                 return session
             return None
         except Exception as e:
-            logger.error(f"Error retrieving conversation {conversation_id}: {e}", exc_info=True)
+            logger.error(
+                f"Error retrieving conversation {conversation_id}: {e}", exc_info=True
+            )
             return None
 
     def get_conversation_messages(
@@ -417,7 +432,9 @@ class ConversationHistoryService:
                 provider = None
                 if enh.get("provider"):
                     p = enh["provider"]
-                    provider = ProviderConfig(id=p.get("id"), model_name=p.get("model_name"))
+                    provider = ProviderConfig(
+                        id=p.get("id"), model_name=p.get("model_name")
+                    )
                 enhancement = EnhancementConfig(
                     strategy=enh.get("strategy", "native"), provider=provider
                 )
@@ -438,9 +455,13 @@ class ConversationHistoryService:
                 provider = None
                 if rer.get("provider"):
                     p = rer["provider"]
-                    provider = ProviderConfig(id=p.get("id"), model_name=p.get("model_name"))
+                    provider = ProviderConfig(
+                        id=p.get("id"), model_name=p.get("model_name")
+                    )
                 reranker = RerankerConfig(
-                    enabled=rer.get("enabled", bool(provider)),  # Enabled if provider is set
+                    enabled=rer.get(
+                        "enabled", bool(provider)
+                    ),  # Enabled if provider is set
                     provider=provider,
                     relevance_threshold=rer.get("relevance_threshold", 0.5),
                 )
@@ -452,10 +473,14 @@ class ConversationHistoryService:
                 provider = None
                 if ag.get("provider"):
                     p = ag["provider"]
-                    provider = ProviderConfig(id=p.get("id"), model_name=p.get("model_name"))
+                    provider = ProviderConfig(
+                        id=p.get("id"), model_name=p.get("model_name")
+                    )
                 answer_generation = AnswerGenerationConfig(
-                    enabled=ag.get("enabled", bool(provider)),  # Enabled if provider is set
-                    provider=provider
+                    enabled=ag.get(
+                        "enabled", bool(provider)
+                    ),  # Enabled if provider is set
+                    provider=provider,
                 )
 
             # Deserialize assistant config
@@ -541,15 +566,6 @@ class ConversationHistoryService:
                 "$push": {"messages": asdict(message)},
                 "$set": {"last_updated": datetime.utcnow()},
             }
-
-            # Update topics and sources if available
-            if message.search_query:
-                update_data["$addToSet"] = {"topics_discussed": message.search_query}
-
-            if message.source_urls:
-                update_data["$addToSet"] = {
-                    "knowledge_sources_used": {"$each": message.source_urls}
-                }
 
             from bson import ObjectId
 
@@ -680,9 +696,6 @@ class ConversationHistoryService:
                 {
                     "$set": {
                         "messages": [],
-                        "context_summary": None,
-                        "topics_discussed": [],
-                        "knowledge_sources_used": [],
                         "last_updated": datetime.utcnow(),
                     }
                 },
@@ -794,7 +807,9 @@ class ConversationHistoryService:
             if enhancement is not None:
                 enhancement_dict = {
                     "strategy": enhancement.strategy,
-                    "provider": asdict(enhancement.provider) if enhancement.provider else None,
+                    "provider": (
+                        asdict(enhancement.provider) if enhancement.provider else None
+                    ),
                 }
                 update_data["$set"]["enhancement"] = enhancement_dict
 
@@ -805,7 +820,9 @@ class ConversationHistoryService:
             # Update reranker configuration
             if reranker is not None:
                 reranker_dict = {
-                    "provider": asdict(reranker.provider) if reranker.provider else None,
+                    "provider": (
+                        asdict(reranker.provider) if reranker.provider else None
+                    ),
                     "relevance_threshold": reranker.relevance_threshold,
                 }
                 update_data["$set"]["reranker"] = reranker_dict
@@ -813,7 +830,11 @@ class ConversationHistoryService:
             # Update answer generation configuration
             if answer_generation is not None:
                 answer_gen_dict = {
-                    "provider": asdict(answer_generation.provider) if answer_generation.provider else None,
+                    "provider": (
+                        asdict(answer_generation.provider)
+                        if answer_generation.provider
+                        else None
+                    ),
                 }
                 update_data["$set"]["answer_generation"] = answer_gen_dict
 
@@ -842,462 +863,40 @@ class ConversationHistoryService:
                 return False
 
         except Exception as e:
-            logger.error(f"Error updating conversation configuration {conversation_id}: {e}")
+            logger.error(
+                f"Error updating conversation configuration {conversation_id}: {e}"
+            )
             return False
 
     def get_conversation_with_provider(
         self, conversation_id: str, user_id: str
     ) -> Optional[Dict[str, Any]]:
-        """Get conversation with expanded provider details."""
+        """Get conversation with expanded provider details.
+
+        NOTE: Currently returns only the conversation session.
+        LLM provider expansion is handled through the assistant_config.system_prompt_tasks.
+        """
         session = self.get_conversation(conversation_id, user_id)
         if not session:
             return None
 
         result = {"session": session, "llm_provider": None}
-
-        # Fetch provider details if configured
-        if session.llm_provider_id:
-            try:
-                from src.services.model_provider.model_provider_service import (
-                    get_model_provider_service,
-                )
-
-                provider_service = get_model_provider_service()
-                provider = provider_service.get_model_provider_response(
-                    session.llm_provider_id, user_id
-                )
-
-                if provider:
-                    result["llm_provider"] = {
-                        "id": provider.id,
-                        "name": provider.name,
-                        "provider_type": provider.provider_type,
-                        "is_active": provider.is_active,
-                        "generative": provider.generative,
-                    }
-            except Exception as e:
-                logger.error(f"Error fetching provider details: {e}")
-
+        # Provider details are now embedded in system_prompt_tasks or answer_generation config
         return result
-
-    def update_conversation_statistics(
-        self,
-        conversation_id: str,
-        document_count: Optional[int] = None,
-        processing_time_ms: Optional[int] = None,
-    ) -> bool:
-        """Update conversation statistics after a query."""
-        from bson import ObjectId
-
-        try:
-            # Get current session to calculate averages
-            session = self.get_conversation(conversation_id)
-            if not session:
-                return False
-
-            update_data = {
-                "$inc": {"total_queries": 1},
-                "$set": {"last_updated": datetime.utcnow()},
-            }
-
-            if document_count is not None:
-                update_data["$inc"]["total_documents_retrieved"] = document_count
-
-            # Calculate average response time
-            if processing_time_ms is not None:
-                if session.average_response_time_ms is None:
-                    # First query
-                    update_data["$set"]["average_response_time_ms"] = float(
-                        processing_time_ms
-                    )
-                else:
-                    # Calculate moving average
-                    total_time = (
-                        session.average_response_time_ms * session.total_queries
-                    )
-                    new_average = (total_time + processing_time_ms) / (
-                        session.total_queries + 1
-                    )
-                    update_data["$set"]["average_response_time_ms"] = new_average
-
-            result = self.collection.update_one(
-                {"_id": ObjectId(conversation_id)}, update_data
-            )
-
-            return result.modified_count > 0
-
-        except Exception as e:
-            logger.error(
-                f"Error updating conversation statistics {conversation_id}: {e}"
-            )
-            return False
-
-    # ============ System Prompt Tasks Management (Phase 1 - Core CRUD) ============
-
-    def create_system_prompt(
-        self,
-        user_id: str,
-        conversation_id: str,
-        name: str,
-        system_prompt: str,
-        description: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-    ) -> Optional[SystemPromptTask]:
-        """
-        Create a new system prompt task for a conversation.
-
-        Args:
-            user_id: User who owns the conversation
-            conversation_id: Conversation ID
-            name: Name of the system prompt (e.g., "Code Reviewer")
-            system_prompt: The actual system prompt content
-            description: Optional description of what this prompt does
-            tags: Optional tags for organization
-
-        Returns:
-            Created SystemPromptTask or None if failed
-        """
-        try:
-            from bson import ObjectId
-
-            # Validate conversation exists and belongs to user
-            doc = self.collection.find_one(
-                {"_id": ObjectId(conversation_id), "user_id": user_id}
-            )
-            if not doc:
-                logger.warning(
-                    f"Conversation not found: {conversation_id} for user {user_id}"
-                )
-                return None
-
-            # Create the system prompt task
-            task = SystemPromptTask(
-                id="",  # Will be generated in __post_init__
-                user_id=user_id,
-                conversation_id=conversation_id,
-                name=name,
-                description=description,
-                system_prompt=system_prompt,
-                tags=tags or [],
-                is_active=True,
-                usage_count=0,
-                created_by=user_id,
-                version=1,
-            )
-
-            # Convert to dict for storage
-            task_dict = asdict(task)
-
-            # Add to conversation's assistant_config.system_prompt_tasks array
-            update_result = self.collection.update_one(
-                {"_id": ObjectId(conversation_id)},
-                {
-                    "$push": {"assistant_config.system_prompt_tasks": task_dict},
-                    "$set": {"last_updated": datetime.utcnow()},
-                },
-            )
-
-            if update_result.modified_count > 0:
-                logger.info(
-                    f"Created system prompt '{name}' for conversation {conversation_id}"
-                )
-                return task
-            else:
-                logger.warning(
-                    f"Failed to create system prompt for conversation {conversation_id}"
-                )
-                return None
-
-        except Exception as e:
-            logger.error(f"Error creating system prompt: {e}")
-            return None
-
-    def get_system_prompt(
-        self, conversation_id: str, prompt_id: str, user_id: str = None
-    ) -> Optional[SystemPromptTask]:
-        """
-        Get a specific system prompt by ID.
-
-        Args:
-            conversation_id: Conversation ID
-            prompt_id: System prompt ID
-            user_id: Optional user ID for validation
-
-        Returns:
-            SystemPromptTask or None if not found
-        """
-        try:
-            from bson import ObjectId
-
-            query = {"_id": ObjectId(conversation_id)}
-            if user_id:
-                query["user_id"] = user_id
-
-            doc = self.collection.find_one(
-                query, {"assistant_config.system_prompt_tasks": {"$elemMatch": {"id": prompt_id}}}
-            )
-
-            if doc and "assistant_config" in doc and "system_prompt_tasks" in doc["assistant_config"] and len(doc["assistant_config"]["system_prompt_tasks"]) > 0:
-                prompt_dict = doc["assistant_config"]["system_prompt_tasks"][0]
-                return self._dict_to_system_prompt_task(prompt_dict)
-
-            logger.debug(f"System prompt not found: {prompt_id}")
-            return None
-
-        except Exception as e:
-            logger.error(f"Error retrieving system prompt {prompt_id}: {e}")
-            return None
-
-    def list_system_prompts(
-        self, conversation_id: str, user_id: str = None, active_only: bool = False
-    ) -> List[SystemPromptTask]:
-        """
-        List all system prompts for a conversation.
-
-        Args:
-            conversation_id: Conversation ID
-            user_id: Optional user ID for validation
-            active_only: If True, return only active prompts
-
-        Returns:
-            List of SystemPromptTask objects
-        """
-        try:
-            from bson import ObjectId
-
-            query = {"_id": ObjectId(conversation_id)}
-            if user_id:
-                query["user_id"] = user_id
-
-            doc = self.collection.find_one(query)
-
-            if not doc or "assistant_config" not in doc or "system_prompt_tasks" not in doc.get("assistant_config", {}):
-                return []
-
-            prompts = []
-            for prompt_dict in doc.get("assistant_config", {}).get("system_prompt_tasks", []):
-                if active_only and not prompt_dict.get("is_active", True):
-                    continue
-                prompts.append(self._dict_to_system_prompt_task(prompt_dict))
-
-            return prompts
-
-        except Exception as e:
-            logger.error(f"Error listing system prompts for {conversation_id}: {e}")
-            return []
-
-    def update_system_prompt(
-        self,
-        conversation_id: str,
-        prompt_id: str,
-        user_id: str,
-        name: Optional[str] = None,
-        system_prompt: Optional[str] = None,
-        description: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        is_active: Optional[bool] = None,
-    ) -> bool:
-        """
-        Update a system prompt.
-
-        Args:
-            conversation_id: Conversation ID
-            prompt_id: System prompt ID
-            user_id: User ID for validation
-            name: New name (optional)
-            system_prompt: New prompt content (optional)
-            description: New description (optional)
-            tags: New tags (optional)
-            is_active: New active status (optional)
-
-        Returns:
-            True if updated successfully
-        """
-        try:
-            from bson import ObjectId
-
-            # Build update dict
-            update_fields = {"last_updated": datetime.utcnow()}
-
-            if name is not None:
-                update_fields["assistant_config.system_prompt_tasks.$.name"] = name
-            if system_prompt is not None:
-                update_fields["assistant_config.system_prompt_tasks.$.system_prompt"] = system_prompt
-                update_fields["assistant_config.system_prompt_tasks.$.version"] = (
-                    update_fields.get("assistant_config.system_prompt_tasks.$.version", 0) + 1
-                )
-            if description is not None:
-                update_fields["assistant_config.system_prompt_tasks.$.description"] = description
-            if tags is not None:
-                update_fields["assistant_config.system_prompt_tasks.$.tags"] = tags
-            if is_active is not None:
-                update_fields["assistant_config.system_prompt_tasks.$.is_active"] = is_active
-
-            update_fields["assistant_config.system_prompt_tasks.$.updated_at"] = datetime.utcnow()
-
-            result = self.collection.update_one(
-                {
-                    "_id": ObjectId(conversation_id),
-                    "user_id": user_id,
-                    "assistant_config.system_prompt_tasks.id": prompt_id,
-                },
-                {"$set": update_fields},
-            )
-
-            if result.modified_count > 0:
-                logger.info(f"Updated system prompt {prompt_id}")
-                return True
-            else:
-                logger.warning(f"System prompt {prompt_id} not found or not updated")
-                return False
-
-        except Exception as e:
-            logger.error(f"Error updating system prompt {prompt_id}: {e}")
-            return False
-
-    def delete_system_prompt(
-        self, conversation_id: str, prompt_id: str, user_id: str
-    ) -> bool:
-        """
-        Delete a system prompt.
-
-        Args:
-            conversation_id: Conversation ID
-            prompt_id: System prompt ID
-            user_id: User ID for validation
-
-        Returns:
-            True if deleted successfully
-        """
-        try:
-            from bson import ObjectId
-
-            result = self.collection.update_one(
-                {
-                    "_id": ObjectId(conversation_id),
-                    "user_id": user_id,
-                },
-                {
-                    "$pull": {"assistant_config.system_prompt_tasks": {"id": prompt_id}},
-                    "$set": {"last_updated": datetime.utcnow()},
-                },
-            )
-
-            if result.modified_count > 0:
-                logger.info(f"Deleted system prompt {prompt_id}")
-                return True
-            else:
-                logger.warning(f"System prompt {prompt_id} not found")
-                return False
-
-        except Exception as e:
-            logger.error(f"Error deleting system prompt {prompt_id}: {e}")
-            return False
-
-    def select_system_prompt(
-        self, conversation_id: str, prompt_id: Optional[str], user_id: str
-    ) -> bool:
-        """
-        Select a system prompt for the conversation.
-
-        Args:
-            conversation_id: Conversation ID
-            prompt_id: System prompt ID to select (None to deselect)
-            user_id: User ID for validation
-
-        Returns:
-            True if selection successful
-        """
-        try:
-            from bson import ObjectId
-
-            result = self.collection.update_one(
-                {
-                    "_id": ObjectId(conversation_id),
-                    "user_id": user_id,
-                },
-                {
-                    "$set": {
-                        "selected_system_prompt_id": prompt_id,
-                        "last_updated": datetime.utcnow(),
-                    }
-                },
-            )
-
-            if result.modified_count > 0:
-                action = f"selected {prompt_id}" if prompt_id else "deselected system prompt"
-                logger.info(f"System prompt {action} for conversation {conversation_id}")
-                return True
-            else:
-                logger.warning(f"Conversation {conversation_id} not found")
-                return False
-
-        except Exception as e:
-            logger.error(f"Error selecting system prompt: {e}")
-            return False
-
-    def increment_prompt_usage(
-        self, conversation_id: str, prompt_id: str, user_id: str
-    ) -> bool:
-        """
-        Increment the usage count for a system prompt.
-
-        Args:
-            conversation_id: Conversation ID
-            prompt_id: System prompt ID
-            user_id: User ID for validation
-
-        Returns:
-            True if incremented successfully
-        """
-        try:
-            from bson import ObjectId
-
-            result = self.collection.update_one(
-                {
-                    "_id": ObjectId(conversation_id),
-                    "user_id": user_id,
-                    "assistant_config.system_prompt_tasks.id": prompt_id,
-                },
-                {
-                    "$inc": {"assistant_config.system_prompt_tasks.$.usage_count": 1},
-                    "$set": {"last_updated": datetime.utcnow()},
-                },
-            )
-
-            if result.modified_count > 0:
-                return True
-            else:
-                logger.warning(f"Failed to increment usage for prompt {prompt_id}")
-                return False
-
-        except Exception as e:
-            logger.error(f"Error incrementing prompt usage: {e}")
-            return False
-
-    @staticmethod
-    def _dict_to_system_prompt(prompt_dict: Dict[str, Any]) -> SystemPromptTask:
-        """Convert a dictionary to SystemPromptTask object."""
-        return SystemPromptTask(
-            id=prompt_dict.get("id", ""),
-            user_id=prompt_dict.get("user_id", ""),
-            conversation_id=prompt_dict.get("conversation_id", ""),
-            name=prompt_dict.get("name", ""),
-            description=prompt_dict.get("description"),
-            system_prompt=prompt_dict.get("system_prompt", ""),
-            tags=prompt_dict.get("tags", []),
-            is_active=prompt_dict.get("is_active", True),
-            usage_count=prompt_dict.get("usage_count", 0),
-            created_at=prompt_dict.get("created_at"),
-            updated_at=prompt_dict.get("updated_at"),
-            created_by=prompt_dict.get("created_by"),
-            version=prompt_dict.get("version", 1),
-        )
 
     @staticmethod
     def _dict_to_system_prompt_task(prompt_dict: Dict[str, Any]) -> SystemPromptTask:
-        """Convert a dictionary to SystemPromptTask object (alias for _dict_to_system_prompt)."""
-        return ConversationHistoryService._dict_to_system_prompt(prompt_dict)
+        """Convert a dictionary to SystemPromptTask object."""
+        return SystemPromptTask(
+            id=prompt_dict.get("id", ""),
+            name=prompt_dict.get("name", ""),
+            system_prompt=prompt_dict.get("system_prompt", ""),
+            description=prompt_dict.get("description"),
+            tags=prompt_dict.get("tags", []),
+            is_active=prompt_dict.get("is_active", True),
+            created_at=prompt_dict.get("created_at"),
+            updated_at=prompt_dict.get("updated_at"),
+        )
 
 
 # Global instance

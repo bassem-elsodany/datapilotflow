@@ -1,5 +1,6 @@
 """Supervisor Agent service implementation."""
 
+import json
 from typing import Any, Dict, List, Optional
 
 from langchain_community.chat_models import ChatLiteLLM
@@ -108,11 +109,16 @@ class SupervisorAgentService(AgentService):
 
     async def _detect_intent(self, state: AgentState) -> str:
         """
-        Detect user intent using LLM chain.
+        Detect user intent using LLM chain with enhanced search planning.
 
         Returns one of:
         - "rag_only": User wants to search/retrieve information from knowledge base
         - "rag_then_task": User wants to do a task using retrieved knowledge from knowledge base
+
+        Also extracts and stores in state:
+        - search_queries: List of targeted search queries for comprehensive context retrieval
+        - task_description: Description of the task to perform (for rag_then_task)
+        - intent_reasoning: Why this intent was chosen
 
         Knowledge base is the ONLY source of truth - all requests must be grounded in it.
 
@@ -125,18 +131,32 @@ class SupervisorAgentService(AgentService):
         messages = state.get("messages", [])
         if not messages:
             logger.warning("No messages for intent detection, defaulting to rag_only")
+            state["search_queries"] = []
             return "rag_only"
 
         user_message = messages[-1]
         user_input = user_message.get("content", "")
 
         try:
-            # Use the intent detection chain (follows same design as RAG agent chains)
+            # Use the intent detection chain with enhanced JSON response
             chain = get_intent_detection_chain(self.llm_client)
 
             # Invoke the chain with user input
             response = chain.invoke({"user_input": user_input})
-            intent = response.content.strip().lower()
+            response_text = response.content.strip()
+
+            # Extract JSON from response (handle markdown code blocks if present)
+            json_text = response_text
+            if "```json" in response_text:
+                json_text = response_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in response_text:
+                json_text = response_text.split("```")[1].split("```")[0].strip()
+
+            # Parse JSON response
+            intent_data = json.loads(json_text)
+
+            # Extract intent
+            intent = intent_data.get("intent", "rag_only").strip().lower()
 
             # Validate intent - only rag_only and rag_then_task are supported
             valid_intents = ["rag_only", "rag_then_task"]
@@ -144,9 +164,36 @@ class SupervisorAgentService(AgentService):
                 logger.warning(
                     f"Invalid intent returned: {intent}, defaulting to rag_only"
                 )
-                return "rag_only"
+                intent = "rag_only"
+
+            # Extract task planning information
+            task_description = intent_data.get("task_description")
+            execution_plan = intent_data.get("execution_plan")
+            reasoning = intent_data.get("reasoning", "")
+
+            # Store in state for Task agent to use
+            state["task_description"] = task_description
+            state["execution_plan"] = execution_plan
+            state["intent_reasoning"] = reasoning
+
+            logger.info(f"✅ Intent: {intent} | Reasoning: {reasoning}")
+            if task_description:
+                logger.info(f"🎯 Task: {task_description}")
+            if execution_plan:
+                logger.info(f"📋 Execution Plan: {execution_plan}")
 
             return intent
+
+        except json.JSONDecodeError as e:
+            logger.error(
+                f"Failed to parse intent JSON: {e}, response: {response_text[:200]}"
+            )
+            logger.warning("Falling back to simple intent detection")
+            # Fallback: try to extract just the intent from the response
+            response_lower = response_text.lower()
+            if "rag_then_task" in response_lower:
+                return "rag_then_task"
+            return "rag_only"
 
         except Exception as e:
             logger.error(f"Error detecting intent: {e}, defaulting to rag_only")

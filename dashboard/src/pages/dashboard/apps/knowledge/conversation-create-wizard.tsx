@@ -291,6 +291,7 @@ export function ConversationCreateWizard() {
       enableLLMGeneration: true,
       enableKnowledgeAssistant: false, // RAG mode (default) - false, switched to true when Assistant selected
       selectedSystemPromptId: undefined,
+      systemPromptTasks: [], // Initialize as empty array - will be populated when user selects a prompt
     },
     validate: {
       conversationName: (value) =>
@@ -331,6 +332,8 @@ export function ConversationCreateWizard() {
         const data = await response.json();
         const session = data.session;
 
+        console.log('[DEBUG loadExistingConversation] session.assistant_config:', session.assistant_config);
+
         // Populate form with existing conversation data
         form.setValues({
           agentType: session.assistant_config?.enabled ? 'assistant' : 'rag',
@@ -351,14 +354,20 @@ export function ConversationCreateWizard() {
           systemPromptTasks: session.assistant_config?.system_prompt_tasks || [],
         });
 
+        console.log('[DEBUG loadExistingConversation] form.values.systemPromptTasks after setValues:', form.values.systemPromptTasks);
+
         // Set selected system prompt for display
         if (session.assistant_config?.system_prompt_tasks?.[0]) {
-          setSelectedSystemPrompt({
+          const promptData = {
             id: session.assistant_config.system_prompt_tasks[0].id,
             title: session.assistant_config.system_prompt_tasks[0].title,
             content: session.assistant_config.system_prompt_tasks[0].content,
             is_active: session.assistant_config.system_prompt_tasks[0].is_active,
-          });
+          };
+          console.log('[DEBUG loadExistingConversation] Setting selectedSystemPrompt:', promptData);
+          setSelectedSystemPrompt(promptData);
+        } else {
+          console.log('[DEBUG loadExistingConversation] No system_prompt_tasks found in session');
         }
       } else {
         notifications.show({
@@ -483,11 +492,13 @@ export function ConversationCreateWizard() {
       const token = localStorage.getItem('jwt_token');
 
       // Build nested configuration structure
-      console.log('DEBUG: Form values before payload:', {
-        agentType: form.values.agentType,
-        systemPromptTasks: form.values.systemPromptTasks,
-        selectedSystemPromptId: form.values.selectedSystemPromptId,
-      });
+      console.log('=== DEBUG: PRE-PAYLOAD STATE ===');
+      console.log('agentType:', form.values.agentType);
+      console.log('selectedSystemPrompt state:', selectedSystemPrompt);
+      console.log('form.values.systemPromptTasks:', form.values.systemPromptTasks);
+      console.log('form.values.selectedSystemPromptId:', form.values.selectedSystemPromptId);
+      console.log('isEditMode:', isEditMode);
+      console.log('editingConversationId:', editingConversationId);
 
       const payload: any = {
         name: form.values.conversationName.trim(),
@@ -526,20 +537,36 @@ export function ConversationCreateWizard() {
           } : null,
         },
         // Complex nested assistant configuration
-        // RAG mode: assistant_config = { enabled: false }
+        // RAG mode: assistant_config = { enabled: false, system_prompt_tasks: null }
         // Assistant mode: assistant_config = { enabled: true, system_prompt_tasks: [...] }
         assistant_config: {
           enabled: form.values.agentType === 'assistant',
-          system_prompt_tasks: form.values.agentType === 'assistant' && form.values.systemPromptTasks && form.values.systemPromptTasks.length > 0 ?
-            form.values.systemPromptTasks.map((task: any) => ({
-              id: task.id || '',
-              title: task.title || task.name || '',
-              content: task.content || task.system_prompt || '',
-              is_active: task.is_active !== false,
-            }))
+          system_prompt_tasks: form.values.agentType === 'assistant' ? 
+            // Priority 1: Use selectedSystemPrompt if available
+            (selectedSystemPrompt ? [{
+              id: selectedSystemPrompt.id || '',
+              title: selectedSystemPrompt.title || selectedSystemPrompt.name || '',
+              content: selectedSystemPrompt.content || selectedSystemPrompt.system_prompt || '',
+              is_active: selectedSystemPrompt.is_active !== false,
+            }]
+            // Priority 2: Use form.values.systemPromptTasks if available
+            : (form.values.systemPromptTasks && form.values.systemPromptTasks.length > 0 ?
+              form.values.systemPromptTasks.map((task: any) => ({
+                id: task.id || '',
+                title: task.title || task.name || '',
+                content: task.content || task.system_prompt || '',
+                is_active: task.is_active !== false,
+              }))
+              : null))
             : null,
         },
       };
+
+      console.log('DEBUG: assistant_config in payload:', {
+        enabled: payload.assistant_config.enabled,
+        system_prompt_tasks: payload.assistant_config.system_prompt_tasks,
+        system_prompt_tasks_count: payload.assistant_config.system_prompt_tasks?.length || 0,
+      });
 
       // Use PUT for edit mode, POST for create mode
       const url = isEditMode
@@ -560,34 +587,8 @@ export function ConversationCreateWizard() {
 
       if (response.ok) {
         const data = await response.json();
+        console.log('[DEBUG] Response from backend:', data);
         const sessionId = isEditMode ? editingConversationId : data.id;
-
-        // If user selected a temporary prompt during creation, create it now
-        if (
-          form.values.selectedSystemPromptId?.startsWith('temp-') &&
-          selectedSystemPrompt
-        ) {
-          try {
-            await fetch(
-              apiUtils.buildApiUrl(`/conversations/${sessionId}/system-prompts`),
-              {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  name: selectedSystemPrompt.name,
-                  description: selectedSystemPrompt.description || '',
-                  system_prompt: selectedSystemPrompt.system_prompt,
-                  tags: selectedSystemPrompt.tags || [],
-                }),
-              }
-            );
-          } catch (error) {
-            console.error('Error creating system prompt:', error);
-          }
-        }
 
         notifications.show({
           title: 'Success',
@@ -713,18 +714,32 @@ export function ConversationCreateWizard() {
           <StepSystemPromptConfiguration
             form={form}
             onPromptSelected={(prompt) => {
+              console.log('=== [DEBUG Step 6] Prompt selected ===');
+              console.log('Prompt object:', JSON.stringify(prompt, null, 2));
+              console.log('Setting selectedSystemPromptId to:', prompt.id);
               form.setFieldValue('selectedSystemPromptId', prompt.id);
+              
+              console.log('Setting selectedSystemPrompt state');
               setSelectedSystemPrompt(prompt);
+              
               // Store the prompt as a system prompt task for assistant_config
               if (prompt) {
-                form.setFieldValue('systemPromptTasks', [
+                const taskData = [
                   {
                     id: prompt.id,
                     title: prompt.title || prompt.name,
                     content: prompt.content || prompt.system_prompt,
                     is_active: prompt.is_active !== false,
                   },
-                ]);
+                ];
+                console.log('Setting systemPromptTasks to:', JSON.stringify(taskData, null, 2));
+                form.setFieldValue('systemPromptTasks', taskData);
+                
+                // Verify immediately
+                console.log('Verification - form.values.systemPromptTasks:', form.values.systemPromptTasks);
+                console.log('Verification - selectedSystemPrompt state:', selectedSystemPrompt);
+              } else {
+                console.error('ERROR: prompt is null/undefined in onPromptSelected!');
               }
             }}
             selectedSystemPrompt={selectedSystemPrompt}
@@ -1241,9 +1256,14 @@ function StepEnhancementStrategy({ form, onLearnClick, providers, providersLoadi
       {isNonNativeStrategy && (
         <>
           <Alert icon={<IconInfoCircle size={16} />} color="cyan" variant="light">
-            <Text size="sm">
-              <strong>LLM Required:</strong> Query enhancement strategies need an LLM to generate query variants. Please select an LLM provider and model below.
-            </Text>
+            <Stack gap="xs">
+              <Text size="sm">
+                <strong>LLM Required:</strong> Query enhancement strategies need an LLM to generate query variants. Please select an LLM provider and model below.
+              </Text>
+              <Text size="sm" c="cyan.9" fw={500}>
+                📌 Note: This LLM will also be used for answer generation if you enable it in Step 5 (Generative Answer).
+              </Text>
+            </Stack>
           </Alert>
 
           <Divider my="sm" />
@@ -1519,47 +1539,77 @@ function StepAdvancedSettings({
 
       {form.values.enableLLMGeneration ? (
         <>
-          <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
-            <Text size="sm">
-              AI will generate natural language answers based on retrieved documents. Uses tokens but provides polished responses.
-            </Text>
-          </Alert>
+          {form.values.selectedStrategy !== 'native' ? (
+            <>
+              <Alert icon={<IconInfoCircle size={16} />} color="cyan" variant="light">
+                <Text size="sm">
+                  <strong>Using Enhancement Strategy LLM:</strong> Since you selected a non-native enhancement strategy, the same LLM provider and model from Step 2 will be used for both query enhancement and answer generation. To use a different LLM, please go back to Step 2 and change the strategy to "Native" or select a different provider.
+                </Text>
+              </Alert>
 
-          <Divider my="sm" />
-
-          <Select
-            label="LLM Provider"
-            placeholder={providersLoading ? 'Loading providers...' : 'Select a provider'}
-            data={
-              providers?.map((p) => ({
-                value: p.id,
-                label: `${p.name} (${p.provider_type})`,
-              })) || []
-            }
-            {...form.getInputProps('selectedProviderId')}
-            searchable
-            disabled={providersLoading}
-            required
-          />
-
-          {form.values.selectedProviderId && providers ? (
-            <Select
-              label="Model"
-              placeholder="Select a model"
-              data={
-                providers
-                  .find((p) => p.id === form.values.selectedProviderId)
-                  ?.generative?.models.map((m: string) => ({
-                    value: m,
-                    label: m,
-                  })) || []
-              }
-              {...form.getInputProps('selectedModel')}
-              searchable
-              required
-            />
+              {form.values.selectedProviderId && form.values.selectedModel && (
+                <Card withBorder p="md" bg="cyan.0">
+                  <Stack gap="xs">
+                    <Text size="sm" fw={600} c="cyan.9">
+                      LLM Configuration (from Enhancement Step)
+                    </Text>
+                    <Group gap="xs">
+                      <Badge size="lg" color="cyan" variant="filled">
+                        Provider: {providers?.find((p: any) => p.id === form.values.selectedProviderId)?.name || form.values.selectedProviderId}
+                      </Badge>
+                      <Badge size="lg" color="cyan" variant="filled">
+                        Model: {form.values.selectedModel}
+                      </Badge>
+                    </Group>
+                  </Stack>
+                </Card>
+              )}
+            </>
           ) : (
-            <Select label="Model" placeholder="Select provider first" disabled />
+            <>
+              <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+                <Text size="sm">
+                  AI will generate natural language answers based on retrieved documents. Uses tokens but provides polished responses.
+                </Text>
+              </Alert>
+
+              <Divider my="sm" />
+
+              <Select
+                label="LLM Provider"
+                placeholder={providersLoading ? 'Loading providers...' : 'Select a provider'}
+                data={
+                  providers?.map((p) => ({
+                    value: p.id,
+                    label: `${p.name} (${p.provider_type})`,
+                  })) || []
+                }
+                {...form.getInputProps('selectedProviderId')}
+                searchable
+                disabled={providersLoading}
+                required
+              />
+
+              {form.values.selectedProviderId && providers ? (
+                <Select
+                  label="Model"
+                  placeholder="Select a model"
+                  data={
+                    providers
+                      .find((p) => p.id === form.values.selectedProviderId)
+                      ?.generative?.models.map((m: string) => ({
+                        value: m,
+                        label: m,
+                      })) || []
+                  }
+                  {...form.getInputProps('selectedModel')}
+                  searchable
+                  required
+                />
+              ) : (
+                <Select label="Model" placeholder="Select provider first" disabled />
+              )}
+            </>
           )}
         </>
       ) : (
@@ -1600,9 +1650,16 @@ function StepSystemPromptConfiguration({
         conversationId=""
         selectedPromptId={form.values.selectedSystemPromptId}
         selectedPromptData={selectedSystemPrompt}
+        existingPrompts={form.values.systemPromptTasks || []}
         onPromptSelected={(prompt) => {
-          form.setFieldValue('selectedSystemPromptId', prompt.id);
+          console.log('[DEBUG SystemPromptConfiguration] onPromptSelected called with:', prompt);
+          form.setFieldValue('selectedSystemPromptId', prompt?.id || null);
+          console.log('[DEBUG SystemPromptConfiguration] Calling parent onPromptSelected callback...');
           onPromptSelected?.(prompt);
+        }}
+        onPromptsChanged={(prompts) => {
+          console.log('[DEBUG SystemPromptConfiguration] Prompts changed:', prompts);
+          form.setFieldValue('systemPromptTasks', prompts);
         }}
       />
 

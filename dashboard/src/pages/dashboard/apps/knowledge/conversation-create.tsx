@@ -374,12 +374,20 @@ export default function ConversationCreate() {
   const [searchParams] = useSearchParams();
   const mode = searchParams.get('mode') || 'wizard'; // 'wizard' or 'pipeline'
 
+  // Debug logging
+  useEffect(() => {
+    console.log('ConversationCreate - mode:', mode);
+    console.log('ConversationCreate - searchParams:', Object.fromEntries(searchParams));
+  }, [mode, searchParams]);
+
   // If mode is pipeline, render pipeline canvas instead
   if (mode === 'pipeline') {
+    console.log('Rendering ConversationCanvasBuilder');
     return <ConversationCanvasBuilder />;
   }
 
   // Otherwise, render the wizard
+  console.log('Rendering ConversationWizard');
   return <ConversationWizard />;
 }
 
