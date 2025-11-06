@@ -1663,6 +1663,45 @@ function StepReviewAndCreate({ form, providers, collections }: StepProps) {
         </Stack>
       </Card>
 
+      {/* STEP 6: SYSTEM PROMPT CONFIGURATION (Assistant mode only) */}
+      {form.values.agentType === 'assistant' && (
+        <Card withBorder p="md" bg="grape.0">
+          <Stack gap="sm">
+            <Text fw={600}>Step 6: System Prompt Configuration</Text>
+            {form.values.systemPromptTasks && form.values.systemPromptTasks.length > 0 ? (
+              <Stack gap="sm">
+                <Text size="sm" c="dimmed">
+                  {form.values.systemPromptTasks.length} prompt task(s) configured
+                </Text>
+                <Stack gap="xs">
+                  {form.values.systemPromptTasks.map((task: any, index: number) => (
+                    <Card key={index} withBorder p="sm" bg="white">
+                      <Stack gap="xs">
+                        <Group justify="space-between">
+                          <Text fw={500} size="sm">
+                            {task.title || task.name || `Task ${index + 1}`}
+                          </Text>
+                          <Badge size="sm" color={task.is_active !== false ? 'green' : 'gray'}>
+                            {task.is_active !== false ? 'Active' : 'Inactive'}
+                          </Badge>
+                        </Group>
+                        <Text size="xs" c="dimmed" lineClamp={2}>
+                          {task.content || task.system_prompt || 'No content'}
+                        </Text>
+                      </Stack>
+                    </Card>
+                  ))}
+                </Stack>
+              </Stack>
+            ) : (
+              <Alert icon={<IconAlertCircle size={16} />} color="yellow" variant="light">
+                <Text size="sm">No system prompt tasks configured</Text>
+              </Alert>
+            )}
+          </Stack>
+        </Card>
+      )}
+
     </Stack>
   );
 }
