@@ -417,13 +417,13 @@ function ConversationCanvasContent() {
     // Check if this is a subflow parent node (Knowledge Retrieval or Task Engine)
     if (node.data?.isSubflowParent) {
       if (node.id === 'retrieval') {
-        // Toggle RAG subflow
+        // Open RAG subflow - close Task Engine if open
         const isCurrentlyExpanded = config.expandedSubflows?.retrieval || false;
         setConfig(prev => ({
           ...prev,
           expandedSubflows: {
-            ...prev.expandedSubflows,
-            retrieval: !prev.expandedSubflows?.retrieval,
+            retrieval: !isCurrentlyExpanded,
+            taskEngine: false, // Close the other subflow to prevent overlap
           },
         }));
         notifications.show({
@@ -432,13 +432,13 @@ function ConversationCanvasContent() {
           color: 'blue',
         });
       } else if (node.id === 'taskEngine') {
-        // Toggle Task Agent subflow
+        // Open Task Agent subflow - close RAG if open
         const isCurrentlyExpanded = config.expandedSubflows?.taskEngine || false;
         setConfig(prev => ({
           ...prev,
           expandedSubflows: {
-            ...prev.expandedSubflows,
-            taskEngine: !prev.expandedSubflows?.taskEngine,
+            retrieval: false, // Close the other subflow to prevent overlap
+            taskEngine: !isCurrentlyExpanded,
           },
         }));
         notifications.show({
