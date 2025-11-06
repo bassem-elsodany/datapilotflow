@@ -49,7 +49,8 @@ import { ConversationNode } from './ConversationNode';
 import { ConversationNodeConfigPanel } from './ConversationNodeConfigPanel';
 import { ConversationTemplate } from './conversationTemplates';
 import { ConversationTemplateSelector } from './ConversationTemplateSelector';
-import { SubflowGroupNode } from './SubflowGroupNode';
+import { RAGSubflowConfig, generateRAGSubflowNodes, generateRAGSubflowEdges } from './RAGSubflow';
+import { TaskAgentSubflowConfig, generateTaskAgentSubflowNodes, generateTaskAgentSubflowEdges } from './TaskAgentSubflow';
 
 const breadcrumbs = [
   { label: 'Dashboard', href: paths.dashboard.root },
@@ -60,7 +61,6 @@ const breadcrumbs = [
 
 const nodeTypes = {
   conversationNode: ConversationNode,
-  subflowGroup: SubflowGroupNode,
 };
 
 // Enhancement strategies
@@ -169,57 +169,72 @@ function ConversationCanvasContent() {
       },
     });
 
-    // For Assistant Agent, generate assistant-specific nodes with subflows as grouped boxes
+    // For Assistant Agent, generate assistant-specific nodes with subflows
     if (isSupervisor) {
       const ragSubflowExpanded = config.expandedSubflows?.retrieval || false;
       const taskSubflowExpanded = config.expandedSubflows?.taskEngine || false;
 
-      // 1. RAG Agent Subflow Group Node
-      // This single node replaces multiple individual subflow nodes
-      const ragSteps = [];
-      if (ragSubflowExpanded) {
-        ragSteps.push({ id: 'enhancement', label: 'Enhancement' });
-        ragSteps.push({ id: 'search', label: 'Search' });
-        if (config.enableReranking) {
-          ragSteps.push({ id: 'rerank', label: 'Rerank' });
-        }
-        if (config.enableLLMGeneration) {
-          ragSteps.push({ id: 'generate', label: 'Generate' });
-        }
-      }
-
+      // 1. Knowledge Retrieval node (circular - parent of RAG subflow)
       nodeList.push({
-        id: 'rag-agent',
-        type: 'subflowGroup',
+        id: 'retrieval',
+        type: 'conversationNode',
         position: { x: startX + horizontalSpacing, y: startY },
         data: {
-          id: 'rag-agent',
-          agentName: ragSubflowExpanded ? '▼ RAG Agent' : '▶ RAG Agent',
-          steps: ragSteps,
-          isExpanded: ragSubflowExpanded,
+          id: 'retrieval',
+          name: 'Knowledge Retrieval',
+          type: 'retrieval',
+          description: 'RAG Agent - Search knowledge base',
+          configured: config.configuredNodes?.retrieval || false,
+          isSubflowParent: true,
+          subflowExpanded: ragSubflowExpanded,
+          subflowLabel: ragSubflowExpanded ? '▼ RAG Agent' : '▶ RAG Agent',
         },
       });
 
-      // 2. Task Agent Subflow Group Node
-      const taskSteps = [];
-      if (taskSubflowExpanded) {
-        taskSteps.push({ id: 'prompts', label: 'System Prompts' });
-        taskSteps.push({ id: 'execution', label: 'Task Execution' });
+      // If RAG subflow is expanded, add individual RAG sub-nodes
+      if (ragSubflowExpanded) {
+        const ragConfig: RAGSubflowConfig = {
+          selectedStrategy: config.selectedStrategy,
+          collectionName: config.collectionName,
+          topK: config.topK,
+          enableReranking: config.enableReranking,
+          selectedRerankerId: config.selectedRerankerId ?? undefined,
+          selectedRerankerModel: config.selectedRerankerModel ?? undefined,
+          enableLLMGeneration: config.enableLLMGeneration,
+          selectedProviderId: config.selectedProviderId ?? undefined,
+          selectedModel: config.selectedModel ?? undefined,
+        };
+        const ragSubflowNodes = generateRAGSubflowNodes('retrieval', startX + horizontalSpacing, startY + 80, ragConfig);
+        nodeList.push(...ragSubflowNodes);
       }
 
+      // 2. Task Engine node (circular - parent of Task Agent subflow)
       nodeList.push({
-        id: 'task-agent',
-        type: 'subflowGroup',
+        id: 'taskEngine',
+        type: 'conversationNode',
         position: { x: startX + horizontalSpacing * 2, y: startY },
         data: {
-          id: 'task-agent',
-          agentName: taskSubflowExpanded ? '▼ Task Agent' : '▶ Task Agent',
-          steps: taskSteps,
-          isExpanded: taskSubflowExpanded,
+          id: 'taskEngine',
+          name: 'Task Engine',
+          type: 'taskEngine',
+          description: 'Task Agent - System Prompts & Execution',
+          configured: config.configuredNodes?.supervisor || false,
+          isSubflowParent: true,
+          subflowExpanded: taskSubflowExpanded,
+          subflowLabel: taskSubflowExpanded ? '▼ Task Agent' : '▶ Task Agent',
         },
       });
 
-      // 3. Response Generation node
+      // If Task subflow is expanded, add individual Task sub-nodes
+      if (taskSubflowExpanded) {
+        const taskConfig: TaskAgentSubflowConfig = {
+          enableKnowledgeAssistant: config.enableKnowledgeAssistant,
+        };
+        const taskSubflowNodes = generateTaskAgentSubflowNodes('taskEngine', startX + horizontalSpacing * 2, startY + 80, taskConfig);
+        nodeList.push(...taskSubflowNodes);
+      }
+
+      // 3. Response Generation node (circular)
       nodeList.push({
         id: 'response',
         type: 'conversationNode',
@@ -350,6 +365,29 @@ function ConversationCanvasContent() {
       });
     }
 
+    // Add RAG subflow edges if expanded
+    if (config.expandedSubflows?.retrieval) {
+      const ragConfig: RAGSubflowConfig = {
+        selectedStrategy: config.selectedStrategy,
+        collectionName: config.collectionName,
+        topK: config.topK,
+        enableReranking: config.enableReranking,
+        selectedRerankerId: config.selectedRerankerId ?? undefined,
+        selectedRerankerModel: config.selectedRerankerModel ?? undefined,
+        enableLLMGeneration: config.enableLLMGeneration,
+        selectedProviderId: config.selectedProviderId ?? undefined,
+        selectedModel: config.selectedModel ?? undefined,
+      };
+      const ragSubflowEdges = generateRAGSubflowEdges('retrieval', ragConfig);
+      edgeList.push(...ragSubflowEdges);
+    }
+
+    // Add Task Agent subflow edges if expanded
+    if (config.expandedSubflows?.taskEngine) {
+      const taskSubflowEdges = generateTaskAgentSubflowEdges('taskEngine');
+      edgeList.push(...taskSubflowEdges);
+    }
+
     return edgeList;
   }, [dynamicNodes, config]);
 
@@ -368,9 +406,9 @@ function ConversationCanvasContent() {
   }, [dynamicNodes, dynamicEdges, setNodes, setEdges]);
 
   const handleNodeDoubleClick = useCallback((event: React.MouseEvent, node: Node) => {
-    // Check if this is a subflow group node
-    if (node.type === 'subflowGroup') {
-      if (node.id === 'rag-agent') {
+    // Check if this is a subflow parent node (Knowledge Retrieval or Task Engine)
+    if (node.data?.isSubflowParent) {
+      if (node.id === 'retrieval') {
         // Toggle RAG subflow
         const isCurrentlyExpanded = config.expandedSubflows?.retrieval || false;
         setConfig(prev => ({
@@ -385,7 +423,7 @@ function ConversationCanvasContent() {
           message: isCurrentlyExpanded ? 'Hiding RAG pipeline steps' : 'Showing RAG pipeline steps',
           color: 'blue',
         });
-      } else if (node.id === 'task-agent') {
+      } else if (node.id === 'taskEngine') {
         // Toggle Task Agent subflow
         const isCurrentlyExpanded = config.expandedSubflows?.taskEngine || false;
         setConfig(prev => ({
