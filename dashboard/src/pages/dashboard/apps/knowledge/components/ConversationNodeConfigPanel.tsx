@@ -14,7 +14,7 @@ import { notifications } from '@mantine/notifications';
 interface ConversationNodeData {
   id: string;
   name: string;
-  type: 'userQuery' | 'settings' | 'enhancement' | 'retrieval' | 'reranking' | 'llm' | 'formatter';
+  type: 'userQuery' | 'settings' | 'enhancement' | 'retrieval' | 'reranking' | 'llm' | 'formatter' | 'assistant' | 'taskEngine' | 'response';
   description: string;
   configured: boolean;
 }
@@ -203,10 +203,13 @@ export function ConversationNodeConfigPanel({
       userQuery: 'User Query',
       settings: 'Conversation Settings',
       enhancement: 'Query Strategy',
-      retrieval: 'Document Search',
+      retrieval: 'Document Search / Knowledge Retrieval',
       reranking: 'Rerank Results',
       llm: 'Generate Answer',
       formatter: 'Return Documents',
+      assistant: 'System Prompts',
+      taskEngine: 'Task Engine',
+      response: 'Response',
     };
     return names[type] || type;
   };
@@ -748,6 +751,120 @@ export function ConversationNodeConfigPanel({
             <Text size="sm" c="dimmed">
               Raw response mode - documents returned without LLM generation
             </Text>
+          </div>
+        );
+
+      case 'assistant':
+        return (
+          <div style={{ padding: '12px' }}>
+            <Stack gap="md">
+              <div>
+                <Text size="xs" fw={600} mb={4}>
+                  System Prompts Configuration
+                </Text>
+                <Text size="xs" c="dimmed" mb="md">
+                  Define task-specific system prompts that guide the task engine behavior. These prompts are applied to knowledge base search results.
+                </Text>
+              </div>
+
+              <Box p="xs" bg="grape.0" style={{ borderRadius: '6px', border: '1px solid var(--mantine-color-grape-2)' }}>
+                <Text size="xs" fw={600} mb={3} c="grape.7">📋 System Prompts:</Text>
+                <Stack gap={2}>
+                  <Text size="xs" c="dimmed">
+                    • Define custom instructions for task execution
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    • Each prompt guides how to process knowledge base results
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    • Prompts are applied before task engine processes retrieved documents
+                  </Text>
+                </Stack>
+              </Box>
+
+              <Text size="xs" c="gray.6">
+                System prompts are managed in the conversation settings and applied during task execution.
+              </Text>
+            </Stack>
+          </div>
+        );
+
+      case 'taskEngine':
+        return (
+          <div style={{ padding: '12px' }}>
+            <Stack gap="md">
+              <div>
+                <Text size="xs" fw={600} mb={4}>
+                  Task Engine Configuration
+                </Text>
+                <Text size="xs" c="dimmed" mb="md">
+                  Multi-task orchestration engine that executes tasks using knowledge base search results and system prompts.
+                </Text>
+              </div>
+
+              <Box p="xs" bg="violet.0" style={{ borderRadius: '6px', border: '1px solid var(--mantine-color-violet-2)' }}>
+                <Text size="xs" fw={600} mb={3} c="violet.7">⚙️ Task Execution Flow:</Text>
+                <Stack gap={2}>
+                  <Text size="xs" c="dimmed">
+                    1️⃣ Receives knowledge base search results
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    2️⃣ Applies relevant system prompts
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    3️⃣ Orchestrates task execution across multiple agents
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    4️⃣ Routes tasks to specialized handlers
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    5️⃣ Synthesizes results for final response
+                  </Text>
+                </Stack>
+              </Box>
+
+              <Text size="xs" c="gray.6">
+                Task engine automatically configured. No manual configuration needed.
+              </Text>
+            </Stack>
+          </div>
+        );
+
+      case 'response':
+        return (
+          <div style={{ padding: '12px' }}>
+            <Stack gap="md">
+              <div>
+                <Text size="xs" fw={600} mb={4}>
+                  Response Generation
+                </Text>
+                <Text size="xs" c="dimmed" mb="md">
+                  Generates final knowledge-backed response using task engine output and retrieval results.
+                </Text>
+              </div>
+
+              <Box p="xs" bg="green.0" style={{ borderRadius: '6px', border: '1px solid var(--mantine-color-green-2)' }}>
+                <Text size="xs" fw={600} mb={3} c="green.7">✅ Response Features:</Text>
+                <Stack gap={2}>
+                  <Text size="xs" c="dimmed">
+                    • Grounded in knowledge base - all responses backed by KB documents
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    • Task results included - incorporates task engine outputs
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    • Traceable - can reference source documents
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    • Synthesized - combines retrieval + task results coherently
+                  </Text>
+                </Stack>
+              </Box>
+
+              <Text size="xs" c="gray.6">
+                Response generation automatically configured. Always references knowledge base as source of truth.
+              </Text>
+            </Stack>
           </div>
         );
 
