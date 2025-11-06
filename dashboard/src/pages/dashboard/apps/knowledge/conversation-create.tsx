@@ -52,6 +52,7 @@ import {
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ConversationCanvasBuilder } from './components/ConversationCanvasBuilder';
+import ConversationCreateWizard from './conversation-create-wizard';
 
 // Pipeline Visualization Component
 interface PipelineStep {
@@ -386,9 +387,9 @@ export default function ConversationCreate() {
     return <ConversationCanvasBuilder />;
   }
 
-  // Otherwise, render the wizard
-  console.log('Rendering ConversationWizard');
-  return <ConversationWizard />;
+  // Otherwise, render the step-by-step wizard
+  console.log('Rendering ConversationCreateWizard');
+  return <ConversationCreateWizard />;
 }
 
 // Wizard Component (existing logic)
