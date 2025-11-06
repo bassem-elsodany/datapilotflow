@@ -158,9 +158,12 @@ function ConversationCanvasContent() {
       },
     });
 
-    // For Assistant Agent, generate assistant-specific nodes
+    // For Assistant Agent, generate assistant-specific nodes with subflows
     if (isSupervisor) {
-      // Knowledge Retrieval node
+      // Check if RAG subflow is expanded (Knowledge Retrieval agent)
+      const ragSubflowExpanded = config.expandedSubflows?.retrieval || false;
+
+      // 1. Knowledge Retrieval node (expandable subflow for RAG Agent)
       nodeList.push({
         id: 'retrieval',
         type: 'conversationNode',
@@ -169,12 +172,15 @@ function ConversationCanvasContent() {
           id: 'retrieval',
           name: 'Knowledge Retrieval',
           type: 'retrieval',
-          description: 'Search knowledge base',
+          description: 'RAG Agent - Search knowledge base',
           configured: config.configuredNodes?.retrieval || false,
+          isSubflowParent: true,
+          subflowExpanded: ragSubflowExpanded,
+          subflowLabel: ragSubflowExpanded ? '▼ RAG Agent' : '▶ RAG Agent',
         },
       });
 
-      // System Prompts node
+      // 2. System Prompts node (Task configuration)
       nodeList.push({
         id: 'assistant',
         type: 'conversationNode',
@@ -183,12 +189,13 @@ function ConversationCanvasContent() {
           id: 'assistant',
           name: 'System Prompts',
           type: 'assistant',
-          description: 'Task-specific system prompts',
+          description: 'Task-specific instructions',
           configured: config.configuredNodes?.assistant || false,
         },
       });
 
-      // Task Engine node
+      // 3. Task Engine node (expandable subflow for Task Agent)
+      const taskSubflowExpanded = config.expandedSubflows?.taskEngine || false;
       nodeList.push({
         id: 'taskEngine',
         type: 'conversationNode',
@@ -197,12 +204,15 @@ function ConversationCanvasContent() {
           id: 'taskEngine',
           name: 'Task Engine',
           type: 'taskEngine',
-          description: 'Multi-task orchestration',
+          description: 'Task Agent - Multi-task orchestration',
           configured: config.configuredNodes?.supervisor || false,
+          isSubflowParent: true,
+          subflowExpanded: taskSubflowExpanded,
+          subflowLabel: taskSubflowExpanded ? '▼ Task Agent' : '▶ Task Agent',
         },
       });
 
-      // Response Generation node
+      // 4. Response Generation node
       nodeList.push({
         id: 'response',
         type: 'conversationNode',
@@ -211,8 +221,8 @@ function ConversationCanvasContent() {
           id: 'response',
           name: 'Response',
           type: 'response',
-          description: 'Generate KB-backed response',
-          configured: true, // Auto-configured for assistant agent
+          description: 'Generate final response',
+          configured: true,
         },
       });
 
