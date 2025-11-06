@@ -253,6 +253,16 @@ export const CONVERSATION_TEMPLATES: ConversationTemplate[] = [
         description: 'Name, description & agent mode',
       },
       {
+        id: 'enhancement',
+        name: 'Query Enhancement',
+        description: 'Query decomposition for better retrieval',
+      },
+      {
+        id: 'retrieval',
+        name: 'Knowledge Retrieval',
+        description: 'Knowledge base search & retrieval',
+      },
+      {
         id: 'assistant',
         name: 'Assistant Configuration',
         description: 'System prompts & task definitions',
@@ -264,16 +274,6 @@ export const CONVERSATION_TEMPLATES: ConversationTemplate[] = [
       },
     ],
     optionalNodes: [
-      {
-        id: 'enhancement',
-        name: 'Query Enhancement',
-        description: 'Optional query transformation for better retrieval',
-      },
-      {
-        id: 'retrieval',
-        name: 'Knowledge Retrieval',
-        description: 'Knowledge base search & retrieval',
-      },
       {
         id: 'reranking',
         name: 'Document Reranking',
