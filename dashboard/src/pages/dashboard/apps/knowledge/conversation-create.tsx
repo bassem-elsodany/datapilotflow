@@ -351,7 +351,7 @@ const breadcrumbs = [
   { label: 'Dashboard', href: paths.dashboard.root },
   { label: 'Apps', href: paths.dashboard.apps.root },
   { label: 'Knowledge Conversations', href: paths.dashboard.apps.knowledgeSearch },
-  { label: 'Create Conversation' },
+  { label: 'Create Conversation Agent' },
 ];
 
 // Query transformation examples for each strategy
@@ -592,7 +592,7 @@ function ConversationWizard() {
         const errorData = await response.json().catch(() => ({}));
         notifications.show({
           title: 'Error',
-          message: errorData.detail || 'Failed to create conversation',
+          message: errorData.detail || 'Failed to create conversation agent',
           color: 'red',
           icon: <IconAlertCircle size={16} />,
         });
@@ -601,7 +601,7 @@ function ConversationWizard() {
       console.error('Error creating new conversation:', error);
       notifications.show({
         title: 'Error',
-        message: 'Failed to create conversation',
+        message: 'Failed to create conversation agent',
         color: 'red',
         icon: <IconAlertCircle size={16} />,
       });
@@ -1056,7 +1056,7 @@ function ConversationWizard() {
                 color="blue"
                 size="md"
               >
-                Create Conversation
+                Create Conversation Agent
               </Button>
             </Group>
           </Stack>

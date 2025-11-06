@@ -5,11 +5,11 @@
  * Allows advanced users to design custom conversation pipelines with full control
  */
 
+import { useGetActiveModelProviders } from '@/api/resources/model-providers';
+import { useGetCollections } from '@/api/resources/vectordb';
 import { Page } from '@/components/page';
 import { PageHeader } from '@/components/page-header';
 import { paths } from '@/routes/paths';
-import { useGetActiveModelProviders } from '@/api/resources/model-providers';
-import { useGetCollections } from '@/api/resources/vectordb';
 import {
   Box,
   Button,
@@ -25,14 +25,14 @@ import {
 import { notifications } from '@mantine/notifications';
 import {
   IconArrowLeft,
+  IconBrain,
   IconCheck,
   IconDatabase,
-  IconBrain,
   IconFilter,
   IconMessageCircle,
 } from '@tabler/icons-react';
-import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const breadcrumbs = [
   { label: 'Dashboard', href: paths.dashboard.root },
@@ -304,7 +304,7 @@ export function ConversationPipelineBuilder() {
               leftSection={<IconCheck size={16} />}
               onClick={handleSaveConversation}
             >
-              Create Conversation
+              Create Conversation Agent
             </Button>
           </Group>
         </Stack>

@@ -1,14 +1,14 @@
-"""Supervisor Agent service implementation."""
+"""Supervisor Agent service implementation using LangGraph-based orchestration."""
 
 import json
 from typing import Any, Dict, List, Optional
-
 from langchain_community.chat_models import ChatLiteLLM
 from loguru import logger
 
 from src.agents.common.agent_interface import AgentService
 from src.agents.common.agent_state import AgentState
 from src.agents.supervisor_agent.chains import get_intent_detection_chain
+from src.agents.supervisor_agent.supervisor_graph import create_supervisor_graph
 
 
 class SupervisorAgentService(AgentService):
@@ -37,7 +37,7 @@ class SupervisorAgentService(AgentService):
         task_agent: Optional[Any] = None,
     ):
         """
-        Initialize Supervisor Agent.
+        Initialize Supervisor Agent with LangGraph-based orchestration.
 
         Args:
             llm_client: LangChain LLM client for intent detection
@@ -47,11 +47,12 @@ class SupervisorAgentService(AgentService):
         self.llm_client = llm_client
         self.rag_agent = rag_agent
         self.task_agent = task_agent
+        self.supervisor_graph = None  # Will be built when agents are registered
         logger.info("✅ Supervisor Agent initialized")
 
     def set_agents(self, rag_agent: Any, task_agent: Any) -> None:
         """
-        Set the worker agents (called after initialization if needed).
+        Set the worker agents and build the supervisor graph (called after initialization).
 
         Args:
             rag_agent: RAGAgentService instance
@@ -59,13 +60,26 @@ class SupervisorAgentService(AgentService):
         """
         self.rag_agent = rag_agent
         self.task_agent = task_agent
-        logger.info("✅ Supervisor: Worker agents registered")
+
+        # Build the supervisor graph now that agents are registered
+        self.supervisor_graph = create_supervisor_graph(
+            llm_client=self.llm_client,
+            rag_agent=rag_agent,
+            task_agent=task_agent,
+            intent_detector=self._detect_intent,
+        )
+
+        logger.info("✅ Supervisor: Worker agents registered and graph built")
 
     async def execute(self, state: AgentState) -> AgentState:
         """
-        Execute supervisor logic: detect intent and route to agents.
+        Execute supervisor orchestration using LangGraph-based routing.
 
-        This is the main orchestration method.
+        This method uses the compiled supervisor graph to:
+        1. Detect user intent
+        2. Route to appropriate agents via tool nodes
+        3. Handle multi-step workflows (RAG → Task)
+        4. Return final state with all agent results
 
         Args:
             state: Current AgentState with user input in messages
@@ -74,34 +88,19 @@ class SupervisorAgentService(AgentService):
             Final AgentState with all agent results and final response
         """
         try:
-            logger.info("🎯 Supervisor: Starting intent detection and routing")
+            logger.info("🎯 Supervisor: Starting graph-based orchestration")
 
-            # Step 1: Detect user intent
-            intent = await self._detect_intent(state)
-            state["intent"] = intent
-            logger.info(f"🔍 Supervisor: Detected intent: {intent}")
-
-            # Step 2: Route to agents based on intent
-            # Knowledge base is the ONLY source of truth - all requests must be grounded in it
-            if intent == "rag_only":
-                logger.info("📚 Supervisor: Routing to RAG Agent for retrieval only")
-                state = await self.rag_agent.execute(state)
-
-            elif intent == "rag_then_task":
-                logger.info(
-                    "📚 Supervisor: Routing to RAG Agent first, then Task Agent"
+            if not self.supervisor_graph:
+                raise RuntimeError(
+                    "Supervisor graph not initialized. Call set_agents() first."
                 )
-                state = await self.rag_agent.execute(state)
-                state = await self.task_agent.execute(state)
 
-            else:
-                logger.warning(
-                    f"⚠️  Supervisor: Unknown intent '{intent}', defaulting to rag_only"
-                )
-                state = await self.rag_agent.execute(state)
+            # Execute the supervisor graph
+            # The graph handles intent detection and routing internally
+            final_state = await self.supervisor_graph.ainvoke(state)
 
-            logger.info("🎉 Supervisor: Orchestration complete")
-            return state
+            logger.info("🎉 Supervisor: Graph-based orchestration complete")
+            return final_state
 
         except Exception as e:
             logger.error(f"❌ Supervisor error: {e}")

@@ -13,20 +13,18 @@
 
 import { useGetActiveModelProviders } from '@/api/resources/model-providers';
 import { useGetCollections } from '@/api/resources/vectordb';
+import { ColorfulVerticalStepper } from '@/components/colorful-vertical-stepper';
 import { Page } from '@/components/page';
 import { PageHeader } from '@/components/page-header';
 import { SystemPromptManager } from '@/components/system-prompt-manager';
-import { ColorfulVerticalStepper } from '@/components/colorful-vertical-stepper';
 import { apiUtils } from '@/config';
 import { paths } from '@/routes/paths';
 import {
   Accordion,
   Alert,
   Badge,
-  Box,
   Button,
   Card,
-  Checkbox,
   Divider,
   Grid,
   Group,
@@ -41,7 +39,7 @@ import {
   Text,
   TextInput,
   Textarea,
-  ThemeIcon,
+  ThemeIcon
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
@@ -51,14 +49,13 @@ import {
   IconArrowsLeftRight,
   IconCheck,
   IconDatabase,
-  IconFilter,
   IconHelp,
   IconInfoCircle,
   IconMessageCircle,
   IconRobot,
   IconScale,
   IconSettings,
-  IconWand,
+  IconWand
 } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -317,6 +314,25 @@ export function ConversationCreateWizard() {
     }
   }, []);
 
+  // Auto-select decomposition strategy when Assistant mode is selected
+  useEffect(() => {
+    if (form.values.agentType === 'assistant') {
+      // Only change if not already set to decomposition (to avoid overwriting in edit mode)
+      if (form.values.selectedStrategy !== 'decomposition') {
+        form.setFieldValue('selectedStrategy', 'decomposition');
+      }
+      // Ensure enableKnowledgeAssistant is true for assistant mode
+      if (!form.values.enableKnowledgeAssistant) {
+        form.setFieldValue('enableKnowledgeAssistant', true);
+      }
+    } else {
+      // RAG mode - ensure enableKnowledgeAssistant is false
+      if (form.values.enableKnowledgeAssistant) {
+        form.setFieldValue('enableKnowledgeAssistant', false);
+      }
+    }
+  }, [form.values.agentType]);
+
   // Load existing conversation data for edit mode
   const loadExistingConversation = async (conversationId: string) => {
     try {
@@ -339,8 +355,9 @@ export function ConversationCreateWizard() {
           agentType: session.assistant_config?.enabled ? 'assistant' : 'rag',
           conversationName: session.name || '',
           conversationDescription: session.description || '',
-          selectedProviderId: session.answer_generation?.provider?.id || null,
-          selectedModel: session.answer_generation?.provider?.model_name || null,
+          // Load LLM provider/model - prefer answer_generation, fallback to enhancement
+          selectedProviderId: session.answer_generation?.provider?.id || session.enhancement?.provider?.id || null,
+          selectedModel: session.answer_generation?.provider?.model_name || session.enhancement?.provider?.model_name || null,
           selectedStrategy: session.enhancement?.strategy || 'native',
           collectionName: session.vector_database?.collection_name || '',
           topK: session.vector_database?.top_k || 5,
@@ -541,7 +558,7 @@ export function ConversationCreateWizard() {
         // Assistant mode: assistant_config = { enabled: true, system_prompt_tasks: [...] }
         assistant_config: {
           enabled: form.values.agentType === 'assistant',
-          system_prompt_tasks: form.values.agentType === 'assistant' ? 
+          system_prompt_tasks: form.values.agentType === 'assistant' ?
             // Priority 1: Use selectedSystemPrompt if available
             (selectedSystemPrompt ? [{
               id: selectedSystemPrompt.id || '',
@@ -549,15 +566,15 @@ export function ConversationCreateWizard() {
               content: selectedSystemPrompt.content || selectedSystemPrompt.system_prompt || '',
               is_active: selectedSystemPrompt.is_active !== false,
             }]
-            // Priority 2: Use form.values.systemPromptTasks if available
-            : (form.values.systemPromptTasks && form.values.systemPromptTasks.length > 0 ?
-              form.values.systemPromptTasks.map((task: any) => ({
-                id: task.id || '',
-                title: task.title || task.name || '',
-                content: task.content || task.system_prompt || '',
-                is_active: task.is_active !== false,
-              }))
-              : null))
+              // Priority 2: Use form.values.systemPromptTasks if available
+              : (form.values.systemPromptTasks && form.values.systemPromptTasks.length > 0 ?
+                form.values.systemPromptTasks.map((task: any) => ({
+                  id: task.id || '',
+                  title: task.title || task.name || '',
+                  content: task.content || task.system_prompt || '',
+                  is_active: task.is_active !== false,
+                }))
+                : null))
             : null,
         },
       };
@@ -602,7 +619,7 @@ export function ConversationCreateWizard() {
         const errorData = await response.json().catch(() => ({}));
         notifications.show({
           title: 'Error',
-          message: errorData.detail || 'Failed to create conversation',
+          message: errorData.detail || 'Failed to create conversation Agent',
           color: 'red',
         });
       }
@@ -634,7 +651,7 @@ export function ConversationCreateWizard() {
   // For Assistant mode: no adjustment needed
   const displayActiveStep = form.values.agentType === 'rag' && activeStep === 7 ? 6 : activeStep;
 
-  const pageTitle = isEditMode ? 'Edit Conversation' : 'Create New Conversation';
+  const pageTitle = isEditMode ? 'Edit Conversation Agent' : 'Create New Conversation Agent';
 
   return (
     <Page title={pageTitle}>
@@ -718,10 +735,10 @@ export function ConversationCreateWizard() {
               console.log('Prompt object:', JSON.stringify(prompt, null, 2));
               console.log('Setting selectedSystemPromptId to:', prompt.id);
               form.setFieldValue('selectedSystemPromptId', prompt.id);
-              
+
               console.log('Setting selectedSystemPrompt state');
               setSelectedSystemPrompt(prompt);
-              
+
               // Store the prompt as a system prompt task for assistant_config
               if (prompt) {
                 const taskData = [
@@ -734,7 +751,7 @@ export function ConversationCreateWizard() {
                 ];
                 console.log('Setting systemPromptTasks to:', JSON.stringify(taskData, null, 2));
                 form.setFieldValue('systemPromptTasks', taskData);
-                
+
                 // Verify immediately
                 console.log('Verification - form.values.systemPromptTasks:', form.values.systemPromptTasks);
                 console.log('Verification - selectedSystemPrompt state:', selectedSystemPrompt);
@@ -791,7 +808,7 @@ export function ConversationCreateWizard() {
                 leftSection={<IconCheck size={16} />}
                 color="green"
               >
-                {isEditMode ? 'Update Conversation' : 'Create Conversation'}
+                {isEditMode ? 'Update Conversation Agent' : 'Create Conversation Agent'}
               </Button>
             )}
           </Group>
@@ -1217,9 +1234,26 @@ function StepVectorDatabase({ form, collections, collectionsLoading }: StepProps
 function StepEnhancementStrategy({ form, onLearnClick, providers, providersLoading }: StepProps & { onLearnClick: () => void; providers?: any; providersLoading?: boolean }) {
   const selectedStrategyInfo = ENHANCEMENT_STRATEGIES.find((s) => s.value === form.values.selectedStrategy);
   const isNonNativeStrategy = form.values.selectedStrategy !== 'native';
+  const isAssistantMode = form.values.agentType === 'assistant';
 
   return (
     <Stack gap="md">
+      {isAssistantMode && (
+        <Alert icon={<IconRobot size={16} />} color="grape" variant="light">
+          <Stack gap="xs">
+            <Text size="sm" fw={600}>
+              🧠 Assistant Mode: Decomposition Strategy Recommended
+            </Text>
+            <Text size="sm">
+              For Assistant agents, we recommend <strong>Decomposition</strong> strategy because it breaks complex user requests into simpler sub-questions. This allows the agent to gather comprehensive knowledge from the knowledge base before executing tasks.
+            </Text>
+            <Text size="xs" c="dimmed">
+              Example: "Create a report on SSL configuration" → Decomposes to: "What is SSL?", "How to configure SSL?", "SSL best practices" → Agent uses all retrieved knowledge to execute the task.
+            </Text>
+          </Stack>
+        </Alert>
+      )}
+
       <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
         <Text size="sm">
           Choose how your queries will be enhanced before searching the knowledge base. Different strategies work better for different types of questions.
@@ -1474,13 +1508,13 @@ function StepReranker({ form, providers, providersLoading }: StepProps) {
 
                 const modelData = hasRerankerModels
                   ? rerankerModels.map((m: string) => ({
-                      value: m,
-                      label: m,
-                    }))
+                    value: m,
+                    label: m,
+                  }))
                   : generativeModels.map((m: string) => ({
-                      value: m,
-                      label: m,
-                    }));
+                    value: m,
+                    label: m,
+                  }));
 
                 return (
                   <Select
@@ -1743,7 +1777,7 @@ function StepReviewAndCreate({ form, providers, collections }: StepProps) {
     <Stack gap="md">
       <Alert icon={<IconCheck size={16} />} color="green" variant="light">
         <Text size="sm">
-          Review your configuration below. All settings will be saved as nested configuration. Click <strong>Create Conversation</strong> to proceed.
+          Review your configuration below. All settings will be saved as nested configuration. Click <strong>Create Conversation Agent</strong> to proceed.
         </Text>
       </Alert>
 

@@ -153,7 +153,9 @@ const generateRagDescription = (
   enableReranking: boolean,
   enableLLMGeneration: boolean,
   topK?: number,
-  collectionName?: string
+  collectionName?: string,
+  enhancementProvider?: { id: string, model_name: string } | null,
+  providers?: any[]
 ): string => {
   const parts: string[] = [];
 
@@ -162,12 +164,22 @@ const generateRagDescription = (
 
   if (strategy === 'native') {
     parts.push(`Using ${strategyLabel} (direct search)`);
-  } else if (strategy === 'augmented' || strategy === 'multi_query' || strategy === 'decomposition') {
-    parts.push(`Using ${strategyLabel} with RRF fusion`);
-  } else if (strategy === 'hyde') {
-    parts.push(`Using ${strategyLabel} (single enhanced query)`);
   } else {
-    parts.push(`Using ${strategyLabel}`);
+    // Non-native strategy - include provider/model info if available
+    let strategyPart = `Using ${strategyLabel}`;
+    if (enhancementProvider) {
+      // Get provider name from providers list
+      const providerName = providers?.find((p: any) => p.id === enhancementProvider.id)?.name || enhancementProvider.id;
+      strategyPart += ` (${providerName}/${enhancementProvider.model_name})`;
+    }
+
+    if (strategy === 'augmented' || strategy === 'multi_query' || strategy === 'decomposition') {
+      strategyPart += ' with RRF fusion';
+    } else if (strategy === 'hyde') {
+      strategyPart += ' (single enhanced query)';
+    }
+
+    parts.push(strategyPart);
   }
 
   // Collection and top-k
@@ -1396,18 +1408,31 @@ export default function ConversationWindow() {
       setIsSavingSettings(true);
       const token = localStorage.getItem('jwt_token');
 
+      // Determine final strategy - force to native if provider/model not set
+      const finalSaveStrategy = selectedStrategy !== 'native' && selectedProviderId && selectedModel
+        ? selectedStrategy
+        : 'native';
+
+      // Warn if strategy was forced back to native
+      if (selectedStrategy !== 'native' && finalSaveStrategy === 'native') {
+        notifications.show({
+          title: 'Strategy Reset',
+          message: `Cannot use "${selectedStrategy}" strategy without LLM provider and model. Strategy has been reset to "native".`,
+          color: 'yellow',
+          icon: <IconAlertCircle size={16} />,
+          autoClose: 7000,
+        });
+      }
+
       // Build nested configuration structure
       const payload: any = {
         // Enhancement configuration
-        enhancement: selectedStrategy !== 'native' && selectedProviderId && selectedModel ? {
-          strategy: selectedStrategy,
-          provider: {
+        enhancement: {
+          strategy: finalSaveStrategy,
+          provider: finalSaveStrategy !== 'native' && selectedProviderId && selectedModel ? {
             id: selectedProviderId,
             model_name: selectedModel,
-          },
-        } : {
-          strategy: 'native',
-          provider: null,
+          } : null,
         },
         // Vector database configuration
         vector_database: {
@@ -1522,12 +1547,28 @@ export default function ConversationWindow() {
         providerToUse = savedEnhancementProvider;
       }
 
+      // Determine final strategy - if strategy is being changed to non-native but no provider exists, force to native
+      const requestedStrategy = updates.strategy || selectedStrategy;
+      const finalStrategy = requestedStrategy !== 'native' && !providerToUse ? 'native' : requestedStrategy;
+
+      // If we had to force strategy back to native, warn the user
+      if (requestedStrategy !== 'native' && !providerToUse && updates.strategy) {
+        notifications.show({
+          title: 'Strategy Reset to Native',
+          message: 'Non-native enhancement strategies require an LLM provider and model. Please configure these in settings first.',
+          color: 'yellow',
+          icon: <IconAlertCircle size={16} />,
+          autoClose: 7000,
+        });
+        setSelectedStrategy('native'); // Update UI
+      }
+
       // Build nested configuration structure with current values + updates
       const payload: any = {
         // Enhancement configuration - uses the same provider as answer_generation
         enhancement: {
-          strategy: updates.strategy || selectedStrategy,
-          provider: providerToUse,
+          strategy: finalStrategy,
+          provider: finalStrategy !== 'native' ? providerToUse : null,
         },
         // Vector database configuration
         vector_database: {
@@ -1627,21 +1668,7 @@ export default function ConversationWindow() {
                   {sessionName}
                 </Anchor>
               </Tooltip>
-              <Group gap="xs">
-                <Text size="sm" c="dimmed">Session ID: {sessionId}</Text>
-                <Tooltip label="Real-time WebSocket connection for streaming AI responses">
-                  <Badge
-                    size="xs"
-                    color="green"
-                    variant="light"
-                    leftSection={
-                      <Box style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: 'currentColor' }} />
-                    }
-                  >
-                    Ready
-                  </Badge>
-                </Tooltip>
-              </Group>
+
               {/* RAG Configuration Description */}
               <Stack gap="xs">
                 <Tooltip
@@ -1650,21 +1677,10 @@ export default function ConversationWindow() {
                 >
                   <Text size="xs" c="blue.6" style={{ fontStyle: 'italic' }}>
                     <IconInfoCircle size={12} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
-                    {generateRagDescription(selectedStrategy, enableReranking, enableLLMGeneration, topK, collectionName)}
+                    {generateRagDescription(selectedStrategy, enableReranking, enableLLMGeneration, topK, collectionName, savedEnhancementProvider, providers)}
                   </Text>
                 </Tooltip>
-                <Button
-                  size="xs"
-                  variant="gradient"
-                  gradient={{ from: 'violet', to: 'purple', deg: 135 }}
-                  leftSection={<IconHelp size={16} />}
-                  onClick={() => setStrategiesInfoModalOpen(true)}
-                  style={{
-                    boxShadow: '0 2px 8px rgba(109, 40, 217, 0.3)',
-                  }}
-                >
-                  Learn & Compare
-                </Button>
+
               </Stack>
             </div>
           </Group>
@@ -2094,12 +2110,12 @@ export default function ConversationWindow() {
                   const newEnableKA = newMode === 'agent';
                   setEnableKnowledgeAssistant(newEnableKA);
                   console.log(`🔄 [MODE CHANGED] User selected: ${newMode} → enableKnowledgeAssistant=${newEnableKA}`);
-                  
+
                   // Auto-configure settings for Assistant Agent mode
                   let strategyUpdate = undefined;
                   let disableLLM = false;
                   let changesMessage = [];
-                  
+
                   if (newMode === 'agent') {
                     // 1. Set strategy to decomposition
                     if (selectedStrategy !== 'decomposition') {
@@ -2109,7 +2125,7 @@ export default function ConversationWindow() {
                       changesMessage.push(`• Strategy: "${previousStrategy || 'native'}" → "decomposition"`);
                       console.log(`🔄 [STRATEGY AUTO-CHANGED] ${previousStrategy || 'native'} → decomposition (Assistant Agent mode)`);
                     }
-                    
+
                     // 2. Disable LLM generation (supervisor handles everything)
                     if (enableLLMGeneration) {
                       setEnableLLMGeneration(false);
@@ -2117,7 +2133,7 @@ export default function ConversationWindow() {
                       changesMessage.push(`• LLM Generation: "enabled" → "disabled"`);
                       console.log(`🔄 [LLM GENERATION DISABLED] Supervisor agent handles response generation (Assistant Agent mode)`);
                     }
-                    
+
                     // Show notification if any changes were made
                     if (changesMessage.length > 0) {
                       notifications.show({
@@ -2141,9 +2157,9 @@ export default function ConversationWindow() {
                       });
                     }
                   }
-                  
+
                   // Save to database (include strategy and LLM generation settings if changed)
-                  handleQuickUpdate({ 
+                  handleQuickUpdate({
                     mode: newMode,
                     ...(strategyUpdate && { strategy: strategyUpdate }),
                     ...(disableLLM && { disableLLMGeneration: true })
@@ -2187,16 +2203,25 @@ export default function ConversationWindow() {
                   // Save to database
                   handleQuickUpdate({ strategy: newStrategy });
                 }}
-                data={ENHANCEMENT_STRATEGIES.map(s => ({
-                  value: s.value,
-                  label: s.label
-                }))}
+                data={ENHANCEMENT_STRATEGIES.map(s => {
+                  let label = s.label;
+                  // For non-native strategies, append provider/model info if available
+                  if (s.value !== 'native' && savedEnhancementProvider) {
+                    // Get provider name from providers list
+                    const providerName = providers?.find((p: any) => p.id === savedEnhancementProvider.id)?.name || savedEnhancementProvider.id;
+                    label = `${s.label} (${providerName}/${savedEnhancementProvider.model_name})`;
+                  }
+                  return {
+                    value: s.value,
+                    label: label
+                  };
+                })}
                 disabled={isLoading || isLoadingHistory}
                 searchable={false}
                 clearable={false}
                 maxDropdownHeight={120}
                 size="xs"
-                w={220}
+                w={280}
                 styles={{
                   input: {
                     backgroundColor: '#f3e5f5',
@@ -2215,53 +2240,55 @@ export default function ConversationWindow() {
                 }}
               />
 
-              {/* Model - Always visible, shows all available models */}
-              <Select
-                placeholder="Model"
-                value={selectedModel}
-                onChange={(value) => {
-                  setSelectedModel(value);
-                  // Update provider ID based on selected model
-                  if (value) {
-                    const provider = providers?.find(p =>
-                      p.generative?.models?.includes(value)
-                    );
-                    if (provider) {
-                      setSelectedProviderId(provider.id);
+              {/* Model - Only visible if LLM generation is enabled */}
+              {enableLLMGeneration && (
+                <Select
+                  placeholder="Model"
+                  value={selectedModel}
+                  onChange={(value) => {
+                    setSelectedModel(value);
+                    // Update provider ID based on selected model
+                    if (value) {
+                      const provider = providers?.find(p =>
+                        p.generative?.models?.includes(value)
+                      );
+                      if (provider) {
+                        setSelectedProviderId(provider.id);
+                      }
+                      // Save to database
+                      handleQuickUpdate({ model: value });
                     }
-                    // Save to database
-                    handleQuickUpdate({ model: value });
-                  }
-                }}
-                data={providers?.flatMap(p =>
-                  p.generative?.models?.map((m: string) => ({
-                    value: m,
-                    label: m.split('/').pop() || m
-                  })) || []
-                ) || []}
-                disabled={isLoading || isLoadingHistory}
-                searchable
-                clearable
-                maxDropdownHeight={120}
-                size="xs"
-                w={140}
-                styles={{
-                  input: {
-                    backgroundColor: '#fff3e0',
-                    border: '1px solid #ff9800',
-                    color: '#e65100',
-                    fontWeight: 600,
-                    paddingLeft: '8px',
-                    paddingRight: '4px',
-                    height: '28px',
-                    fontSize: '12px',
-                    borderRadius: '6px',
-                  },
-                  dropdown: {
-                    minWidth: '150px'
-                  }
-                }}
-              />
+                  }}
+                  data={providers?.flatMap(p =>
+                    p.generative?.models?.map((m: string) => ({
+                      value: m,
+                      label: m.split('/').pop() || m
+                    })) || []
+                  ) || []}
+                  disabled={isLoading || isLoadingHistory}
+                  searchable
+                  clearable
+                  maxDropdownHeight={120}
+                  size="xs"
+                  w={140}
+                  styles={{
+                    input: {
+                      backgroundColor: '#fff3e0',
+                      border: '1px solid #ff9800',
+                      color: '#e65100',
+                      fontWeight: 600,
+                      paddingLeft: '8px',
+                      paddingRight: '4px',
+                      height: '28px',
+                      fontSize: '12px',
+                      borderRadius: '6px',
+                    },
+                    dropdown: {
+                      minWidth: '150px'
+                    }
+                  }}
+                />
+              )}
 
               {/* Spacer */}
               <Box style={{ flex: 1 }} />

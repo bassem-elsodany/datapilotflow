@@ -38,6 +38,7 @@ import ReactFlow, {
   BackgroundVariant,
   Controls,
   Edge,
+  MarkerType,
   MiniMap,
   Node,
   ReactFlowProvider,
@@ -84,6 +85,10 @@ interface ConversationConfig {
   enableLLMGeneration: boolean;
   enableKnowledgeAssistant: boolean;
   topK: number;
+  // Assistant/System Prompt configuration
+  selectedSystemPromptId?: string | null;
+  selectedSystemPrompt?: any;
+  systemPromptTasks?: any[];
   // Template information
   selectedTemplate?: ConversationTemplate;
   // Track which nodes user has configured
@@ -94,6 +99,7 @@ interface ConversationConfig {
     llm?: boolean;
     assistant?: boolean;
     supervisor?: boolean;
+    taskEngine?: boolean;
   };
   // Track expanded subflows for Assistant Agent
   expandedSubflows?: {
@@ -138,6 +144,15 @@ function ConversationCanvasContent() {
       taskEngine: false,
     },
   });
+
+  // Debug: Log config changes
+  useEffect(() => {
+    console.log('[CONFIG STATE CHANGED]:', {
+      'configuredNodes': config.configuredNodes,
+      'collectionName': config.collectionName,
+      'retrieval flag': config.configuredNodes?.retrieval,
+    });
+  }, [config.configuredNodes, config.collectionName]);
 
   // Positioning constants for the canvas
   const HORIZONTAL_SPACING = 160; // Compact spacing to fit all nodes without scrolling (max 5 nodes = 30 + 4*160 = 670px)
@@ -268,7 +283,7 @@ function ConversationCanvasContent() {
       if (taskSubflowExpanded) {
         const taskConfig: TaskAgentSubflowConfig = {
           enableKnowledgeAssistant: config.enableKnowledgeAssistant,
-          selectedSystemPromptId: config.selectedSystemPromptId,
+          selectedSystemPromptId: config.selectedSystemPromptId || undefined,
         };
         const taskSubflowNodes = generateTaskAgentSubflowNodes('taskEngine', startX + horizontalSpacing * 2 - 30, startY + 80, taskConfig);
         nodeList.push(...taskSubflowNodes);
@@ -294,7 +309,11 @@ function ConversationCanvasContent() {
     // RAG flow continues below...
 
     // 1. Query Strategy node (formerly Enhancement)
-    // Green if: selectedStrategy is marked as configured in configuredNodes
+    // Green if: strategy is native OR (strategy is non-native AND provider + model are set)
+    const isEnhancementConfigured = config.selectedStrategy === 'native'
+      ? (config.configuredNodes?.enhancement || false)
+      : (config.configuredNodes?.enhancement && !!config.selectedProviderId && !!config.selectedModel);
+
     nodeList.push({
       id: 'enhancement',
       type: 'conversationNode',
@@ -304,7 +323,7 @@ function ConversationCanvasContent() {
         name: 'Query Strategy',
         type: 'enhancement',
         description: ENHANCEMENT_STRATEGIES.find(s => s.value === config.selectedStrategy)?.label || 'Native RAG',
-        configured: config.configuredNodes?.enhancement || false, // Green if user has confirmed
+        configured: isEnhancementConfigured,
       },
     });
 
@@ -398,7 +417,7 @@ function ConversationCanvasContent() {
         target: nodeIds[i + 1],
         type: 'default',
         animated: true,
-        markerEnd: { type: 'arrowclosed', color: '#51cf66', scale: 0.5 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: '#51cf66' },
         style: {
           stroke: '#51cf66',
           strokeWidth: 2,
@@ -445,6 +464,16 @@ function ConversationCanvasContent() {
     setNodes(dynamicNodes);
     setEdges(dynamicEdges);
   }, [dynamicNodes, dynamicEdges, setNodes, setEdges]);
+
+  const handleNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
+    // Single click opens config panel for all configurable nodes
+    const configurableNodes = ['userQuery', 'settings', 'enhancement', 'retrieval', 'reranking', 'llm', 'formatter', 'assistant', 'taskEngine'];
+
+    if (configurableNodes.includes(node.data?.type)) {
+      setSelectedNodeId(node.id);
+      setConfigPanelOpen(true);
+    }
+  }, []);
 
   const handleNodeDoubleClick = useCallback((event: React.MouseEvent, node: Node) => {
     // Check if this is a subflow parent node (Knowledge Retrieval or Task Engine)
@@ -537,18 +566,39 @@ function ConversationCanvasContent() {
   };
 
   const handleSaveNodeConfig = (nodeId: string, nodeConfig: any) => {
-    setConfig(prev => ({
-      ...nodeConfig,
-      configuredNodes: {
+    console.log('[handleSaveNodeConfig] nodeId:', nodeId, 'nodeConfig:', nodeConfig);
+
+    setConfig(prev => {
+      const newConfiguredNodes = {
         ...prev.configuredNodes,
-        [nodeId]: true, // Mark this node as configured when user saves
-      },
-    }));
+        [nodeId]: true,  // Mark this specific node as configured
+      };
+
+      // If this is a retrieval subflow node, also mark the parent 'retrieval' as configured
+      if (nodeId.startsWith('retrieval-')) {
+        newConfiguredNodes.retrieval = true;
+      }
+
+      // If this is a taskEngine subflow node, also mark the parent 'taskEngine' as configured
+      if (nodeId.startsWith('taskEngine-')) {
+        newConfiguredNodes.taskEngine = true;
+      }
+
+      const newConfig = {
+        ...prev,           // Preserve ALL previous config
+        ...nodeConfig,     // Merge in ONLY the node-specific properties
+        configuredNodes: newConfiguredNodes,
+      };
+
+      console.log('[handleSaveNodeConfig] Updated configuredNodes:', newConfiguredNodes);
+
+      return newConfig;
+    });
+
     setConfigPanelOpen(false);
-    // Nodes update automatically via useMemo when config changes
     notifications.show({
       title: 'Configuration Saved',
-      message: 'Node configuration updated',
+      message: `${nodeId} node configured successfully`,
       color: 'green',
     });
   };
@@ -562,10 +612,11 @@ function ConversationCanvasContent() {
       enableReranking: selectedOptionals.includes('reranking') || template.defaultConfig.enableReranking,
       enableLLMGeneration: selectedOptionals.includes('llm') || template.defaultConfig.enableLLMGeneration,
       enableKnowledgeAssistant: template.type === 'supervisor', // Auto-enable for supervisor templates
-      // Mark enhancement as configured since template selected the strategy
+      // Mark enhancement as configured only if it's native strategy
+      // For non-native strategies, user must configure provider and model
       configuredNodes: {
         ...prev.configuredNodes,
-        enhancement: true, // Enhancement is configured in both RAG and Supervisor modes
+        enhancement: template.defaultConfig.selectedStrategy === 'native', // Only auto-configure for native
         assistant: template.type === 'supervisor' ? true : undefined, // Assistant config for supervisor
       },
     }));
@@ -617,6 +668,16 @@ function ConversationCanvasContent() {
         return;
       }
 
+      // Validate enhancement strategy requirements
+      if (config.selectedStrategy !== 'native' && (!config.selectedProviderId || !config.selectedModel)) {
+        notifications.show({
+          title: 'Error',
+          message: 'LLM provider and model are required for non-native enhancement strategies',
+          color: 'red',
+        });
+        return;
+      }
+
       if (config.enableLLMGeneration && (!config.selectedProviderId || !config.selectedModel)) {
         notifications.show({
           title: 'Error',
@@ -626,41 +687,88 @@ function ConversationCanvasContent() {
         return;
       }
 
-      // Create conversation via API
+      // Create conversation via API - Match wizard payload structure exactly
       const token = localStorage.getItem('jwt_token');
+
+      // Determine final strategy based on available configuration
+      // If user selected a non-native strategy but didn't configure provider/model, force to native
+      const finalStrategy = config.selectedStrategy !== 'native' && config.selectedProviderId && config.selectedModel
+        ? config.selectedStrategy
+        : 'native';
+
       const payload: any = {
         name: config.conversationName.trim(),
+        description: config.conversationDescription.trim() || null,
+        // Enhancement configuration - ALWAYS include
+        enhancement: {
+          strategy: finalStrategy,
+          provider: finalStrategy !== 'native' && config.selectedProviderId && config.selectedModel ? {
+            id: config.selectedProviderId,
+            model_name: config.selectedModel,
+          } : null,
+        },
+        // Vector database configuration
+        vector_database: {
+          collection_name: config.collectionName,
+          top_k: config.topK,
+        },
+        // Reranker configuration - ALWAYS include with enabled flag
+        reranker: {
+          enabled: config.enableReranking,
+          provider: config.enableReranking && config.selectedRerankerId && config.selectedRerankerModel ? {
+            id: config.selectedRerankerId,
+            model_name: config.selectedRerankerModel,
+          } : null,
+          relevance_threshold: 0.5, // Default threshold
+        },
+        // Answer generation configuration - ALWAYS include with enabled flag
+        answer_generation: {
+          enabled: config.enableLLMGeneration && config.selectedProviderId && config.selectedModel ? true : false,
+          provider: config.enableLLMGeneration && config.selectedProviderId && config.selectedModel ? {
+            id: config.selectedProviderId,
+            model_name: config.selectedModel,
+          } : null,
+        },
+        // Assistant configuration - Preserve tasks even when disabled
+        assistant_config: (() => {
+          console.log('[CREATE] Assistant config state:', {
+            enableKnowledgeAssistant: config.enableKnowledgeAssistant,
+            selectedSystemPrompt: config.selectedSystemPrompt,
+            systemPromptTasks: config.systemPromptTasks,
+            selectedSystemPromptId: config.selectedSystemPromptId,
+          });
+
+          // Build system_prompt_tasks regardless of enabled state
+          // This preserves tasks when switching between RAG and Assistant modes
+          let tasks = null;
+
+          // Priority 1: Use selectedSystemPrompt if available
+          if (config.selectedSystemPrompt) {
+            tasks = [{
+              id: config.selectedSystemPrompt.id || '',
+              title: config.selectedSystemPrompt.title || config.selectedSystemPrompt.name || '',
+              content: config.selectedSystemPrompt.content || config.selectedSystemPrompt.system_prompt || '',
+              is_active: config.selectedSystemPrompt.is_active !== false,
+            }];
+          }
+          // Priority 2: Use systemPromptTasks if available
+          else if (config.systemPromptTasks && config.systemPromptTasks.length > 0) {
+            tasks = config.systemPromptTasks.map((task: any) => ({
+              id: task.id || '',
+              title: task.title || task.name || '',
+              content: task.content || task.system_prompt || '',
+              is_active: task.is_active !== false,
+            }));
+          }
+
+          return {
+            enabled: config.enableKnowledgeAssistant || false,
+            system_prompt_tasks: tasks, // Preserved regardless of enabled state
+          };
+        })(),
       };
 
-      if (config.conversationDescription.trim()) {
-        payload.description = config.conversationDescription.trim();
-      }
-
-      if (config.selectedStrategy && config.selectedStrategy !== 'none') {
-        payload.enhancement_strategy = config.selectedStrategy;
-      }
-
-      payload.collection_name = config.collectionName.trim();
-      payload.enable_reranking = config.enableReranking;
-      payload.enable_llm_generation = config.enableLLMGeneration;
-      payload.enable_knowledge_assistant = config.enableKnowledgeAssistant;
-      payload.top_k = config.topK;
-
-      if (config.selectedProviderId) {
-        payload.llm_provider_id = config.selectedProviderId;
-      }
-
-      if (config.selectedModel) {
-        payload.llm_model_name = config.selectedModel;
-      }
-
-      if (config.enableReranking && config.selectedRerankerId) {
-        payload.reranker_provider_id = config.selectedRerankerId;
-      }
-
-      if (config.enableReranking && config.selectedRerankerModel) {
-        payload.reranker_model_name = config.selectedRerankerModel;
-      }
+      console.log('[handleCreateConversation] Payload:', JSON.stringify(payload, null, 2));
 
       const response = await fetch(apiUtils.buildApiUrl('/conversations'), {
         method: 'POST',
@@ -759,6 +867,7 @@ function ConversationCanvasContent() {
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               nodeTypes={nodeTypes}
+              onNodeClick={handleNodeClick}
               onNodeDoubleClick={handleNodeDoubleClick}
               onContextMenu={handleCanvasContextMenu}
               fitView
@@ -897,6 +1006,17 @@ function ConversationCanvasContent() {
                   return;
                 }
 
+                // Validate enhancement node configuration
+                if (config.selectedStrategy !== 'native' && (!config.selectedProviderId || !config.selectedModel)) {
+                  notifications.show({
+                    title: 'Configuration Incomplete',
+                    message: 'Query Strategy requires LLM provider and model for non-native strategies. Please configure the Query Strategy node.',
+                    color: 'red',
+                    icon: <IconAlertCircle size={16} />,
+                  });
+                  return;
+                }
+
                 if (!config.collectionName || !config.topK) {
                   console.error('[ERROR] Validation failed:', {
                     collectionName: config.collectionName,
@@ -1021,9 +1141,16 @@ function ConversationCanvasContent() {
                 }
 
                 if (!config.configuredNodes?.retrieval) {
+                  console.error('[Validation Failed] retrieval node not configured:', {
+                    'configuredNodes': config.configuredNodes,
+                    'configuredNodes.retrieval': config.configuredNodes?.retrieval,
+                    'collectionName': config.collectionName,
+                    'configuredNodes keys': Object.keys(config.configuredNodes || {}),
+                    'configuredNodes values': Object.values(config.configuredNodes || {}),
+                  });
                   notifications.show({
                     title: 'Error',
-                    message: 'Document Search (collection) must be configured',
+                    message: `Document Search (collection) must be configured. Current status: retrieval=${config.configuredNodes?.retrieval}, collection=${config.collectionName}`,
                     color: 'red',
                     icon: <IconAlertCircle size={16} />,
                   });
@@ -1055,7 +1182,7 @@ function ConversationCanvasContent() {
               }}
               color="blue"
             >
-              Create Conversation
+              Create Conversation Agent
             </Button>
           </Group>
         </Stack>
