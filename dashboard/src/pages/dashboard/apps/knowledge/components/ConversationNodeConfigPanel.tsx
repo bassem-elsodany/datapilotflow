@@ -312,6 +312,7 @@ export function ConversationNodeConfigPanel({
 
       case 'enhancement':
         const selectedStrategyInfo = ENHANCEMENT_STRATEGIES.find(s => s.value === (localConfig.selectedStrategy || 'native'));
+        const isSupervisorMode = config?.selectedTemplate?.type === 'supervisor';
 
         return (
           <div style={{ padding: '12px' }}>
@@ -320,7 +321,17 @@ export function ConversationNodeConfigPanel({
                 label="Enhancement Strategy"
                 data={ENHANCEMENT_STRATEGIES.map(s => ({ value: s.value, label: s.label }))}
                 value={localConfig.selectedStrategy || 'native'}
-                onChange={(value) => setLocalConfig({ ...localConfig, selectedStrategy: value })}
+                onChange={(value) => {
+                  if (isSupervisorMode && value !== 'decomposition') {
+                    notifications.show({
+                      title: '⚠️ Not Recommended',
+                      message: 'In Supervisor Agent mode, decomposition is the recommended enhancement strategy. It breaks down complex queries into sub-questions for better Task Agent comprehension.',
+                      color: 'yellow',
+                      autoClose: 5000,
+                    });
+                  }
+                  setLocalConfig({ ...localConfig, selectedStrategy: value });
+                }}
                 size="sm"
               />
 
