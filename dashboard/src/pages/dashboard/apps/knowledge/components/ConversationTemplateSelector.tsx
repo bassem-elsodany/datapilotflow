@@ -5,6 +5,7 @@
  */
 
 import {
+  Accordion,
   Badge,
   Box,
   Button,
@@ -78,7 +79,7 @@ export function ConversationTemplateSelector({
             <Text size="sm" c="dimmed">
               Choose a pre-built conversation agent pipeline template and customize it by enabling/disabling optional components
             </Text>
-            <Stack gap="md">
+            <Accordion>
               {CONVERSATION_TEMPLATES.map(template => {
                 const getTemplateColor = (id: string) => {
                   const colors: Record<string, string> = {
@@ -87,6 +88,7 @@ export function ConversationTemplateSelector({
                     'advanced-rag': '#f0fff4',
                     'decomposition-rag': '#f4f0ff',
                     'hyde-rag': '#fff0f4',
+                    'supervisor-agent': '#f3f0ff',
                   };
                   return colors[id] || '#f9f9f9';
                 };
@@ -101,18 +103,6 @@ export function ConversationTemplateSelector({
                     'supervisor-agent': '#5f3dc4',
                   };
                   return colors[id] || '#ccc';
-                };
-
-                const getTemplateColor = (id: string) => {
-                  const colors: Record<string, string> = {
-                    'basic-rag': '#f0f4ff',
-                    'augmented-rag': '#fff4f0',
-                    'advanced-rag': '#f0fff4',
-                    'decomposition-rag': '#f4f0ff',
-                    'hyde-rag': '#fff0f4',
-                    'supervisor-agent': '#f3f0ff',
-                  };
-                  return colors[id] || '#f9f9f9';
                 };
 
                 const getTemplateDetails = (id: string) => {
@@ -154,79 +144,72 @@ export function ConversationTemplateSelector({
                 const details = getTemplateDetails(template.id);
 
                 return (
-                  <Card
-                    key={template.id}
-                    p="md"
-                    radius="md"
-                    withBorder
-                    style={{
-                      cursor: 'pointer',
-                      backgroundColor: getTemplateColor(template.id),
-                      borderColor: getTemplateBorderColor(template.id),
-                      borderWidth: '2px',
-                      transition: 'all 0.2s ease',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.1)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.boxShadow = 'none';
-                    }}
-                    onClick={() => handleSelectTemplate(template)}
-                  >
-                    <Stack gap="md">
-                      {/* Header */}
-                      <div>
-                        <Title order={4} style={{ fontSize: '18px', marginBottom: '4px' }}>
+                  <Accordion.Item key={template.id} value={template.id}>
+                    <Accordion.Control
+                      style={{
+                        backgroundColor: getTemplateColor(template.id),
+                        borderColor: getTemplateBorderColor(template.id),
+                      }}
+                    >
+                      <Group justify="space-between" style={{ width: '100%' }}>
+                        <Title order={5} style={{ fontSize: '16px', margin: 0 }}>
                           {template.icon} {template.name}
                         </Title>
-                      </div>
-
-                      {/* Definition */}
-                      <div>
-                        <Text size="sm" fw={600} mb="xs" c="blue.7">What it does:</Text>
-                        <Text size="sm" c="dimmed" style={{ lineHeight: 1.4 }}>
-                          {details.definition}
-                        </Text>
-                      </div>
-
-                      {/* Example */}
-                      <div>
-                        <Text size="sm" fw={600} mb="xs" c="green.7">Example:</Text>
-                        <Box
-                          p="xs"
-                          bg="white"
-                          style={{
-                            borderRadius: '4px',
-                            border: '1px solid var(--mantine-color-gray-2)',
-                            fontFamily: 'monospace',
-                            fontSize: '12px',
-                            lineHeight: '1.4',
-                            whiteSpace: 'pre-wrap',
-                            wordBreak: 'break-word',
-                            color: '#333'
+                        <Button
+                          size="xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelectTemplate(template);
                           }}
                         >
-                          {details.example}
-                        </Box>
-                      </div>
+                          Select
+                        </Button>
+                      </Group>
+                    </Accordion.Control>
+                    <Accordion.Panel>
+                      <Stack gap="md">
+                        {/* Definition */}
+                        <div>
+                          <Text size="sm" fw={600} mb="xs" c="blue.7">What it does:</Text>
+                          <Text size="sm" c="dimmed" style={{ lineHeight: 1.4 }}>
+                            {details.definition}
+                          </Text>
+                        </div>
 
-                      {/* When to Use */}
-                      <div>
-                        <Text size="sm" fw={600} mb="xs" c="orange.7">When to use:</Text>
-                        <Text size="sm" c="dimmed" style={{ lineHeight: 1.4 }}>
-                          {details.whenToUse}
-                        </Text>
-                      </div>
+                        {/* Example */}
+                        <div>
+                          <Text size="sm" fw={600} mb="xs" c="green.7">Example:</Text>
+                          <Box
+                            p="xs"
+                            bg="white"
+                            style={{
+                              borderRadius: '4px',
+                              border: '1px solid var(--mantine-color-gray-2)',
+                              fontFamily: 'monospace',
+                              fontSize: '12px',
+                              lineHeight: '1.4',
+                              whiteSpace: 'pre-wrap',
+                              wordBreak: 'break-word',
+                              color: '#333'
+                            }}
+                          >
+                            {details.example}
+                          </Box>
+                        </div>
 
-                      <Text size="xs" c="dimmed" ta="center" mt="xs">
-                        Click to select this template →
-                      </Text>
-                    </Stack>
-                  </Card>
+                        {/* When to Use */}
+                        <div>
+                          <Text size="sm" fw={600} mb="xs" c="orange.7">When to use:</Text>
+                          <Text size="sm" c="dimmed" style={{ lineHeight: 1.4 }}>
+                            {details.whenToUse}
+                          </Text>
+                        </div>
+                      </Stack>
+                    </Accordion.Panel>
+                  </Accordion.Item>
                 );
               })}
-            </Stack>
+            </Accordion>
           </>
         ) : (
           // Template Customization View
