@@ -195,6 +195,12 @@ export function ConversationNodeConfigPanel({
       return;
     }
 
+    console.log('[handleSave] Saving node config:', {
+      nodeId: node.id,
+      collectionName: localConfig.collectionName,
+      topK: localConfig.topK,
+      localConfig: localConfig,
+    });
     onSave(node.id, localConfig);
     onClose();
   };
@@ -434,7 +440,10 @@ export function ConversationNodeConfigPanel({
                 label="Vector Collection *"
                 data={(collections || []).map((c: any) => ({ value: c.name, label: c.name }))}
                 value={localConfig.collectionName || ''}
-                onChange={(value) => setLocalConfig({ ...localConfig, collectionName: value })}
+                onChange={(value) => {
+                  console.log('[Collection Select] Changed to:', value);
+                  setLocalConfig({ ...localConfig, collectionName: value });
+                }}
                 placeholder="Select collection..."
                 size="sm"
                 required
