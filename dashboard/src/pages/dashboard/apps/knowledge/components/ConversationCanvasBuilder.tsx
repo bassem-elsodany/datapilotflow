@@ -95,6 +95,11 @@ interface ConversationConfig {
     assistant?: boolean;
     supervisor?: boolean;
   };
+  // Track expanded subflows for Assistant Agent
+  expandedSubflows?: {
+    retrieval?: boolean;
+    taskEngine?: boolean;
+  };
 }
 
 function ConversationCanvasContent() {
@@ -127,6 +132,10 @@ function ConversationCanvasContent() {
       retrieval: false,
       reranking: false,
       llm: false,
+    },
+    expandedSubflows: {
+      retrieval: false,
+      taskEngine: false,
     },
   });
 
@@ -189,11 +198,11 @@ function ConversationCanvasContent() {
           collectionName: config.collectionName,
           topK: config.topK,
           enableReranking: config.enableReranking,
-          selectedRerankerId: config.selectedRerankerId,
-          selectedRerankerModel: config.selectedRerankerModel,
+          selectedRerankerId: config.selectedRerankerId ?? undefined,
+          selectedRerankerModel: config.selectedRerankerModel ?? undefined,
           enableLLMGeneration: config.enableLLMGeneration,
-          selectedProviderId: config.selectedProviderId,
-          selectedModel: config.selectedModel,
+          selectedProviderId: config.selectedProviderId ?? undefined,
+          selectedModel: config.selectedModel ?? undefined,
         };
         const ragSubflowNodes = generateRAGSubflowNodes('retrieval', startX + horizontalSpacing, startY + 80, ragConfig);
         nodeList.push(...ragSubflowNodes);
@@ -351,7 +360,6 @@ function ConversationCanvasContent() {
         target: nodeIds[i + 1],
         type: 'default',
         animated: true,
-        markerEnd: { type: 'arrowclosed' },
         style: {
           stroke: '#228be6',
           strokeWidth: 2,
@@ -366,11 +374,11 @@ function ConversationCanvasContent() {
         collectionName: config.collectionName,
         topK: config.topK,
         enableReranking: config.enableReranking,
-        selectedRerankerId: config.selectedRerankerId,
-        selectedRerankerModel: config.selectedRerankerModel,
+        selectedRerankerId: config.selectedRerankerId ?? undefined,
+        selectedRerankerModel: config.selectedRerankerModel ?? undefined,
         enableLLMGeneration: config.enableLLMGeneration,
-        selectedProviderId: config.selectedProviderId,
-        selectedModel: config.selectedModel,
+        selectedProviderId: config.selectedProviderId ?? undefined,
+        selectedModel: config.selectedModel ?? undefined,
       };
       const ragSubflowEdges = generateRAGSubflowEdges('retrieval', ragConfig);
       edgeList.push(...ragSubflowEdges);
@@ -404,6 +412,7 @@ function ConversationCanvasContent() {
     if (node.data?.isSubflowParent) {
       if (node.id === 'retrieval') {
         // Toggle RAG subflow
+        const isCurrentlyExpanded = config.expandedSubflows?.retrieval || false;
         setConfig(prev => ({
           ...prev,
           expandedSubflows: {
@@ -412,12 +421,13 @@ function ConversationCanvasContent() {
           },
         }));
         notifications.show({
-          title: prev => prev ? 'RAG Agent Expanded' : 'RAG Agent Collapsed',
-          message: prev => prev ? 'Viewing RAG pipeline steps' : 'Collapsed RAG pipeline',
+          title: isCurrentlyExpanded ? 'RAG Agent Collapsed' : 'RAG Agent Expanded',
+          message: isCurrentlyExpanded ? 'Hiding RAG pipeline steps' : 'Showing RAG pipeline steps',
           color: 'blue',
         });
       } else if (node.id === 'taskEngine') {
         // Toggle Task Agent subflow
+        const isCurrentlyExpanded = config.expandedSubflows?.taskEngine || false;
         setConfig(prev => ({
           ...prev,
           expandedSubflows: {
@@ -426,8 +436,8 @@ function ConversationCanvasContent() {
           },
         }));
         notifications.show({
-          title: prev => prev ? 'Task Agent Expanded' : 'Task Agent Collapsed',
-          message: prev => prev ? 'Viewing task pipeline steps' : 'Collapsed task pipeline',
+          title: isCurrentlyExpanded ? 'Task Agent Collapsed' : 'Task Agent Expanded',
+          message: isCurrentlyExpanded ? 'Hiding task pipeline steps' : 'Showing task pipeline steps',
           color: 'blue',
         });
       }
