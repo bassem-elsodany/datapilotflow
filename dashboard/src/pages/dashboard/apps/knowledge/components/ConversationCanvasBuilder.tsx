@@ -163,7 +163,69 @@ function ConversationCanvasContent() {
       },
     });
 
-    // BOTH flows include Knowledge Retrieval with RAG subflow
+    // For Assistant Agent, generate assistant-specific nodes
+    if (isSupervisor) {
+      // Knowledge Retrieval node
+      nodeList.push({
+        id: 'retrieval',
+        type: 'conversationNode',
+        position: { x: startX + horizontalSpacing, y: startY },
+        data: {
+          id: 'retrieval',
+          name: 'Knowledge Retrieval',
+          type: 'retrieval',
+          description: 'Search knowledge base',
+          configured: config.configuredNodes?.retrieval || false,
+        },
+      });
+
+      // System Prompts node
+      nodeList.push({
+        id: 'assistant',
+        type: 'conversationNode',
+        position: { x: startX + horizontalSpacing * 2, y: startY },
+        data: {
+          id: 'assistant',
+          name: 'System Prompts',
+          type: 'assistant',
+          description: 'Task-specific system prompts',
+          configured: config.configuredNodes?.assistant || false,
+        },
+      });
+
+      // Task Engine node
+      nodeList.push({
+        id: 'taskEngine',
+        type: 'conversationNode',
+        position: { x: startX + horizontalSpacing * 3, y: startY },
+        data: {
+          id: 'taskEngine',
+          name: 'Task Engine',
+          type: 'taskEngine',
+          description: 'Multi-task orchestration',
+          configured: config.configuredNodes?.supervisor || false,
+        },
+      });
+
+      // Response Generation node
+      nodeList.push({
+        id: 'response',
+        type: 'conversationNode',
+        position: { x: startX + horizontalSpacing * 4, y: startY },
+        data: {
+          id: 'response',
+          name: 'Response',
+          type: 'response',
+          description: 'Generate KB-backed response',
+          configured: true, // Auto-configured for assistant agent
+        },
+      });
+
+      return nodeList;
+    }
+
+    // RAG flow - Knowledge Retrieval encapsulates complete RAG pipeline as subflow
+
     // Check if RAG subflow is expanded
     const ragSubflowExpanded = config.expandedSubflows?.retrieval || false;
 
@@ -203,81 +265,47 @@ function ConversationCanvasContent() {
       nodeList.push(...subflowNodes);
     }
 
-    // For Assistant Agent, add additional nodes (System Prompts, Task Engine, Response)
-    if (isSupervisor) {
-      // System Prompts node
-      nodeList.push({
+    // System Prompts node (for assistant agent)
+    nodeList.push({
+      id: 'assistant',
+      type: 'conversationNode',
+      position: { x: startX + horizontalSpacing * 2, y: startY },
+      data: {
         id: 'assistant',
-        type: 'conversationNode',
-        position: { x: startX + horizontalSpacing * 2, y: startY },
-        data: {
-          id: 'assistant',
-          name: 'System Prompts',
-          type: 'assistant',
-          description: 'Task-specific system prompts',
-          configured: config.configuredNodes?.assistant || false,
-        },
-      });
+        name: 'System Prompts',
+        type: 'assistant',
+        description: 'Task-specific system prompts',
+        configured: config.configuredNodes?.assistant || false,
+      },
+    });
 
-      // Task Engine node
-      nodeList.push({
+    // Task Engine node (for assistant agent)
+    nodeList.push({
+      id: 'taskEngine',
+      type: 'conversationNode',
+      position: { x: startX + horizontalSpacing * 3, y: startY },
+      data: {
         id: 'taskEngine',
-        type: 'conversationNode',
-        position: { x: startX + horizontalSpacing * 3, y: startY },
-        data: {
-          id: 'taskEngine',
-          name: 'Task Engine',
-          type: 'taskEngine',
-          description: 'Multi-task orchestration',
-          configured: config.configuredNodes?.supervisor || false,
-        },
-      });
+        name: 'Task Engine',
+        type: 'taskEngine',
+        description: 'Multi-task orchestration',
+        configured: config.configuredNodes?.supervisor || false,
+      },
+    });
 
-      // Response node
-      nodeList.push({
+    // Response node
+    nodeList.push({
+      id: 'response',
+      type: 'conversationNode',
+      position: { x: startX + horizontalSpacing * 4, y: startY },
+      data: {
         id: 'response',
-        type: 'conversationNode',
-        position: { x: startX + horizontalSpacing * 4, y: startY },
-        data: {
-          id: 'response',
-          name: 'Response',
-          type: 'response',
-          description: 'Generate KB-backed response',
-          configured: true,
-        },
-      });
-    } else {
-      // For RAG templates, add LLM generation node after retrieval
-      const llmNodeX = ragSubflowExpanded ? startX + horizontalSpacing * 2 : startX + horizontalSpacing * 2;
-
-      if (config.enableLLMGeneration) {
-        nodeList.push({
-          id: 'llm',
-          type: 'conversationNode',
-          position: { x: llmNodeX, y: startY },
-          data: {
-            id: 'llm',
-            name: 'Generate Answer',
-            type: 'llm',
-            description: config.selectedModel ? 'Configured' : 'Not configured',
-            configured: config.configuredNodes?.llm || false,
-          },
-        });
-      } else {
-        nodeList.push({
-          id: 'formatter',
-          type: 'conversationNode',
-          position: { x: llmNodeX, y: startY },
-          data: {
-            id: 'formatter',
-            name: 'Return Documents',
-            type: 'formatter',
-            description: 'Retrieval only',
-            configured: false,
-          },
-        });
-      }
-    }
+        name: 'Response',
+        type: 'response',
+        description: 'Generate KB-backed response',
+        configured: true,
+      },
+    });
 
     return nodeList;
   }, [config]);
