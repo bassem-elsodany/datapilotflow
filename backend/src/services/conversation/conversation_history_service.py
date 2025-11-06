@@ -120,7 +120,7 @@ class ConversationHistoryService:
             answer_generation: Answer generation configuration
             tags: Tags for organization
             assistant_config: Complex nested configuration for Assistant mode
-                Required - contains enable_knowledge_assistant boolean and optional system_prompt_tasks
+                Required - contains enabled boolean and optional system_prompt_tasks
         """
 
         # Validate enhancement provider if provided
@@ -208,10 +208,10 @@ class ConversationHistoryService:
 
         # Assistant config is required - always serialize it
         if not assistant_config:
-            raise ValueError("assistant_config is required - must specify enable_knowledge_assistant mode")
+            raise ValueError("assistant_config is required - must specify enabled mode")
 
         assistant_config_dict = {
-            "enable_knowledge_assistant": assistant_config.enable_knowledge_assistant,
+            "enabled": assistant_config.enabled,
         }
         if assistant_config.system_prompt_tasks:
             assistant_config_dict["system_prompt_tasks"] = [
@@ -226,7 +226,7 @@ class ConversationHistoryService:
         conversation_id = str(result.inserted_id)
 
         # Determine agent type from assistant_config
-        agent_type = "supervisor" if assistant_config.enable_knowledge_assistant else "rag"
+        agent_type = "supervisor" if assistant_config.enabled else "rag"
 
         logger.info(
             f"Created conversation {conversation_id} for user {user_id} "
@@ -325,7 +325,7 @@ class ConversationHistoryService:
                             spt = self._dict_to_system_prompt_task(spt_dict)
                             system_prompt_tasks.append(spt)
                     assistant_config = AssistantConfig(
-                        enable_knowledge_assistant=ac.get("enable_knowledge_assistant", False),
+                        enabled=ac.get("enabled", False),
                         system_prompt_tasks=system_prompt_tasks,
                     )
 
@@ -459,7 +459,7 @@ class ConversationHistoryService:
                         spt = self._dict_to_system_prompt_task(spt_dict)
                         system_prompt_tasks.append(spt)
                 assistant_config = AssistantConfig(
-                    enable_knowledge_assistant=ac.get("enable_knowledge_assistant", False),
+                    enabled=ac.get("enabled", False),
                     system_prompt_tasks=system_prompt_tasks,
                 )
 
@@ -810,7 +810,7 @@ class ConversationHistoryService:
             # Update assistant_config (complex nested structure for Assistant mode)
             if assistant_config is not None:
                 assistant_config_dict = {
-                    "enable_knowledge_assistant": assistant_config.enable_knowledge_assistant,
+                    "enabled": assistant_config.enabled,
                 }
                 if assistant_config.system_prompt_tasks:
                     assistant_config_dict["system_prompt_tasks"] = [

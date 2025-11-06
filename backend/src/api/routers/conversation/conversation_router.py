@@ -107,8 +107,8 @@ class SystemPromptTaskRequest(BaseModel):
 class AssistantConfigRequest(BaseModel):
     """Request model for complex nested Assistant mode configuration."""
 
-    enable_knowledge_assistant: bool = Field(
-        True, description="Enable knowledge assistant for multi-agent orchestration"
+    enabled: bool = Field(
+        True, description="Whether Assistant mode is enabled (true) or RAG mode (false)"
     )
     system_prompt_tasks: Optional[List[SystemPromptTaskRequest]] = Field(
         None, description="System prompt tasks for the assistant"
@@ -214,7 +214,7 @@ def _serialize_conversation_to_response(session: 'ConversationSession') -> dict:
     # Assistant configuration (complex nested structure)
     if session.assistant_config:
         response["assistant_config"] = {
-            "enable_knowledge_assistant": session.assistant_config.enable_knowledge_assistant,
+            "enabled": session.assistant_config.enabled,
         }
         if session.assistant_config.system_prompt_tasks:
             response["assistant_config"]["system_prompt_tasks"] = [
@@ -401,7 +401,7 @@ async def create_conversation_session(
         "provider": {"id": "string", "model_name": "string"} (optional)
       },
       "assistant_config": {
-        "enable_knowledge_assistant": boolean,
+        "enabled": boolean,
         "system_prompt_tasks": [...] (optional)
       },
       "tags": ["string"]
@@ -471,7 +471,7 @@ async def create_conversation_session(
                     for task in create_request.assistant_config.system_prompt_tasks
                 ]
             assistant_config = AssistantConfig(
-                enable_knowledge_assistant=create_request.assistant_config.enable_knowledge_assistant,
+                enabled=create_request.assistant_config.enabled,
                 system_prompt_tasks=system_prompt_tasks,
             )
 
@@ -487,11 +487,11 @@ async def create_conversation_session(
             assistant_config=assistant_config,
         )
 
-        # Determine agent type from assistant_config or legacy enable_knowledge_assistant
+        # Determine agent type from assistant_config
         if assistant_config:
-            agent_type = "supervisor" if assistant_config.enable_knowledge_assistant else "rag"
+            agent_type = "supervisor" if assistant_config.enabled else "rag"
         else:
-            agent_type = "supervisor" if create_request.enable_knowledge_assistant else "rag"
+            agent_type = "rag"  # Default to RAG if no assistant_config
         return {
             "success": True,
             "id": session_id,
@@ -794,7 +794,7 @@ async def update_conversation_session(
         # Assistant configuration (complex nested structure)
         if config_request.assistant_config is not None:
             assistant_config_dict = {
-                "enable_knowledge_assistant": config_request.assistant_config.enable_knowledge_assistant,
+                "enabled": config_request.assistant_config.enabled,
             }
             if config_request.assistant_config.system_prompt_tasks:
                 assistant_config_dict["system_prompt_tasks"] = [

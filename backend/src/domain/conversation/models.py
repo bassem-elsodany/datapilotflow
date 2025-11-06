@@ -123,7 +123,7 @@ class SystemPromptTask:
 class AssistantConfig:
     """Complex nested structure for Assistant mode configuration."""
 
-    enable_knowledge_assistant: bool  # Enable knowledge assistant for multi-agent orchestration
+    enabled: bool  # Whether Assistant mode is enabled (true) or RAG mode (false)
     system_prompt_tasks: Optional[List[SystemPromptTask]] = None  # System prompt tasks for the assistant
 
     def get_active_prompt(self) -> Optional[SystemPromptTask]:
