@@ -98,8 +98,21 @@ export function ConversationTemplateSelector({
                     'advanced-rag': '#51cf66',
                     'decomposition-rag': '#9c36b5',
                     'hyde-rag': '#e64980',
+                    'supervisor-agent': '#5f3dc4',
                   };
                   return colors[id] || '#ccc';
+                };
+
+                const getTemplateColor = (id: string) => {
+                  const colors: Record<string, string> = {
+                    'basic-rag': '#f0f4ff',
+                    'augmented-rag': '#fff4f0',
+                    'advanced-rag': '#f0fff4',
+                    'decomposition-rag': '#f4f0ff',
+                    'hyde-rag': '#fff0f4',
+                    'supervisor-agent': '#f3f0ff',
+                  };
+                  return colors[id] || '#f9f9f9';
                 };
 
                 const getTemplateDetails = (id: string) => {
@@ -128,6 +141,11 @@ export function ConversationTemplateSelector({
                       definition: 'Generates a hypothetical answer to your question first, then searches for documents similar to that answer.',
                       example: 'User: "How to configure SSL?"\nGenerates: "Create VirtualHost, add SSLEngine on, set certificate paths..."\nSearches for documents similar to this.',
                       whenToUse: 'Use when: Want semantic similarity matching, answer-seeking queries, documents match answer patterns'
+                    },
+                    'supervisor-agent': {
+                      definition: 'Intelligent multi-agent orchestrator that analyzes your query, routes it to specialized task handlers, manages tool execution, and synthesizes results across multiple agents.',
+                      example: 'User: "Create a budget report and send notification"\nSupervisor routes to: Budget Analyzer → Report Generator → Notification Service\nOrchestratestools & synthesizes final response.',
+                      whenToUse: 'Use when: Complex multi-step workflows, need tool execution, multiple specialized tasks, intelligent task routing & dependencies'
                     },
                   };
                   return details[id] || { definition: '', example: '', whenToUse: '' };
