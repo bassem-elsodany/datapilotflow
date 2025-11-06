@@ -8,7 +8,6 @@ from loguru import logger
 from src.agents.common.agent_interface import AgentService
 from src.agents.common.agent_state import AgentState
 from src.agents.supervisor_agent.chains import get_intent_detection_chain
-from src.agents.supervisor_agent.supervisor_graph import create_supervisor_graph
 
 
 class SupervisorAgentService(AgentService):
@@ -55,21 +54,26 @@ class SupervisorAgentService(AgentService):
         Set the worker agents and build the supervisor graph (called after initialization).
 
         Args:
-            rag_agent: RAGAgentService instance
-            task_agent: TaskAgentService instance
+            rag_agent: RAGAgentService instance (has rag_graph attribute)
+            task_agent: TaskAgentService instance (has task_graph attribute)
         """
         self.rag_agent = rag_agent
         self.task_agent = task_agent
 
-        # Build the supervisor graph now that agents are registered
-        self.supervisor_graph = create_supervisor_graph(
+        # Import here to avoid circular imports
+        from src.agents.supervisor_agent.supervisor_graph import (
+            create_supervisor_graph_with_agents,
+        )
+
+        # Build the supervisor graph using langgraph-supervisor library
+        # Passes agent graphs (Pregel objects) directly to create_supervisor()
+        self.supervisor_graph = create_supervisor_graph_with_agents(
             llm_client=self.llm_client,
             rag_agent=rag_agent,
             task_agent=task_agent,
-            intent_detector=self._detect_intent,
         )
 
-        logger.info("✅ Supervisor: Worker agents registered and graph built")
+        logger.info("✅ Supervisor: Worker agents registered and supervisor graph built")
 
     async def execute(self, state: AgentState) -> AgentState:
         """
