@@ -1514,14 +1514,14 @@ function StepReviewAndCreate({ form, providers, collections }: StepProps) {
       </Card>
 
       {/* STEP 1: CONVERSATION SETTINGS */}
-      <Card withBorder p="md">
+      <Card withBorder p="md" bg="blue.0">
         <Stack gap="sm">
           <Text fw={600}>Step 1: Conversation Settings</Text>
-          <Text fw={500} size="lg">
+          <Text fw={500} size="lg" c="dark">
             {form.values.conversationName}
           </Text>
           {form.values.conversationDescription && (
-            <Text size="sm" c="dimmed">
+            <Text size="sm" c="dark">
               {form.values.conversationDescription}
             </Text>
           )}
@@ -1561,27 +1561,27 @@ function StepReviewAndCreate({ form, providers, collections }: StepProps) {
       </Card>
 
       {/* STEP 3: VECTOR DATABASE */}
-      <Card withBorder p="md">
+      <Card withBorder p="md" bg="teal.0">
         <Stack gap="sm">
           <Text fw={600}>Step 3: Vector Database</Text>
           <Grid gutter="md">
             <Grid.Col span={{ base: 12, sm: 6 }}>
               <Stack gap="xs">
                 <div>
-                  <Text size="xs" fw={500} c="dimmed">Collection Name</Text>
-                  <Text size="sm">{selectedCollection?.name || form.values.collectionName}</Text>
+                  <Text size="xs" fw={500} c="dark">Collection Name</Text>
+                  <Text size="sm" fw={500} c="dark">{selectedCollection?.name || form.values.collectionName}</Text>
                 </div>
                 <div>
-                  <Text size="xs" fw={500} c="dimmed">Records</Text>
-                  <Text size="sm">{selectedCollection?.record_count.toLocaleString() || 'Unknown'}</Text>
+                  <Text size="xs" fw={500} c="dark">Records</Text>
+                  <Text size="sm" fw={500} c="dark">{selectedCollection?.record_count.toLocaleString() || 'Unknown'}</Text>
                 </div>
               </Stack>
             </Grid.Col>
             <Grid.Col span={{ base: 12, sm: 6 }}>
               <Stack gap="xs">
                 <div>
-                  <Text size="xs" fw={500} c="dimmed">Top K (Retrieval Count)</Text>
-                  <Text size="sm">{form.values.topK} documents</Text>
+                  <Text size="xs" fw={500} c="dark">Top K (Retrieval Count)</Text>
+                  <Text size="sm" fw={500} c="dark">{form.values.topK} documents</Text>
                 </div>
               </Stack>
             </Grid.Col>
@@ -1598,22 +1598,22 @@ function StepReviewAndCreate({ form, providers, collections }: StepProps) {
               <Grid.Col span={{ base: 12, sm: 6 }}>
                 <Stack gap="xs">
                   <div>
-                    <Text size="xs" fw={500} c="dimmed">Reranker Provider</Text>
-                    <Text size="sm">{selectedRerankerProvider?.name || 'Not selected'}</Text>
+                    <Text size="xs" fw={500} c="dark">Reranker Provider</Text>
+                    <Text size="sm" fw={500} c="dark">{selectedRerankerProvider?.name || 'Not selected'}</Text>
                   </div>
                   <div>
-                    <Text size="xs" fw={500} c="dimmed">Model</Text>
-                    <Text size="sm">{form.values.selectedRerankerModel || 'Not selected'}</Text>
+                    <Text size="xs" fw={500} c="dark">Model</Text>
+                    <Text size="sm" fw={500} c="dark">{form.values.selectedRerankerModel || 'Not selected'}</Text>
                   </div>
                 </Stack>
               </Grid.Col>
               <Grid.Col span={{ base: 12, sm: 6 }}>
                 <Stack gap="xs">
                   <div>
-                    <Text size="xs" fw={500} c="dimmed">Relevance Threshold</Text>
-                    <Text size="sm">{form.values.relevanceThreshold} (0-1 scale)</Text>
+                    <Text size="xs" fw={500} c="dark">Relevance Threshold</Text>
+                    <Text size="sm" fw={500} c="dark">{form.values.relevanceThreshold} (0-1 scale)</Text>
                   </div>
-                  <Text size="xs" c="dimmed">
+                  <Text size="xs" c="dark">
                     Documents below this score will be filtered out
                   </Text>
                 </Stack>
@@ -1624,12 +1624,12 @@ function StepReviewAndCreate({ form, providers, collections }: StepProps) {
       )}
 
       {/* STEP 5: ANSWER GENERATION & SYSTEM PROMPT */}
-      <Card withBorder p="md">
+      <Card withBorder p="md" bg="lime.0">
         <Stack gap="sm">
           <Text fw={600}>Step 5: Answer Generation & System Prompt</Text>
           <Group gap="md">
             <div>
-              <Text size="sm" fw={500} mb="xs">
+              <Text size="sm" fw={500} mb="xs" c="dark">
                 Generative Answer
               </Text>
               <Badge size="lg" color={form.values.enableLLMGeneration ? 'green' : 'gray'}>
@@ -1638,14 +1638,14 @@ function StepReviewAndCreate({ form, providers, collections }: StepProps) {
             </div>
             {form.values.enableLLMGeneration && (
               <div>
-                <Text size="sm" fw={500} mb="xs">
+                <Text size="sm" fw={500} mb="xs" c="dark">
                   Answer Generation Provider
                 </Text>
                 <Stack gap="4px">
-                  <Text size="xs" c="dimmed">
+                  <Text size="sm" c="dark">
                     Provider: {selectedProvider?.name || 'Not selected'}
                   </Text>
-                  <Text size="xs" c="dimmed">
+                  <Text size="sm" c="dark">
                     Model: {form.values.selectedModel || 'Not selected'}
                   </Text>
                 </Stack>
@@ -1654,7 +1654,7 @@ function StepReviewAndCreate({ form, providers, collections }: StepProps) {
           </Group>
           {form.values.agentType === 'assistant' && (
             <div style={{ borderTop: '1px solid #dee2e6', paddingTop: '12px', marginTop: '12px' }}>
-              <Text size="sm" fw={500} mb="xs">System Prompt</Text>
+              <Text size="sm" fw={500} mb="xs" c="dark">System Prompt</Text>
               <Badge color={form.values.selectedSystemPromptId ? 'blue' : 'gray'}>
                 {form.values.selectedSystemPromptId ? 'Configured' : 'Not configured'}
               </Badge>
@@ -1665,27 +1665,31 @@ function StepReviewAndCreate({ form, providers, collections }: StepProps) {
 
       {/* STEP 6: SYSTEM PROMPT CONFIGURATION (Assistant mode only) */}
       {form.values.agentType === 'assistant' && (
-        <Card withBorder p="md" bg="grape.0">
+        <Card withBorder p="md" bg="violet.1" style={{ borderColor: '#a78bfa' }}>
           <Stack gap="sm">
-            <Text fw={600}>Step 6: System Prompt Configuration</Text>
+            <Group justify="space-between">
+              <Text fw={600}>Step 6: System Prompt Configuration</Text>
+              <Badge size="lg" color="violet">
+                {form.values.systemPromptTasks?.length || 0} Task{form.values.systemPromptTasks?.length !== 1 ? 's' : ''}
+              </Badge>
+            </Group>
             {form.values.systemPromptTasks && form.values.systemPromptTasks.length > 0 ? (
               <Stack gap="sm">
-                <Text size="sm" c="dimmed">
-                  {form.values.systemPromptTasks.length} prompt task(s) configured
-                </Text>
                 <Stack gap="xs">
                   {form.values.systemPromptTasks.map((task: any, index: number) => (
-                    <Card key={index} withBorder p="sm" bg="white">
+                    <Card key={index} withBorder p="sm" bg="white" style={{ borderColor: '#d8b4fe' }}>
                       <Stack gap="xs">
                         <Group justify="space-between">
-                          <Text fw={500} size="sm">
-                            {task.title || task.name || `Task ${index + 1}`}
-                          </Text>
+                          <div style={{ flex: 1 }}>
+                            <Text fw={600} size="sm" c="dark">
+                              {task.title || task.name || `Task ${index + 1}`}
+                            </Text>
+                          </div>
                           <Badge size="sm" color={task.is_active !== false ? 'green' : 'gray'}>
                             {task.is_active !== false ? 'Active' : 'Inactive'}
                           </Badge>
                         </Group>
-                        <Text size="xs" c="dimmed" lineClamp={2}>
+                        <Text size="sm" c="dark" lineClamp={3}>
                           {task.content || task.system_prompt || 'No content'}
                         </Text>
                       </Stack>
