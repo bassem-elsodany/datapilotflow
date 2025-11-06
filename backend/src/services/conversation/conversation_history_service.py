@@ -217,8 +217,10 @@ class ConversationHistoryService:
             assistant_config_dict["system_prompt_tasks"] = [
                 asdict(task) for task in assistant_config.system_prompt_tasks
             ]
+            logger.info(f"[DEBUG] System prompt tasks being saved: {assistant_config_dict['system_prompt_tasks']}")
         else:
             assistant_config_dict["system_prompt_tasks"] = None
+            logger.info("[DEBUG] No system prompt tasks to save")
         conversation_data["assistant_config"] = assistant_config_dict
 
         # Insert and get the MongoDB _id

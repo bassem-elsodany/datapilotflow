@@ -6,6 +6,7 @@ traditional chat, memory reset, and conversation session management.
 All conversation-related functionality is centralized here.
 """
 
+from dataclasses import asdict
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -499,6 +500,30 @@ async def create_conversation_session(
             tags=create_request.tags,
             assistant_config=assistant_config,
         )
+
+        # Update system_prompt_tasks with the actual conversation_id
+        if assistant_config and assistant_config.system_prompt_tasks:
+            logger.info(f"[DEBUG] Updating system_prompt_tasks with conversation_id: {session_id}")
+            try:
+                from bson import ObjectId
+                # Update each system prompt task with the correct conversation_id
+                conversation_history_service.collection.update_one(
+                    {"_id": ObjectId(session_id)},
+                    {
+                        "$set": {
+                            "assistant_config.system_prompt_tasks": [
+                                {
+                                    **asdict(task),
+                                    "conversation_id": session_id
+                                }
+                                for task in assistant_config.system_prompt_tasks
+                            ]
+                        }
+                    }
+                )
+                logger.info(f"[DEBUG] Successfully updated system_prompt_tasks with conversation_id")
+            except Exception as e:
+                logger.error(f"[DEBUG] Failed to update system_prompt_tasks conversation_id: {e}")
 
         # Determine agent type from assistant_config
         if assistant_config:
