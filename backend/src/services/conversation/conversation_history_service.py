@@ -300,6 +300,7 @@ class ConversationHistoryService:
                         p = rer["provider"]
                         provider = ProviderConfig(id=p.get("id"), model_name=p.get("model_name"))
                     reranker = RerankerConfig(
+                        enabled=rer.get("enabled", bool(provider)),  # Enabled if provider is set
                         provider=provider,
                         relevance_threshold=rer.get("relevance_threshold", 0.5),
                     )
@@ -312,7 +313,10 @@ class ConversationHistoryService:
                     if ag.get("provider"):
                         p = ag["provider"]
                         provider = ProviderConfig(id=p.get("id"), model_name=p.get("model_name"))
-                    answer_generation = AnswerGenerationConfig(provider=provider)
+                    answer_generation = AnswerGenerationConfig(
+                        enabled=ag.get("enabled", bool(provider)),  # Enabled if provider is set
+                        provider=provider
+                    )
 
                 # Deserialize assistant config
                 assistant_config = None
@@ -434,6 +438,7 @@ class ConversationHistoryService:
                     p = rer["provider"]
                     provider = ProviderConfig(id=p.get("id"), model_name=p.get("model_name"))
                 reranker = RerankerConfig(
+                    enabled=rer.get("enabled", bool(provider)),  # Enabled if provider is set
                     provider=provider,
                     relevance_threshold=rer.get("relevance_threshold", 0.5),
                 )
@@ -446,7 +451,10 @@ class ConversationHistoryService:
                 if ag.get("provider"):
                     p = ag["provider"]
                     provider = ProviderConfig(id=p.get("id"), model_name=p.get("model_name"))
-                answer_generation = AnswerGenerationConfig(provider=provider)
+                answer_generation = AnswerGenerationConfig(
+                    enabled=ag.get("enabled", bool(provider)),  # Enabled if provider is set
+                    provider=provider
+                )
 
             # Deserialize assistant config
             assistant_config = None

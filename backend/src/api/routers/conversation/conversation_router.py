@@ -69,6 +69,9 @@ class VectorDatabaseConfigRequest(BaseModel):
 class RerankerConfigRequest(BaseModel):
     """Request model for reranker configuration."""
 
+    enabled: bool = Field(
+        False, description="Whether reranking is enabled"
+    )
     provider: Optional[ProviderConfigRequest] = Field(
         None, description="Reranker provider"
     )
@@ -83,6 +86,9 @@ class RerankerConfigRequest(BaseModel):
 class AnswerGenerationConfigRequest(BaseModel):
     """Request model for answer generation configuration."""
 
+    enabled: bool = Field(
+        False, description="Whether answer generation is enabled"
+    )
     provider: Optional[ProviderConfigRequest] = Field(
         None, description="LLM provider for answer generation"
     )
@@ -187,6 +193,7 @@ def _serialize_conversation_to_response(session: 'ConversationSession') -> dict:
     # Reranker configuration
     if session.reranker:
         response["reranker"] = {
+            "enabled": session.reranker.enabled,
             "provider": (
                 {
                     "id": session.reranker.provider.id,
@@ -201,6 +208,7 @@ def _serialize_conversation_to_response(session: 'ConversationSession') -> dict:
     # Answer generation configuration
     if session.answer_generation:
         response["answer_generation"] = {
+            "enabled": session.answer_generation.enabled,
             "provider": (
                 {
                     "id": session.answer_generation.provider.id,
@@ -298,8 +306,8 @@ class SystemPromptTaskResponse(BaseModel):
 class AssistantConfigResponse(BaseModel):
     """Response model for complex nested Assistant mode configuration."""
 
-    enable_knowledge_assistant: bool = Field(
-        ..., description="Enable knowledge assistant for multi-agent orchestration"
+    enabled: bool = Field(
+        ..., description="Whether Assistant mode is enabled (true) or RAG mode (false)"
     )
     system_prompt_tasks: Optional[List[SystemPromptTaskResponse]] = Field(
         None, description="System prompt tasks for the assistant"
@@ -440,6 +448,7 @@ async def create_conversation_session(
                     model_name=create_request.reranker.provider.model_name,
                 )
             reranker = RerankerConfig(
+                enabled=create_request.reranker.enabled,
                 provider=provider,
                 relevance_threshold=create_request.reranker.relevance_threshold,
             )
@@ -452,7 +461,10 @@ async def create_conversation_session(
                     id=create_request.answer_generation.provider.id,
                     model_name=create_request.answer_generation.provider.model_name,
                 )
-            answer_generation = AnswerGenerationConfig(provider=provider)
+            answer_generation = AnswerGenerationConfig(
+                enabled=create_request.answer_generation.enabled,
+                provider=provider
+            )
 
         # Build assistant_config if provided
         assistant_config = None
@@ -777,6 +789,7 @@ async def update_conversation_session(
                     "model_name": config_request.reranker.provider.model_name,
                 }
             update_doc["reranker"] = {
+                "enabled": config_request.reranker.enabled,
                 "provider": provider,
                 "relevance_threshold": config_request.reranker.relevance_threshold,
             }
@@ -789,7 +802,10 @@ async def update_conversation_session(
                     "id": config_request.answer_generation.provider.id,
                     "model_name": config_request.answer_generation.provider.model_name,
                 }
-            update_doc["answer_generation"] = {"provider": provider}
+            update_doc["answer_generation"] = {
+                "enabled": config_request.answer_generation.enabled,
+                "provider": provider
+            }
 
         # Assistant configuration (complex nested structure)
         if config_request.assistant_config is not None:

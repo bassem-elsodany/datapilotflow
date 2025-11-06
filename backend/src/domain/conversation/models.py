@@ -63,6 +63,7 @@ class VectorDatabaseConfig:
 class RerankerConfig:
     """Document reranker configuration."""
 
+    enabled: bool = False  # Whether reranking is enabled
     provider: Optional[ProviderConfig] = None  # Reranker provider
     relevance_threshold: float = 0.5  # Relevance score threshold (0-1)
 
@@ -71,6 +72,7 @@ class RerankerConfig:
 class AnswerGenerationConfig:
     """Answer generation configuration."""
 
+    enabled: bool = False  # Whether answer generation is enabled
     provider: Optional[ProviderConfig] = None  # LLM provider for answer generation
 
 

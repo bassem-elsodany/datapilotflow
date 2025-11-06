@@ -425,6 +425,7 @@ export function ConversationCreateWizard() {
         },
         // Reranker configuration
         reranker: form.values.enableReranking ? {
+          enabled: true,
           provider: form.values.selectedRerankerId && form.values.selectedRerankerModel ? {
             id: form.values.selectedRerankerId,
             model_name: form.values.selectedRerankerModel,
@@ -433,6 +434,7 @@ export function ConversationCreateWizard() {
         } : null,
         // Answer generation configuration
         answer_generation: form.values.enableLLMGeneration && form.values.selectedProviderId && form.values.selectedModel ? {
+          enabled: true,
           provider: {
             id: form.values.selectedProviderId,
             model_name: form.values.selectedModel,
