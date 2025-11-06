@@ -351,7 +351,7 @@ export function ConversationNodeConfigPanel({
                   <Select
                     label="LLM Provider for Query Enhancement"
                     placeholder="Select a provider"
-                    data={config?.providers?.map((p: any) => ({
+                    data={providers?.map((p: any) => ({
                       value: p.id,
                       label: `${p.name} (${p.provider_type})`,
                     })) || []}
@@ -362,12 +362,12 @@ export function ConversationNodeConfigPanel({
                     clearable
                   />
 
-                  {localConfig.selectedProviderId && config?.providers ? (
+                  {localConfig.selectedProviderId && providers ? (
                     <Select
                       label="Model for Query Enhancement"
                       placeholder="Select a model"
                       data={
-                        config.providers
+                        providers
                           .find((p: any) => p.id === localConfig.selectedProviderId)
                           ?.generative?.models.map((m: string) => ({
                             value: m,
