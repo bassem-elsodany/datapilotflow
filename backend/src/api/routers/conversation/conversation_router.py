@@ -485,7 +485,7 @@ async def create_conversation_session(
                 system_prompt_tasks=system_prompt_tasks,
             )
 
-        session_id = conversation_history_service.create_conversation_v2(
+        session_id = conversation_history_service.create_conversation(
             user_id=current_user.id,
             name=create_request.name,
             description=create_request.description,
