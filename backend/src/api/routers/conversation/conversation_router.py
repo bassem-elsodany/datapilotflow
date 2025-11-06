@@ -161,16 +161,7 @@ def _serialize_conversation_to_response(session: 'ConversationSession') -> dict:
         "last_updated": session.last_updated.isoformat(),
         "message_count": session.message_count,
         "tags": session.tags or [],
-        "enable_knowledge_assistant": session.enable_knowledge_assistant,
     }
-
-    # System prompt (embedded)
-    if session.system_prompt:
-        response["system_prompt"] = {
-            "id": session.system_prompt.id,
-            "title": session.system_prompt.title,
-            "content": session.system_prompt.content,
-        }
 
     # Enhancement configuration
     if session.enhancement:
@@ -413,8 +404,7 @@ async def create_conversation_session(
         "enable_knowledge_assistant": boolean,
         "system_prompt_tasks": [...] (optional)
       },
-      "tags": ["string"],
-      "enable_knowledge_assistant": boolean (deprecated - use assistant_config)
+      "tags": ["string"]
     }
     """
     try:
