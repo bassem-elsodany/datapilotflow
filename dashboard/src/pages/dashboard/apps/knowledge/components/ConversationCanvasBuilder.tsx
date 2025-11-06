@@ -146,6 +146,37 @@ function ConversationCanvasContent() {
   const START_Y = 50;
   const NODES_PER_LINE = 4;
 
+  // Helper function to check if all RAG subflow nodes are configured
+  const areRAGSubflowNodesConfigured = (): boolean => {
+    // Enhancement is configured if selectedStrategy is set AND
+    // if it's non-native, LLM provider and model must also be set
+    let enhancementConfigured = !!config.selectedStrategy;
+    if (enhancementConfigured && config.selectedStrategy !== 'native') {
+      enhancementConfigured = !!config.selectedProviderId && !!config.selectedModel;
+    }
+
+    // Retrieval is configured if collectionName and topK are set
+    const retrievalConfigured = !!config.collectionName && !!config.topK;
+
+    // Reranking is configured if enabled and provider/model are set
+    const rerangingConfigured = !config.enableReranking || (!!config.selectedRerankerId && !!config.selectedRerankerModel);
+
+    // LLM generation is configured if enabled and provider/model are set
+    const llmConfigured = !config.enableLLMGeneration || (!!config.selectedProviderId && !!config.selectedModel);
+
+    return enhancementConfigured && retrievalConfigured && rerangingConfigured && llmConfigured;
+  };
+
+  // Helper function to check if all Task Agent subflow nodes are configured
+  const areTaskSubflowNodesConfigured = (): boolean => {
+    // System Prompts is configured if selectedSystemPromptId is set
+    const systemPromptsConfigured = !!config.selectedSystemPromptId;
+
+    // Task Execution is configured if enableKnowledgeAssistant is true
+    const taskExecutionConfigured = config.enableKnowledgeAssistant !== false;
+
+    return systemPromptsConfigured && taskExecutionConfigured;
+  };
 
   // Dynamic node generation based on configuration
   // RAG flow: User Query → Query Strategy → Search Documents → Rerank? → Generate Answer/Raw Output
@@ -192,7 +223,7 @@ function ConversationCanvasContent() {
           name: 'Knowledge Retrieval',
           type: 'retrieval',
           description: 'RAG Agent - Search knowledge base',
-          configured: config.configuredNodes?.retrieval || false,
+          configured: areRAGSubflowNodesConfigured(),
           isSubflowParent: true,
           subflowExpanded: ragSubflowExpanded,
           subflowLabel: ragSubflowExpanded ? '▼ RAG Agent' : '▶ RAG Agent',
@@ -226,7 +257,7 @@ function ConversationCanvasContent() {
           name: 'Task Engine',
           type: 'taskEngine',
           description: 'Task Agent - System Prompts & Execution',
-          configured: config.configuredNodes?.supervisor || false,
+          configured: areTaskSubflowNodesConfigured(),
           isSubflowParent: true,
           subflowExpanded: taskSubflowExpanded,
           subflowLabel: taskSubflowExpanded ? '▼ Task Agent' : '▶ Task Agent',
