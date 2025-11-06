@@ -986,11 +986,11 @@ class ConversationHistoryService:
             # Convert to dict for storage
             task_dict = asdict(task)
 
-            # Add to conversation's system_prompt_tasks array
+            # Add to conversation's assistant_config.system_prompt_tasks array
             update_result = self.collection.update_one(
                 {"_id": ObjectId(conversation_id)},
                 {
-                    "$push": {"system_prompt_tasks": task_dict},
+                    "$push": {"assistant_config.system_prompt_tasks": task_dict},
                     "$set": {"last_updated": datetime.utcnow()},
                 },
             )
@@ -1032,12 +1032,12 @@ class ConversationHistoryService:
                 query["user_id"] = user_id
 
             doc = self.collection.find_one(
-                query, {"system_prompt_tasks": {"$elemMatch": {"id": prompt_id}}}
+                query, {"assistant_config.system_prompt_tasks": {"$elemMatch": {"id": prompt_id}}}
             )
 
-            if doc and "system_prompt_tasks" in doc and len(doc["system_prompt_tasks"]) > 0:
-                prompt_dict = doc["system_prompt_tasks"][0]
-                return self._dict_to_system_prompt(prompt_dict)
+            if doc and "assistant_config" in doc and "system_prompt_tasks" in doc["assistant_config"] and len(doc["assistant_config"]["system_prompt_tasks"]) > 0:
+                prompt_dict = doc["assistant_config"]["system_prompt_tasks"][0]
+                return self._dict_to_system_prompt_task(prompt_dict)
 
             logger.debug(f"System prompt not found: {prompt_id}")
             return None
@@ -1069,14 +1069,14 @@ class ConversationHistoryService:
 
             doc = self.collection.find_one(query)
 
-            if not doc or "system_prompt_tasks" not in doc:
+            if not doc or "assistant_config" not in doc or "system_prompt_tasks" not in doc.get("assistant_config", {}):
                 return []
 
             prompts = []
-            for prompt_dict in doc.get("system_prompt_tasks", []):
+            for prompt_dict in doc.get("assistant_config", {}).get("system_prompt_tasks", []):
                 if active_only and not prompt_dict.get("is_active", True):
                     continue
-                prompts.append(self._dict_to_system_prompt(prompt_dict))
+                prompts.append(self._dict_to_system_prompt_task(prompt_dict))
 
             return prompts
 
@@ -1118,26 +1118,26 @@ class ConversationHistoryService:
             update_fields = {"last_updated": datetime.utcnow()}
 
             if name is not None:
-                update_fields["system_prompt_tasks.$.name"] = name
+                update_fields["assistant_config.system_prompt_tasks.$.name"] = name
             if system_prompt is not None:
-                update_fields["system_prompt_tasks.$.system_prompt"] = system_prompt
-                update_fields["system_prompt_tasks.$.version"] = (
-                    update_fields.get("system_prompt_tasks.$.version", 0) + 1
+                update_fields["assistant_config.system_prompt_tasks.$.system_prompt"] = system_prompt
+                update_fields["assistant_config.system_prompt_tasks.$.version"] = (
+                    update_fields.get("assistant_config.system_prompt_tasks.$.version", 0) + 1
                 )
             if description is not None:
-                update_fields["system_prompt_tasks.$.description"] = description
+                update_fields["assistant_config.system_prompt_tasks.$.description"] = description
             if tags is not None:
-                update_fields["system_prompt_tasks.$.tags"] = tags
+                update_fields["assistant_config.system_prompt_tasks.$.tags"] = tags
             if is_active is not None:
-                update_fields["system_prompt_tasks.$.is_active"] = is_active
+                update_fields["assistant_config.system_prompt_tasks.$.is_active"] = is_active
 
-            update_fields["system_prompt_tasks.$.updated_at"] = datetime.utcnow()
+            update_fields["assistant_config.system_prompt_tasks.$.updated_at"] = datetime.utcnow()
 
             result = self.collection.update_one(
                 {
                     "_id": ObjectId(conversation_id),
                     "user_id": user_id,
-                    "system_prompt_tasks.id": prompt_id,
+                    "assistant_config.system_prompt_tasks.id": prompt_id,
                 },
                 {"$set": update_fields},
             )
@@ -1176,7 +1176,7 @@ class ConversationHistoryService:
                     "user_id": user_id,
                 },
                 {
-                    "$pull": {"system_prompt_tasks": {"id": prompt_id}},
+                    "$pull": {"assistant_config.system_prompt_tasks": {"id": prompt_id}},
                     "$set": {"last_updated": datetime.utcnow()},
                 },
             )
@@ -1255,10 +1255,10 @@ class ConversationHistoryService:
                 {
                     "_id": ObjectId(conversation_id),
                     "user_id": user_id,
-                    "system_prompt_tasks.id": prompt_id,
+                    "assistant_config.system_prompt_tasks.id": prompt_id,
                 },
                 {
-                    "$inc": {"system_prompt_tasks.$.usage_count": 1},
+                    "$inc": {"assistant_config.system_prompt_tasks.$.usage_count": 1},
                     "$set": {"last_updated": datetime.utcnow()},
                 },
             )
