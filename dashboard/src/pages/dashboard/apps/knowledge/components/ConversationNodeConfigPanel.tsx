@@ -5,7 +5,7 @@
  * EXACTLY SAME as job pipeline's NodeConfigPanel
  */
 
-import { ActionIcon, Group, Select, NumberInput, Switch, TextInput, Textarea, Paper, Text, Stack, Badge, Box, List, Divider, Button, Modal, Grid, Card, ScrollArea } from '@mantine/core';
+import { ActionIcon, Group, Select, NumberInput, Switch, TextInput, Textarea, Paper, Text, Stack, Badge, Box, List, Divider, Button } from '@mantine/core';
 import { IconChevronDown, IconChevronUp, IconX, IconHelp, IconCheck, IconAlertCircle } from '@tabler/icons-react';
 import { useState, useEffect } from 'react';
 import { Node } from 'reactflow';
@@ -117,8 +117,6 @@ export function ConversationNodeConfigPanel({
 }: ConversationNodeConfigPanelProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [localConfig, setLocalConfig] = useState(config);
-  const [strategiesInfoModalOpen, setStrategiesInfoModalOpen] = useState(false);
-  const [selectedForComparison, setSelectedForComparison] = useState<string[]>([]);
 
   useEffect(() => {
     if (opened && node) {
@@ -392,20 +390,6 @@ export function ConversationNodeConfigPanel({
                 </>
               )}
 
-              {/* Learn & Compare Button */}
-              <Button
-                size="xs"
-                variant="gradient"
-                gradient={{ from: 'violet', to: 'purple', deg: 135 }}
-                leftSection={<IconHelp size={16} />}
-                onClick={() => setStrategiesInfoModalOpen(true)}
-                style={{
-                  boxShadow: '0 2px 8px rgba(109, 40, 217, 0.3)',
-                }}
-                fullWidth
-              >
-                Learn & Compare Strategies
-              </Button>
             </Stack>
           </div>
         );
@@ -1019,114 +1003,6 @@ export function ConversationNodeConfigPanel({
           </Group>
         </div>
       )}
-
-      {/* Learn & Compare Strategies Modal */}
-      <Modal
-        opened={strategiesInfoModalOpen}
-        onClose={() => setStrategiesInfoModalOpen(false)}
-        title="Enhancement Strategies - Learn & Compare"
-        size="xl"
-        scrollAreaComponent={ScrollArea.Autosize}
-      >
-        <Stack gap="md">
-          <Grid>
-            {ENHANCEMENT_STRATEGIES.map((strategy) => (
-              <Grid.Col key={strategy.value} span={{ base: 12, sm: 6 }}>
-                <Card
-                  withBorder
-                  p="md"
-                  radius="md"
-                  style={{
-                    background: `linear-gradient(135deg, var(--mantine-color-${strategy.color}-0) 0%, #ffffff 100%)`,
-                    borderColor: `var(--mantine-color-${strategy.color}-3)`,
-                    borderWidth: '2px',
-                    height: '100%',
-                  }}
-                >
-                  <Stack gap="sm">
-                    <div>
-                      <Text fw={700} size="md" c={strategy.color}>
-                        {strategy.label}
-                      </Text>
-                      <Text size="xs" c="dimmed" mt={4}>
-                        {strategy.description}
-                      </Text>
-                    </div>
-
-                    <Text size="xs" c="dimmed" style={{ lineHeight: 1.5 }}>
-                      {strategy.details}
-                    </Text>
-
-                    <Divider />
-
-                    <div>
-                      <Text size="xs" fw={600} c="green.7" mb={4}>
-                        ✓ Pros
-                      </Text>
-                      <Stack gap={2}>
-                        {strategy.pros.map((pro, idx) => (
-                          <Text key={idx} size="xs" c="dimmed">
-                            • {pro}
-                          </Text>
-                        ))}
-                      </Stack>
-                    </div>
-
-                    <div>
-                      <Text size="xs" fw={600} c="red.7" mb={4}>
-                        ✗ Cons
-                      </Text>
-                      <Stack gap={2}>
-                        {strategy.cons.map((con, idx) => (
-                          <Text key={idx} size="xs" c="dimmed">
-                            • {con}
-                          </Text>
-                        ))}
-                      </Stack>
-                    </div>
-
-                    <div>
-                      <Text size="xs" fw={600} c="blue.7" mb={4}>
-                        Best For
-                      </Text>
-                      <Group gap={4}>
-                        {strategy.useCases.map((useCase, idx) => (
-                          <Badge key={idx} size="xs" variant="dot" color={strategy.color}>
-                            {useCase}
-                          </Badge>
-                        ))}
-                      </Group>
-                    </div>
-
-                    {strategy.example && (
-                      <>
-                        <Divider />
-                        <div>
-                          <Text size="xs" fw={600} c="violet.7" mb={4}>
-                            📝 Example
-                          </Text>
-                          <Stack gap="xs" size="xs">
-                            <div>
-                              <Text size="xs" c="dimmed" fw={500}>Original:</Text>
-                              <Text size="xs" fw={500}>{strategy.example.original}</Text>
-                            </div>
-                            <div>
-                              <Text size="xs" c="dimmed" fw={500}>Output:</Text>
-                              <Text size="xs" style={{ whiteSpace: 'pre-line' }}>
-                                {strategy.example.output}
-                              </Text>
-                            </div>
-                          </Stack>
-                        </div>
-                      </>
-                    )}
-                  </Stack>
-                </Card>
-              </Grid.Col>
-            ))}
-          </Grid>
-        </Stack>
-      </Modal>
     </Paper>
   );
 }

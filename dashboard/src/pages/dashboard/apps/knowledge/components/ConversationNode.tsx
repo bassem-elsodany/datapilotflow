@@ -17,7 +17,7 @@ import {
   IconClock,
   IconMessageCircle,
   IconWand,
-  IconArrowDown,
+  IconScale,
 } from '@tabler/icons-react';
 
 interface ConversationNodeData {
@@ -46,7 +46,7 @@ export const ConversationNode = memo(({ data, selected }: NodeProps<Conversation
       case 'retrieval':
         return <IconDatabase size={14} />;
       case 'reranking':
-        return <IconArrowDown size={14} />;
+        return <IconScale size={14} />;
       case 'llm':
         return <IconBrain size={14} />;
       case 'formatter':
