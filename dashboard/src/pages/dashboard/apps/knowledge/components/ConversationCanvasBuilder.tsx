@@ -533,7 +533,7 @@ function ConversationCanvasContent() {
       // Mark enhancement as configured since template selected the strategy
       configuredNodes: {
         ...prev.configuredNodes,
-        enhancement: template.type === 'rag' ? true : undefined, // Enhancement only for RAG
+        enhancement: true, // Enhancement is configured in both RAG and Supervisor modes
         assistant: template.type === 'supervisor' ? true : undefined, // Assistant config for supervisor
       },
     }));

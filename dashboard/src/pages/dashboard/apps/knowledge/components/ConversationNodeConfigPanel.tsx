@@ -236,6 +236,8 @@ export function ConversationNodeConfigPanel({
                   checked={localConfig.enableKnowledgeAssistant !== false}
                   onChange={(e) => setLocalConfig({ ...localConfig, enableKnowledgeAssistant: e.currentTarget.checked })}
                   size="sm"
+                  disabled={config?.selectedTemplate?.type === 'supervisor'}
+                  title={config?.selectedTemplate?.type === 'supervisor' ? 'Always enabled in Assistant mode' : ''}
                 />
               </div>
 
