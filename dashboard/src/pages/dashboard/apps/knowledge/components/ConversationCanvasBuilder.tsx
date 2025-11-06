@@ -538,7 +538,8 @@ function ConversationCanvasContent() {
 
   const handleSaveNodeConfig = (nodeId: string, nodeConfig: any) => {
     setConfig(prev => ({
-      ...nodeConfig,
+      ...prev,
+      ...nodeConfig, // Merge new config values into existing config
       configuredNodes: {
         ...prev.configuredNodes,
         [nodeId]: true, // Mark this node as configured when user saves
