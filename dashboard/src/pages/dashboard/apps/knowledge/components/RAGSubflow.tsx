@@ -28,6 +28,12 @@ export function generateRAGSubflowNodes(parentId: string, baseX: number, baseY: 
   const nodeSpacing = 90; // Tighter spacing for grouped layout
 
   // Sub-node 1: Query Enhancement
+  // Configured if: strategy is set AND (if non-native, LLM provider and model are set)
+  let enhancementConfigured = !!config.selectedStrategy;
+  if (enhancementConfigured && config.selectedStrategy !== 'native') {
+    enhancementConfigured = !!config.selectedProviderId && !!config.selectedModel;
+  }
+
   nodes.push({
     id: `${parentId}-enhancement`,
     type: 'conversationNode',
@@ -37,11 +43,12 @@ export function generateRAGSubflowNodes(parentId: string, baseX: number, baseY: 
       name: 'Enhancement',
       type: 'enhancement',
       description: 'Query strategy',
-      configured: !!config.selectedStrategy,
+      configured: enhancementConfigured,
     },
   });
 
   // Sub-node 2: Vector Search
+  // Configured if: collection name AND topK are set
   nodes.push({
     id: `${parentId}-search`,
     type: 'conversationNode',
@@ -51,7 +58,7 @@ export function generateRAGSubflowNodes(parentId: string, baseX: number, baseY: 
       name: 'Search',
       type: 'retrieval',
       description: 'Vector search',
-      configured: !!config.collectionName,
+      configured: !!config.collectionName && !!config.topK,
     },
   });
 
@@ -66,7 +73,7 @@ export function generateRAGSubflowNodes(parentId: string, baseX: number, baseY: 
         name: 'Rerank',
         type: 'reranking',
         description: 'Filter results',
-        configured: !!config.selectedRerankerId,
+        configured: !!config.selectedRerankerId && !!config.selectedRerankerModel,
       },
     });
   }
@@ -83,7 +90,7 @@ export function generateRAGSubflowNodes(parentId: string, baseX: number, baseY: 
         name: 'Generate',
         type: 'llm',
         description: 'Answer generation',
-        configured: !!config.selectedProviderId,
+        configured: !!config.selectedProviderId && !!config.selectedModel,
       },
     });
   }
