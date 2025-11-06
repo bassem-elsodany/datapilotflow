@@ -121,6 +121,13 @@ export default function KnowledgeSearch() {
     navigate(paths.dashboard.apps.conversation(sessionId));
   };
 
+  const editConversation = (sessionId: string) => {
+    // Navigate to the wizard in edit mode with conversation ID
+    navigate(paths.dashboard.apps.conversationCreate, {
+      state: { editingConversationId: sessionId }
+    });
+  };
+
   const deleteSession = async (sessionId: string) => {
     try {
       const token = localStorage.getItem('jwt_token');
@@ -336,6 +343,12 @@ export default function KnowledgeSearch() {
                 </ActionIcon>
               </Menu.Target>
               <Menu.Dropdown>
+                <Menu.Item
+                  leftSection={<IconEdit size={16} />}
+                  onClick={() => editConversation(session.id)}
+                >
+                  Edit Configuration
+                </Menu.Item>
                 <Menu.Item
                   leftSection={<IconEdit size={16} />}
                   onClick={() => openRenameModal(session)}

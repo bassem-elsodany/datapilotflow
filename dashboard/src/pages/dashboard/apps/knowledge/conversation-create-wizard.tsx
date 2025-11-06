@@ -61,7 +61,7 @@ import {
   IconWand,
 } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 // ============================================================================
 // TYPES & CONSTANTS
@@ -255,6 +255,7 @@ const STEP_CONFIGS = [
 
 export function ConversationCreateWizard() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeStep, setActiveStep] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [isCreating, setIsCreating] = useState(false);
@@ -262,6 +263,11 @@ export function ConversationCreateWizard() {
   const [strategiesInfoModalOpen, setStrategiesInfoModalOpen] = useState(false);
   const [comparisonMode, setComparisonMode] = useState(false);
   const [selectedForComparison, setSelectedForComparison] = useState<string[]>([]);
+
+  // Edit mode state
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
+  const [isLoadingExisting, setIsLoadingExisting] = useState(false);
 
   // Fetch data
   const { data: providers, isLoading: providersLoading } = useGetActiveModelProviders();
@@ -299,6 +305,79 @@ export function ConversationCreateWizard() {
         value < 5 || value > 30 ? 'Top K must be between 5 and 30' : null,
     },
   });
+
+  // Detect edit mode and load existing conversation
+  useEffect(() => {
+    const state = location.state as { editingConversationId?: string } | null;
+    if (state?.editingConversationId) {
+      setIsEditMode(true);
+      setEditingConversationId(state.editingConversationId);
+      loadExistingConversation(state.editingConversationId);
+    }
+  }, []);
+
+  // Load existing conversation data for edit mode
+  const loadExistingConversation = async (conversationId: string) => {
+    try {
+      setIsLoadingExisting(true);
+      const token = localStorage.getItem('jwt_token');
+      const response = await fetch(apiUtils.buildApiUrl(`/conversations/${conversationId}`), {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const session = data.session;
+
+        // Populate form with existing conversation data
+        form.setValues({
+          agentType: session.assistant_config?.enabled ? 'assistant' : 'rag',
+          conversationName: session.name || '',
+          conversationDescription: session.description || '',
+          selectedProviderId: session.answer_generation?.provider?.id || null,
+          selectedModel: session.answer_generation?.provider?.model_name || null,
+          selectedStrategy: session.enhancement?.strategy || 'native',
+          collectionName: session.vector_database?.collection_name || '',
+          topK: session.vector_database?.top_k || 5,
+          enableReranking: session.reranker?.enabled || false,
+          relevanceThreshold: session.reranker?.relevance_threshold || 0.5,
+          selectedRerankerId: session.reranker?.provider?.id || null,
+          selectedRerankerModel: session.reranker?.provider?.model_name || null,
+          enableLLMGeneration: session.answer_generation?.enabled || false,
+          enableKnowledgeAssistant: session.assistant_config?.enabled || false,
+          selectedSystemPromptId: session.assistant_config?.system_prompt_tasks?.[0]?.id || null,
+          systemPromptTasks: session.assistant_config?.system_prompt_tasks || [],
+        });
+
+        // Set selected system prompt for display
+        if (session.assistant_config?.system_prompt_tasks?.[0]) {
+          setSelectedSystemPrompt({
+            id: session.assistant_config.system_prompt_tasks[0].id,
+            title: session.assistant_config.system_prompt_tasks[0].title,
+            content: session.assistant_config.system_prompt_tasks[0].content,
+            is_active: session.assistant_config.system_prompt_tasks[0].is_active,
+          });
+        }
+      } else {
+        notifications.show({
+          title: 'Error',
+          message: 'Failed to load conversation',
+          color: 'red',
+        });
+      }
+    } catch (error) {
+      console.error('Error loading conversation:', error);
+      notifications.show({
+        title: 'Error',
+        message: 'Failed to load conversation',
+        color: 'red',
+      });
+    } finally {
+      setIsLoadingExisting(false);
+    }
+  };
 
   // Get selected provider for model info
   const selectedProvider = providers?.find(
@@ -465,8 +544,14 @@ export function ConversationCreateWizard() {
         },
       };
 
-      const response = await fetch(apiUtils.buildApiUrl('/conversations'), {
-        method: 'POST',
+      // Use PUT for edit mode, POST for create mode
+      const url = isEditMode
+        ? apiUtils.buildApiUrl(`/conversations/${editingConversationId}`)
+        : apiUtils.buildApiUrl('/conversations');
+      const method = isEditMode ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method: method,
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -476,7 +561,7 @@ export function ConversationCreateWizard() {
 
       if (response.ok) {
         const data = await response.json();
-        const sessionId = data.id;
+        const sessionId = isEditMode ? editingConversationId : data.id;
 
         // If user selected a temporary prompt during creation, create it now
         if (
@@ -507,7 +592,7 @@ export function ConversationCreateWizard() {
 
         notifications.show({
           title: 'Success',
-          message: 'Conversation created successfully',
+          message: isEditMode ? 'Conversation updated successfully' : 'Conversation created successfully',
           color: 'green',
           icon: <IconCheck size={16} />,
         });
@@ -549,9 +634,11 @@ export function ConversationCreateWizard() {
   // For Assistant mode: no adjustment needed
   const displayActiveStep = form.values.agentType === 'rag' && activeStep === 7 ? 6 : activeStep;
 
+  const pageTitle = isEditMode ? 'Edit Conversation' : 'Create New Conversation';
+
   return (
-    <Page title="Create New Conversation">
-      <PageHeader title="Create New Conversation" />
+    <Page title={pageTitle}>
+      <PageHeader title={pageTitle} />
 
       <ColorfulVerticalStepper
         activeStep={displayActiveStep}
@@ -690,7 +777,7 @@ export function ConversationCreateWizard() {
                 leftSection={<IconCheck size={16} />}
                 color="green"
               >
-                Create Conversation
+                {isEditMode ? 'Update Conversation' : 'Create Conversation'}
               </Button>
             )}
           </Group>
