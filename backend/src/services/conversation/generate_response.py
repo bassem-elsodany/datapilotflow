@@ -24,8 +24,8 @@ from src.agents.rag_agent.state import RAGWorkflowState as WorkflowState
 from src.agents.rag_agent.state import create_initial_state
 from src.config import settings
 from src.orchestration.orchestrator import create_multi_agent_orchestrator
+from src.domain.conversation import ConversationMessage
 from src.services.conversation.conversation_history_service import (
-    ConversationMessage,
     conversation_history_service,
 )
 from src.services.model_provider.model_provider_service import (

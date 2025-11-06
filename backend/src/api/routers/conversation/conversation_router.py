@@ -14,16 +14,18 @@ from pydantic import BaseModel, Field
 
 from src.api.routers.auth.auth_router import get_current_user
 from src.domain.user import User
+from src.domain.conversation import (
+    AnswerGenerationConfig,
+    AssistantConfig,
+    EnhancementConfig,
+    ProviderConfig,
+    RerankerConfig,
+    SystemPrompt,
+    SystemPromptTask,
+    VectorDatabaseConfig,
+)
 from src.services.conversation.conversation_history_service import (
     conversation_history_service,
-    SystemPromptTask,
-    ProviderConfig,
-    EnhancementConfig,
-    VectorDatabaseConfig,
-    RerankerConfig,
-    AnswerGenerationConfig,
-    SystemPrompt,
-    AssistantConfig,
 )
 
 # Create router
