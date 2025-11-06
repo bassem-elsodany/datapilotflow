@@ -20,15 +20,17 @@ from src.config import settings
 from src.services.conversation.conversation_history_service import (
     conversation_history_service,
 )
-from src.services.conversation.generate_response import (
-    get_response_stream_rag,
+from src.services.conversation.generate_response_rag import get_response_stream_rag
+from src.services.conversation.generate_response_supervisor import (
     get_response_stream_supervisor,
 )
 from src.services.model_provider.model_provider_service import (
     get_model_provider_service,
 )
 
-# Workflow logic moved to generate_response service
+# Workflow logic split into:
+# - generate_response_rag: RAG-only pipeline execution
+# - generate_response_supervisor: Supervisor Agent orchestration with intent routing
 
 router = APIRouter(tags=["Agent WebSocket"])
 
@@ -71,9 +73,18 @@ def extract_conversation_config(conversation) -> dict:
         config["collection_name"] = conversation.vector_database.collection_name
         config["top_k"] = conversation.vector_database.top_k
 
-    # Load enhancement strategy
+    # Load enhancement strategy and provider
     if conversation.enhancement:
         config["selected_strategy"] = conversation.enhancement.strategy
+        
+        # For non-native strategies, the provider is required and stored in enhancement.provider
+        # If answer_generation doesn't have a provider, use enhancement.provider as fallback
+        if (conversation.enhancement.strategy != "native" 
+            and conversation.enhancement.provider 
+            and not config["llm_provider_id"]):
+            config["llm_provider_id"] = conversation.enhancement.provider.id
+            config["llm_model_name"] = conversation.enhancement.provider.model_name
+            logger.debug(f"Using enhancement provider for non-native strategy: {config['llm_provider_id']}/{config['llm_model_name']}")
 
     # Load reranking settings
     if conversation.reranker and conversation.reranker.provider:
