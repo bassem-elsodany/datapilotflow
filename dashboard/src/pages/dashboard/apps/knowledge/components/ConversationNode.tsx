@@ -23,9 +23,13 @@ import {
 interface ConversationNodeData {
   id: string;
   name: string;
-  type: 'userQuery' | 'settings' | 'enhancement' | 'retrieval' | 'reranking' | 'llm' | 'formatter';
+  type: 'userQuery' | 'settings' | 'enhancement' | 'retrieval' | 'reranking' | 'llm' | 'formatter' | 'assistant' | 'taskEngine' | 'response';
   description: string;
   configured: boolean;
+  // Subflow properties
+  isSubflowParent?: boolean;
+  subflowExpanded?: boolean;
+  subflowLabel?: string;
 }
 
 export const ConversationNode = memo(({ data, selected }: NodeProps<ConversationNodeData>) => {
@@ -47,6 +51,12 @@ export const ConversationNode = memo(({ data, selected }: NodeProps<Conversation
         return <IconBrain size={14} />;
       case 'formatter':
         return <IconDatabase size={14} />;
+      case 'assistant':
+        return <IconWand size={14} />;
+      case 'taskEngine':
+        return <IconSettings size={14} />;
+      case 'response':
+        return <IconCheck size={14} />;
       default:
         return <IconSettings size={14} />;
     }
@@ -126,7 +136,7 @@ export const ConversationNode = memo(({ data, selected }: NodeProps<Conversation
       </Tooltip>
 
       {/* Label underneath */}
-      <div style={{ marginTop: '4px', textAlign: 'center', maxWidth: '60px' }}>
+      <div style={{ marginTop: '4px', textAlign: 'center', maxWidth: '70px' }}>
         <Text
           size="xs"
           fw={500}
@@ -137,8 +147,21 @@ export const ConversationNode = memo(({ data, selected }: NodeProps<Conversation
             color: selected ? '#228be6' : '#333',
           }}
         >
-          {data.name}
+          {data.isSubflowParent ? data.subflowLabel || data.name : data.name}
         </Text>
+        {data.isSubflowParent && (
+          <Text
+            size="xs"
+            style={{
+              fontSize: '5px',
+              lineHeight: 1.0,
+              color: '#999',
+              marginTop: '1px',
+            }}
+          >
+            (Double-click to expand)
+          </Text>
+        )}
       </div>
 
       {/* Hidden handles */}
