@@ -20,7 +20,6 @@ from src.domain.conversation import (
     EnhancementConfig,
     ProviderConfig,
     RerankerConfig,
-    SystemPrompt,
     SystemPromptTask,
     VectorDatabaseConfig,
 )
@@ -420,13 +419,8 @@ async def create_conversation_session(
     """
     try:
         # Convert request models to service dataclasses
-        system_prompt = None
-        if create_request.system_prompt:
-            system_prompt = SystemPrompt(
-                id=create_request.system_prompt.id,
-                title=create_request.system_prompt.title,
-                content=create_request.system_prompt.content,
-            )
+        # Note: system_prompt is now part of assistant_config.system_prompt_tasks
+        # (if provided in the request at all)
 
         enhancement = None
         if create_request.enhancement:
@@ -495,13 +489,11 @@ async def create_conversation_session(
             user_id=current_user.id,
             name=create_request.name,
             description=create_request.description,
-            system_prompt=system_prompt,
             enhancement=enhancement,
             vector_database=vector_database,
             reranker=reranker,
             answer_generation=answer_generation,
             tags=create_request.tags,
-            enable_knowledge_assistant=create_request.enable_knowledge_assistant,
             assistant_config=assistant_config,
         )
 
