@@ -386,7 +386,7 @@ async def create_conversation_session(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Create a new conversation session with restructured nested configuration.
+    Create a new conversation session with nested configuration structure.
 
     Request body structure:
     {
@@ -408,8 +408,12 @@ async def create_conversation_session(
       "answer_generation": {
         "provider": {"id": "string", "model_name": "string"} (optional)
       },
+      "assistant_config": {
+        "enable_knowledge_assistant": boolean,
+        "system_prompt_tasks": [...] (optional)
+      },
       "tags": ["string"],
-      "enable_knowledge_assistant": boolean
+      "enable_knowledge_assistant": boolean (deprecated - use assistant_config)
     }
     """
     try:
