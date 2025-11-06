@@ -878,6 +878,9 @@ function StepAgentType({ form }: StepProps) {
             onClick={() => {
               form.setFieldValue('agentType', 'rag');
               form.setFieldValue('enableKnowledgeAssistant', false);
+              // Clear assistant-only fields when switching to RAG mode
+              form.setFieldValue('systemPromptTasks', []);
+              form.setFieldValue('selectedSystemPromptId', null);
             }}
           >
             <Group gap="sm" mb="md">
@@ -925,6 +928,10 @@ function StepAgentType({ form }: StepProps) {
             onClick={() => {
               form.setFieldValue('agentType', 'assistant');
               form.setFieldValue('enableKnowledgeAssistant', true);
+              // Ensure assistant-only fields are initialized
+              if (!form.values.systemPromptTasks) {
+                form.setFieldValue('systemPromptTasks', []);
+              }
             }}
           >
             <Group gap="sm" mb="md">
