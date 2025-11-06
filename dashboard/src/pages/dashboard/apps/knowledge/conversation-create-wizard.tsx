@@ -276,7 +276,7 @@ export function ConversationCreateWizard() {
       selectedProviderId: null,
       selectedModel: null,
       selectedStrategy: 'native',
-      collectionName: 'LongTermMemory',
+      collectionName: '',  // Empty - user must select a collection
       topK: 5,
       enableReranking: false,
       relevanceThreshold: 0.5,
