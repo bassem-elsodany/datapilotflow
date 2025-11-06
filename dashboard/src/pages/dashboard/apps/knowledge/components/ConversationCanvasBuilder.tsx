@@ -180,31 +180,18 @@ function ConversationCanvasContent() {
         },
       });
 
-      // 2. System Prompts node (Task configuration)
-      nodeList.push({
-        id: 'assistant',
-        type: 'conversationNode',
-        position: { x: startX + horizontalSpacing * 2, y: startY },
-        data: {
-          id: 'assistant',
-          name: 'System Prompts',
-          type: 'assistant',
-          description: 'Task-specific instructions',
-          configured: config.configuredNodes?.assistant || false,
-        },
-      });
-
-      // 3. Task Engine node (expandable subflow for Task Agent)
+      // 2. Task Engine node (expandable subflow for Task Agent)
+      // Task Agent includes: System Prompts → Task Execution
       const taskSubflowExpanded = config.expandedSubflows?.taskEngine || false;
       nodeList.push({
         id: 'taskEngine',
         type: 'conversationNode',
-        position: { x: startX + horizontalSpacing * 3, y: startY },
+        position: { x: startX + horizontalSpacing * 2, y: startY },
         data: {
           id: 'taskEngine',
           name: 'Task Engine',
           type: 'taskEngine',
-          description: 'Task Agent - Multi-task orchestration',
+          description: 'Task Agent - System Prompts & Execution',
           configured: config.configuredNodes?.supervisor || false,
           isSubflowParent: true,
           subflowExpanded: taskSubflowExpanded,
@@ -212,11 +199,11 @@ function ConversationCanvasContent() {
         },
       });
 
-      // 4. Response Generation node
+      // 3. Response Generation node
       nodeList.push({
         id: 'response',
         type: 'conversationNode',
-        position: { x: startX + horizontalSpacing * 4, y: startY },
+        position: { x: startX + horizontalSpacing * 3, y: startY },
         data: {
           id: 'response',
           name: 'Response',
