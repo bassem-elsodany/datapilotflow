@@ -82,12 +82,16 @@ interface ConversationConfig {
   enableLLMGeneration: boolean;
   enableKnowledgeAssistant: boolean;
   topK: number;
+  // Template information
+  selectedTemplate?: ConversationTemplate;
   // Track which nodes user has configured
   configuredNodes?: {
     enhancement?: boolean;
     retrieval?: boolean;
     reranking?: boolean;
     llm?: boolean;
+    assistant?: boolean;
+    supervisor?: boolean;
   };
 }
 
@@ -126,6 +130,7 @@ function ConversationCanvasContent() {
 
   // Dynamic node generation based on configuration
   // RAG flow: User Query → Query Strategy → Search Documents → Rerank? → Generate Answer/Raw Output
+  // Supervisor flow: User Query → Task Analyzer → Supervisor → Tool Execution → Response
   // Settings (conversation name & description) handled in modal before canvas
   // Uses horizontal layout with proper positioning - compact spacing to fit in viewport
   const dynamicNodes = useMemo(() => {
@@ -135,6 +140,9 @@ function ConversationCanvasContent() {
     const startX = 30;
     const startY = 50;
     const nodesPerLine = 4;
+
+    // Check if this is a supervisor template
+    const isSupervisor = config.selectedTemplate?.type === 'supervisor';
 
     // 0. User Query node (starting point - dummy node, no config needed)
     nodeList.push({
@@ -149,6 +157,69 @@ function ConversationCanvasContent() {
         configured: true, // Always configured, it's just a starting point
       },
     });
+
+    // For Supervisor Agent, generate supervisor-specific nodes
+    if (isSupervisor) {
+      // Assistant Configuration node
+      nodeList.push({
+        id: 'assistant',
+        type: 'conversationNode',
+        position: { x: startX + horizontalSpacing, y: startY },
+        data: {
+          id: 'assistant',
+          name: 'Assistant Config',
+          type: 'assistant',
+          description: 'Knowledge assistant & system prompts',
+          configured: config.configuredNodes?.assistant || false,
+        },
+      });
+
+      // Supervisor Orchestrator node
+      nodeList.push({
+        id: 'supervisor',
+        type: 'conversationNode',
+        position: { x: startX + horizontalSpacing * 2, y: startY },
+        data: {
+          id: 'supervisor',
+          name: 'Supervisor',
+          type: 'supervisor',
+          description: 'Multi-agent orchestration',
+          configured: config.configuredNodes?.supervisor || false,
+        },
+      });
+
+      // Tool Execution node
+      nodeList.push({
+        id: 'toolExecution',
+        type: 'conversationNode',
+        position: { x: startX + horizontalSpacing * 3, y: startY },
+        data: {
+          id: 'toolExecution',
+          name: 'Tool Execution',
+          type: 'toolExecution',
+          description: 'Execute tasks & tools',
+          configured: true, // Auto-configured for supervisor
+        },
+      });
+
+      // Response Generation node
+      nodeList.push({
+        id: 'response',
+        type: 'conversationNode',
+        position: { x: startX + horizontalSpacing * 4, y: startY },
+        data: {
+          id: 'response',
+          name: 'Response',
+          type: 'response',
+          description: 'Generate final response',
+          configured: true, // Auto-configured for supervisor
+        },
+      });
+
+      return nodeList;
+    }
+
+    // RAG flow continues below...
 
     // 1. Query Strategy node (formerly Enhancement)
     // Green if: selectedStrategy is marked as configured in configuredNodes
@@ -355,13 +426,16 @@ function ConversationCanvasContent() {
     // Apply template configuration to the canvas
     setConfig(prev => ({
       ...prev,
+      selectedTemplate: template, // Store the template for node generation
       selectedStrategy: template.defaultConfig.selectedStrategy,
       enableReranking: selectedOptionals.includes('reranking') || template.defaultConfig.enableReranking,
       enableLLMGeneration: selectedOptionals.includes('llm') || template.defaultConfig.enableLLMGeneration,
+      enableKnowledgeAssistant: template.type === 'supervisor', // Auto-enable for supervisor templates
       // Mark enhancement as configured since template selected the strategy
       configuredNodes: {
         ...prev.configuredNodes,
-        enhancement: true, // Enhancement is configured via template selection
+        enhancement: template.type === 'rag' ? true : undefined, // Enhancement only for RAG
+        assistant: template.type === 'supervisor' ? true : undefined, // Assistant config for supervisor
       },
     }));
 
