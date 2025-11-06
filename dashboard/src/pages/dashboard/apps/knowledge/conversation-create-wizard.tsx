@@ -606,6 +606,17 @@ export function ConversationCreateWizard() {
             onPromptSelected={(prompt) => {
               form.setFieldValue('selectedSystemPromptId', prompt.id);
               setSelectedSystemPrompt(prompt);
+              // Store the prompt as a system prompt task for assistant_config
+              if (prompt) {
+                form.setFieldValue('systemPromptTasks', [
+                  {
+                    id: prompt.id,
+                    title: prompt.title || prompt.name,
+                    content: prompt.content || prompt.system_prompt,
+                    is_active: prompt.is_active !== false,
+                  },
+                ]);
+              }
             }}
             selectedSystemPrompt={selectedSystemPrompt}
           />
@@ -618,6 +629,17 @@ export function ConversationCreateWizard() {
             onPromptSelected={(prompt) => {
               form.setFieldValue('selectedSystemPromptId', prompt.id);
               setSelectedSystemPrompt(prompt);
+              // Store the prompt as a system prompt task for assistant_config
+              if (prompt) {
+                form.setFieldValue('systemPromptTasks', [
+                  {
+                    id: prompt.id,
+                    title: prompt.title || prompt.name,
+                    content: prompt.content || prompt.system_prompt,
+                    is_active: prompt.is_active !== false,
+                  },
+                ]);
+              }
             }}
             selectedSystemPrompt={selectedSystemPrompt}
           />
