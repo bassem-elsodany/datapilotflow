@@ -19,15 +19,16 @@ export const SubflowContainer = memo(({ data, selected }: NodeProps<SubflowConta
   return (
     <div
       style={{
-        position: 'absolute',
         width: `${data.width}px`,
         height: `${data.height}px`,
-        backgroundColor: selected ? 'rgba(34, 139, 230, 0.15)' : 'rgba(230, 230, 230, 0.8)',
+        backgroundColor: selected ? 'rgba(34, 139, 230, 0.15)' : 'rgba(230, 230, 230, 0.85)',
         border: selected ? '2px solid #228be6' : '2px solid #999',
         borderRadius: '8px',
-        padding: '24px 12px 12px 12px',
+        padding: '28px 12px 12px 12px',
         boxSizing: 'border-box',
         pointerEvents: 'none',
+        position: 'relative',
+        zIndex: 0,
       }}
     >
       <div
@@ -42,6 +43,7 @@ export const SubflowContainer = memo(({ data, selected }: NodeProps<SubflowConta
           fontSize: '11px',
           fontWeight: 600,
           letterSpacing: '0.5px',
+          zIndex: 10,
         }}
       >
         {data.title}
