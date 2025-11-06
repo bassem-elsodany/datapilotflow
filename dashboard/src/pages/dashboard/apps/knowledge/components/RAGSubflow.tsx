@@ -103,7 +103,7 @@ export function generateRAGSubflowEdges(parentId: string, config: RAGSubflowConf
     source: `${parentId}-enhancement`,
     target: `${parentId}-search`,
     animated: true,
-    markerEnd: { type: 'arrow', color: '#228be6' },
+    markerEnd: { type: 'arrowclosed', color: '#228be6', scale: 0.5 },
   });
 
   // Search → Rerank or Generate
@@ -114,7 +114,7 @@ export function generateRAGSubflowEdges(parentId: string, config: RAGSubflowConf
       source: `${parentId}-search`,
       target: nextNodeId,
       animated: true,
-      markerEnd: { type: 'arrow', color: '#228be6' },
+      markerEnd: { type: 'arrowclosed', color: '#228be6', scale: 0.5 },
     });
   }
 
@@ -125,7 +125,7 @@ export function generateRAGSubflowEdges(parentId: string, config: RAGSubflowConf
       source: `${parentId}-rerank`,
       target: `${parentId}-generate`,
       animated: true,
-      markerEnd: { type: 'arrow', color: '#228be6' },
+      markerEnd: { type: 'arrowclosed', color: '#228be6', scale: 0.5 },
     });
   }
 
