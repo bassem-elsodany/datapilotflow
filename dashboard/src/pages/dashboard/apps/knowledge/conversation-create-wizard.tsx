@@ -538,12 +538,17 @@ export function ConversationCreateWizard() {
     ? STEP_CONFIGS.filter((_, index) => index !== 6) // Remove System Prompt step (index 6)
     : STEP_CONFIGS;
 
+  // Adjust activeStep display for stepper component based on filtered steps
+  // For RAG mode: steps 0-5 stay the same, step 7 becomes visual step 6
+  // For Assistant mode: no adjustment needed
+  const displayActiveStep = form.values.agentType === 'rag' && activeStep === 7 ? 6 : activeStep;
+
   return (
     <Page title="Create New Conversation">
       <PageHeader title="Create New Conversation" />
 
       <ColorfulVerticalStepper
-        activeStep={activeStep}
+        activeStep={displayActiveStep}
         completedSteps={completedSteps}
         steps={visibleSteps}
         onStepClick={handleStepClick}
