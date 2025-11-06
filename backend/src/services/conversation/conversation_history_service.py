@@ -36,7 +36,7 @@ The service uses a boundary pattern where:
 - API endpoints and WebSocket handlers perform conversion at boundaries
 - Core business logic remains unchanged
 - extract_conversation_config() helper flattens nested structure for agents
-- _deserialize_nested_config() reconstructs objects from MongoDB documents
+- Deserialization inlined in get_conversation() and get_user_conversations()
 - asdict() converts dataclass objects to MongoDB-compatible dictionaries
 
 SINGLE STRUCTURED IMPLEMENTATION
@@ -457,78 +457,6 @@ class ConversationHistoryService:
         )
         return conversation_id
 
-    @staticmethod
-    def _deserialize_nested_config(doc: Dict[str, Any]) -> tuple:
-        """
-        Deserialize nested configuration from MongoDB document.
-
-        Returns: (system_prompt, enhancement, vector_database, reranker, answer_generation, assistant_config)
-        """
-        system_prompt = None
-        if doc.get("system_prompt"):
-            sp = doc["system_prompt"]
-            system_prompt = SystemPrompt(
-                id=sp.get("id"),
-                title=sp.get("title"),
-                content=sp.get("content"),
-            )
-
-        enhancement = None
-        if doc.get("enhancement"):
-            enh = doc["enhancement"]
-            provider = None
-            if enh.get("provider"):
-                p = enh["provider"]
-                provider = ProviderConfig(id=p.get("id"), model_name=p.get("model_name"))
-            enhancement = EnhancementConfig(
-                strategy=enh.get("strategy", "native"), provider=provider
-            )
-
-        vector_database = None
-        if doc.get("vector_database"):
-            vdb = doc["vector_database"]
-            vector_database = VectorDatabaseConfig(
-                collection_name=vdb.get("collection_name", "LongTermMemory"),
-                top_k=vdb.get("top_k", 5),
-            )
-
-        reranker = None
-        if doc.get("reranker"):
-            rer = doc["reranker"]
-            provider = None
-            if rer.get("provider"):
-                p = rer["provider"]
-                provider = ProviderConfig(id=p.get("id"), model_name=p.get("model_name"))
-            reranker = RerankerConfig(
-                provider=provider,
-                relevance_threshold=rer.get("relevance_threshold", 0.5),
-            )
-
-        answer_generation = None
-        if doc.get("answer_generation"):
-            ag = doc["answer_generation"]
-            provider = None
-            if ag.get("provider"):
-                p = ag["provider"]
-                provider = ProviderConfig(id=p.get("id"), model_name=p.get("model_name"))
-            answer_generation = AnswerGenerationConfig(provider=provider)
-
-        # Deserialize assistant_config (complex nested structure)
-        assistant_config = None
-        if doc.get("assistant_config"):
-            ac = doc["assistant_config"]
-            system_prompt_tasks = None
-            if ac.get("system_prompt_tasks"):
-                system_prompt_tasks = []
-                for spt_dict in ac["system_prompt_tasks"]:
-                    spt = ConversationHistoryService._dict_to_system_prompt_task(spt_dict)
-                    system_prompt_tasks.append(spt)
-            assistant_config = AssistantConfig(
-                enable_knowledge_assistant=ac.get("enable_knowledge_assistant", False),
-                system_prompt_tasks=system_prompt_tasks,
-            )
-
-        return system_prompt, enhancement, vector_database, reranker, answer_generation, assistant_config
 
     def get_conversation(
         self, conversation_id: str, user_id: str = None
@@ -564,10 +492,74 @@ class ConversationHistoryService:
                     )
                     messages.append(msg)
 
-                # Deserialize nested configuration
-                system_prompt, enhancement, vector_database, reranker, answer_generation, assistant_config = (
-                    self._deserialize_nested_config(doc)
-                )
+                # Deserialize system prompt
+                system_prompt = None
+                if doc.get("system_prompt"):
+                    sp = doc["system_prompt"]
+                    system_prompt = SystemPrompt(
+                        id=sp.get("id"),
+                        title=sp.get("title"),
+                        content=sp.get("content"),
+                    )
+
+                # Deserialize enhancement config
+                enhancement = None
+                if doc.get("enhancement"):
+                    enh = doc["enhancement"]
+                    provider = None
+                    if enh.get("provider"):
+                        p = enh["provider"]
+                        provider = ProviderConfig(id=p.get("id"), model_name=p.get("model_name"))
+                    enhancement = EnhancementConfig(
+                        strategy=enh.get("strategy", "native"), provider=provider
+                    )
+
+                # Deserialize vector database config
+                vector_database = None
+                if doc.get("vector_database"):
+                    vdb = doc["vector_database"]
+                    vector_database = VectorDatabaseConfig(
+                        collection_name=vdb.get("collection_name", "LongTermMemory"),
+                        top_k=vdb.get("top_k", 5),
+                    )
+
+                # Deserialize reranker config
+                reranker = None
+                if doc.get("reranker"):
+                    rer = doc["reranker"]
+                    provider = None
+                    if rer.get("provider"):
+                        p = rer["provider"]
+                        provider = ProviderConfig(id=p.get("id"), model_name=p.get("model_name"))
+                    reranker = RerankerConfig(
+                        provider=provider,
+                        relevance_threshold=rer.get("relevance_threshold", 0.5),
+                    )
+
+                # Deserialize answer generation config
+                answer_generation = None
+                if doc.get("answer_generation"):
+                    ag = doc["answer_generation"]
+                    provider = None
+                    if ag.get("provider"):
+                        p = ag["provider"]
+                        provider = ProviderConfig(id=p.get("id"), model_name=p.get("model_name"))
+                    answer_generation = AnswerGenerationConfig(provider=provider)
+
+                # Deserialize assistant config
+                assistant_config = None
+                if doc.get("assistant_config"):
+                    ac = doc["assistant_config"]
+                    system_prompt_tasks = None
+                    if ac.get("system_prompt_tasks"):
+                        system_prompt_tasks = []
+                        for spt_dict in ac["system_prompt_tasks"]:
+                            spt = self._dict_to_system_prompt_task(spt_dict)
+                            system_prompt_tasks.append(spt)
+                    assistant_config = AssistantConfig(
+                        enable_knowledge_assistant=ac.get("enable_knowledge_assistant", False),
+                        system_prompt_tasks=system_prompt_tasks,
+                    )
 
                 session = ConversationSession(
                     _id=str(doc["_id"]),
@@ -646,10 +638,74 @@ class ConversationHistoryService:
                 )
                 messages.append(msg)
 
-            # Deserialize nested configuration
-            system_prompt, enhancement, vector_database, reranker, answer_generation, assistant_config = (
-                self._deserialize_nested_config(doc)
-            )
+            # Deserialize system prompt
+            system_prompt = None
+            if doc.get("system_prompt"):
+                sp = doc["system_prompt"]
+                system_prompt = SystemPrompt(
+                    id=sp.get("id"),
+                    title=sp.get("title"),
+                    content=sp.get("content"),
+                )
+
+            # Deserialize enhancement config
+            enhancement = None
+            if doc.get("enhancement"):
+                enh = doc["enhancement"]
+                provider = None
+                if enh.get("provider"):
+                    p = enh["provider"]
+                    provider = ProviderConfig(id=p.get("id"), model_name=p.get("model_name"))
+                enhancement = EnhancementConfig(
+                    strategy=enh.get("strategy", "native"), provider=provider
+                )
+
+            # Deserialize vector database config
+            vector_database = None
+            if doc.get("vector_database"):
+                vdb = doc["vector_database"]
+                vector_database = VectorDatabaseConfig(
+                    collection_name=vdb.get("collection_name", "LongTermMemory"),
+                    top_k=vdb.get("top_k", 5),
+                )
+
+            # Deserialize reranker config
+            reranker = None
+            if doc.get("reranker"):
+                rer = doc["reranker"]
+                provider = None
+                if rer.get("provider"):
+                    p = rer["provider"]
+                    provider = ProviderConfig(id=p.get("id"), model_name=p.get("model_name"))
+                reranker = RerankerConfig(
+                    provider=provider,
+                    relevance_threshold=rer.get("relevance_threshold", 0.5),
+                )
+
+            # Deserialize answer generation config
+            answer_generation = None
+            if doc.get("answer_generation"):
+                ag = doc["answer_generation"]
+                provider = None
+                if ag.get("provider"):
+                    p = ag["provider"]
+                    provider = ProviderConfig(id=p.get("id"), model_name=p.get("model_name"))
+                answer_generation = AnswerGenerationConfig(provider=provider)
+
+            # Deserialize assistant config
+            assistant_config = None
+            if doc.get("assistant_config"):
+                ac = doc["assistant_config"]
+                system_prompt_tasks = None
+                if ac.get("system_prompt_tasks"):
+                    system_prompt_tasks = []
+                    for spt_dict in ac["system_prompt_tasks"]:
+                        spt = self._dict_to_system_prompt_task(spt_dict)
+                        system_prompt_tasks.append(spt)
+                assistant_config = AssistantConfig(
+                    enable_knowledge_assistant=ac.get("enable_knowledge_assistant", False),
+                    system_prompt_tasks=system_prompt_tasks,
+                )
 
             session = ConversationSession(
                 _id=str(doc["_id"]),
