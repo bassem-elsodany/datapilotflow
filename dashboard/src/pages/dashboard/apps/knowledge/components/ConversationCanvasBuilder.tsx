@@ -118,7 +118,7 @@ function ConversationCanvasContent() {
     conversationName: '',
     conversationDescription: '',
     selectedStrategy: 'native',
-    collectionName: '', // NO DEFAULT - user must select
+    collectionName: 'LongTermMemory', // Default collection
     selectedProviderId: null,
     selectedModel: null,
     enableReranking: false,
@@ -126,7 +126,7 @@ function ConversationCanvasContent() {
     selectedRerankerModel: null,
     enableLLMGeneration: true,
     enableKnowledgeAssistant: true,
-    topK: 5, // Default topK is OK, but retrieval not configured until user chooses collection
+    topK: 5, // Default topK
     configuredNodes: {
       enhancement: false,
       retrieval: false,
@@ -855,7 +855,7 @@ function ConversationCanvasContent() {
               leftSection={<IconCheck size={16} />}
               onClick={() => {
                 // Validate all required nodes are configured BEFORE opening modal
-                if (!config.configuredNodes?.enhancement) {
+                if (!config.selectedStrategy) {
                   notifications.show({
                     title: 'Configuration Incomplete',
                     message: 'Query Strategy must be configured',
@@ -865,7 +865,7 @@ function ConversationCanvasContent() {
                   return;
                 }
 
-                if (!config.configuredNodes?.retrieval) {
+                if (!config.collectionName || !config.topK) {
                   notifications.show({
                     title: 'Configuration Incomplete',
                     message: 'Document Search must be configured (select collection and Top K)',
