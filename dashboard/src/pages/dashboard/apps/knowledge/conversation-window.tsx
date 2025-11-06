@@ -1398,6 +1398,7 @@ export default function ConversationWindow() {
         },
         // Reranker configuration
         reranker: enableReranking ? {
+          enabled: true,
           provider: selectedRerankerId && selectedRerankerModel ? {
             id: selectedRerankerId,
             model_name: selectedRerankerModel,
@@ -1406,6 +1407,7 @@ export default function ConversationWindow() {
         } : null,
         // Answer generation configuration
         answer_generation: enableLLMGeneration && selectedProviderId && selectedModel ? {
+          enabled: true,
           provider: {
             id: selectedProviderId,
             model_name: selectedModel,
@@ -1488,6 +1490,7 @@ export default function ConversationWindow() {
         },
         // Reranker configuration
         reranker: enableReranking ? {
+          enabled: true,
           provider: selectedRerankerId && selectedRerankerModel ? {
             id: selectedRerankerId,
             model_name: selectedRerankerModel,
@@ -1496,6 +1499,7 @@ export default function ConversationWindow() {
         } : null,
         // Answer generation configuration
         answer_generation: enableLLMGeneration && selectedProviderId && selectedModel ? {
+          enabled: true,
           provider: {
             id: selectedProviderId,
             model_name: selectedModel,
