@@ -1416,11 +1416,11 @@ export default function ConversationWindow() {
           },
         } : null,
         enable_knowledge_assistant: enableKnowledgeAssistant,
-        // Complex nested assistant configuration (for Assistant mode)
-        assistant_config: enableKnowledgeAssistant ? {
-          enable_knowledge_assistant: true,
+        // Complex nested assistant configuration (always present, never null)
+        assistant_config: {
+          enable_knowledge_assistant: enableKnowledgeAssistant,
           system_prompt_tasks: null, // Keep existing prompts
-        } : null,
+        },
       };
 
 
@@ -1506,11 +1506,11 @@ export default function ConversationWindow() {
           },
         } : null,
         enable_knowledge_assistant: enableKnowledgeAssistant,
-        // Complex nested assistant configuration (for Assistant mode)
-        assistant_config: enableKnowledgeAssistant ? {
-          enable_knowledge_assistant: true,
+        // Complex nested assistant configuration (always present, never null)
+        assistant_config: {
+          enable_knowledge_assistant: enableKnowledgeAssistant,
           system_prompt_tasks: null, // Keep existing prompts
-        } : null,
+        },
       };
 
       const response = await fetch(apiUtils.buildApiUrl(`/conversations/${sessionId}`), {

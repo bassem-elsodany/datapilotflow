@@ -444,19 +444,19 @@ export function ConversationCreateWizard() {
           title: 'Selected System Prompt',
           content: '',
         } : null,
-        // Complex nested assistant configuration (for Assistant mode)
-        // RAG mode: assistant_config is null
-        // Assistant mode: assistant_config contains enable_knowledge_assistant and system_prompt_tasks
-        assistant_config: form.values.agentType === 'assistant' ? {
-          enable_knowledge_assistant: true,
-          system_prompt_tasks: form.values.systemPromptTasks && form.values.systemPromptTasks.length > 0 ?
+        // Complex nested assistant configuration
+        // RAG mode: assistant_config = { enable_knowledge_assistant: false }
+        // Assistant mode: assistant_config = { enable_knowledge_assistant: true, system_prompt_tasks: [...] }
+        assistant_config: {
+          enable_knowledge_assistant: form.values.agentType === 'assistant',
+          system_prompt_tasks: form.values.agentType === 'assistant' && form.values.systemPromptTasks && form.values.systemPromptTasks.length > 0 ?
             form.values.systemPromptTasks.map((task: any) => ({
               title: task.title || task.name || '',
               content: task.content || task.system_prompt || '',
               is_active: task.is_active !== false,
             }))
             : null,
-        } : null,
+        },
       };
 
       const response = await fetch(apiUtils.buildApiUrl('/conversations'), {
