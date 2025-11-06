@@ -428,22 +428,22 @@ export function ConversationCreateWizard() {
           top_k: form.values.topK,
         },
         // Reranker configuration
-        reranker: form.values.enableReranking ? {
-          enabled: true,
-          provider: form.values.selectedRerankerId && form.values.selectedRerankerModel ? {
+        reranker: {
+          enabled: form.values.enableReranking,
+          provider: form.values.enableReranking && form.values.selectedRerankerId && form.values.selectedRerankerModel ? {
             id: form.values.selectedRerankerId,
             model_name: form.values.selectedRerankerModel,
           } : null,
           relevance_threshold: form.values.relevanceThreshold,
-        } : null,
+        },
         // Answer generation configuration
-        answer_generation: form.values.enableLLMGeneration && form.values.selectedProviderId && form.values.selectedModel ? {
-          enabled: true,
-          provider: {
+        answer_generation: {
+          enabled: form.values.enableLLMGeneration && form.values.selectedProviderId && form.values.selectedModel ? true : false,
+          provider: form.values.enableLLMGeneration && form.values.selectedProviderId && form.values.selectedModel ? {
             id: form.values.selectedProviderId,
             model_name: form.values.selectedModel,
-          },
-        } : null,
+          } : null,
+        },
         // System prompt (only for Assistant/Supervisor mode)
         system_prompt: form.values.agentType === 'assistant' && form.values.selectedSystemPromptId && !form.values.selectedSystemPromptId.startsWith('temp-') ? {
           id: form.values.selectedSystemPromptId,

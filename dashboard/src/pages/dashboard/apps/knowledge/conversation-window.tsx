@@ -1403,22 +1403,22 @@ export default function ConversationWindow() {
           top_k: topK,
         },
         // Reranker configuration
-        reranker: enableReranking ? {
-          enabled: true,
-          provider: selectedRerankerId && selectedRerankerModel ? {
+        reranker: {
+          enabled: enableReranking,
+          provider: enableReranking && selectedRerankerId && selectedRerankerModel ? {
             id: selectedRerankerId,
             model_name: selectedRerankerModel,
           } : null,
           relevance_threshold: relevanceThreshold,
-        } : null,
+        },
         // Answer generation configuration
-        answer_generation: enableLLMGeneration && selectedProviderId && selectedModel ? {
-          enabled: true,
-          provider: {
+        answer_generation: {
+          enabled: enableLLMGeneration && selectedProviderId && selectedModel ? true : false,
+          provider: enableLLMGeneration && selectedProviderId && selectedModel ? {
             id: selectedProviderId,
             model_name: selectedModel,
-          },
-        } : null,
+          } : null,
+        },
         enable_knowledge_assistant: enableKnowledgeAssistant,
         // Complex nested assistant configuration (always present, never null)
         assistant_config: {
@@ -1501,22 +1501,22 @@ export default function ConversationWindow() {
           top_k: topK,
         },
         // Reranker configuration
-        reranker: enableReranking ? {
-          enabled: true,
-          provider: selectedRerankerId && selectedRerankerModel ? {
+        reranker: {
+          enabled: enableReranking,
+          provider: enableReranking && selectedRerankerId && selectedRerankerModel ? {
             id: selectedRerankerId,
             model_name: selectedRerankerModel,
           } : null,
           relevance_threshold: relevanceThreshold,
-        } : null,
+        },
         // Answer generation configuration
-        answer_generation: enableLLMGeneration && selectedProviderId && selectedModel ? {
-          enabled: true,
-          provider: {
+        answer_generation: {
+          enabled: enableLLMGeneration && selectedProviderId && selectedModel ? true : false,
+          provider: enableLLMGeneration && selectedProviderId && selectedModel ? {
             id: selectedProviderId,
             model_name: selectedModel,
-          },
-        } : null,
+          } : null,
+        },
         enable_knowledge_assistant: enableKnowledgeAssistant,
         // Complex nested assistant configuration (always present, never null)
         assistant_config: {
