@@ -1,60 +1,60 @@
 /**
  * System Prompt Manager Component
  *
- * Allows users to:
+ * Manages system prompts as part of the conversation (no backend API calls)
  * - Create new system prompts
  * - Edit existing prompts
- * - Delete prompts
+ * - Delete prompts from conversation
  * - Use quick presets
  */
 
-import React, { useState, useEffect } from 'react';
 import {
-  Modal,
-  Button,
-  TextInput,
-  Textarea,
-  Stack,
-  Group,
-  Card,
-  Text,
-  Badge,
   ActionIcon,
   Alert,
-  Tabs,
-  ThemeIcon,
+  Badge,
+  Button,
+  Card,
   Divider,
+  Group,
+  Modal,
+  Stack,
+  Tabs,
+  Text,
+  TextInput,
+  Textarea,
+  ThemeIcon,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import {
-  IconPlus,
-  IconEdit,
-  IconTrash,
-  IconCheck,
-  IconX,
   IconAlertCircle,
-  IconWand,
   IconBook,
+  IconCheck,
+  IconEdit,
+  IconPlus,
   IconSettings,
+  IconTrash,
+  IconWand
 } from '@tabler/icons-react';
-import { apiUtils } from '@/config';
+import { useEffect, useState } from 'react';
 
 interface SystemPrompt {
   id: string;
-  name: string;
+  title?: string;
+  name?: string;
   description?: string;
-  system_prompt: string;
-  tags: string[];
-  is_active: boolean;
-  usage_count: number;
-  version: number;
+  content?: string;
+  system_prompt?: string;
+  tags?: string[];
+  is_active?: boolean;
 }
 
 interface SystemPromptManagerProps {
   conversationId: string;
   selectedPromptId?: string;
   selectedPromptData?: SystemPrompt | null;
+  existingPrompts?: SystemPrompt[]; // Prompts from the conversation
   onPromptSelected?: (prompt: SystemPrompt) => void;
+  onPromptsChanged?: (prompts: SystemPrompt[]) => void; // Notify parent of prompt list changes
 }
 
 const QUICK_PRESETS = [
@@ -114,10 +114,11 @@ export function SystemPromptManager({
   conversationId,
   selectedPromptId,
   selectedPromptData,
+  existingPrompts = [],
   onPromptSelected,
+  onPromptsChanged,
 }: SystemPromptManagerProps) {
-  const [prompts, setPrompts] = useState<SystemPrompt[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [prompts, setPrompts] = useState<SystemPrompt[]>(existingPrompts);
   const [managerModalOpen, setManagerModalOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editingPrompt, setEditingPrompt] = useState<SystemPrompt | null>(null);
@@ -125,263 +126,122 @@ export function SystemPromptManager({
   const [expandedPresetIndex, setExpandedPresetIndex] = useState<number | null>(null);
   const [fromPreset, setFromPreset] = useState(false);
 
-  // Load prompts when manager opens
+  // Update local prompts when existingPrompts changes
   useEffect(() => {
-    if (managerModalOpen && conversationId) {
-      loadPrompts();
-    }
-  }, [managerModalOpen, conversationId]);
+    setPrompts(existingPrompts);
+  }, [existingPrompts]);
 
-  // If in conversation creation mode and a prompt is selected, show it in the list
-  useEffect(() => {
-    if (!conversationId && selectedPromptId?.startsWith('temp-') && selectedPromptData) {
-      // Find if this temp prompt is already in the list
-      const existingPrompt = prompts.find(p => p.id === selectedPromptId);
-      if (!existingPrompt) {
-        // Add the unsaved prompt to the displayed list
-        setPrompts([selectedPromptData, ...prompts]);
-      }
-    }
-  }, [selectedPromptId, conversationId, selectedPromptData]);
-
-  const loadPrompts = async () => {
-    if (!conversationId) return;
-    try {
-      setLoading(true);
-      const token = localStorage.getItem('jwt_token');
-      const response = await fetch(
-        apiUtils.buildApiUrl(`/conversations/${conversationId}/system-prompts?active_only=true`),
-        {
-          headers: { 'Authorization': `Bearer ${token}` },
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        setPrompts(data.data || []);
-      }
-    } catch (error) {
-      console.error('Error loading prompts:', error);
+  const handleSave = () => {
+    if (!formData.name || !formData.system_prompt) {
       notifications.show({
-        title: 'Error',
-        message: 'Failed to load system prompts',
-        color: 'red',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCreateOrUpdate = async () => {
-    if (!formData.name.trim() || !formData.system_prompt.trim()) {
-      notifications.show({
-        title: 'Error',
-        message: 'Name and prompt are required',
+        title: 'Validation Error',
+        message: 'Name and prompt content are required',
         color: 'red',
       });
       return;
     }
 
-    // If no conversation ID, we're in conversation creation mode
-    // Just store the prompt locally and select it, don't call API
-    if (!conversationId) {
-      const tempPrompt: SystemPrompt = {
+    let updatedPrompts: SystemPrompt[];
+
+    if (editingPrompt) {
+      // Update existing prompt
+      updatedPrompts = prompts.map(p =>
+        p.id === editingPrompt.id
+          ? {
+            ...p,
+            name: formData.name,
+            title: formData.name,
+            description: formData.description,
+            system_prompt: formData.system_prompt,
+            content: formData.system_prompt,
+          }
+          : p
+      );
+
+      notifications.show({
+        title: 'Success',
+        message: 'Prompt updated successfully',
+        color: 'green',
+      });
+    } else {
+      // Create new prompt
+      const newPrompt: SystemPrompt = {
         id: `temp-${Date.now()}`,
         name: formData.name,
+        title: formData.name,
         description: formData.description,
         system_prompt: formData.system_prompt,
+        content: formData.system_prompt,
         tags: [],
         is_active: true,
-        usage_count: 0,
-        version: 1,
       };
+
+      updatedPrompts = [newPrompt, ...prompts];
 
       notifications.show({
         title: 'Success',
-        message: 'Prompt saved! It will be created when you create the conversation.',
+        message: 'Prompt created successfully',
         color: 'green',
       });
-      onPromptSelected?.(tempPrompt);
-      setFormData({ name: '', description: '', system_prompt: '' });
-      setCreateModalOpen(false);
-      if (fromPreset) {
-        setFromPreset(false);
-        setManagerModalOpen(true);
-      }
-      return;
+
+      // Auto-select the new prompt
+      onPromptSelected?.(newPrompt);
     }
 
-    try {
-      const token = localStorage.getItem('jwt_token');
-
-      if (editingPrompt) {
-        // Update
-        const response = await fetch(
-          apiUtils.buildApiUrl(`/conversations/${conversationId}/system-prompts/${editingPrompt.id}`),
-          {
-            method: 'PUT',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              name: formData.name,
-              description: formData.description,
-              system_prompt: formData.system_prompt,
-            }),
-          }
-        );
-
-        if (response.ok) {
-          notifications.show({
-            title: 'Success',
-            message: 'Prompt updated successfully',
-            color: 'green',
-          });
-          await loadPrompts();
-          setEditingPrompt(null);
-          setFormData({ name: '', description: '', system_prompt: '' });
-          setCreateModalOpen(false);
-        }
-      } else {
-        // Create
-        const response = await fetch(
-          apiUtils.buildApiUrl(`/conversations/${conversationId}/system-prompts`),
-          {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              name: formData.name,
-              description: formData.description,
-              system_prompt: formData.system_prompt,
-              tags: [],
-            }),
-          }
-        );
-
-        if (response.ok) {
-          const newPrompt = await response.json();
-          notifications.show({
-            title: 'Success',
-            message: 'Prompt created successfully',
-            color: 'green',
-          });
-          onPromptSelected?.(newPrompt.data);
-          await loadPrompts();
-          setFormData({ name: '', description: '', system_prompt: '' });
-          setCreateModalOpen(false);
-          if (fromPreset) {
-            setFromPreset(false);
-            setManagerModalOpen(true);
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error saving prompt:', error);
-      notifications.show({
-        title: 'Error',
-        message: 'Failed to save prompt',
-        color: 'red',
-      });
+    setPrompts(updatedPrompts);
+    onPromptsChanged?.(updatedPrompts);
+    setEditingPrompt(null);
+    setFormData({ name: '', description: '', system_prompt: '' });
+    setCreateModalOpen(false);
+    if (fromPreset) {
+      setFromPreset(false);
+      setManagerModalOpen(true);
     }
   };
 
-  const handleDelete = async (promptId: string) => {
-    if (!confirm('Are you sure you want to delete this prompt?')) return;
+  const handleDelete = (promptId: string) => {
+    if (!confirm('Are you sure you want to delete this prompt from the conversation?')) return;
 
-    try {
-      const token = localStorage.getItem('jwt_token');
-      const response = await fetch(
-        apiUtils.buildApiUrl(`/conversations/${conversationId}/system-prompts/${promptId}`),
-        {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` },
-        }
-      );
+    const updatedPrompts = prompts.filter(p => p.id !== promptId);
+    setPrompts(updatedPrompts);
+    onPromptsChanged?.(updatedPrompts);
 
-      if (response.ok) {
-        notifications.show({
-          title: 'Success',
-          message: 'Prompt deleted successfully',
-          color: 'green',
-        });
-        await loadPrompts();
-      }
-    } catch (error) {
-      console.error('Error deleting prompt:', error);
-      notifications.show({
-        title: 'Error',
-        message: 'Failed to delete prompt',
-        color: 'red',
-      });
+    notifications.show({
+      title: 'Success',
+      message: 'Prompt deleted successfully',
+      color: 'green',
+    });
+
+    // If the deleted prompt was selected, clear selection
+    if (selectedPromptId === promptId) {
+      onPromptSelected?.(null as any);
     }
   };
 
-  const handleUsePreset = async (preset: typeof QUICK_PRESETS[0]) => {
-    // If no conversation ID, we're in conversation creation mode
-    // Just select the preset without API call
-    if (!conversationId) {
-      const tempPrompt: SystemPrompt = {
-        id: `temp-${Date.now()}`,
-        name: preset.name,
-        description: preset.description,
-        system_prompt: preset.system_prompt,
-        tags: preset.tags,
-        is_active: true,
-        usage_count: 0,
-        version: 1,
-      };
+  const handleUsePreset = (preset: typeof QUICK_PRESETS[0]) => {
+    const tempPrompt: SystemPrompt = {
+      id: `temp-${Date.now()}`,
+      name: preset.name,
+      title: preset.name,
+      description: preset.description,
+      system_prompt: preset.system_prompt,
+      content: preset.system_prompt,
+      tags: preset.tags,
+      is_active: true,
+    };
 
-      notifications.show({
-        title: 'Success',
-        message: `${preset.name} preset selected! It will be created when you create the conversation.`,
-        color: 'green',
-      });
-      onPromptSelected?.(tempPrompt);
-      setManagerModalOpen(false);
-      return;
-    }
+    const updatedPrompts = [tempPrompt, ...prompts];
+    setPrompts(updatedPrompts);
+    onPromptsChanged?.(updatedPrompts);
 
-    try {
-      const token = localStorage.getItem('jwt_token');
-      const response = await fetch(
-        apiUtils.buildApiUrl(`/conversations/${conversationId}/system-prompts`),
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            name: preset.name,
-            description: preset.description,
-            system_prompt: preset.system_prompt,
-            tags: preset.tags,
-          }),
-        }
-      );
+    notifications.show({
+      title: 'Preset Selected',
+      message: `${preset.name} preset added to conversation`,
+      color: 'green',
+    });
 
-      if (response.ok) {
-        const newPrompt = await response.json();
-        notifications.show({
-          title: 'Success',
-          message: `${preset.name} preset added`,
-          color: 'green',
-        });
-        onPromptSelected?.(newPrompt.data);
-        await loadPrompts();
-      }
-    } catch (error) {
-      console.error('Error using preset:', error);
-      notifications.show({
-        title: 'Error',
-        message: 'Failed to add preset',
-        color: 'red',
-      });
-    }
+    onPromptSelected?.(tempPrompt);
+    setManagerModalOpen(false);
   };
 
   return (
@@ -390,248 +250,251 @@ export function SystemPromptManager({
         variant="light"
         leftSection={<IconSettings size={16} />}
         onClick={() => setManagerModalOpen(true)}
-        fullWidth
       >
-        Manage System Prompts
+        Manage System Prompts {prompts.length > 0 && `(${prompts.length})`}
       </Button>
 
+      {/* Manager Modal */}
       <Modal
         opened={managerModalOpen}
         onClose={() => setManagerModalOpen(false)}
-        title="System Prompt Manager"
-        size="lg"
+        title={
+          <Group gap="xs">
+            <ThemeIcon size="md" variant="light" color="blue">
+              <IconBook size={18} />
+            </ThemeIcon>
+            <Text fw={600}>System Prompt Manager</Text>
+          </Group>
+        }
+        size="xl"
       >
-        <Tabs defaultValue="my-prompts">
-          <Tabs.List>
-            <Tabs.Tab value="my-prompts">My Prompts ({prompts.length})</Tabs.Tab>
-            <Tabs.Tab value="presets">Quick Presets</Tabs.Tab>
-          </Tabs.List>
+        <Stack gap="lg">
+          <Alert icon={<IconAlertCircle size={16} />} color="blue" variant="light">
+            <Text size="sm">
+              Manage system prompts for this conversation. Changes will be saved when you update the conversation.
+            </Text>
+          </Alert>
 
-          <Tabs.Panel value="my-prompts" pt="md">
-            <Stack gap="md">
-              <Group justify="space-between">
-                <Text size="sm" c="dimmed">
-                  Create and manage custom system prompts for this conversation
-                </Text>
-                <Button
-                  size="sm"
-                  leftSection={<IconPlus size={14} />}
-                  onClick={() => {
-                    setEditingPrompt(null);
-                    setFormData({ name: '', description: '', system_prompt: '' });
-                    setCreateModalOpen(true);
-                  }}
-                >
-                  New Prompt
-                </Button>
-              </Group>
+          <Tabs defaultValue="my-prompts">
+            <Tabs.List>
+              <Tabs.Tab value="my-prompts" leftSection={<IconBook size={16} />}>
+                My Prompts ({prompts.length})
+              </Tabs.Tab>
+              <Tabs.Tab value="presets" leftSection={<IconWand size={16} />}>
+                Quick Presets
+              </Tabs.Tab>
+            </Tabs.List>
 
-              {prompts.length === 0 ? (
-                <Alert icon={<IconAlertCircle size={16} />} color="blue" variant="light">
-                  No prompts yet. Create one or use a quick preset.
-                </Alert>
-              ) : (
-                <Stack gap="sm">
-                  {prompts.map((prompt) => (
-                    <Card key={prompt.id} p="md" withBorder>
-                      <Group justify="space-between" mb="xs">
-                        <div>
-                          <Text fw={600} size="sm">{prompt.name}</Text>
-                          {prompt.description && (
-                            <Text size="xs" c="dimmed">{prompt.description}</Text>
-                          )}
-                        </div>
-                        <Group gap="xs">
-                          <ActionIcon
-                            size="sm"
-                            variant="light"
-                            color="blue"
-                            onClick={() => {
-                              setEditingPrompt(prompt);
-                              setFormData({
-                                name: prompt.name,
-                                description: prompt.description || '',
-                                system_prompt: prompt.system_prompt,
-                              });
-                              setCreateModalOpen(true);
-                            }}
-                          >
-                            <IconEdit size={14} />
-                          </ActionIcon>
-                          <ActionIcon
-                            size="sm"
-                            variant="light"
-                            color="red"
-                            onClick={() => handleDelete(prompt.id)}
-                          >
-                            <IconTrash size={14} />
-                          </ActionIcon>
+            <Tabs.Panel value="my-prompts" pt="md">
+              <Stack gap="md">
+                <Group justify="space-between">
+                  <Text size="sm" c="dimmed">
+                    {prompts.length === 0 ? 'No prompts yet' : `${prompts.length} prompt${prompts.length !== 1 ? 's' : ''}`}
+                  </Text>
+                  <Button
+                    size="xs"
+                    leftSection={<IconPlus size={14} />}
+                    onClick={() => {
+                      setEditingPrompt(null);
+                      setFormData({ name: '', description: '', system_prompt: '' });
+                      setCreateModalOpen(true);
+                      setManagerModalOpen(false);
+                    }}
+                  >
+                    Create New
+                  </Button>
+                </Group>
+
+                {prompts.length === 0 ? (
+                  <Alert icon={<IconAlertCircle size={16} />} color="gray" variant="light">
+                    <Text size="sm">
+                      No prompts yet. Create a new prompt or use a preset to get started.
+                    </Text>
+                  </Alert>
+                ) : (
+                  <Stack gap="sm">
+                    {prompts.map((prompt) => (
+                      <Card key={prompt.id} withBorder p="md">
+                        <Group justify="space-between" align="flex-start">
+                          <div style={{ flex: 1 }}>
+                            <Group gap="xs" mb="xs">
+                              {selectedPromptId === prompt.id && (
+                                <Badge size="sm" leftSection={<IconCheck size={12} />}>
+                                  Selected
+                                </Badge>
+                              )}
+                            </Group>
+                            <Text fw={600} size="md">
+                              {prompt.title || prompt.name}
+                            </Text>
+                            {prompt.description && (
+                              <Text size="sm" c="dimmed" mt={4}>
+                                {prompt.description}
+                              </Text>
+                            )}
+                          </div>
+
+                          <Group gap="xs">
+                            <ActionIcon
+                              size="sm"
+                              variant="light"
+                              onClick={() => {
+                                setEditingPrompt(prompt);
+                                setFormData({
+                                  name: prompt.name || prompt.title || '',
+                                  description: prompt.description || '',
+                                  system_prompt: prompt.system_prompt || prompt.content || '',
+                                });
+                                setCreateModalOpen(true);
+                                setManagerModalOpen(false);
+                              }}
+                            >
+                              <IconEdit size={14} />
+                            </ActionIcon>
+                            <ActionIcon
+                              size="sm"
+                              variant="light"
+                              color="red"
+                              onClick={() => handleDelete(prompt.id)}
+                            >
+                              <IconTrash size={14} />
+                            </ActionIcon>
+                          </Group>
                         </Group>
+
+                        <Group justify="flex-end" mt="sm">
+                          <Button
+                            size="xs"
+                            variant="subtle"
+                            onClick={() => onPromptSelected?.(prompt)}
+                          >
+                            {selectedPromptId === prompt.id ? 'Selected' : 'Select'}
+                          </Button>
+                        </Group>
+                      </Card>
+                    ))}
+                  </Stack>
+                )}
+              </Stack>
+            </Tabs.Panel>
+
+            <Tabs.Panel value="presets" pt="md">
+              <Stack gap="md">
+                <Text size="sm" c="dimmed">
+                  Quick presets to get started
+                </Text>
+
+                {QUICK_PRESETS.map((preset, index) => (
+                  <Card key={index} withBorder p="md">
+                    <Stack gap="sm">
+                      <Group justify="space-between" align="flex-start">
+                        <div>
+                          <Text fw={600} size="md">
+                            {preset.name}
+                          </Text>
+                          <Text size="sm" c="dimmed" mt={4}>
+                            {preset.description}
+                          </Text>
+                        </div>
+                        <Button
+                          size="xs"
+                          variant="light"
+                          color="green"
+                          leftSection={<IconCheck size={14} />}
+                          onClick={() => handleUsePreset(preset)}
+                        >
+                          Use This
+                        </Button>
                       </Group>
 
-                      <Group gap="xs" mb="sm">
-                        {selectedPromptId === prompt.id && (
-                          <Badge size="sm" leftSection={<IconCheck size={12} />}>
-                            Selected
-                          </Badge>
-                        )}
-                        <Badge size="sm" variant="dot">
-                          v{prompt.version}
-                        </Badge>
-                      </Group>
-
-                      <Text size="xs" c="dimmed" lineClamp={2} mb="sm">
-                        {prompt.system_prompt}
-                      </Text>
+                      {expandedPresetIndex === index && (
+                        <>
+                          <Divider />
+                          <Text size="xs" style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', background: '#f8f9fa', padding: '8px', borderRadius: '4px' }}>
+                            {preset.system_prompt}
+                          </Text>
+                        </>
+                      )}
 
                       <Button
                         size="xs"
                         variant="subtle"
-                        onClick={() => onPromptSelected?.(prompt)}
+                        onClick={() => setExpandedPresetIndex(expandedPresetIndex === index ? null : index)}
                       >
-                        {selectedPromptId === prompt.id ? 'Selected' : 'Select'}
+                        {expandedPresetIndex === index ? 'Hide' : 'Show'} Prompt
                       </Button>
-                    </Card>
-                  ))}
-                </Stack>
-              )}
-            </Stack>
-          </Tabs.Panel>
-
-          <Tabs.Panel value="presets" pt="md">
-            <Stack gap="md">
-              <Text size="sm" c="dimmed">
-                Quick presets for common use cases. Click "Expand" to view full content, or "Customize & Save" to modify before adding.
-              </Text>
-
-              {QUICK_PRESETS.map((preset, index) => (
-                <Card key={preset.name} p="md" withBorder>
-                  <Group justify="space-between" align="flex-start" mb="xs">
-                    <div style={{ flex: 1 }}>
-                      <Text fw={600} size="sm">{preset.name}</Text>
-                      <Text size="xs" c="dimmed">{preset.description}</Text>
-                    </div>
-                    <ThemeIcon variant="light" size="lg" radius="md">
-                      {preset.name.includes('Code') && <IconSettings size={18} />}
-                      {preset.name.includes('Document') && <IconBook size={18} />}
-                      {preset.name.includes('Technical') && <IconWand size={18} />}
-                    </ThemeIcon>
-                  </Group>
-
-                  {/* Preview or Full Content */}
-                  <Text size="xs" c="dimmed" mb="sm" style={{ whiteSpace: 'pre-wrap' }}>
-                    {expandedPresetIndex === index
-                      ? preset.system_prompt
-                      : preset.system_prompt.substring(0, 150) + '...'}
-                  </Text>
-
-                  <Group gap="xs" mb="sm">
-                    {preset.tags.map((tag) => (
-                      <Badge key={tag} size="xs" variant="dot">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </Group>
-
-                  <Group gap="xs">
-                    <Button
-                      size="xs"
-                      variant="light"
-                      onClick={() =>
-                        setExpandedPresetIndex(
-                          expandedPresetIndex === index ? null : index
-                        )
-                      }
-                    >
-                      {expandedPresetIndex === index ? 'Collapse' : 'Expand'}
-                    </Button>
-
-                    <Button
-                      size="xs"
-                      variant="light"
-                      color="blue"
-                      onClick={() => {
-                        setEditingPrompt(null);
-                        setFormData({
-                          name: preset.name,
-                          description: preset.description,
-                          system_prompt: preset.system_prompt,
-                        });
-                        setFromPreset(true);
-                        setCreateModalOpen(true);
-                      }}
-                    >
-                      Customize & Save
-                    </Button>
-
-                    <Button
-                      size="xs"
-                      variant="light"
-                      onClick={() => handleUsePreset(preset)}
-                    >
-                      Use as-is
-                    </Button>
-                  </Group>
-                </Card>
-              ))}
-            </Stack>
-          </Tabs.Panel>
-        </Tabs>
+                    </Stack>
+                  </Card>
+                ))}
+              </Stack>
+            </Tabs.Panel>
+          </Tabs>
+        </Stack>
       </Modal>
 
+      {/* Create/Edit Modal */}
       <Modal
         opened={createModalOpen}
         onClose={() => {
           setCreateModalOpen(false);
           setEditingPrompt(null);
-          if (fromPreset) {
-            setFromPreset(false);
-            setManagerModalOpen(true);
-          }
+          setFormData({ name: '', description: '', system_prompt: '' });
         }}
-        title={editingPrompt ? 'Edit System Prompt' : (fromPreset ? 'Customize Preset' : 'Create System Prompt')}
+        title={
+          <Group gap="xs">
+            <ThemeIcon size="md" variant="light" color={editingPrompt ? 'blue' : 'green'}>
+              {editingPrompt ? <IconEdit size={18} /> : <IconPlus size={18} />}
+            </ThemeIcon>
+            <Text fw={600}>{editingPrompt ? 'Edit' : 'Create'} System Prompt</Text>
+          </Group>
+        }
         size="lg"
       >
         <Stack gap="md">
           <TextInput
             label="Prompt Name"
-            placeholder="e.g., Code Reviewer, Document Summarizer"
+            placeholder="e.g., SQL Query Expert"
             value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.currentTarget.value })}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            required
           />
 
           <Textarea
             label="Description (Optional)"
             placeholder="Brief description of what this prompt does"
             value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.currentTarget.value })}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             rows={2}
           />
 
           <Textarea
             label="System Prompt"
-            placeholder="Enter the system prompt instructions..."
+            placeholder="You are an expert... Your role is to..."
             value={formData.system_prompt}
-            onChange={(e) => setFormData({ ...formData, system_prompt: e.currentTarget.value })}
-            rows={6}
+            onChange={(e) => setFormData({ ...formData, system_prompt: e.target.value })}
+            rows={10}
             required
+            description="Define how the assistant should behave and what it should do"
           />
 
-          <Group justify="flex-end" gap="xs">
+          <Group justify="flex-end">
             <Button
               variant="subtle"
               onClick={() => {
                 setCreateModalOpen(false);
                 setEditingPrompt(null);
+                setFormData({ name: '', description: '', system_prompt: '' });
+                setManagerModalOpen(true);
               }}
             >
               Cancel
             </Button>
             <Button
-              leftSection={editingPrompt ? <IconCheck size={16} /> : <IconPlus size={16} />}
-              onClick={handleCreateOrUpdate}
+              color={editingPrompt ? 'blue' : 'green'}
+              leftSection={editingPrompt ? <IconEdit size={16} /> : <IconPlus size={16} />}
+              onClick={handleSave}
             >
-              {editingPrompt ? 'Update' : 'Create'}
+              {editingPrompt ? 'Update' : 'Create'} Prompt
             </Button>
           </Group>
         </Stack>
