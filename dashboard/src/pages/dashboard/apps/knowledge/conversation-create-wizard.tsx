@@ -618,7 +618,7 @@ export function ConversationCreateWizard() {
         )}
 
         {/* STEP 6 or 7: REVIEW & CREATE (depends on agent type) */}
-        {activeStep === (form.values.agentType === 'assistant' ? 7 : 6) && (
+        {displayActiveStep === (form.values.agentType === 'assistant' ? 7 : 6) && (
           <StepReviewAndCreate
             form={form}
             providers={providers}
