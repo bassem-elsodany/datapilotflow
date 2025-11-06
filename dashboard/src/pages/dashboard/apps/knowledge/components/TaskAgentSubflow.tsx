@@ -13,10 +13,11 @@ export interface TaskAgentSubflowConfig {
 
 /**
  * Generate Task Agent subflow nodes (children of Task Engine)
+ * Nodes are positioned tightly together in a group
  */
 export function generateTaskAgentSubflowNodes(parentId: string, baseX: number, baseY: number, config: TaskAgentSubflowConfig): Node[] {
   const nodes: Node[] = [];
-  const nodeSpacing = 120;
+  const nodeSpacing = 90; // Tighter spacing for grouped layout
 
   // Sub-node 1: System Prompts
   nodes.push({

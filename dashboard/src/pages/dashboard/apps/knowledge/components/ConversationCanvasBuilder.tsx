@@ -195,16 +195,22 @@ function ConversationCanvasContent() {
 
       // If RAG subflow is expanded, add container and individual RAG sub-nodes
       if (ragSubflowExpanded) {
+        // Calculate how many steps will be shown
+        let stepCount = 2; // Enhancement + Search
+        if (config.enableReranking) stepCount++;
+        if (config.enableLLMGeneration) stepCount++;
+        const containerWidth = stepCount * 90 + 60; // 90px per node + padding
+
         // Add container box for grouping
         nodeList.push({
           id: 'retrieval-container',
           type: 'subflowContainer',
-          position: { x: startX + horizontalSpacing - 80, y: startY + 50 },
+          position: { x: startX + horizontalSpacing - 50, y: startY + 50 },
           data: {
             id: 'retrieval-container',
             title: 'RAG Agent Steps',
-            width: 500,
-            height: 140,
+            width: containerWidth,
+            height: 120,
           },
         });
 
@@ -219,7 +225,7 @@ function ConversationCanvasContent() {
           selectedProviderId: config.selectedProviderId ?? undefined,
           selectedModel: config.selectedModel ?? undefined,
         };
-        const ragSubflowNodes = generateRAGSubflowNodes('retrieval', startX + horizontalSpacing - 60, startY + 80, ragConfig);
+        const ragSubflowNodes = generateRAGSubflowNodes('retrieval', startX + horizontalSpacing - 30, startY + 80, ragConfig);
         nodeList.push(...ragSubflowNodes);
       }
 
@@ -242,23 +248,26 @@ function ConversationCanvasContent() {
 
       // If Task subflow is expanded, add container and individual Task sub-nodes
       if (taskSubflowExpanded) {
+        // Task Agent always has 2 steps: System Prompts + Execution
+        const taskContainerWidth = 2 * 90 + 60; // 90px per node + padding
+
         // Add container box for grouping
         nodeList.push({
           id: 'taskEngine-container',
           type: 'subflowContainer',
-          position: { x: startX + horizontalSpacing * 2 - 60, y: startY + 50 },
+          position: { x: startX + horizontalSpacing * 2 - 50, y: startY + 50 },
           data: {
             id: 'taskEngine-container',
             title: 'Task Agent Steps',
-            width: 350,
-            height: 140,
+            width: taskContainerWidth,
+            height: 120,
           },
         });
 
         const taskConfig: TaskAgentSubflowConfig = {
           enableKnowledgeAssistant: config.enableKnowledgeAssistant,
         };
-        const taskSubflowNodes = generateTaskAgentSubflowNodes('taskEngine', startX + horizontalSpacing * 2 - 40, startY + 80, taskConfig);
+        const taskSubflowNodes = generateTaskAgentSubflowNodes('taskEngine', startX + horizontalSpacing * 2 - 30, startY + 80, taskConfig);
         nodeList.push(...taskSubflowNodes);
       }
 
