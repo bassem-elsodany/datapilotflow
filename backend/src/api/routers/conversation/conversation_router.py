@@ -815,6 +815,7 @@ async def update_conversation_session(
             if config_request.assistant_config.system_prompt_tasks:
                 assistant_config_dict["system_prompt_tasks"] = [
                     {
+                        "id": task.id,
                         "title": task.title,
                         "content": task.content,
                         "is_active": task.is_active,

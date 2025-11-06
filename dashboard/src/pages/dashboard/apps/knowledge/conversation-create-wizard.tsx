@@ -536,6 +536,7 @@ export function ConversationCreateWizard() {
           enabled: form.values.agentType === 'assistant',
           system_prompt_tasks: form.values.agentType === 'assistant' && form.values.systemPromptTasks && form.values.systemPromptTasks.length > 0 ?
             form.values.systemPromptTasks.map((task: any) => ({
+              id: task.id || '',
               title: task.title || task.name || '',
               content: task.content || task.system_prompt || '',
               is_active: task.is_active !== false,
