@@ -51,7 +51,6 @@ import { ConversationTemplate } from './conversationTemplates';
 import { ConversationTemplateSelector } from './ConversationTemplateSelector';
 import { RAGSubflowConfig, generateRAGSubflowNodes, generateRAGSubflowEdges } from './RAGSubflow';
 import { TaskAgentSubflowConfig, generateTaskAgentSubflowNodes, generateTaskAgentSubflowEdges } from './TaskAgentSubflow';
-import { SubflowContainer } from './SubflowContainer';
 
 const breadcrumbs = [
   { label: 'Dashboard', href: paths.dashboard.root },
@@ -62,7 +61,6 @@ const breadcrumbs = [
 
 const nodeTypes = {
   conversationNode: ConversationNode,
-  subflowContainer: SubflowContainer,
 };
 
 // Enhancement strategies
@@ -141,6 +139,31 @@ function ConversationCanvasContent() {
     },
   });
 
+  // Positioning constants for the canvas
+  const HORIZONTAL_SPACING = 160; // Compact spacing to fit all nodes without scrolling (max 5 nodes = 30 + 4*160 = 670px)
+  const VERTICAL_SPACING = 200;
+  const START_X = 30;
+  const START_Y = 50;
+  const NODES_PER_LINE = 4;
+
+  // Calculate subflow box positions for SVG rendering
+  const subflowBoxPositions = useMemo(() => {
+    return {
+      ragBox: {
+        x: START_X + HORIZONTAL_SPACING - 60,
+        y: START_Y + 50,
+        width: 280,
+        height: 80,
+      },
+      taskBox: {
+        x: START_X + HORIZONTAL_SPACING * 2 - 60,
+        y: START_Y + 50,
+        width: 200,
+        height: 80,
+      },
+    };
+  }, []);
+
   // Dynamic node generation based on configuration
   // RAG flow: User Query → Query Strategy → Search Documents → Rerank? → Generate Answer/Raw Output
   // Supervisor flow: User Query → Task Analyzer → Supervisor → Tool Execution → Response
@@ -148,11 +171,11 @@ function ConversationCanvasContent() {
   // Uses horizontal layout with proper positioning - compact spacing to fit in viewport
   const dynamicNodes = useMemo(() => {
     const nodeList: Node[] = [];
-    const horizontalSpacing = 160; // Compact spacing to fit all nodes without scrolling (max 5 nodes = 30 + 4*160 = 670px)
-    const verticalSpacing = 200;
-    const startX = 30;
-    const startY = 50;
-    const nodesPerLine = 4;
+    const horizontalSpacing = HORIZONTAL_SPACING;
+    const verticalSpacing = VERTICAL_SPACING;
+    const startX = START_X;
+    const startY = START_Y;
+    const nodesPerLine = NODES_PER_LINE;
 
     // Check if this is a supervisor template
     const isSupervisor = config.selectedTemplate?.type === 'supervisor';
@@ -193,27 +216,8 @@ function ConversationCanvasContent() {
         },
       });
 
-      // If RAG subflow is expanded, add container and individual RAG sub-nodes
+      // If RAG subflow is expanded, add individual RAG sub-nodes
       if (ragSubflowExpanded) {
-        // Calculate how many steps will be shown
-        let stepCount = 2; // Enhancement + Search
-        if (config.enableReranking) stepCount++;
-        if (config.enableLLMGeneration) stepCount++;
-        const containerWidth = stepCount * 90 + 60; // 90px per node + padding
-
-        // Add container box for grouping
-        nodeList.push({
-          id: 'retrieval-container',
-          type: 'subflowContainer',
-          position: { x: startX + horizontalSpacing - 50, y: startY + 50 },
-          data: {
-            id: 'retrieval-container',
-            title: 'RAG Agent Steps',
-            width: containerWidth,
-            height: 120,
-          },
-        });
-
         const ragConfig: RAGSubflowConfig = {
           selectedStrategy: config.selectedStrategy,
           collectionName: config.collectionName,
@@ -246,24 +250,8 @@ function ConversationCanvasContent() {
         },
       });
 
-      // If Task subflow is expanded, add container and individual Task sub-nodes
+      // If Task subflow is expanded, add individual Task sub-nodes
       if (taskSubflowExpanded) {
-        // Task Agent always has 2 steps: System Prompts + Execution
-        const taskContainerWidth = 2 * 90 + 60; // 90px per node + padding
-
-        // Add container box for grouping
-        nodeList.push({
-          id: 'taskEngine-container',
-          type: 'subflowContainer',
-          position: { x: startX + horizontalSpacing * 2 - 50, y: startY + 50 },
-          data: {
-            id: 'taskEngine-container',
-            title: 'Task Agent Steps',
-            width: taskContainerWidth,
-            height: 120,
-          },
-        });
-
         const taskConfig: TaskAgentSubflowConfig = {
           enableKnowledgeAssistant: config.enableKnowledgeAssistant,
         };
@@ -763,6 +751,42 @@ function ConversationCanvasContent() {
               <Controls />
               <MiniMap />
             </ReactFlow>
+
+            {/* HTML overlay boxes for subflow grouping - positioned with calculated coordinates */}
+            {config.expandedSubflows?.retrieval && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: `${subflowBoxPositions.ragBox.x}px`,
+                  top: `${subflowBoxPositions.ragBox.y}px`,
+                  width: `${subflowBoxPositions.ragBox.width}px`,
+                  height: `${subflowBoxPositions.ragBox.height}px`,
+                  border: '2px solid #74a9e0',
+                  borderRadius: '6px',
+                  backgroundColor: 'rgba(116, 169, 224, 0.15)',
+                  pointerEvents: 'none',
+                  zIndex: 1,
+                  boxSizing: 'border-box',
+                }}
+              />
+            )}
+            {config.expandedSubflows?.taskEngine && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: `${subflowBoxPositions.taskBox.x}px`,
+                  top: `${subflowBoxPositions.taskBox.y}px`,
+                  width: `${subflowBoxPositions.taskBox.width}px`,
+                  height: `${subflowBoxPositions.taskBox.height}px`,
+                  border: '2px solid #74a9e0',
+                  borderRadius: '6px',
+                  backgroundColor: 'rgba(116, 169, 224, 0.15)',
+                  pointerEvents: 'none',
+                  zIndex: 1,
+                  boxSizing: 'border-box',
+                }}
+              />
+            )}
 
             {/* Context Menu for adding disabled nodes */}
             {contextMenu && (
