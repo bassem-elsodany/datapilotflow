@@ -1387,9 +1387,15 @@ export default function ConversationWindow() {
       // Build nested configuration structure
       const payload: any = {
         // Enhancement configuration
-        enhancement: {
-          strategy: selectedStrategy !== 'none' ? selectedStrategy : 'native',
-          provider: null, // Enhancement provider is optional
+        enhancement: selectedStrategy !== 'native' && selectedProviderId && selectedModel ? {
+          strategy: selectedStrategy,
+          provider: {
+            id: selectedProviderId,
+            model_name: selectedModel,
+          },
+        } : {
+          strategy: 'native',
+          provider: null,
         },
         // Vector database configuration
         vector_database: {
@@ -1479,9 +1485,15 @@ export default function ConversationWindow() {
       // Build nested configuration structure
       const payload: any = {
         // Enhancement configuration
-        enhancement: {
-          strategy: selectedStrategy !== 'none' ? selectedStrategy : 'native',
-          provider: null, // Enhancement provider is optional
+        enhancement: selectedStrategy !== 'native' && selectedProviderId && selectedModel ? {
+          strategy: selectedStrategy,
+          provider: {
+            id: selectedProviderId,
+            model_name: selectedModel,
+          },
+        } : {
+          strategy: 'native',
+          provider: null,
         },
         // Vector database configuration
         vector_database: {

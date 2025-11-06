@@ -412,11 +412,15 @@ export function ConversationCreateWizard() {
             ? true
             : form.values.enableKnowledgeAssistant,
         // Enhancement configuration
-        enhancement: {
-          strategy: form.values.selectedStrategy !== 'none'
-            ? form.values.selectedStrategy
-            : 'native',
-          provider: null, // Enhancement provider is optional
+        enhancement: form.values.selectedStrategy !== 'native' && form.values.selectedProviderId && form.values.selectedModel ? {
+          strategy: form.values.selectedStrategy,
+          provider: {
+            id: form.values.selectedProviderId,
+            model_name: form.values.selectedModel,
+          },
+        } : {
+          strategy: 'native',
+          provider: null,
         },
         // Vector database configuration
         vector_database: {
