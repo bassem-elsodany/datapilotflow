@@ -531,6 +531,13 @@ export function ConversationCreateWizard() {
   // RENDER
   // ========================================================================
 
+  // Filter steps based on agent type
+  // RAG mode: exclude Step 6 (System Prompt)
+  // Assistant mode: include all steps
+  const visibleSteps = form.values.agentType === 'rag'
+    ? STEP_CONFIGS.filter((_, index) => index !== 6) // Remove System Prompt step (index 6)
+    : STEP_CONFIGS;
+
   return (
     <Page title="Create New Conversation">
       <PageHeader title="Create New Conversation" />
@@ -538,7 +545,7 @@ export function ConversationCreateWizard() {
       <ColorfulVerticalStepper
         activeStep={activeStep}
         completedSteps={completedSteps}
-        steps={STEP_CONFIGS}
+        steps={visibleSteps}
         onStepClick={handleStepClick}
       >
         {/* STEP 0: AGENT TYPE SELECTION */}
