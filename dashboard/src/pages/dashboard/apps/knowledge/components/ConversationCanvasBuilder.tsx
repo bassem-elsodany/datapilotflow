@@ -51,6 +51,7 @@ import { ConversationTemplate } from './conversationTemplates';
 import { ConversationTemplateSelector } from './ConversationTemplateSelector';
 import { RAGSubflowConfig, generateRAGSubflowNodes, generateRAGSubflowEdges } from './RAGSubflow';
 import { TaskAgentSubflowConfig, generateTaskAgentSubflowNodes, generateTaskAgentSubflowEdges } from './TaskAgentSubflow';
+import { SubflowContainer } from './SubflowContainer';
 
 const breadcrumbs = [
   { label: 'Dashboard', href: paths.dashboard.root },
@@ -61,6 +62,7 @@ const breadcrumbs = [
 
 const nodeTypes = {
   conversationNode: ConversationNode,
+  subflowContainer: SubflowContainer,
 };
 
 // Enhancement strategies
@@ -191,8 +193,21 @@ function ConversationCanvasContent() {
         },
       });
 
-      // If RAG subflow is expanded, add individual RAG sub-nodes
+      // If RAG subflow is expanded, add container and individual RAG sub-nodes
       if (ragSubflowExpanded) {
+        // Add container box for grouping
+        nodeList.push({
+          id: 'retrieval-container',
+          type: 'subflowContainer',
+          position: { x: startX + horizontalSpacing - 80, y: startY + 50 },
+          data: {
+            id: 'retrieval-container',
+            title: 'RAG Agent Steps',
+            width: 500,
+            height: 140,
+          },
+        });
+
         const ragConfig: RAGSubflowConfig = {
           selectedStrategy: config.selectedStrategy,
           collectionName: config.collectionName,
@@ -204,7 +219,7 @@ function ConversationCanvasContent() {
           selectedProviderId: config.selectedProviderId ?? undefined,
           selectedModel: config.selectedModel ?? undefined,
         };
-        const ragSubflowNodes = generateRAGSubflowNodes('retrieval', startX + horizontalSpacing, startY + 80, ragConfig);
+        const ragSubflowNodes = generateRAGSubflowNodes('retrieval', startX + horizontalSpacing - 60, startY + 80, ragConfig);
         nodeList.push(...ragSubflowNodes);
       }
 
@@ -225,12 +240,25 @@ function ConversationCanvasContent() {
         },
       });
 
-      // If Task subflow is expanded, add individual Task sub-nodes
+      // If Task subflow is expanded, add container and individual Task sub-nodes
       if (taskSubflowExpanded) {
+        // Add container box for grouping
+        nodeList.push({
+          id: 'taskEngine-container',
+          type: 'subflowContainer',
+          position: { x: startX + horizontalSpacing * 2 - 60, y: startY + 50 },
+          data: {
+            id: 'taskEngine-container',
+            title: 'Task Agent Steps',
+            width: 350,
+            height: 140,
+          },
+        });
+
         const taskConfig: TaskAgentSubflowConfig = {
           enableKnowledgeAssistant: config.enableKnowledgeAssistant,
         };
-        const taskSubflowNodes = generateTaskAgentSubflowNodes('taskEngine', startX + horizontalSpacing * 2, startY + 80, taskConfig);
+        const taskSubflowNodes = generateTaskAgentSubflowNodes('taskEngine', startX + horizontalSpacing * 2 - 40, startY + 80, taskConfig);
         nodeList.push(...taskSubflowNodes);
       }
 
