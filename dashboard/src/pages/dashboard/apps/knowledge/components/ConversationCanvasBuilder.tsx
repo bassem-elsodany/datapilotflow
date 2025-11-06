@@ -49,6 +49,7 @@ import { ConversationNode } from './ConversationNode';
 import { ConversationNodeConfigPanel } from './ConversationNodeConfigPanel';
 import { ConversationTemplate } from './conversationTemplates';
 import { ConversationTemplateSelector } from './ConversationTemplateSelector';
+import { RAGSubflowConfig, generateRAGSubflowNodes, generateRAGSubflowEdges } from './RAGSubflow';
 
 const breadcrumbs = [
   { label: 'Dashboard', href: paths.dashboard.root },
@@ -84,6 +85,10 @@ interface ConversationConfig {
   topK: number;
   // Template information
   selectedTemplate?: ConversationTemplate;
+  // Subflow expansion state
+  expandedSubflows?: {
+    retrieval?: boolean; // Is Knowledge Retrieval RAG subflow expanded?
+  };
   // Track which nodes user has configured
   configuredNodes?: {
     enhancement?: boolean;
@@ -219,96 +224,88 @@ function ConversationCanvasContent() {
       return nodeList;
     }
 
-    // RAG flow continues below...
+    // RAG flow - Knowledge Retrieval encapsulates complete RAG pipeline as subflow
 
-    // 1. Query Strategy node (formerly Enhancement)
-    // Green if: selectedStrategy is marked as configured in configuredNodes
-    nodeList.push({
-      id: 'enhancement',
-      type: 'conversationNode',
-      position: { x: startX + horizontalSpacing, y: startY },
-      data: {
-        id: 'enhancement',
-        name: 'Query Strategy',
-        type: 'enhancement',
-        description: ENHANCEMENT_STRATEGIES.find(s => s.value === config.selectedStrategy)?.label || 'Native RAG',
-        configured: config.configuredNodes?.enhancement || false, // Green if user has confirmed
-      },
-    });
+    // Check if RAG subflow is expanded
+    const ragSubflowExpanded = config.expandedSubflows?.retrieval || false;
 
-    // 2. Search Documents node (formerly Retrieval)
-    // Green if: collectionName is set AND retrieval is marked as configured
-    // NO DEFAULT COLLECTION - user must explicitly select
+    // Main Knowledge Retrieval node (parent of subflow)
     nodeList.push({
       id: 'retrieval',
       type: 'conversationNode',
-      position: { x: startX + horizontalSpacing * 2, y: startY },
+      position: { x: startX + horizontalSpacing, y: startY },
       data: {
         id: 'retrieval',
-        name: 'Search Documents',
+        name: 'Knowledge Retrieval',
         type: 'retrieval',
         description: config.collectionName ? `Collection: ${config.collectionName}` : 'Not configured',
-        configured: config.configuredNodes?.retrieval || false, // Green only if user explicitly configured
+        configured: config.configuredNodes?.retrieval || false,
+        isSubflowParent: true,
+        subflowExpanded: ragSubflowExpanded,
+        subflowLabel: ragSubflowExpanded ? '▼ RAG Pipeline' : '▶ RAG Pipeline',
       },
     });
 
-    // 3. Reranking node (only if enabled)
-    // Green if: reranker provider AND model are both selected AND marked as configured
-    if (config.enableReranking) {
-      // Get provider name for display
-      const rerankerProvider = providers?.find(p => p.id === config.selectedRerankerId);
-      const rerankerDisplay = config.selectedRerankerModel
-        ? `${rerankerProvider?.name || 'Reranker'} (${config.selectedRerankerModel})`
-        : config.selectedRerankerId
-          ? 'Provider selected'
-          : 'Not configured';
+    // If subflow is expanded, add all RAG sub-nodes
+    if (ragSubflowExpanded) {
+      const ragConfig: RAGSubflowConfig = {
+        selectedStrategy: config.selectedStrategy,
+        collectionName: config.collectionName,
+        topK: config.topK,
+        enableReranking: config.enableReranking,
+        selectedRerankerId: config.selectedRerankerId,
+        selectedRerankerModel: config.selectedRerankerModel,
+        enableLLMGeneration: config.enableLLMGeneration,
+        selectedProviderId: config.selectedProviderId,
+        selectedModel: config.selectedModel,
+      };
 
-      nodeList.push({
-        id: 'reranking',
-        type: 'conversationNode',
-        position: { x: startX + horizontalSpacing * 3, y: startY },
-        data: {
-          id: 'reranking',
-          name: 'Rerank Results',
-          type: 'reranking',
-          description: rerankerDisplay,
-          configured: config.configuredNodes?.reranking || false, // Green only if user explicitly configured
-        },
-      });
+      // Generate subflow nodes
+      const subflowNodes = generateRAGSubflowNodes('retrieval', startX + horizontalSpacing, startY + 60, ragConfig);
+      nodeList.push(...subflowNodes);
     }
 
-    // 4. Final node: Generate Answer or Raw Output
-    const finalNodeX = config.enableReranking
-      ? startX + horizontalSpacing * 4
-      : startX + horizontalSpacing * 3;
+    // System Prompts node (for assistant agent)
+    nodeList.push({
+      id: 'assistant',
+      type: 'conversationNode',
+      position: { x: startX + horizontalSpacing * 2, y: startY },
+      data: {
+        id: 'assistant',
+        name: 'System Prompts',
+        type: 'assistant',
+        description: 'Task-specific system prompts',
+        configured: config.configuredNodes?.assistant || false,
+      },
+    });
 
-    if (config.enableLLMGeneration) {
-      nodeList.push({
-        id: 'llm',
-        type: 'conversationNode',
-        position: { x: finalNodeX, y: startY },
-        data: {
-          id: 'llm',
-          name: 'Generate Answer',
-          type: 'llm',
-          description: config.selectedModel ? 'Configured' : 'Not configured',
-          configured: config.configuredNodes?.llm || false, // Green only if user explicitly configured
-        },
-      });
-    } else {
-      nodeList.push({
-        id: 'formatter',
-        type: 'conversationNode',
-        position: { x: finalNodeX, y: startY },
-        data: {
-          id: 'formatter',
-          name: 'Return Documents',
-          type: 'formatter',
-          description: 'Retrieval only',
-          configured: false, // Raw output is default fallback, not user-configured
-        },
-      });
-    }
+    // Task Engine node (for assistant agent)
+    nodeList.push({
+      id: 'taskEngine',
+      type: 'conversationNode',
+      position: { x: startX + horizontalSpacing * 3, y: startY },
+      data: {
+        id: 'taskEngine',
+        name: 'Task Engine',
+        type: 'taskEngine',
+        description: 'Multi-task orchestration',
+        configured: config.configuredNodes?.supervisor || false,
+      },
+    });
+
+    // Response node
+    nodeList.push({
+      id: 'response',
+      type: 'conversationNode',
+      position: { x: startX + horizontalSpacing * 4, y: startY },
+      data: {
+        id: 'response',
+        name: 'Response',
+        type: 'response',
+        description: 'Generate KB-backed response',
+        configured: true,
+      },
+    });
 
     return nodeList;
   }, [config]);
@@ -316,14 +313,17 @@ function ConversationCanvasContent() {
   // Dynamic edge generation based on node order
   const dynamicEdges = useMemo(() => {
     const edgeList: Edge[] = [];
-    const nodeIds = dynamicNodes.map(n => n.id);
 
-    // Create edges between consecutive nodes
-    for (let i = 0; i < nodeIds.length - 1; i++) {
+    // Get main flow nodes (exclude subflow nodes which have parent set)
+    const mainFlowNodes = dynamicNodes.filter(n => !n.parent);
+    const mainNodeIds = mainFlowNodes.map(n => n.id);
+
+    // Create edges between consecutive main flow nodes
+    for (let i = 0; i < mainNodeIds.length - 1; i++) {
       edgeList.push({
         id: `e${i + 1}`,
-        source: nodeIds[i],
-        target: nodeIds[i + 1],
+        source: mainNodeIds[i],
+        target: mainNodeIds[i + 1],
         type: 'default',
         animated: true,
         markerEnd: { type: 'arrowclosed' },
@@ -334,8 +334,26 @@ function ConversationCanvasContent() {
       });
     }
 
+    // Add RAG subflow edges if subflow is expanded
+    if (config.expandedSubflows?.retrieval) {
+      const ragConfig: RAGSubflowConfig = {
+        selectedStrategy: config.selectedStrategy,
+        collectionName: config.collectionName,
+        topK: config.topK,
+        enableReranking: config.enableReranking,
+        selectedRerankerId: config.selectedRerankerId,
+        selectedRerankerModel: config.selectedRerankerModel,
+        enableLLMGeneration: config.enableLLMGeneration,
+        selectedProviderId: config.selectedProviderId,
+        selectedModel: config.selectedModel,
+      };
+
+      const subflowEdges = generateRAGSubflowEdges('retrieval', ragConfig);
+      edgeList.push(...subflowEdges);
+    }
+
     return edgeList;
-  }, [dynamicNodes]);
+  }, [dynamicNodes, config]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -352,9 +370,27 @@ function ConversationCanvasContent() {
   }, [dynamicNodes, dynamicEdges, setNodes, setEdges]);
 
   const handleNodeDoubleClick = useCallback((event: React.MouseEvent, node: Node) => {
-    setSelectedNodeId(node.id);
-    setConfigPanelOpen(true);
-  }, []);
+    // Check if this is the Knowledge Retrieval subflow parent node
+    if (node.id === 'retrieval' && node.data?.isSubflowParent) {
+      // Toggle subflow expansion
+      setConfig(prev => ({
+        ...prev,
+        expandedSubflows: {
+          ...prev.expandedSubflows,
+          retrieval: !prev.expandedSubflows?.retrieval,
+        },
+      }));
+      notifications.show({
+        title: config.expandedSubflows?.retrieval ? 'RAG Pipeline Collapsed' : 'RAG Pipeline Expanded',
+        message: config.expandedSubflows?.retrieval ? 'Click again to expand' : 'View and configure each RAG step',
+        color: 'blue',
+      });
+    } else {
+      // Regular node configuration
+      setSelectedNodeId(node.id);
+      setConfigPanelOpen(true);
+    }
+  }, [config.expandedSubflows]);
 
   const handleCanvasContextMenu = useCallback((event: React.MouseEvent) => {
     event.preventDefault();
