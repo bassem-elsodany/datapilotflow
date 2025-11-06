@@ -133,9 +133,9 @@ export function ConversationTemplateSelector({
                       whenToUse: 'Use when: Want semantic similarity matching, answer-seeking queries, documents match answer patterns'
                     },
                     'supervisor-agent': {
-                      definition: 'Intelligent multi-agent orchestrator that analyzes your query, routes it to specialized task handlers, manages tool execution, and synthesizes results across multiple agents.',
-                      example: 'User: "Create a budget report and send notification"\nSupervisor routes to: Budget Analyzer → Report Generator → Notification Service\nOrchestratestools & synthesizes final response.',
-                      whenToUse: 'Use when: Complex multi-step workflows, need tool execution, multiple specialized tasks, intelligent task routing & dependencies'
+                      definition: 'RAG-based agent with system prompts that orchestrates multiple tasks. Uses knowledge base as single source of truth while executing complex workflows with intelligent task routing and custom system prompts for each task.',
+                      example: 'User: "Search knowledge base and create a compliance report"\nAgent: Retrieves relevant docs from KB → Applies custom system prompt → Executes report generation task → Returns knowledge-backed result.',
+                      whenToUse: 'Use when: Complex multi-task workflows grounded in knowledge base, need system-prompted task execution, intelligent task routing with KB as source of truth'
                     },
                   };
                   return details[id] || { definition: '', example: '', whenToUse: '' };

@@ -242,9 +242,9 @@ export const CONVERSATION_TEMPLATES: ConversationTemplate[] = [
 
   {
     id: 'supervisor-agent',
-    name: 'Supervisor Agent (Multi-Task Orchestration)',
-    description: 'Intelligent agent orchestrator for handling complex multi-step tasks with knowledge assistant capabilities',
-    icon: '🤖',
+    name: 'Assistant Agent (Knowledge-Based Task Engine)',
+    description: 'Multi-task RAG agent with system prompts and intelligent task routing using knowledge base as source of truth',
+    icon: '🧠',
     type: 'supervisor',
     requiredNodes: [
       {
@@ -255,29 +255,29 @@ export const CONVERSATION_TEMPLATES: ConversationTemplate[] = [
       {
         id: 'assistant',
         name: 'Assistant Configuration',
-        description: 'Enable knowledge assistant & system prompts',
+        description: 'System prompts & task definitions',
       },
       {
-        id: 'supervisor',
-        name: 'Supervisor Orchestrator',
-        description: 'Multi-agent task orchestration',
+        id: 'taskEngine',
+        name: 'Task Engine',
+        description: 'Multi-task orchestration & execution',
       },
     ],
     optionalNodes: [
       {
         id: 'enhancement',
         name: 'Query Enhancement',
-        description: 'Optional query transformation',
+        description: 'Optional query transformation for better retrieval',
       },
       {
         id: 'retrieval',
         name: 'Knowledge Retrieval',
-        description: 'Optional knowledge base search',
+        description: 'Knowledge base search & retrieval',
       },
       {
         id: 'reranking',
         name: 'Document Reranking',
-        description: 'Optional result ranking',
+        description: 'Optional relevance ranking',
       },
     ],
     defaultConfig: {

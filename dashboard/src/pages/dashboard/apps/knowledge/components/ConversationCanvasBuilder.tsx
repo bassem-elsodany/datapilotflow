@@ -158,47 +158,47 @@ function ConversationCanvasContent() {
       },
     });
 
-    // For Supervisor Agent, generate supervisor-specific nodes
+    // For Assistant Agent, generate assistant-specific nodes
     if (isSupervisor) {
-      // Assistant Configuration node
+      // Knowledge Retrieval node
       nodeList.push({
-        id: 'assistant',
+        id: 'retrieval',
         type: 'conversationNode',
         position: { x: startX + horizontalSpacing, y: startY },
         data: {
+          id: 'retrieval',
+          name: 'Knowledge Retrieval',
+          type: 'retrieval',
+          description: 'Search knowledge base',
+          configured: config.configuredNodes?.retrieval || false,
+        },
+      });
+
+      // System Prompts node
+      nodeList.push({
+        id: 'assistant',
+        type: 'conversationNode',
+        position: { x: startX + horizontalSpacing * 2, y: startY },
+        data: {
           id: 'assistant',
-          name: 'Assistant Config',
+          name: 'System Prompts',
           type: 'assistant',
-          description: 'Knowledge assistant & system prompts',
+          description: 'Task-specific system prompts',
           configured: config.configuredNodes?.assistant || false,
         },
       });
 
-      // Supervisor Orchestrator node
+      // Task Engine node
       nodeList.push({
-        id: 'supervisor',
-        type: 'conversationNode',
-        position: { x: startX + horizontalSpacing * 2, y: startY },
-        data: {
-          id: 'supervisor',
-          name: 'Supervisor',
-          type: 'supervisor',
-          description: 'Multi-agent orchestration',
-          configured: config.configuredNodes?.supervisor || false,
-        },
-      });
-
-      // Tool Execution node
-      nodeList.push({
-        id: 'toolExecution',
+        id: 'taskEngine',
         type: 'conversationNode',
         position: { x: startX + horizontalSpacing * 3, y: startY },
         data: {
-          id: 'toolExecution',
-          name: 'Tool Execution',
-          type: 'toolExecution',
-          description: 'Execute tasks & tools',
-          configured: true, // Auto-configured for supervisor
+          id: 'taskEngine',
+          name: 'Task Engine',
+          type: 'taskEngine',
+          description: 'Multi-task orchestration',
+          configured: config.configuredNodes?.supervisor || false,
         },
       });
 
@@ -211,8 +211,8 @@ function ConversationCanvasContent() {
           id: 'response',
           name: 'Response',
           type: 'response',
-          description: 'Generate final response',
-          configured: true, // Auto-configured for supervisor
+          description: 'Generate KB-backed response',
+          configured: true, // Auto-configured for assistant agent
         },
       });
 
