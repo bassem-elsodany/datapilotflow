@@ -443,8 +443,16 @@ export default function ConversationWindow() {
           const newEnableLLMGeneration = data.session.answer_generation?.provider ? true : false;
           setEnableLLMGeneration(newEnableLLMGeneration);
 
-          // Load supervisor setting - exact value from DB
-          const newEnableKnowledgeAssistant = data.session.enable_knowledge_assistant !== undefined ? data.session.enable_knowledge_assistant : true;
+          // Load supervisor setting - check both nested assistant_config and legacy flat field
+          // Prefer assistant_config if available, fall back to legacy enable_knowledge_assistant
+          let newEnableKnowledgeAssistant = false;
+          if (data.session.assistant_config) {
+            // Use nested assistant_config structure
+            newEnableKnowledgeAssistant = data.session.assistant_config.enable_knowledge_assistant ?? false;
+          } else {
+            // Fall back to legacy flat field for backwards compatibility
+            newEnableKnowledgeAssistant = data.session.enable_knowledge_assistant !== undefined ? data.session.enable_knowledge_assistant : false;
+          }
           setEnableKnowledgeAssistant(newEnableKnowledgeAssistant);
         }
 
@@ -1408,6 +1416,11 @@ export default function ConversationWindow() {
           },
         } : null,
         enable_knowledge_assistant: enableKnowledgeAssistant,
+        // Complex nested assistant configuration (for Assistant mode)
+        assistant_config: enableKnowledgeAssistant ? {
+          enable_knowledge_assistant: true,
+          system_prompt_tasks: null, // Keep existing prompts
+        } : null,
       };
 
 
@@ -1493,6 +1506,11 @@ export default function ConversationWindow() {
           },
         } : null,
         enable_knowledge_assistant: enableKnowledgeAssistant,
+        // Complex nested assistant configuration (for Assistant mode)
+        assistant_config: enableKnowledgeAssistant ? {
+          enable_knowledge_assistant: true,
+          system_prompt_tasks: null, // Keep existing prompts
+        } : null,
       };
 
       const response = await fetch(apiUtils.buildApiUrl(`/conversations/${sessionId}`), {
