@@ -1633,7 +1633,9 @@ function StepReviewAndCreate({ form, providers, collections }: StepProps) {
       {/* STEP 5: ANSWER GENERATION & SYSTEM PROMPT */}
       <Card withBorder p="md" bg="lime.0">
         <Stack gap="sm">
-          <Text fw={600}>Step 5: Answer Generation & System Prompt</Text>
+          <Text fw={600}>
+            Step 5: Answer Generation {form.values.agentType === 'assistant' && '& System Prompt'}
+          </Text>
           <Group gap="md">
             <div>
               <Text size="sm" fw={500} mb="xs" c="dark">
