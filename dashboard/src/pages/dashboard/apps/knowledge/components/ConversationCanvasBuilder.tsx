@@ -776,46 +776,43 @@ function ConversationCanvasContent() {
                     </Button>
                   )}
 
-                  {config.selectedTemplate?.type === 'supervisor' ? (
+                  {!config.enableLLMGeneration && (
+                    <>
+                      <Button
+                        variant="subtle"
+                        justify="flex-start"
+                        fullWidth
+                        size="xs"
+                        onClick={() => {
+                          if (config.selectedTemplate?.type === 'supervisor') {
+                            notifications.show({
+                              title: '⚠️ Not Recommended',
+                              message: 'In Supervisor Agent mode, LLM generation is not recommended. The system needs raw documents context for the Task Agent to execute tasks effectively.',
+                              color: 'yellow',
+                              autoClose: 5000,
+                            });
+                          }
+                          handleEnableLLMGeneration();
+                        }}
+                        style={{ borderRadius: 0, padding: '8px 12px' }}
+                      >
+                        ➕ Add Generate Answer Node
+                        {config.selectedTemplate?.type === 'supervisor' && ' (⚠️ Not Recommended)'}
+                      </Button>
+                    </>
+                  )}
+                  {config.enableLLMGeneration && (
                     <Button
                       variant="subtle"
                       justify="flex-start"
                       fullWidth
                       size="xs"
-                      disabled
+                      color="red"
+                      onClick={handleDisableLLMGeneration}
                       style={{ borderRadius: 0, padding: '8px 12px' }}
-                      title="Not recommended in Supervisor Agent mode - uses raw context for Task Agent"
                     >
-                      ⚠️ Generate Answer (Disabled in Supervisor Mode)
+                      ❌ Remove Generate Answer Node
                     </Button>
-                  ) : (
-                    <>
-                      {!config.enableLLMGeneration && (
-                        <Button
-                          variant="subtle"
-                          justify="flex-start"
-                          fullWidth
-                          size="xs"
-                          onClick={handleEnableLLMGeneration}
-                          style={{ borderRadius: 0, padding: '8px 12px' }}
-                        >
-                          ➕ Add Generate Answer Node
-                        </Button>
-                      )}
-                      {config.enableLLMGeneration && (
-                        <Button
-                          variant="subtle"
-                          justify="flex-start"
-                          fullWidth
-                          size="xs"
-                          color="red"
-                          onClick={handleDisableLLMGeneration}
-                          style={{ borderRadius: 0, padding: '8px 12px' }}
-                        >
-                          ❌ Remove Generate Answer Node
-                        </Button>
-                      )}
-                    </>
                   )}
                 </Stack>
               </div>
