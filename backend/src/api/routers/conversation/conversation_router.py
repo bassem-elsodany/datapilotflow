@@ -747,18 +747,6 @@ async def update_conversation_session(
             update_doc["description"] = config_request.description
         if config_request.tags is not None:
             update_doc["tags"] = config_request.tags
-        if config_request.enable_knowledge_assistant is not None:
-            update_doc["enable_knowledge_assistant"] = (
-                config_request.enable_knowledge_assistant
-            )
-
-        # System prompt (embedded)
-        if config_request.system_prompt is not None:
-            update_doc["system_prompt"] = {
-                "id": config_request.system_prompt.id,
-                "title": config_request.system_prompt.title,
-                "content": config_request.system_prompt.content,
-            }
 
         # Enhancement configuration
         if config_request.enhancement is not None:
