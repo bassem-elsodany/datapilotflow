@@ -108,7 +108,6 @@ class ConversationHistoryService:
         reranker: Optional[RerankerConfig] = None,
         answer_generation: Optional[AnswerGenerationConfig] = None,
         tags: Optional[List[str]] = None,
-        enable_knowledge_assistant: bool = False,
         assistant_config: Optional[AssistantConfig] = None,
     ) -> str:
         """Create a new conversation with nested configuration structure.
@@ -123,8 +122,8 @@ class ConversationHistoryService:
             reranker: Reranker configuration
             answer_generation: Answer generation configuration
             tags: Tags for organization
-            enable_knowledge_assistant: Enable knowledge assistant (deprecated - use assistant_config)
             assistant_config: Complex nested configuration for Assistant mode
+                Required - contains enable_knowledge_assistant boolean and optional system_prompt_tasks
         """
 
         # Validate enhancement provider if provided
@@ -209,34 +208,29 @@ class ConversationHistoryService:
             "reranker": asdict(reranker) if reranker else None,
             "answer_generation": asdict(answer_generation) if answer_generation else None,
             "tags": tags or [],
-            "enable_knowledge_assistant": enable_knowledge_assistant,
         }
 
-        # Always include assistant_config (never null) - enable_knowledge_assistant determines mode
-        if assistant_config:
-            assistant_config_dict = {
-                "enable_knowledge_assistant": assistant_config.enable_knowledge_assistant,
-            }
-            if assistant_config.system_prompt_tasks:
-                assistant_config_dict["system_prompt_tasks"] = [
-                    asdict(task) for task in assistant_config.system_prompt_tasks
-                ]
-            else:
-                assistant_config_dict["system_prompt_tasks"] = None
-            conversation_data["assistant_config"] = assistant_config_dict
+        # Assistant config is required - always serialize it
+        if not assistant_config:
+            raise ValueError("assistant_config is required - must specify enable_knowledge_assistant mode")
+
+        assistant_config_dict = {
+            "enable_knowledge_assistant": assistant_config.enable_knowledge_assistant,
+        }
+        if assistant_config.system_prompt_tasks:
+            assistant_config_dict["system_prompt_tasks"] = [
+                asdict(task) for task in assistant_config.system_prompt_tasks
+            ]
         else:
-            # When no assistant_config provided, create with enable_knowledge_assistant flag
-            conversation_data["assistant_config"] = {
-                "enable_knowledge_assistant": enable_knowledge_assistant,
-                "system_prompt_tasks": None,
-            }
+            assistant_config_dict["system_prompt_tasks"] = None
+        conversation_data["assistant_config"] = assistant_config_dict
 
         # Insert and get the MongoDB _id
         result = self.collection.insert_one(conversation_data)
         conversation_id = str(result.inserted_id)
 
-        # Determine agent type from assistant_config or legacy enable_knowledge_assistant
-        agent_type = "supervisor" if (assistant_config and assistant_config.enable_knowledge_assistant) else ("supervisor" if enable_knowledge_assistant else "rag")
+        # Determine agent type from assistant_config
+        agent_type = "supervisor" if assistant_config.enable_knowledge_assistant else "rag"
 
         logger.info(
             f"Created conversation {conversation_id} for user {user_id} "
@@ -364,7 +358,6 @@ class ConversationHistoryService:
                     answer_generation=answer_generation,
                     tags=doc.get("tags", []),
                     assistant_config=assistant_config,
-                    enable_knowledge_assistant=doc.get("enable_knowledge_assistant", False),
                 )
                 return session
             return None
@@ -510,7 +503,6 @@ class ConversationHistoryService:
                 answer_generation=answer_generation,
                 tags=doc.get("tags", []),
                 assistant_config=assistant_config,
-                enable_knowledge_assistant=doc.get("enable_knowledge_assistant", False),
             )
             sessions.append(session)
 
@@ -784,7 +776,6 @@ class ConversationHistoryService:
         reranker: Optional[RerankerConfig] = None,
         answer_generation: Optional[AnswerGenerationConfig] = None,
         tags: Optional[List[str]] = None,
-        enable_knowledge_assistant: Optional[bool] = None,
         name: Optional[str] = None,
         description: Optional[str] = None,
         assistant_config: Optional[AssistantConfig] = None,
@@ -800,7 +791,6 @@ class ConversationHistoryService:
             reranker: Reranker configuration
             answer_generation: Answer generation configuration
             tags: Tags for organization
-            enable_knowledge_assistant: Enable knowledge assistant (deprecated - use assistant_config)
             name: Conversation name
             description: Conversation description
             assistant_config: Complex nested configuration for Assistant mode
@@ -817,8 +807,6 @@ class ConversationHistoryService:
                 update_data["$set"]["description"] = description
             if tags is not None:
                 update_data["$set"]["tags"] = tags
-            if enable_knowledge_assistant is not None:
-                update_data["$set"]["enable_knowledge_assistant"] = enable_knowledge_assistant
 
             # Update system prompt (embedded)
             if system_prompt is not None:

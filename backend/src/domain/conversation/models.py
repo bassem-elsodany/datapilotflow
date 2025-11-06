@@ -175,10 +175,9 @@ class ConversationSession:
     # Tags for organization
     tags: Optional[List[str]] = None
     # Assistant mode configuration (complex nested structure)
-    # Contains enable_knowledge_assistant and system_prompt_tasks
+    # Contains enable_knowledge_assistant boolean and system_prompt_tasks list
+    # This is the ONLY place mode is stored - no redundant flat fields
     assistant_config: Optional[AssistantConfig] = None
-    # Legacy field for backwards compatibility (deprecated - use assistant_config.enable_knowledge_assistant)
-    enable_knowledge_assistant: bool = False
 
     def __post_init__(self):
         if self.tags is None:
