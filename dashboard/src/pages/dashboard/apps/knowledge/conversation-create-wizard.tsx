@@ -352,22 +352,15 @@ export function ConversationCreateWizard() {
     }
     setCompletedSteps((prev) => [...new Set([...prev, activeStep])]);
 
-    // Skip Step 6 (System Prompt) for RAG mode
-    let nextStep = activeStep + 1;
-    if (activeStep === 5 && form.values.agentType === 'rag') {
-      nextStep = 7; // Skip to Review & Create for RAG mode
-    }
-
+    // Always go to next step (System Prompt step is now always shown, just disabled for RAG)
+    const nextStep = activeStep + 1;
     setActiveStep(nextStep);
   };
 
   const handlePreviousStep = () => {
     if (activeStep > 0) {
-      let prevStep = activeStep - 1;
-      // Skip Step 6 (System Prompt) when going back in RAG mode
-      if (activeStep === 7 && form.values.agentType === 'rag') {
-        prevStep = 5; // Skip from Review & Create back to Advanced Settings for RAG
-      }
+      // Always go to previous step (System Prompt step is now always shown, just disabled for RAG)
+      const prevStep = activeStep - 1;
       setActiveStep(prevStep);
     }
   };
@@ -593,20 +586,32 @@ export function ConversationCreateWizard() {
           />
         )}
 
-        {/* STEP 6: SYSTEM PROMPT (only for Assistant mode) */}
-        {form.values.agentType === 'assistant' && activeStep === 6 && (
-          <StepSystemPromptConfiguration
-            form={form}
-            onPromptSelected={(prompt) => {
-              form.setFieldValue('selectedSystemPromptId', prompt.id);
-              setSelectedSystemPrompt(prompt);
-            }}
-            selectedSystemPrompt={selectedSystemPrompt}
-          />
+        {/* STEP 6: SYSTEM PROMPT */}
+        {activeStep === 6 && (
+          <>
+            {form.values.agentType === 'assistant' ? (
+              <StepSystemPromptConfiguration
+                form={form}
+                onPromptSelected={(prompt) => {
+                  form.setFieldValue('selectedSystemPromptId', prompt.id);
+                  setSelectedSystemPrompt(prompt);
+                }}
+                selectedSystemPrompt={selectedSystemPrompt}
+              />
+            ) : (
+              <Stack gap="md">
+                <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+                  <Text size="sm">
+                    System Prompt Configuration is not applicable for RAG mode. RAG mode focuses on retrieval and answer generation without task execution. Click <strong>Next</strong> to proceed to Review & Create.
+                  </Text>
+                </Alert>
+              </Stack>
+            )}
+          </>
         )}
 
-        {/* STEP 6 or 7: REVIEW & CREATE (depends on agent type) */}
-        {activeStep === (form.values.agentType === 'assistant' ? 7 : 6) && (
+        {/* STEP 7: REVIEW & CREATE (always shown at step 7) */}
+        {activeStep === 7 && (
           <StepReviewAndCreate
             form={form}
             providers={providers}
