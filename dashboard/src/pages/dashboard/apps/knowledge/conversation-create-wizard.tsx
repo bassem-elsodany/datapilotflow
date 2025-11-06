@@ -1524,7 +1524,7 @@ function StepReviewAndCreate({ form, providers, collections }: StepProps) {
               {form.values.agentType === 'rag' ? 'RAG Mode' : 'Assistant Mode'}
             </Badge>
           </Group>
-          <Text size="xs" c="dimmed">
+          <Text size="xs" c="dark">
             {form.values.agentType === 'rag'
               ? 'Standard RAG pipeline: retrieval + optional reranking + optional answer generation'
               : 'Supervisor mode: intelligent task routing + RAG context + system prompt execution'}
@@ -1566,10 +1566,10 @@ function StepReviewAndCreate({ form, providers, collections }: StepProps) {
                   Query Enhancement Provider
                 </Text>
                 <Stack gap="4px">
-                  <Text size="xs" c="dimmed">
+                  <Text size="sm" c="dark">
                     Provider: {selectedProvider?.name || 'Not selected'}
                   </Text>
-                  <Text size="xs" c="dimmed">
+                  <Text size="sm" c="dark">
                     Model: {form.values.selectedModel || 'Not selected'}
                   </Text>
                 </Stack>
