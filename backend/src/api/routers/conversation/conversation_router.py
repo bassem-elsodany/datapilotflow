@@ -105,6 +105,7 @@ class SystemPromptRequest(BaseModel):
 class SystemPromptTaskRequest(BaseModel):
     """Request model for system prompt task (for assistant_config)."""
 
+    id: Optional[str] = Field(None, description="System prompt task ID (auto-generated if not provided)")
     title: str = Field(..., min_length=1, max_length=100, description="System prompt task title")
     content: str = Field(..., min_length=10, description="System prompt task content")
     is_active: bool = Field(True, description="Whether this prompt is active")
@@ -473,7 +474,7 @@ async def create_conversation_session(
             if create_request.assistant_config.system_prompt_tasks:
                 system_prompt_tasks = [
                     SystemPromptTask(
-                        id="",  # Will be generated in __post_init__
+                        id=task.id or "",  # Use provided ID if exists, otherwise will be generated in __post_init__
                         user_id=current_user.id,
                         conversation_id="",  # Will be set after conversation creation
                         name=task.title,  # API uses 'title', SystemPromptTask uses 'name'
