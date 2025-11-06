@@ -123,7 +123,7 @@ export function ConversationNodeConfigPanel({
       setIsExpanded(true);
       setLocalConfig(config);
     }
-  }, [node, opened, config]);
+  }, [node, opened]);
 
   if (!opened || !node) return null;
 
