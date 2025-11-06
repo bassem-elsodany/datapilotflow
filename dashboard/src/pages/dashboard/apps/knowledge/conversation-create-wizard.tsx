@@ -483,6 +483,12 @@ export function ConversationCreateWizard() {
       const token = localStorage.getItem('jwt_token');
 
       // Build nested configuration structure
+      console.log('DEBUG: Form values before payload:', {
+        agentType: form.values.agentType,
+        systemPromptTasks: form.values.systemPromptTasks,
+        selectedSystemPromptId: form.values.selectedSystemPromptId,
+      });
+
       const payload: any = {
         name: form.values.conversationName.trim(),
         description: form.values.conversationDescription.trim() || null,
@@ -550,6 +556,8 @@ export function ConversationCreateWizard() {
         ? apiUtils.buildApiUrl(`/conversations/${editingConversationId}`)
         : apiUtils.buildApiUrl('/conversations');
       const method = isEditMode ? 'PUT' : 'POST';
+
+      console.log('DEBUG: Payload being sent:', JSON.stringify(payload, null, 2));
 
       const response = await fetch(url, {
         method: method,
