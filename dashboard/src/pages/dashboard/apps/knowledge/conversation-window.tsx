@@ -443,15 +443,11 @@ export default function ConversationWindow() {
           const newEnableLLMGeneration = data.session.answer_generation?.provider ? true : false;
           setEnableLLMGeneration(newEnableLLMGeneration);
 
-          // Load supervisor setting - check both nested assistant_config and legacy flat field
-          // Prefer assistant_config if available, fall back to legacy enable_knowledge_assistant
+          // Load supervisor setting from assistant_config
           let newEnableKnowledgeAssistant = false;
           if (data.session.assistant_config) {
             // Use nested assistant_config structure
-            newEnableKnowledgeAssistant = data.session.assistant_config.enable_knowledge_assistant ?? false;
-          } else {
-            // Fall back to legacy flat field for backwards compatibility
-            newEnableKnowledgeAssistant = data.session.enable_knowledge_assistant !== undefined ? data.session.enable_knowledge_assistant : false;
+            newEnableKnowledgeAssistant = data.session.assistant_config.enabled ?? false;
           }
           setEnableKnowledgeAssistant(newEnableKnowledgeAssistant);
         }
@@ -1418,7 +1414,7 @@ export default function ConversationWindow() {
         enable_knowledge_assistant: enableKnowledgeAssistant,
         // Complex nested assistant configuration (always present, never null)
         assistant_config: {
-          enable_knowledge_assistant: enableKnowledgeAssistant,
+          enabled: enableKnowledgeAssistant,
           system_prompt_tasks: null, // Keep existing prompts
         },
       };
@@ -1508,7 +1504,7 @@ export default function ConversationWindow() {
         enable_knowledge_assistant: enableKnowledgeAssistant,
         // Complex nested assistant configuration (always present, never null)
         assistant_config: {
-          enable_knowledge_assistant: enableKnowledgeAssistant,
+          enabled: enableKnowledgeAssistant,
           system_prompt_tasks: null, // Keep existing prompts
         },
       };
