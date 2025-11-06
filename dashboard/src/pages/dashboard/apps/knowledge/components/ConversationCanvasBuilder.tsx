@@ -118,7 +118,7 @@ function ConversationCanvasContent() {
     conversationName: '',
     conversationDescription: '',
     selectedStrategy: 'native',
-    collectionName: 'LongTermMemory', // Default collection
+    collectionName: '', // User MUST select collection
     selectedProviderId: null,
     selectedModel: null,
     enableReranking: false,
