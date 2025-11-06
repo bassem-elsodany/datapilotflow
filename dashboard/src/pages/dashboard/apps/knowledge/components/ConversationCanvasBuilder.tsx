@@ -776,30 +776,46 @@ function ConversationCanvasContent() {
                     </Button>
                   )}
 
-                  {!config.enableLLMGeneration && (
+                  {config.selectedTemplate?.type === 'supervisor' ? (
                     <Button
                       variant="subtle"
                       justify="flex-start"
                       fullWidth
                       size="xs"
-                      onClick={handleEnableLLMGeneration}
+                      disabled
                       style={{ borderRadius: 0, padding: '8px 12px' }}
+                      title="Not recommended in Supervisor Agent mode - uses raw context for Task Agent"
                     >
-                      ➕ Add Generate Answer Node
+                      ⚠️ Generate Answer (Disabled in Supervisor Mode)
                     </Button>
-                  )}
-                  {config.enableLLMGeneration && (
-                    <Button
-                      variant="subtle"
-                      justify="flex-start"
-                      fullWidth
-                      size="xs"
-                      color="red"
-                      onClick={handleDisableLLMGeneration}
-                      style={{ borderRadius: 0, padding: '8px 12px' }}
-                    >
-                      ❌ Remove Generate Answer Node
-                    </Button>
+                  ) : (
+                    <>
+                      {!config.enableLLMGeneration && (
+                        <Button
+                          variant="subtle"
+                          justify="flex-start"
+                          fullWidth
+                          size="xs"
+                          onClick={handleEnableLLMGeneration}
+                          style={{ borderRadius: 0, padding: '8px 12px' }}
+                        >
+                          ➕ Add Generate Answer Node
+                        </Button>
+                      )}
+                      {config.enableLLMGeneration && (
+                        <Button
+                          variant="subtle"
+                          justify="flex-start"
+                          fullWidth
+                          size="xs"
+                          color="red"
+                          onClick={handleDisableLLMGeneration}
+                          style={{ borderRadius: 0, padding: '8px 12px' }}
+                        >
+                          ❌ Remove Generate Answer Node
+                        </Button>
+                      )}
+                    </>
                   )}
                 </Stack>
               </div>
