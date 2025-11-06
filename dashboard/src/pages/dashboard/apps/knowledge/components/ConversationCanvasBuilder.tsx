@@ -49,6 +49,8 @@ import { ConversationNode } from './ConversationNode';
 import { ConversationNodeConfigPanel } from './ConversationNodeConfigPanel';
 import { ConversationTemplate } from './conversationTemplates';
 import { ConversationTemplateSelector } from './ConversationTemplateSelector';
+import { RAGSubflowConfig, generateRAGSubflowNodes, generateRAGSubflowEdges } from './RAGSubflow';
+import { TaskAgentSubflowConfig, generateTaskAgentSubflowNodes, generateTaskAgentSubflowEdges } from './TaskAgentSubflow';
 
 const breadcrumbs = [
   { label: 'Dashboard', href: paths.dashboard.root },
@@ -180,6 +182,23 @@ function ConversationCanvasContent() {
         },
       });
 
+      // If RAG subflow is expanded, add RAG sub-nodes
+      if (ragSubflowExpanded) {
+        const ragConfig: RAGSubflowConfig = {
+          selectedStrategy: config.selectedStrategy,
+          collectionName: config.collectionName,
+          topK: config.topK,
+          enableReranking: config.enableReranking,
+          selectedRerankerId: config.selectedRerankerId,
+          selectedRerankerModel: config.selectedRerankerModel,
+          enableLLMGeneration: config.enableLLMGeneration,
+          selectedProviderId: config.selectedProviderId,
+          selectedModel: config.selectedModel,
+        };
+        const ragSubflowNodes = generateRAGSubflowNodes('retrieval', startX + horizontalSpacing, startY + 80, ragConfig);
+        nodeList.push(...ragSubflowNodes);
+      }
+
       // 2. Task Engine node (expandable subflow for Task Agent)
       // Task Agent includes: System Prompts → Task Execution
       const taskSubflowExpanded = config.expandedSubflows?.taskEngine || false;
@@ -198,6 +217,15 @@ function ConversationCanvasContent() {
           subflowLabel: taskSubflowExpanded ? '▼ Task Agent' : '▶ Task Agent',
         },
       });
+
+      // If Task subflow is expanded, add Task sub-nodes
+      if (taskSubflowExpanded) {
+        const taskConfig: TaskAgentSubflowConfig = {
+          enableKnowledgeAssistant: config.enableKnowledgeAssistant,
+        };
+        const taskSubflowNodes = generateTaskAgentSubflowNodes('taskEngine', startX + horizontalSpacing * 2, startY + 80, taskConfig);
+        nodeList.push(...taskSubflowNodes);
+      }
 
       // 3. Response Generation node
       nodeList.push({
@@ -313,9 +341,9 @@ function ConversationCanvasContent() {
   // Dynamic edge generation based on node order
   const dynamicEdges = useMemo(() => {
     const edgeList: Edge[] = [];
-    const nodeIds = dynamicNodes.map(n => n.id);
+    const nodeIds = dynamicNodes.map(n => n.id).filter(id => !id.includes('-')); // Only main flow nodes
 
-    // Create edges between consecutive nodes
+    // Create edges between consecutive main flow nodes
     for (let i = 0; i < nodeIds.length - 1; i++) {
       edgeList.push({
         id: `e${i + 1}`,
@@ -331,8 +359,31 @@ function ConversationCanvasContent() {
       });
     }
 
+    // Add RAG subflow edges if expanded
+    if (config.expandedSubflows?.retrieval) {
+      const ragConfig: RAGSubflowConfig = {
+        selectedStrategy: config.selectedStrategy,
+        collectionName: config.collectionName,
+        topK: config.topK,
+        enableReranking: config.enableReranking,
+        selectedRerankerId: config.selectedRerankerId,
+        selectedRerankerModel: config.selectedRerankerModel,
+        enableLLMGeneration: config.enableLLMGeneration,
+        selectedProviderId: config.selectedProviderId,
+        selectedModel: config.selectedModel,
+      };
+      const ragSubflowEdges = generateRAGSubflowEdges('retrieval', ragConfig);
+      edgeList.push(...ragSubflowEdges);
+    }
+
+    // Add Task Agent subflow edges if expanded
+    if (config.expandedSubflows?.taskEngine) {
+      const taskSubflowEdges = generateTaskAgentSubflowEdges('taskEngine');
+      edgeList.push(...taskSubflowEdges);
+    }
+
     return edgeList;
-  }, [dynamicNodes]);
+  }, [dynamicNodes, config]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -349,9 +400,43 @@ function ConversationCanvasContent() {
   }, [dynamicNodes, dynamicEdges, setNodes, setEdges]);
 
   const handleNodeDoubleClick = useCallback((event: React.MouseEvent, node: Node) => {
-    setSelectedNodeId(node.id);
-    setConfigPanelOpen(true);
-  }, []);
+    // Check if this is a subflow parent node (Knowledge Retrieval or Task Engine)
+    if (node.data?.isSubflowParent) {
+      if (node.id === 'retrieval') {
+        // Toggle RAG subflow
+        setConfig(prev => ({
+          ...prev,
+          expandedSubflows: {
+            ...prev.expandedSubflows,
+            retrieval: !prev.expandedSubflows?.retrieval,
+          },
+        }));
+        notifications.show({
+          title: prev => prev ? 'RAG Agent Expanded' : 'RAG Agent Collapsed',
+          message: prev => prev ? 'Viewing RAG pipeline steps' : 'Collapsed RAG pipeline',
+          color: 'blue',
+        });
+      } else if (node.id === 'taskEngine') {
+        // Toggle Task Agent subflow
+        setConfig(prev => ({
+          ...prev,
+          expandedSubflows: {
+            ...prev.expandedSubflows,
+            taskEngine: !prev.expandedSubflows?.taskEngine,
+          },
+        }));
+        notifications.show({
+          title: prev => prev ? 'Task Agent Expanded' : 'Task Agent Collapsed',
+          message: prev => prev ? 'Viewing task pipeline steps' : 'Collapsed task pipeline',
+          color: 'blue',
+        });
+      }
+    } else {
+      // Regular node configuration
+      setSelectedNodeId(node.id);
+      setConfigPanelOpen(true);
+    }
+  }, [config.expandedSubflows]);
 
   const handleCanvasContextMenu = useCallback((event: React.MouseEvent) => {
     event.preventDefault();
