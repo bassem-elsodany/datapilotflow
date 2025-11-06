@@ -25,11 +25,13 @@ from loguru import logger
 from opik.integrations.langchain import OpikTracer
 from opik.integrations.litellm import track_litellm
 
+from langgraph_supervisor import create_supervisor
+
 from src.agents.common.agent_state import AgentState
+from src.agents.rag_agent import RAGAgentService
+from src.agents.task_agent import TaskAgentService
 from src.agents.rag_agent.graph import graph_dev as workflow
-from src.config import settings
 from src.domain.conversation import ConversationMessage
-from src.orchestration.orchestrator import create_multi_agent_orchestrator
 from src.services.conversation.conversation_history_service import (
     conversation_history_service,
 )
@@ -199,12 +201,44 @@ async def get_response_stream_supervisor(
 
         # ========== PHASE 2: SUPERVISOR CREATION ==========
 
-        logger.info("🤖 Creating supervisor orchestrator using langgraph-supervisor library")
+        logger.info("🤖 Creating supervisor using langgraph-supervisor library")
 
-        supervisor = create_multi_agent_orchestrator(
+        # Create RAG and Task agents
+        rag_agent = RAGAgentService(
             llm_client=llm_client,
             rag_graph=workflow,
             conversation_service=None,
+        )
+        task_agent = TaskAgentService(llm_client=llm_client)
+
+        # Create supervisor graph using official langgraph-supervisor pattern
+        # Following: https://github.com/langchain-ai/langgraph-supervisor-py
+        supervisor_prompt = """You are an intelligent supervisor orchestrating multiple specialist agents.
+
+Available agents:
+1. **RAG Agent** - Document retrieval and ranking from knowledge base
+   - Use when user needs information from documents
+   - Gather knowledge before task execution
+
+2. **Task Agent** - Task execution, analysis, and code generation
+   - Use for tasks requiring action or reasoning
+   - Has access to RAG context if documents were retrieved
+
+Your routing strategy:
+- For document questions: Use RAG Agent
+- For tasks needing knowledge: Use RAG Agent first, then Task Agent
+- For pure tasks: Use Task Agent directly
+- Always provide agents with full context
+
+Be decisive about routing."""
+
+        supervisor_graph = create_supervisor(
+            agents=[rag_agent.rag_graph, task_agent.task_graph],
+            model=llm_client,
+            prompt=supervisor_prompt,
+            output_mode="last_message",
+            add_handoff_messages=True,
+            handoff_tool_prefix="delegate_to_",
         )
 
         # Create initial state for supervisor
@@ -244,19 +278,18 @@ async def get_response_stream_supervisor(
 
         orchestration_start = time.time()
 
-        # Execute the supervisor graph
+        # Execute the supervisor graph using official pattern
         # The LangGraph Supervisor library handles:
         # 1. LLM-driven intent detection
-        # 2. Tool-based handoff to agents
+        # 2. Tool-based handoff to agents (delegate_to_rag_agent, delegate_to_task_agent)
         # 3. Context injection between agents
         # 4. Final response synthesis
         logger.info("🚀 Invoking supervisor graph for orchestration")
 
         # Use astream_events to track orchestration progress
-        events_streamed = False
         final_result_state = None
 
-        async for event in supervisor.supervisor_graph.astream_events(
+        async for event in supervisor_graph.astream_events(
             input=supervisor_initial_state,
             config={"configurable": {"thread_id": str(start_time)}},
             version="v2",
@@ -265,11 +298,10 @@ async def get_response_stream_supervisor(
             node_name = event.get("name", "")
             event_data = event.get("data", {})
 
-            # Log node execution
+            # Log node execution for visibility
             if event_type == "on_chain_start":
-                if node_name in ["supervisor", "rag_agent", "task_agent"]:
+                if node_name in ["supervisor", "delegate_to_rag_agent", "delegate_to_task_agent"]:
                     logger.info(f"▶️ Supervisor Graph: Entering node '{node_name}'")
-                    events_streamed = True
 
             elif event_type == "on_chain_end":
                 if node_name == "LangGraph":
@@ -290,7 +322,7 @@ async def get_response_stream_supervisor(
             logger.info(
                 "📊 Events incomplete, invoking supervisor graph synchronously"
             )
-            result_state = await supervisor.supervisor_graph.ainvoke(
+            result_state = await supervisor_graph.ainvoke(
                 supervisor_initial_state,
                 config={"configurable": {"thread_id": str(start_time)}},
             )
