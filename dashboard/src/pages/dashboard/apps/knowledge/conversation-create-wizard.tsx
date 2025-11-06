@@ -1497,6 +1497,39 @@ function StepSystemPromptConfiguration({
           onPromptSelected?.(prompt);
         }}
       />
+
+      {/* Display selected/created prompt content */}
+      {selectedSystemPrompt && (
+        <Card withBorder p="md" bg="grape.1" style={{ borderColor: '#a855f7' }}>
+          <Stack gap="sm">
+            <Group justify="space-between">
+              <Text fw={600} c="grape">
+                {selectedSystemPrompt.title || selectedSystemPrompt.name}
+              </Text>
+              <Badge size="lg" color="grape">
+                Selected
+              </Badge>
+            </Group>
+
+            {selectedSystemPrompt.description && (
+              <Text size="sm" c="dimmed">
+                {selectedSystemPrompt.description}
+              </Text>
+            )}
+
+            <Divider />
+
+            <div>
+              <Text size="sm" fw={500} mb="xs" c="dark">
+                System Prompt Content:
+              </Text>
+              <Paper p="sm" bg="white" style={{ borderRadius: '4px', fontFamily: 'monospace', fontSize: '12px', maxHeight: '200px', overflow: 'auto', lineHeight: '1.5', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                {selectedSystemPrompt.content || selectedSystemPrompt.system_prompt}
+              </Paper>
+            </div>
+          </Stack>
+        </Card>
+      )}
     </Stack>
   );
 }
