@@ -469,10 +469,16 @@ async def create_conversation_session(
             )
 
         # Build assistant_config if provided
+        logger.info(f"[DEBUG] create_request.assistant_config: {create_request.assistant_config}")
+        if create_request.assistant_config:
+            logger.info(f"[DEBUG] assistant_config exists: enabled={create_request.assistant_config.enabled}")
+            logger.info(f"[DEBUG] system_prompt_tasks from request: {create_request.assistant_config.system_prompt_tasks}")
+
         assistant_config = None
         if create_request.assistant_config:
             system_prompt_tasks = None
             if create_request.assistant_config.system_prompt_tasks:
+                logger.info(f"[DEBUG] Found {len(create_request.assistant_config.system_prompt_tasks)} system_prompt_tasks")
                 system_prompt_tasks = [
                     SystemPromptTask(
                         id=task.id or "",  # Use provided ID if exists, otherwise will be generated in __post_init__
@@ -484,10 +490,14 @@ async def create_conversation_session(
                     )
                     for task in create_request.assistant_config.system_prompt_tasks
                 ]
+                logger.info(f"[DEBUG] Created {len(system_prompt_tasks)} SystemPromptTask objects")
+            else:
+                logger.info("[DEBUG] system_prompt_tasks is None or empty")
             assistant_config = AssistantConfig(
                 enabled=create_request.assistant_config.enabled,
                 system_prompt_tasks=system_prompt_tasks,
             )
+            logger.info(f"[DEBUG] Created AssistantConfig with {len(system_prompt_tasks) if system_prompt_tasks else 0} tasks")
 
         session_id = conversation_history_service.create_conversation(
             user_id=current_user.id,
