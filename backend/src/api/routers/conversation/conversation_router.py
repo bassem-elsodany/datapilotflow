@@ -697,31 +697,6 @@ async def delete_conversation_session(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
-async def create_conversation_session(
-    create_request: CreateSessionRequest = CreateSessionRequest(),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Create a new conversation session.
-    """
-    try:
-        session_id = conversation_history_service.create_conversation(
-            user_id=current_user.id, name=create_request.name
-        )
-
-        return {
-            "success": True,
-            "id": session_id,
-            "name": create_request.name or f"Session {session_id[:8]}",
-            "message": "Conversation session created successfully",
-        }
-
-    except Exception as e:
-        logger.error(f"Error creating conversation session: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.put("/{conversation_id}/name", status_code=status.HTTP_200_OK)
 async def rename_conversation_session(
     conversation_id: str,
