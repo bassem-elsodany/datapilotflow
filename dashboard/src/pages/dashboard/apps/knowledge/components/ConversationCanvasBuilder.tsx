@@ -223,7 +223,7 @@ function ConversationCanvasContent() {
           name: 'Knowledge Retrieval',
           type: 'retrieval',
           description: 'RAG Agent - Search knowledge base',
-          configured: areRAGSubflowNodesConfigured(),
+          configured: ragSubflowExpanded ? areRAGSubflowNodesConfigured() : false,
           isSubflowParent: true,
           subflowExpanded: ragSubflowExpanded,
           subflowLabel: ragSubflowExpanded ? '▼ RAG Agent' : '▶ RAG Agent',
@@ -268,6 +268,7 @@ function ConversationCanvasContent() {
       if (taskSubflowExpanded) {
         const taskConfig: TaskAgentSubflowConfig = {
           enableKnowledgeAssistant: config.enableKnowledgeAssistant,
+          selectedSystemPromptId: config.selectedSystemPromptId,
         };
         const taskSubflowNodes = generateTaskAgentSubflowNodes('taskEngine', startX + horizontalSpacing * 2 - 30, startY + 80, taskConfig);
         nodeList.push(...taskSubflowNodes);

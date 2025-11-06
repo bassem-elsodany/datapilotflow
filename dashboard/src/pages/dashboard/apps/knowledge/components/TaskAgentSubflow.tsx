@@ -9,6 +9,7 @@ import { Node, Edge } from 'reactflow';
 
 export interface TaskAgentSubflowConfig {
   enableKnowledgeAssistant: boolean;
+  selectedSystemPromptId?: string;
 }
 
 /**
@@ -20,6 +21,7 @@ export function generateTaskAgentSubflowNodes(parentId: string, baseX: number, b
   const nodeSpacing = 90; // Tighter spacing for grouped layout
 
   // Sub-node 1: System Prompts
+  // Configured if: selectedSystemPromptId is set
   nodes.push({
     id: `${parentId}-prompts`,
     type: 'conversationNode',
@@ -29,7 +31,7 @@ export function generateTaskAgentSubflowNodes(parentId: string, baseX: number, b
       name: 'System Prompts',
       type: 'assistant',
       description: 'Task instructions',
-      configured: true,
+      configured: !!config.selectedSystemPromptId,
     },
   });
 
