@@ -21,10 +21,11 @@ export interface RAGSubflowConfig {
 
 /**
  * Generate RAG subflow nodes (children of Knowledge Retrieval)
+ * Nodes are positioned tightly together in a group
  */
 export function generateRAGSubflowNodes(parentId: string, baseX: number, baseY: number, config: RAGSubflowConfig): Node[] {
   const nodes: Node[] = [];
-  const nodeSpacing = 120;
+  const nodeSpacing = 90; // Tighter spacing for grouped layout
 
   // Sub-node 1: Query Enhancement
   nodes.push({
