@@ -5,12 +5,12 @@
  * EXACTLY SAME as job pipeline's NodeConfigPanel
  */
 
-import { ActionIcon, Group, Select, NumberInput, Switch, TextInput, Textarea, Paper, Text, Stack, Badge, Box, List, Divider, Button } from '@mantine/core';
-import { IconChevronDown, IconChevronUp, IconX, IconHelp, IconCheck, IconAlertCircle } from '@tabler/icons-react';
-import { useState, useEffect } from 'react';
-import { Node } from 'reactflow';
-import { notifications } from '@mantine/notifications';
 import { SystemPromptManager } from '@/components/system-prompt-manager';
+import { ActionIcon, Box, Button, Divider, Group, NumberInput, Paper, Select, Stack, Switch, Text, TextInput, Textarea } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
+import { IconAlertCircle, IconCheck, IconChevronDown, IconChevronUp, IconX } from '@tabler/icons-react';
+import { useEffect, useState } from 'react';
+import { Node } from 'reactflow';
 
 interface ConversationNodeData {
   id: string;
@@ -195,13 +195,24 @@ export function ConversationNodeConfigPanel({
       return;
     }
 
-    console.log('[handleSave] Saving node config:', {
+    // Remove configuredNodes and expandedSubflows from localConfig before saving
+    // These should only be managed by the canvas, not passed from the panel
+    const { configuredNodes, expandedSubflows, selectedTemplate, ...configToSave } = localConfig;
+
+    // Force enableKnowledgeAssistant to false in RAG mode, true in supervisor mode
+    if (config?.selectedTemplate?.type === 'rag') {
+      configToSave.enableKnowledgeAssistant = false;
+    } else if (config?.selectedTemplate?.type === 'supervisor') {
+      configToSave.enableKnowledgeAssistant = true;
+    }
+
+    console.log('[handleSave] Saving config without configuredNodes:', {
       nodeId: node.id,
-      collectionName: localConfig.collectionName,
-      topK: localConfig.topK,
-      localConfig: localConfig,
+      nodeType: node.data.type,
+      configToSave,
     });
-    onSave(node.id, localConfig);
+
+    onSave(node.id, configToSave);
     onClose();
   };
 
@@ -234,20 +245,32 @@ export function ConversationNodeConfigPanel({
               </div>
 
               <Divider label="Knowledge Assistant" labelPosition="center" />
-              
+
               <div>
                 <Switch
                   label="Enable Knowledge Assistant"
                   description="Let AI perform tasks (like writing, coding, analysis) using information from your knowledge base as context"
-                  checked={localConfig.enableKnowledgeAssistant !== false}
+                  checked={
+                    config?.selectedTemplate?.type === 'supervisor'
+                      ? true
+                      : config?.selectedTemplate?.type === 'rag'
+                        ? false
+                        : (localConfig.enableKnowledgeAssistant !== false)
+                  }
                   onChange={(e) => setLocalConfig({ ...localConfig, enableKnowledgeAssistant: e.currentTarget.checked })}
                   size="sm"
-                  disabled={config?.selectedTemplate?.type === 'supervisor'}
-                  title={config?.selectedTemplate?.type === 'supervisor' ? 'Always enabled in Assistant mode' : ''}
+                  disabled={config?.selectedTemplate?.type === 'supervisor' || config?.selectedTemplate?.type === 'rag'}
+                  title={
+                    config?.selectedTemplate?.type === 'supervisor'
+                      ? 'Always enabled in Assistant mode'
+                      : config?.selectedTemplate?.type === 'rag'
+                        ? 'Always disabled in RAG mode - switch to Assistant Agent template to enable'
+                        : ''
+                  }
                 />
               </div>
 
-              {localConfig.enableKnowledgeAssistant !== false ? (
+              {(config?.selectedTemplate?.type === 'supervisor' || localConfig.enableKnowledgeAssistant !== false) && config?.selectedTemplate?.type !== 'rag' ? (
                 <div style={{
                   padding: '12px',
                   backgroundColor: 'var(--mantine-color-grape-0)',
@@ -581,8 +604,8 @@ export function ConversationNodeConfigPanel({
                     const provider = providers?.find((p: any) => p.id === localConfig.selectedRerankerId);
                     const models = provider
                       ? (provider.reranker?.models && provider.reranker.models.length > 0
-                          ? provider.reranker.models
-                          : provider.generative?.models || [])
+                        ? provider.reranker.models
+                        : provider.generative?.models || [])
                       : [];
 
                     return (
