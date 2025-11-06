@@ -146,48 +146,6 @@ function ConversationCanvasContent() {
   const START_Y = 50;
   const NODES_PER_LINE = 4;
 
-  // Calculate subflow box positions based on actual subflow node positions
-  const subflowBoxPositions = useMemo(() => {
-    // RAG subflow nodes are positioned at: baseX = START_X + HORIZONTAL_SPACING - 30, baseY = START_Y + 80
-    // With nodeSpacing of 90px, need to account for all nodes and add padding
-    const ragBaseX = START_X + HORIZONTAL_SPACING - 30;
-    const ragBaseY = START_Y + 80;
-
-    // Task subflow nodes are positioned at: baseX = START_X + HORIZONTAL_SPACING * 2 - 30, baseY = START_Y + 80
-    const taskBaseX = START_X + HORIZONTAL_SPACING * 2 - 30;
-    const taskBaseY = START_Y + 80;
-
-    // Calculate how many RAG nodes will be visible (including optional reranking and LLM generation)
-    let ragNodeCount = 2; // Enhancement + Search minimum
-    if (config.enableReranking) ragNodeCount++;
-    if (config.enableLLMGeneration) ragNodeCount++;
-
-    // Box needs to accommodate all nodes with spacing, nodeSpacing = 90px
-    const nodeSpacing = 90;
-    const nodeDiameter = 80; // Rough diameter of circular node
-    const padding = 20; // Padding around nodes
-
-    // RAG box: width = all nodes + spacing + padding
-    const ragBoxWidth = ragNodeCount * nodeSpacing + padding;
-
-    // Task box: always 2 nodes (System Prompts + Execution)
-    const taskBoxWidth = 2 * nodeSpacing + padding;
-
-    return {
-      ragBox: {
-        x: ragBaseX - padding / 2,  // Offset to center padding
-        y: ragBaseY - padding / 2,
-        width: ragBoxWidth,
-        height: nodeDiameter + padding,
-      },
-      taskBox: {
-        x: taskBaseX - padding / 2,
-        y: taskBaseY - padding / 2,
-        width: taskBoxWidth,
-        height: nodeDiameter + padding,
-      },
-    };
-  }, [config.enableReranking, config.enableLLMGeneration]);
 
   // Dynamic node generation based on configuration
   // RAG flow: User Query → Query Strategy → Search Documents → Rerank? → Generate Answer/Raw Output
@@ -777,41 +735,6 @@ function ConversationCanvasContent() {
               <MiniMap />
             </ReactFlow>
 
-            {/* HTML overlay boxes for subflow grouping - positioned with calculated coordinates */}
-            {config.expandedSubflows?.retrieval && (
-              <div
-                style={{
-                  position: 'absolute',
-                  left: `${subflowBoxPositions.ragBox.x}px`,
-                  top: `${subflowBoxPositions.ragBox.y}px`,
-                  width: `${subflowBoxPositions.ragBox.width}px`,
-                  height: `${subflowBoxPositions.ragBox.height}px`,
-                  border: '2px solid #74a9e0',
-                  borderRadius: '6px',
-                  backgroundColor: 'rgba(116, 169, 224, 0.15)',
-                  pointerEvents: 'none',
-                  zIndex: 1,
-                  boxSizing: 'border-box',
-                }}
-              />
-            )}
-            {config.expandedSubflows?.taskEngine && (
-              <div
-                style={{
-                  position: 'absolute',
-                  left: `${subflowBoxPositions.taskBox.x}px`,
-                  top: `${subflowBoxPositions.taskBox.y}px`,
-                  width: `${subflowBoxPositions.taskBox.width}px`,
-                  height: `${subflowBoxPositions.taskBox.height}px`,
-                  border: '2px solid #74a9e0',
-                  borderRadius: '6px',
-                  backgroundColor: 'rgba(116, 169, 224, 0.15)',
-                  pointerEvents: 'none',
-                  zIndex: 1,
-                  boxSizing: 'border-box',
-                }}
-              />
-            )}
 
             {/* Context Menu for adding disabled nodes */}
             {contextMenu && (
