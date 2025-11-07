@@ -52,9 +52,9 @@ def extract_conversation_config(conversation) -> dict:
         "collection_name": None,
         "enhancement_config": {},
         "enable_reranking": False,
-        "relevance_threshold": 0.5,
+        "relevance_threshold": 0.6,
         "enable_llm_generation": False,
-        "top_k": 5,
+        "top_k": 10,
         "conversation_description": None,
         "reranker_model_name": None,
     }
@@ -76,15 +76,19 @@ def extract_conversation_config(conversation) -> dict:
     # Load enhancement strategy and provider
     if conversation.enhancement:
         config["selected_strategy"] = conversation.enhancement.strategy
-        
+
         # For non-native strategies, the provider is required and stored in enhancement.provider
         # If answer_generation doesn't have a provider, use enhancement.provider as fallback
-        if (conversation.enhancement.strategy != "native" 
-            and conversation.enhancement.provider 
-            and not config["llm_provider_id"]):
+        if (
+            conversation.enhancement.strategy != "native"
+            and conversation.enhancement.provider
+            and not config["llm_provider_id"]
+        ):
             config["llm_provider_id"] = conversation.enhancement.provider.id
             config["llm_model_name"] = conversation.enhancement.provider.model_name
-            logger.debug(f"Using enhancement provider for non-native strategy: {config['llm_provider_id']}/{config['llm_model_name']}")
+            logger.debug(
+                f"Using enhancement provider for non-native strategy: {config['llm_provider_id']}/{config['llm_model_name']}"
+            )
 
     # Load reranking settings
     if conversation.reranker and conversation.reranker.provider:
@@ -253,7 +257,9 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
                 conversation_id = msg.get("conversation_id") or msg.get("session_id")
 
                 # Log the incoming query
-                logger.info(f"📨 [RAG QUERY RECEIVED] Query: {query[:100]}{'...' if len(query) > 100 else ''} | Conversation ID: {conversation_id}")
+                logger.info(
+                    f"📨 [RAG QUERY RECEIVED] Query: {query[:100]}{'...' if len(query) > 100 else ''} | Conversation ID: {conversation_id}"
+                )
 
                 # Initialize defaults
                 llm_provider_id = None
@@ -289,7 +295,9 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
                             relevance_threshold = config["relevance_threshold"]
                             enable_llm_generation = config["enable_llm_generation"]
                             top_k = config["top_k"]
-                            conversation_description = config["conversation_description"]
+                            conversation_description = config[
+                                "conversation_description"
+                            ]
                             reranker_model_name = config["reranker_model_name"]
 
                             # Retrieval strategy is auto-detected at runtime based on query variants
@@ -417,8 +425,15 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
                     )
                     logger.debug(f"📡 [RAG EVENT DATA] {json.dumps(chunk)}")
 
-                    if chunk_type in ["workflow_progress", "workflow_complete", "workflow_error", "streaming_response"]:
-                        logger.debug(f"📡 [RAG SEND] Sending to client: type={chunk_type}, stage={chunk_stage}")
+                    if chunk_type in [
+                        "workflow_progress",
+                        "workflow_complete",
+                        "workflow_error",
+                        "streaming_response",
+                    ]:
+                        logger.debug(
+                            f"📡 [RAG SEND] Sending to client: type={chunk_type}, stage={chunk_stage}"
+                        )
                         await websocket.send_text(json.dumps(chunk))
                         logger.debug(f"✅ [RAG SENT] Event sent to client")
                     else:
@@ -426,13 +441,17 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
                             f"⚠️ Skipping unexpected RAG event type: {chunk_type}"
                         )
 
-                logger.info("✅ RAG query processing completed, waiting for next query...")
+                logger.info(
+                    "✅ RAG query processing completed, waiting for next query..."
+                )
 
             except WebSocketDisconnect:
                 logger.debug(f"📤 WebSocket disconnected by client")
                 return
             except asyncio.TimeoutError:
-                logger.debug(f"⏱️ WebSocket receive timeout after {timeout}s - closing connection")
+                logger.debug(
+                    f"⏱️ WebSocket receive timeout after {timeout}s - closing connection"
+                )
                 await websocket.close(code=1000, reason="Connection idle timeout")
                 return
             except json.JSONDecodeError:
@@ -462,7 +481,9 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
                         )
                     )
                 except Exception as send_error:
-                    logger.debug(f"Could not send error message to client (connection may be closed): {send_error}")
+                    logger.debug(
+                        f"Could not send error message to client (connection may be closed): {send_error}"
+                    )
 
     except WebSocketDisconnect:
         logger.info(f"❌ RAG WebSocket disconnected for user: {user_id}")
@@ -476,7 +497,9 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
 
 
 @router.websocket("/ws/agent/query/supervisor")
-async def agent_query_supervisor_websocket(websocket: WebSocket, token: str = Query(None)):
+async def agent_query_supervisor_websocket(
+    websocket: WebSocket, token: str = Query(None)
+):
     """
     WebSocket endpoint for AI agent query processing with SUPERVISOR MODE.
 
@@ -536,7 +559,9 @@ async def agent_query_supervisor_websocket(websocket: WebSocket, token: str = Qu
         return
 
     await websocket.accept()
-    logger.info(f"Supervisor WebSocket connected for user: {user_id} with timeout: {timeout}")
+    logger.info(
+        f"Supervisor WebSocket connected for user: {user_id} with timeout: {timeout}"
+    )
 
     try:
         while True:
@@ -550,7 +575,9 @@ async def agent_query_supervisor_websocket(websocket: WebSocket, token: str = Qu
                 conversation_id = msg.get("conversation_id") or msg.get("session_id")
 
                 # Log the incoming query
-                logger.info(f"📨 [SUPERVISOR QUERY RECEIVED] Query: {query[:100]}{'...' if len(query) > 100 else ''} | Conversation ID: {conversation_id}")
+                logger.info(
+                    f"📨 [SUPERVISOR QUERY RECEIVED] Query: {query[:100]}{'...' if len(query) > 100 else ''} | Conversation ID: {conversation_id}"
+                )
 
                 # Initialize defaults
                 llm_provider_id = None
@@ -586,7 +613,9 @@ async def agent_query_supervisor_websocket(websocket: WebSocket, token: str = Qu
                             relevance_threshold = config["relevance_threshold"]
                             enable_llm_generation = config["enable_llm_generation"]
                             top_k = config["top_k"]
-                            conversation_description = config["conversation_description"]
+                            conversation_description = config[
+                                "conversation_description"
+                            ]
                             reranker_model_name = config["reranker_model_name"]
 
                             # Retrieval strategy is auto-detected at runtime based on query variants
@@ -713,7 +742,14 @@ async def agent_query_supervisor_websocket(websocket: WebSocket, token: str = Qu
                     )
                     logger.debug(f"📡 Full event payload: {json.dumps(chunk)}")
 
-                    if chunk_type in ["supervisor_progress", "supervisor_started", "workflow_complete", "workflow_started", "streaming_response", "supervisor_error"]:
+                    if chunk_type in [
+                        "supervisor_progress",
+                        "supervisor_started",
+                        "workflow_complete",
+                        "workflow_started",
+                        "streaming_response",
+                        "supervisor_error",
+                    ]:
                         await websocket.send_text(json.dumps(chunk))
                         logger.info(f"✅ Supervisor event sent to client successfully")
                     else:
@@ -721,13 +757,17 @@ async def agent_query_supervisor_websocket(websocket: WebSocket, token: str = Qu
                             f"⚠️ Skipping unexpected Supervisor event type: {chunk_type}"
                         )
 
-                logger.info("✅ Supervisor query processing completed, waiting for next query...")
+                logger.info(
+                    "✅ Supervisor query processing completed, waiting for next query..."
+                )
 
             except WebSocketDisconnect:
                 logger.debug(f"📤 WebSocket disconnected by client")
                 return
             except asyncio.TimeoutError:
-                logger.debug(f"⏱️ WebSocket receive timeout after {timeout}s - closing connection")
+                logger.debug(
+                    f"⏱️ WebSocket receive timeout after {timeout}s - closing connection"
+                )
                 await websocket.close(code=1000, reason="Connection idle timeout")
                 return
             except json.JSONDecodeError:
@@ -744,7 +784,9 @@ async def agent_query_supervisor_websocket(websocket: WebSocket, token: str = Qu
                         )
                     )
                 except Exception as send_error:
-                    logger.debug(f"Could not send error message to client (connection may be closed): {send_error}")
+                    logger.debug(
+                        f"Could not send error message to client (connection may be closed): {send_error}"
+                    )
             except Exception as e:
                 logger.error(f"❌ Error processing Supervisor message: {str(e)}")
                 logger.error(f"Traceback: {traceback.format_exc()}")
@@ -760,7 +802,9 @@ async def agent_query_supervisor_websocket(websocket: WebSocket, token: str = Qu
                         )
                     )
                 except Exception as send_error:
-                    logger.debug(f"Could not send error message to client (connection may be closed): {send_error}")
+                    logger.debug(
+                        f"Could not send error message to client (connection may be closed): {send_error}"
+                    )
 
     except WebSocketDisconnect:
         logger.info(f"❌ Supervisor WebSocket disconnected for user: {user_id}")
@@ -771,5 +815,3 @@ async def agent_query_supervisor_websocket(websocket: WebSocket, token: str = Qu
             await websocket.close(code=1011, reason="Internal server error")
         except Exception:
             pass
-
-

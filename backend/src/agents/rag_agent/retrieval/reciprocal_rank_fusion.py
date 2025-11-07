@@ -215,8 +215,8 @@ async def parallel_retrieval(
             logger.info("🔥" * 40)
 
             # Use synchronous retriever in async context
-            logger.info(f"⚙️  Calling Milvus retriever.get_relevant_documents()...")
-            docs = await asyncio.to_thread(retriever.get_relevant_documents, query)
+            logger.info(f"⚙️  Calling Milvus retriever.invoke()...")
+            docs = await asyncio.to_thread(retriever.invoke, query)
             logger.info(f"✅ Milvus returned {len(docs)} documents")
 
             # Format results

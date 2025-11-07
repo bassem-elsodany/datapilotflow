@@ -6,6 +6,7 @@ AI responses using direct RAG pipeline without supervisor routing.
 """
 
 import asyncio
+import os
 import time
 import traceback
 import uuid
@@ -16,7 +17,7 @@ import litellm
 from langchain_community.chat_models import ChatLiteLLM
 from loguru import logger
 from opik.integrations.langchain import OpikTracer
-from opik.integrations.litellm import track_litellm
+from opik.integrations.litellm import opik_tracker
 
 from src.agents.common.agent_state import AgentState
 from src.agents.rag_agent.graph import graph_dev as workflow
@@ -74,7 +75,7 @@ async def get_response_stream_rag(
                 f"Agent tracing enabled: Workflow config: strategy={selected_strategy}, collection={collection_name}, llm_provider_id={llm_provider_id}, llm_model_name={llm_model_name}"
             )
             # Enable LiteLLM tracking for cost and token usage
-            track_litellm()
+            opik_tracker.track_litellm()
             logger.debug("✅ LiteLLM tracking enabled for cost and token usage")
 
             # Build tags for Opik trace
@@ -142,6 +143,17 @@ async def get_response_stream_rag(
         if not provider.is_active:
             raise ValueError(f"Provider is not active: {provider.name}")
 
+        # Validate API key is configured for this provider
+        if not provider.api_key or provider.api_key.strip() == "":
+            raise ValueError(
+                f"API key not configured for provider '{provider.name}' ({provider.provider_type}). "
+                f"Please configure the API key in the provider settings."
+            )
+
+        logger.debug(
+            f"🔑 Provider API key status: {'SET (' + str(len(provider.api_key)) + ' chars)' if provider.api_key else 'NOT SET'}"
+        )
+
         # Get temperature and max_tokens from provider's generative config
         generative_config = provider.generative.config if provider.generative else {}
         temperature = generative_config.get("temperature", 0.7)
@@ -159,7 +171,7 @@ async def get_response_stream_rag(
         )
 
         logger.info(
-            f"✅ Created LLM client: {model_string} (temperature={temperature}, max_tokens={max_tokens})"
+            f"✅ Created LLM client: {model_string} (temperature={temperature}, max_tokens={max_tokens}, api_key={'***' + provider.api_key[-4:] if provider.api_key else 'NONE'})"
         )
 
         # Add LLM client to workflow config
@@ -611,8 +623,9 @@ async def get_response_stream_rag(
         logger.critical(
             f"🔴 [RAG STREAM ENDED] answer_generation_emitted={answer_generation_emitted}, has_final_answer={bool(last_state.get('final_answer'))}"
         )
+        final_answer_text = last_state.get("final_answer") or ""
         logger.critical(
-            f"🔴 [RAG STREAM ENDED] final_answer length={len(last_state.get('final_answer', ''))}"
+            f"🔴 [RAG STREAM ENDED] final_answer length={len(final_answer_text)}"
         )
 
         # CRITICAL FIX 3: If response_generation wasn't emitted but we have final_answer, emit it now

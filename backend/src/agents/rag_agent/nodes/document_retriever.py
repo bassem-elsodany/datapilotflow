@@ -126,7 +126,9 @@ async def document_retriever(state: WorkflowState) -> WorkflowState:
             logger.info(f"📊 Number of query variants: {len(query_variants)}")
             logger.info(f"📊 User requested top_k: {top_k}")
             logger.info(f"📊 Documents per query variant: {top_k_per_query}")
-            logger.info(f"📊 Total docs retrieved before fusion: {len(query_variants)} × {top_k_per_query} = {len(query_variants) * top_k_per_query}")
+            logger.info(
+                f"📊 Total docs retrieved before fusion: {len(query_variants)} × {top_k_per_query} = {len(query_variants) * top_k_per_query}"
+            )
             logger.info(f"📊 RRF constant k: {rrf_k}")
             logger.info(f"📊 Final top_k after RRF fusion: {top_k}")
             logger.info("🚨" * 50)
