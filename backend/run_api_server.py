@@ -5,6 +5,8 @@ import sys
 import uvicorn
 from loguru import logger
 
+# Import compatibility shim for opik with LangChain 1.0+
+import src.compat_langchain_load  # noqa: F401
 from src.api_server import app
 from src.config import settings
 from src.infrastructure.mongo.client import close_mongo_client

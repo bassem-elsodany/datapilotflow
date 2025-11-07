@@ -321,35 +321,108 @@ class KnowledgeJobService:
         if not current_job:
             return None
 
-        # If vector DB collection fields are being updated, update the collection first
-        vectordb_update_fields = [
-            "vectordb_collection_description",
-            "embedding_model_provider_id",
-            "embedding_model_name",
-            "vector_dimension",
-            "collection_name",
-        ]
+        # Get the current collection to check if collection_name is changing
+        current_collection = self.vectordb_collection_service.get_collection(
+            current_job.vectordb_collection_id, user_id
+        )
+        if not current_collection:
+            logger.error(
+                f"Current collection {current_job.vectordb_collection_id} not found for job {job_id}"
+            )
+            raise ValueError("Current vector DB collection not found")
 
-        vectordb_update_data = {}
-        for field in vectordb_update_fields:
-            if hasattr(update_data, field) and getattr(update_data, field) is not None:
-                vectordb_update_data[field] = getattr(update_data, field)
+        # Check if collection_name is changing
+        collection_name_changed = (
+            hasattr(update_data, "collection_name")
+            and update_data.collection_name is not None
+            and update_data.collection_name != current_collection.collection_name
+        )
 
-        if vectordb_update_data:
-            # Create VectorDBCollectionUpdate object
-            vectordb_collection_update = VectorDBCollectionUpdate(
-                **vectordb_update_data
+        new_collection_id = None
+
+        if collection_name_changed:
+            # CRITICAL: If collection_name is changing, CREATE A NEW COLLECTION
+            # Do NOT update the existing collection (other jobs might be using it!)
+            logger.info(
+                f"Collection name changing from '{current_collection.collection_name}' to '{update_data.collection_name}' "
+                f"- creating NEW collection instead of updating existing one"
             )
 
-            # Update the vector DB collection
-            updated_collection = self.vectordb_collection_service.update_collection(
-                current_job.vectordb_collection_id, user_id, vectordb_collection_update
+            # Build new collection data
+            new_collection_data = VectorDBCollectionCreate(
+                collection_name=update_data.collection_name,
+                description=update_data.vectordb_collection_description
+                or current_collection.description,
+                embedding_model_provider_id=update_data.embedding_model_provider_id
+                or current_collection.embedding_model_provider_id,
+                embedding_model_name=update_data.embedding_model_name
+                or current_collection.embedding_model_name,
+                vector_dimension=update_data.vector_dimension
+                or current_collection.vector_dimension,
             )
-            if not updated_collection:
-                raise ValueError("Failed to update vector DB collection configuration")
 
-        # Update the job with the provided data (same model now)
-        job_update_data = update_data
+            # Create new collection
+            new_collection = self.vectordb_collection_service.create_collection(
+                new_collection_data, user_id
+            )
+            if not new_collection:
+                raise ValueError("Failed to create new vector DB collection")
+
+            new_collection_id = new_collection.id
+            logger.info(
+                f"Created new collection {new_collection_id} with name '{update_data.collection_name}'"
+            )
+
+        else:
+            # Collection name NOT changing - safe to update existing collection
+            vectordb_update_fields = [
+                "vectordb_collection_description",
+                "embedding_model_provider_id",
+                "embedding_model_name",
+                "vector_dimension",
+            ]
+
+            vectordb_update_data = {}
+            for field in vectordb_update_fields:
+                if (
+                    hasattr(update_data, field)
+                    and getattr(update_data, field) is not None
+                ):
+                    vectordb_update_data[field] = getattr(update_data, field)
+
+            if vectordb_update_data:
+                logger.info(
+                    f"Updating existing collection {current_job.vectordb_collection_id} "
+                    f"(collection name unchanged: '{current_collection.collection_name}')"
+                )
+
+                # Create VectorDBCollectionUpdate object
+                vectordb_collection_update = VectorDBCollectionUpdate(
+                    **vectordb_update_data
+                )
+
+                # Update the existing vector DB collection
+                updated_collection = self.vectordb_collection_service.update_collection(
+                    current_job.vectordb_collection_id,
+                    user_id,
+                    vectordb_collection_update,
+                )
+                if not updated_collection:
+                    raise ValueError(
+                        "Failed to update vector DB collection configuration"
+                    )
+
+        # If new collection was created, update the job to point to it
+        if new_collection_id:
+            # Create a modified update_data with new collection ID
+            job_update_dict = update_data.dict(exclude_unset=True)
+            job_update_dict["vectordb_collection_id"] = new_collection_id
+            job_update_data = KnowledgeJobUpdate(**job_update_dict)
+            logger.info(
+                f"Updating job {job_id} to use new collection {new_collection_id}"
+            )
+        else:
+            job_update_data = update_data
 
         return self.knowledge_job_dao.update_job(job_id, user_id, job_update_data)
 

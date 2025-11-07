@@ -24,9 +24,6 @@ def answer_generator(state: WorkflowState) -> WorkflowState:
     """
     logger.info("🚀 [NODE START] answer_generator")
     try:
-        # Add processing step
-        state["processing_steps"].append("answer_generation")
-
         # Get LLM client from config
         config = state.get("config", {})
         llm_client = config.get("llm_client")

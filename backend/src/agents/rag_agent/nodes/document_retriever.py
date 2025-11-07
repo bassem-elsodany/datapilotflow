@@ -5,6 +5,7 @@ This node retrieves relevant documents using the retriever tool.
 Supports both single-query and Reciprocal Rank Fusion (RRF) strategies.
 """
 
+import asyncio
 import traceback
 
 import opik
@@ -26,9 +27,6 @@ async def document_retriever(state: WorkflowState) -> WorkflowState:
     """
     logger.info("🚀 [NODE START] document_retriever")
     try:
-        # Add processing step
-        state["processing_steps"].append("document_retrieval")
-
         # Get configuration from state
         config = state.get("config", {})
         collection_name = config.get("collection_name", "LongTermMemory")
@@ -170,8 +168,8 @@ async def document_retriever(state: WorkflowState) -> WorkflowState:
             search_query = query_variants[0]
             logger.info(f"🔍 Using single query strategy: '{search_query[:100]}...'")
 
-            # Use the retriever to get documents
-            documents = retriever.get_relevant_documents(search_query)
+            # Use async retriever (calls _aget_relevant_documents)
+            documents = await retriever.ainvoke(search_query)
 
             # Format results
             retrieved_docs = []

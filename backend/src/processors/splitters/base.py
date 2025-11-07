@@ -8,7 +8,7 @@ providing a unified interface for different splitting strategies.
 from abc import ABC, abstractmethod
 from typing import List
 
-from langchain.schema import Document
+from langchain_core.documents import Document
 from loguru import logger
 
 from src.domain.knowledge.document_splitter import DocumentSplitter

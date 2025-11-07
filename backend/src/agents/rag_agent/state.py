@@ -48,8 +48,7 @@ class RAGWorkflowState(TypedDict):
     query_info: Optional[Dict[str, Any]]
 
     # Metadata
-    processing_steps: List[str]
-    errors: List[str]
+    errors: Optional[List[str]]
 
     # Configuration
     config: Optional[Dict[str, Any]]
@@ -94,7 +93,6 @@ def create_initial_state(
         context=None,
         final_answer=None,
         query_info=None,
-        processing_steps=[],
         errors=[],
         config=config or {},
     )

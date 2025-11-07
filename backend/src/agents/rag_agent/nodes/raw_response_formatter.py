@@ -23,9 +23,6 @@ def raw_response_formatter(state: WorkflowState) -> WorkflowState:
     """
     logger.info("🚀 [NODE START] raw_response_formatter")
     try:
-        # Add processing step
-        state["processing_steps"].append("raw_response_formatting")
-
         # Get documents - use judged_documents if available, otherwise use retrieved_documents
         judged_docs = state.get("judged_documents")
 

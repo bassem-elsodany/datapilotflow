@@ -160,6 +160,9 @@ class CreateSessionRequest(BaseModel):
 
 def _serialize_conversation_to_response(session: "ConversationSession") -> dict:
     """Serialize ConversationSession to API response format (new nested structure)."""
+    # Determine agent mode based on assistant_config
+    agent_mode = "assistant" if (session.assistant_config and session.assistant_config.enabled) else "rag"
+    
     response = {
         "id": session._id,
         "name": session.name or f"Session {session._id[:8]}",
@@ -168,6 +171,7 @@ def _serialize_conversation_to_response(session: "ConversationSession") -> dict:
         "last_updated": session.last_updated.isoformat(),
         "message_count": session.message_count,
         "tags": session.tags or [],
+        "agent_mode": agent_mode,  # "rag" or "assistant"
     }
 
     # Enhancement configuration

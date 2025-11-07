@@ -79,7 +79,7 @@ async def _process_url_with_crawler(
 
         # Time-based heartbeat tracking
         last_heartbeat_time = time.time()
-        heartbeat_time_interval = 120  # Send heartbeat every 2 minutes if no activity
+        heartbeat_time_interval = 600  # Send heartbeat every 10 minutes if no activity (long pages can take time)
 
         # Create crawler result iterator
         crawler_iter = (await crawler.arun(url, config=crawler_config)).__aiter__()

@@ -5,12 +5,16 @@ This module provides a LangChain retriever tool that searches the vector databas
 for relevant context to enrich the agent's responses.
 """
 
+import asyncio
 from typing import Any, Dict
 
-from langchain_core.tools import create_retriever_tool
-from langchain_core.callbacks import CallbackManagerForRetrieverRun
+from langchain_core.callbacks import (
+    AsyncCallbackManagerForRetrieverRun,
+    CallbackManagerForRetrieverRun,
+)
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
+from langchain_core.tools import create_retriever_tool
 from loguru import logger
 
 from src.infrastructure.milvus.client import MilvusClientWrapper
@@ -154,6 +158,140 @@ class MilvusRetriever(BaseRetriever):
 
         except Exception as e:
             logger.error(f"   ❌❌ MILVUS RETRIEVAL FAILED: {e}")
+            import traceback
+
+            logger.error(traceback.format_exc())
+            return []
+
+    async def _aget_relevant_documents(
+        self, query: str, *, run_manager: AsyncCallbackManagerForRetrieverRun = None
+    ) -> list[Document]:
+        """
+        Async version: Retrieve relevant documents from Milvus without blocking event loop.
+
+        This is the CORRECT method for async contexts (RAG agent). All blocking I/O
+        operations are wrapped in asyncio.to_thread() to prevent event loop blocking.
+
+        Args:
+            query: The search query
+            run_manager: Async callback manager for the retriever run
+
+        Returns:
+            List of relevant documents
+        """
+        try:
+            logger.info("   " + "▼" * 50)
+            logger.info(f"   🔎 MILVUS RETRIEVER (ASYNC): Starting vector search")
+            logger.info(f"   📝 Query: '{query[:150]}...'")
+
+            # Get collection configuration (MongoDB call - wrap in thread)
+            vectordb_service = get_vectordb_collection_service()
+            collection_config = await asyncio.to_thread(
+                vectordb_service.get_collection_by_name, self.collection_name
+            )
+
+            if not collection_config:
+                raise ValueError(f"Collection not found: {self.collection_name}")
+
+            # Get embedding provider (MongoDB call - wrap in thread)
+            embedding_provider_id = collection_config.embedding_model_provider_id
+            embedding_model_name = collection_config.embedding_model_name
+            vector_dimension = collection_config.vector_dimension
+
+            logger.info(f"   ⚙️  Collection: {self.collection_name}")
+            logger.info(f"   ⚙️  Embedding model: {embedding_model_name}")
+            logger.info(f"   ⚙️  Vector dimension: {vector_dimension}")
+            logger.info(f"   ⚙️  Top K: {self.top_k}")
+
+            model_provider_service = get_model_provider_service()
+            provider = await asyncio.to_thread(
+                model_provider_service.get_model_provider,
+                embedding_provider_id,
+                self.user_id,
+            )
+
+            if not provider:
+                raise ValueError(
+                    f"Embedding provider not found: {embedding_provider_id}"
+                )
+
+            if not provider.embedding:
+                raise ValueError(
+                    f"Embedding not configured for provider: {provider.name}"
+                )
+
+            # Initialize Milvus client
+            from src.domain.rag.rag_file_upload import RagFileUpload
+
+            milvus_client = MilvusClientWrapper(
+                model=RagFileUpload,
+                collection_name=self.collection_name,
+                vector_dimension=vector_dimension,
+            )
+
+            # Generate query embedding (API call - wrap in thread)
+            import litellm
+
+            litellm_model = f"{provider.provider_type}/{embedding_model_name}"
+            logger.info(f"   🧮 Generating embedding vector using {litellm_model}...")
+
+            embedding_response = await asyncio.to_thread(
+                litellm.embedding,
+                model=litellm_model,
+                input=[query],
+                api_key=provider.api_key,
+                api_base=provider.endpoint if provider.endpoint else None,
+                dimensions=vector_dimension,
+            )
+
+            query_vector = embedding_response.data[0]["embedding"]
+            logger.info(
+                f"   ✅ Embedding vector generated: {len(query_vector)} dimensions"
+            )
+            logger.info(f"   ✅ First 5 dimensions: {query_vector[:5]}")
+
+            # Search Milvus (Milvus call - wrap in thread)
+            logger.info(
+                f"   🔍 Searching Milvus collection '{self.collection_name}' with top_k={self.top_k}..."
+            )
+            results = await asyncio.to_thread(
+                milvus_client.search_with_vector,
+                query_vector=query_vector,
+                limit=self.top_k,
+            )
+            logger.info(f"   ✅ Milvus search complete: Found {len(results)} results")
+
+            # Convert to LangChain Documents
+            documents = []
+            for i, result in enumerate(results):
+                properties = result.get("properties", {})
+                content = properties.get("page_content", properties.get("text", ""))
+
+                if i == 0:
+                    logger.info(f"   📊 First result structure:")
+                    logger.info(f"      Result keys: {list(result.keys())}")
+                    logger.info(f"      Properties keys: {list(properties.keys())}")
+                    logger.info(f"      Distance: {result.get('distance', 'N/A')}")
+
+                doc = Document(
+                    page_content=content,
+                    metadata={
+                        **{k: v for k, v in properties.items() if k != "page_content"},
+                        "id": result.get("id"),
+                        "distance": result.get("distance", 0.0),
+                    },
+                )
+                documents.append(doc)
+
+            logger.info(
+                f"   ✅✅ MILVUS ASYNC SEARCH COMPLETE: Retrieved {len(documents)} documents from {self.collection_name}"
+            )
+            logger.info("   " + "▲" * 50)
+
+            return documents
+
+        except Exception as e:
+            logger.error(f"   ❌❌ MILVUS ASYNC RETRIEVAL FAILED: {e}")
             import traceback
 
             logger.error(traceback.format_exc())

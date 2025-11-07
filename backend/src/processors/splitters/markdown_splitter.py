@@ -11,7 +11,7 @@ Implements a HYBRID splitting strategy:
 
 from typing import List, Optional
 
-from langchain.schema import Document
+from langchain_core.documents import Document
 from langchain_text_splitters import (
     MarkdownHeaderTextSplitter,
     RecursiveCharacterTextSplitter,
@@ -211,7 +211,9 @@ class MarkdownSplitter(BaseSplitter):
 
         return final_chunks
 
-    def _merge_small_into_parent(self, chunks: List[Document], source_url: str = "unknown") -> List[Document]:
+    def _merge_small_into_parent(
+        self, chunks: List[Document], source_url: str = "unknown"
+    ) -> List[Document]:
         """
         Merge small chunks into their direct parent (previous chunk) to prevent noisy low-information chunks.
 
@@ -240,12 +242,14 @@ class MarkdownSplitter(BaseSplitter):
         chunk_data = []
         for idx, chunk in enumerate(chunks):
             token_count = self._token_counter.count_tokens(chunk.page_content)
-            chunk_data.append({
-                "index": idx,
-                "chunk": chunk,
-                "token_count": token_count,
-                "merged": False  # Track if this chunk was merged into previous
-            })
+            chunk_data.append(
+                {
+                    "index": idx,
+                    "chunk": chunk,
+                    "token_count": token_count,
+                    "merged": False,  # Track if this chunk was merged into previous
+                }
+            )
 
         # Process chunks from left to right, merging small chunks into previous chunk
         merged_count = 0
@@ -267,11 +271,15 @@ class MarkdownSplitter(BaseSplitter):
 
                 if prev_data:
                     # Check if merging would exceed max_tokens
-                    total_tokens = prev_data["token_count"] + current_data["token_count"]
+                    total_tokens = (
+                        prev_data["token_count"] + current_data["token_count"]
+                    )
 
                     if total_tokens <= self.max_tokens:
                         # Merge current chunk into previous chunk
-                        prev_data["chunk"].page_content += "\n\n" + current_data["chunk"].page_content
+                        prev_data["chunk"].page_content += (
+                            "\n\n" + current_data["chunk"].page_content
+                        )
                         prev_data["token_count"] = total_tokens
                         current_data["merged"] = True
                         merged_count += 1

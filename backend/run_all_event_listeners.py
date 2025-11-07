@@ -14,6 +14,9 @@ import time
 from pathlib import Path
 from typing import List
 
+# Import compatibility shim for opik with LangChain 1.0+
+import src.compat_langchain_load  # noqa: F401
+
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 

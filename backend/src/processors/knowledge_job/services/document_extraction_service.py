@@ -2,7 +2,11 @@
 Document Extraction Service - Clean async generator interface (NO CALLBACKS).
 
 This service provides a clean async generator interface for extracting documents
-from knowledge sources, eliminating the callback-based approach.
+from knowledge sources (both web scraping and local files), eliminating the callback-based approach.
+
+This service routes to the appropriate extraction method based on content_source_type:
+- LOCAL_FILES: Uses FileExtractionStep logic
+- WEB_SCRAPING: Uses web crawler
 """
 
 import time
@@ -12,11 +16,15 @@ from langchain_core.documents import Document
 from loguru import logger
 
 from src.domain.knowledge.knowledge_job import KnowledgeJob
-from src.domain.knowledge.knowledge_source_config import KnowledgeSourceConfig
+from src.domain.knowledge.knowledge_source_config import (
+    ContentSourceType,
+    KnowledgeSourceConfig,
+)
 from src.processors.crawler import (
     CrawlerKnowledgeConfig,
     get_knowledge_source_documents,
 )
+from src.processors.knowledge_job.orchestration.job_context import JobContext
 
 
 class DocumentExtractionService:
@@ -36,20 +44,106 @@ class DocumentExtractionService:
         """
         Extract documents as an async generator (NO CALLBACKS).
 
-        This method directly yields batches of raw documents from the crawler
-        without any callback mechanisms.
+        Routes to the appropriate extraction method based on content_source_type:
+        - LOCAL_FILES: Delegates to FileExtractionStep logic
+        - WEB_SCRAPING: Uses web crawler
 
         Args:
             knowledge_job: The job configuration
             knowledge_source_config: The knowledge source configuration
-            batch_size: Target batch size for yielding (crawler may yield different sizes)
+            batch_size: Target batch size for yielding
 
         Yields:
             List[Document]: Batches of extracted documents
         """
         logger.info(
             f"[GENERATOR] Starting document extraction for {knowledge_source_config.name} "
-            f"(job: {knowledge_job.id})"
+            f"(job: {knowledge_job.id}, source_type: {knowledge_source_config.content_source_type}, "
+            f"scraping_mode: {knowledge_source_config.scraping_mode})"
+        )
+
+        # Route based on content source type
+        if knowledge_source_config.content_source_type == ContentSourceType.LOCAL_FILES:
+            # Extract from local files using FileExtractionStep logic
+            async for batch in self._extract_from_local_files(
+                knowledge_job, knowledge_source_config, batch_size
+            ):
+                yield batch
+        elif (
+            knowledge_source_config.content_source_type
+            == ContentSourceType.WEB_SCRAPING
+        ):
+            # Extract from web using crawler
+            async for batch in self._extract_from_web(
+                knowledge_job, knowledge_source_config, batch_size
+            ):
+                yield batch
+        else:
+            raise ValueError(
+                f"Unsupported content_source_type: {knowledge_source_config.content_source_type}"
+            )
+
+    async def _extract_from_local_files(
+        self,
+        knowledge_job: KnowledgeJob,
+        knowledge_source_config: KnowledgeSourceConfig,
+        batch_size: int,
+    ) -> AsyncGenerator[List[Document], None]:
+        """
+        Extract documents from local files.
+
+        Delegates to FileExtractionStep's extraction logic.
+
+        Args:
+            knowledge_job: The job configuration
+            knowledge_source_config: The knowledge source configuration (LOCAL_FILES)
+            batch_size: Target batch size for yielding
+
+        Yields:
+            List[Document]: Batches of extracted documents
+        """
+        logger.info(
+            f"[LOCAL FILES] Extracting from local files with mode: {knowledge_source_config.scraping_mode}"
+        )
+
+        # Create a context for FileExtractionStep
+        from src.processors.knowledge_job.pipeline.steps.file_extraction_step import (
+            FileExtractionStep,
+        )
+
+        # Create FileExtractionStep instance
+        file_extraction_step = FileExtractionStep(batch_size=batch_size)
+
+        # Create a minimal context for extraction
+        context = JobContext(
+            job=knowledge_job,
+            knowledge_source_config=knowledge_source_config,
+            user_id=knowledge_source_config.user_id,
+        )
+
+        # Delegate to FileExtractionStep's _extract_files method
+        async for batch in file_extraction_step._extract_files(context, batch_size):
+            yield batch
+
+    async def _extract_from_web(
+        self,
+        knowledge_job: KnowledgeJob,
+        knowledge_source_config: KnowledgeSourceConfig,
+        batch_size: int,
+    ) -> AsyncGenerator[List[Document], None]:
+        """
+        Extract documents from web sources using the crawler.
+
+        Args:
+            knowledge_job: The job configuration
+            knowledge_source_config: The knowledge source configuration (WEB_SCRAPING)
+            batch_size: Target batch size for yielding
+
+        Yields:
+            List[Document]: Batches of extracted documents
+        """
+        logger.info(
+            f"[WEB SCRAPING] Using web crawler for mode: {knowledge_source_config.scraping_mode}"
         )
 
         start_time = time.time()
@@ -122,7 +216,7 @@ class DocumentExtractionService:
             # Timeout for receiving batches from crawler
             # This timeout applies to receiving ANY batch (including empty heartbeat batches)
             # If crawler yields empty batches as heartbeat, timeout is reset
-            batch_timeout = 900  # 15 minutes - crawler should yield heartbeat if skipping many URLs
+            batch_timeout = 1800  # 30 minutes - crawler should yield heartbeat if skipping many URLs (long pages need time)
 
             logger.info(
                 f"[GENERATOR] Starting batch extraction with {batch_timeout}s timeout per batch"
@@ -136,8 +230,7 @@ class DocumentExtractionService:
                 try:
                     # Wait for next batch with timeout
                     batch = await asyncio.wait_for(
-                        generator_iter.__anext__(),
-                        timeout=batch_timeout
+                        generator_iter.__anext__(), timeout=batch_timeout
                     )
 
                     # Empty batch = heartbeat signal from crawler (e.g., skipping duplicates)

@@ -99,17 +99,8 @@ class VectorDBCollectionService:
                     user_id,
                 )
 
-            # Validate chunking config if provided
-            if (
-                update_data.chunk_size is not None
-                and update_data.chunk_overlap is not None
-            ):
-                logger.debug(
-                    f"Validating chunking config: chunk_size={update_data.chunk_size}, chunk_overlap={update_data.chunk_overlap}"
-                )
-                self._validate_chunking_config(
-                    update_data.chunk_size, update_data.chunk_overlap
-                )
+            # Note: Chunking configuration is handled at the job level via document splitter,
+            # not at the vector DB collection level
 
             result = self.vectordb_collection_dao.update_collection(
                 collection_id, user_id, update_data

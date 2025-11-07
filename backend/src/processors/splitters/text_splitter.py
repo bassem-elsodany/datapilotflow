@@ -7,7 +7,7 @@ chunking with configurable size and overlap for unstructured content.
 
 from typing import List
 
-from langchain.schema import Document
+from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from loguru import logger
 

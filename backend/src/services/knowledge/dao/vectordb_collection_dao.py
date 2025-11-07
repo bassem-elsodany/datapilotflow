@@ -94,16 +94,31 @@ class VectorDBCollectionDAO(MongoClientWrapper[VectorDBCollection]):
     ) -> Optional[VectorDBCollection]:
         """Get a vector DB collection configuration by collection name"""
         try:
+            logger.debug(
+                f"[DAO] Querying MongoDB for collection_name='{collection_name}'"
+            )
             result = self.collection.find_one({"collection_name": collection_name})
+            logger.debug(f"[DAO] MongoDB find_one result: {result is not None}")
 
             if result:
-                return self._parse_single_document(result)
-            return None
+                parsed = self._parse_single_document(result)
+                logger.debug(
+                    f"[DAO] Successfully parsed collection config for '{collection_name}'"
+                )
+                return parsed
+            else:
+                logger.warning(
+                    f"[DAO] ❌ MongoDB returned NO document for collection_name='{collection_name}'"
+                )
+                return None
 
         except Exception as e:
             logger.error(
-                f"Error getting vector DB collection by name {collection_name}: {e}"
+                f"[DAO] ❌❌ EXCEPTION getting vector DB collection by name '{collection_name}': {e}"
             )
+            import traceback
+
+            logger.error(f"[DAO] Traceback: {traceback.format_exc()}")
             return None
 
     def list_collections(

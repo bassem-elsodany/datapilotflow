@@ -12,6 +12,7 @@ import {
   IconAlertTriangle,
   IconEdit,
   IconEye,
+  IconMessagePlus,
   IconPlayerPlay,
   IconPlayerStop,
   IconRefresh,
@@ -186,6 +187,17 @@ export function JobActions({
             onClick={() => navigate(paths.dashboard.management.knowledgeSources.jobEdit(job.id))}
           >
             <IconEdit size={16} />
+          </ActionIcon>
+        </Tooltip>
+
+        {/* Always visible - Create Conversation */}
+        <Tooltip label="Create Conversation Agent">
+          <ActionIcon
+            variant="subtle"
+            color="violet"
+            onClick={() => navigate('/dashboard/apps/conversation/create')}
+          >
+            <IconMessagePlus size={16} />
           </ActionIcon>
         </Tooltip>
 

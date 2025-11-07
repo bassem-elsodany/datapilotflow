@@ -93,9 +93,6 @@ async def document_judger(state: WorkflowState) -> WorkflowState:
     """
     logger.info("🚀 [NODE START] document_judger")
     try:
-        # Add processing step
-        state["processing_steps"].append("document_judging")
-
         # Get LLM client from config
         config = state.get("config", {})
         llm_client = config.get("llm_client")

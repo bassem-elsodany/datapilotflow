@@ -6,7 +6,7 @@ organized by functionality for better maintainability.
 """
 
 # Import from subpackages
-from .agent import agent_websocket_router
+from .agent import rag_router, supervisor_router
 from .auth import auth_router
 from .conversation import conversation_router
 from .health import health_router
@@ -22,7 +22,8 @@ from .notifications import notification_router, notification_websocket_router
 from .vectordb.collection_router import router as vectordb_collection_router
 
 __all__ = [
-    "agent_websocket_router",
+    "rag_router",
+    "supervisor_router",
     "auth_router",
     "knowledge_router",
     "knowledge_source_router",

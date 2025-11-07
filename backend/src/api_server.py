@@ -29,7 +29,6 @@ else:
 
 from src.api.constants import API_CONFIG, API_PREFIX
 from src.api.routers import (
-    agent_websocket_router,
     auth_router,
     conversation_router,
     document_splitter_router,
@@ -43,6 +42,8 @@ from src.api.routers import (
     notification_router,
     notification_websocket_router,
     pipeline_router,
+    rag_router,
+    supervisor_router,
     vectordb_collection_router,
 )
 from src.api.routers.knowledge.knowledge_source_preview_router import (
@@ -162,7 +163,8 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 # Include routers under API version prefix
 app.include_router(auth_router, prefix=API_PREFIX, tags=["Authentication Management"])
-app.include_router(agent_websocket_router, prefix=API_PREFIX, tags=["Agent WebSocket"])
+app.include_router(rag_router, prefix=API_PREFIX, tags=["RAG WebSocket"])
+app.include_router(supervisor_router, prefix=API_PREFIX, tags=["Supervisor WebSocket"])
 app.include_router(
     conversation_router, prefix=API_PREFIX, tags=["Conversations Management"]
 )
