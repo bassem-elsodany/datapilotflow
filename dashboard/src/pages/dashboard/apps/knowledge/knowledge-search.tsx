@@ -3,16 +3,16 @@ import { Page } from '@/components/page';
 import { PageHeader } from '@/components/page-header';
 import { apiUtils } from '@/config';
 import { paths } from '@/routes/paths';
-import { ActionIcon, Alert, Badge, Box, Button, Grid, Group, Menu, Modal, Stack, Text, TextInput, Tooltip } from '@mantine/core';
+import { ActionIcon, Alert, Badge, Box, Button, Grid, Group, Modal, Stack, Text, TextInput, Tooltip } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import {
+  IconBrain,
   IconCalendar,
-  IconDots,
   IconEdit,
-  IconEye,
   IconMessageCircle,
   IconMessages,
   IconPlus,
+  IconRobot,
   IconTrash
 } from '@tabler/icons-react';
 import { DataTableColumn } from 'mantine-datatable';
@@ -23,7 +23,9 @@ import { ConversationCreationModal } from './components/ConversationCreationModa
 interface Conversation {
   id: string; // MongoDB _id
   sessionName: string;
+  description?: string; // Conversation description
   messageCount: number;
+  agentMode?: 'rag' | 'assistant'; // Agent mode: RAG or Assistant (Supervisor)
   messages?: Message[];
   createdAt?: string;
   updatedAt?: string;
@@ -83,7 +85,9 @@ export default function KnowledgeSearch() {
         const mappedSessions = (data.sessions || []).map((session: any) => ({
           id: session.id,
           sessionName: session.name,
+          description: session.description,
           messageCount: session.message_count,
+          agentMode: session.agent_mode || 'rag', // Default to 'rag' if not specified
           createdAt: session.created_at,
           updatedAt: session.created_at, // Backend doesn't provide updated_at, use created_at
         }));
@@ -140,9 +144,9 @@ export default function KnowledgeSearch() {
 
       if (response.ok) {
         await loadConversationHistory();
-        // If the deleted session was the current one, create a new session
+        // If the deleted session was the current one, clear it
         if (sessionId === currentSessionId) {
-          await createNewConversation();
+          setCurrentSessionId(null);
         }
         // Close the delete modal
         setDeleteModalOpen(false);
@@ -255,36 +259,61 @@ export default function KnowledgeSearch() {
     () => [
       {
         accessor: 'sessionName',
-        title: 'Session Name',
+        title: 'Name',
         width: 300,
         sortable: true,
         render: (session) => (
-          <Group gap="xs">
-            <Tooltip label="Click to open conversation">
-              <Text
-                fw={500}
-                size="sm"
-                style={{
-                  cursor: 'pointer',
-                  color: 'var(--mantine-color-blue-6)',
-                  textDecoration: 'none'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.textDecoration = 'underline';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.textDecoration = 'none';
-                }}
-                onClick={() => navigate(paths.dashboard.apps.conversation(session.id))}
-              >
-                {session.sessionName}
-              </Text>
-            </Tooltip>
+          <Group gap="xs" align="flex-start">
+            <Stack gap={2} style={{ flex: 1 }}>
+              <Tooltip label="Click to open conversation">
+                <Text
+                  fw={500}
+                  size="sm"
+                  style={{
+                    cursor: 'pointer',
+                    color: 'var(--mantine-color-blue-6)',
+                    textDecoration: 'none'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.textDecoration = 'underline';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.textDecoration = 'none';
+                  }}
+                  onClick={() => navigate(paths.dashboard.apps.conversation(session.id))}
+                >
+                  {session.sessionName}
+                </Text>
+              </Tooltip>
+              {session.description && (
+                <Text size="xs" c="dimmed" lineClamp={2}>
+                  {session.description}
+                </Text>
+              )}
+            </Stack>
             {session.id === currentSessionId && (
               <Badge size="xs" color="blue">Current</Badge>
             )}
           </Group>
         ),
+      },
+      {
+        accessor: 'agentMode',
+        title: 'Mode',
+        width: 150,
+        sortable: true,
+        render: (session) => {
+          const isAssistant = session.agentMode === 'assistant';
+          return (
+            <Badge
+              variant="light"
+              color={isAssistant ? 'violet' : 'blue'}
+              leftSection={isAssistant ? <IconRobot size={14} /> : <IconBrain size={14} />}
+            >
+              {isAssistant ? 'Assistant' : 'RAG'}
+            </Badge>
+          );
+        },
       },
       {
         accessor: 'messageCount',
@@ -325,45 +354,39 @@ export default function KnowledgeSearch() {
       {
         accessor: 'actions',
         title: 'Actions',
-        width: 150,
+        width: 180,
         render: (session) => (
-          <Group gap="xs">
-            <Button
-              variant="subtle"
-              size="xs"
-              leftSection={<IconEye size="1rem" />}
-              onClick={() => selectConversation(session.id)}
-            >
-              Open
-            </Button>
-            <Menu>
-              <Menu.Target>
-                <ActionIcon variant="light" size="sm">
-                  <IconDots size={16} />
-                </ActionIcon>
-              </Menu.Target>
-              <Menu.Dropdown>
-                <Menu.Item
-                  leftSection={<IconEdit size={16} />}
-                  onClick={() => editConversation(session.id)}
-                >
-                  Edit Configuration
-                </Menu.Item>
-                <Menu.Item
-                  leftSection={<IconEdit size={16} />}
-                  onClick={() => openRenameModal(session)}
-                >
-                  Rename
-                </Menu.Item>
-                <Menu.Item
-                  leftSection={<IconTrash size={16} />}
-                  color="red"
-                  onClick={() => openDeleteModal(session)}
-                >
-                  Delete
-                </Menu.Item>
-              </Menu.Dropdown>
-            </Menu>
+          <Group gap="xs" wrap="nowrap">
+            <Tooltip label="Edit Configuration">
+              <ActionIcon
+                variant="light"
+                color="gray"
+                size="md"
+                onClick={() => editConversation(session.id)}
+              >
+                <IconEdit size={18} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="Rename">
+              <ActionIcon
+                variant="light"
+                color="gray"
+                size="md"
+                onClick={() => openRenameModal(session)}
+              >
+                <IconMessageCircle size={18} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="Delete">
+              <ActionIcon
+                variant="light"
+                color="red"
+                size="md"
+                onClick={() => openDeleteModal(session)}
+              >
+                <IconTrash size={18} />
+              </ActionIcon>
+            </Tooltip>
           </Group>
         ),
       },
@@ -416,9 +439,9 @@ export default function KnowledgeSearch() {
               ) : (
                 <DataTable.Table
                   minHeight={240}
-                  noRecordsText={DataTable.noRecordsText('session')}
-                  recordsPerPageLabel={DataTable.recordsPerPageLabel('sessions')}
-                  paginationText={DataTable.paginationText('sessions')}
+                  noRecordsText={DataTable.noRecordsText('conversation agents')}
+                  recordsPerPageLabel={DataTable.recordsPerPageLabel('conversation agents')}
+                  paginationText={DataTable.paginationText('conversation agents')}
                   page={1}
                   records={filteredSessions}
                   fetching={isLoading}
