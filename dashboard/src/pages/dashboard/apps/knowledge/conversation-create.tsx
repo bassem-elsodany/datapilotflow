@@ -735,10 +735,12 @@ function ConversationWizard() {
                 <Select
                   label="Enhancement Strategy"
                   placeholder="Select strategy"
-                  data={ENHANCEMENT_STRATEGIES.map((s) => ({
-                    value: s.value,
-                    label: s.label,
-                  }))}
+                  data={ENHANCEMENT_STRATEGIES
+                    .filter(s => s.value !== 'custom_variants') // Hide custom_variants (only for Assistant mode)
+                    .map((s) => ({
+                      value: s.value,
+                      label: s.label,
+                    }))}
                   value={selectedStrategy}
                   onChange={(value) => setSelectedStrategy(value || 'none')}
                   description="Select how your queries will be enhanced for better retrieval"
@@ -1197,7 +1199,9 @@ function ConversationWizard() {
                   },
                 }}
               >
-                {ENHANCEMENT_STRATEGIES.map((strategy) => (
+                {ENHANCEMENT_STRATEGIES
+                  .filter(strategy => strategy.value !== 'custom_variants') // Hide custom_variants (only for Assistant mode)
+                  .map((strategy) => (
                   <Accordion.Item
                     key={strategy.value}
                     value={strategy.value}
@@ -1322,7 +1326,9 @@ function ConversationWizard() {
                   </Alert>
 
                   <Stack gap="xs">
-                    {ENHANCEMENT_STRATEGIES.map((strategy) => (
+                    {ENHANCEMENT_STRATEGIES
+                      .filter(strategy => strategy.value !== 'custom_variants') // Hide custom_variants (only for Assistant mode)
+                      .map((strategy) => (
                       <Card
                         key={strategy.value}
                         padding="md"

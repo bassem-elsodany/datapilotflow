@@ -61,6 +61,20 @@ const ENHANCEMENT_STRATEGIES = [
     }
   },
   {
+    value: 'custom_variants',
+    label: 'Custom Variants',
+    description: 'User-provided query variations (no LLM cost)',
+    details: 'Accepts pre-defined query variants from you without any LLM enhancement. Searches all variants in parallel and uses RRF to merge results. Perfect for when you know exactly what variations to search.',
+    useCases: ['Multi-language search', 'Pre-computed variants', 'Zero LLM cost', 'Full control over variations'],
+    pros: ['No LLM cost', 'Full user control', 'Fast (parallel search)', 'Predictable results'],
+    cons: ['Requires manual variant creation', 'No AI suggestions', 'Quality depends on user input'],
+    color: 'cyan',
+    example: {
+      original: 'Send as list: ["SSL configuration", "TLS setup", "HTTPS encryption"]',
+      output: 'Uses your variants:\n1. "SSL configuration"\n2. "TLS setup"\n3. "HTTPS encryption"\n\nSearches all in parallel with RRF fusion. No LLM enhancement.'
+    }
+  },
+  {
     value: 'multi_query',
     label: 'Multi-Query',
     description: 'Rephrase the same question in different ways',
@@ -351,15 +365,17 @@ export function ConversationNodeConfigPanel({
             <Stack gap="sm">
               <Select
                 label="Enhancement Strategy"
-                data={ENHANCEMENT_STRATEGIES.map(s => ({ value: s.value, label: s.label }))}
+                data={ENHANCEMENT_STRATEGIES
+                  .filter(s => isSupervisorMode || s.value !== 'custom_variants') // Hide custom_variants in RAG mode
+                  .map(s => ({ value: s.value, label: s.label }))}
                 value={localConfig.selectedStrategy || 'native'}
                 onChange={(value) => {
-                  if (isSupervisorMode && value !== 'decomposition') {
+                  if (isSupervisorMode && value !== 'custom_variants' && value !== 'decomposition') {
                     notifications.show({
                       title: '⚠️ Not Recommended',
-                      message: 'In Supervisor Agent mode, decomposition is the recommended enhancement strategy. It breaks down complex queries into sub-questions for better Task Agent comprehension.',
+                      message: 'In Supervisor Agent mode, custom_variants or decomposition strategies are recommended. Custom variants allows you to provide pre-defined query variations, while decomposition auto-generates sub-questions using LLM.',
                       color: 'yellow',
-                      autoClose: 5000,
+                      autoClose: 6000,
                     });
                   }
                   setLocalConfig({ ...localConfig, selectedStrategy: value });

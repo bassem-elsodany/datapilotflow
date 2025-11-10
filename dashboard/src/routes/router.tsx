@@ -199,6 +199,24 @@ const router = createBrowserRouter([
               },
             ],
           },
+          /* ---------------------------- TOOLS MANAGEMENT --------------------------- */
+          {
+            path: 'tools',
+            children: [
+              {
+                index: true,
+                element: LazyPage(() => import('@/pages/dashboard/management/tools')),
+              },
+              {
+                path: 'create',
+                element: LazyPage(() => import('@/pages/dashboard/management/tools/form')),
+              },
+              {
+                path: ':toolId/edit',
+                element: LazyPage(() => import('@/pages/dashboard/management/tools/form')),
+              },
+            ],
+          },
         ],
       },
     ],

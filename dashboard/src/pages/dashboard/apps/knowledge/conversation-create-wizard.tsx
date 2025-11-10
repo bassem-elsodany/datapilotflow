@@ -12,11 +12,11 @@
  */
 
 import { useGetActiveModelProviders } from '@/api/resources/model-providers';
+import { useGetTools } from '@/api/resources/tools';
 import { useGetCollections } from '@/api/resources/vectordb';
 import { ColorfulVerticalStepper } from '@/components/colorful-vertical-stepper';
 import { Page } from '@/components/page';
 import { PageHeader } from '@/components/page-header';
-import { SystemPromptManager } from '@/components/system-prompt-manager';
 import { apiUtils } from '@/config';
 import { paths } from '@/routes/paths';
 import {
@@ -55,6 +55,7 @@ import {
   IconRobot,
   IconScale,
   IconSettings,
+  IconTool,
   IconWand
 } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
@@ -87,11 +88,8 @@ interface ConversationFormData {
   enableLLMGeneration: boolean;
   enableKnowledgeAssistant: boolean;
 
-  // Step 6 - System Prompt (Assistant mode only)
-  systemPromptTitle: string;
-  systemPromptContent: string;
-  selectedSystemPromptId: string | null;
-  systemPromptTasks: any[];
+  // Step 6 - Tools Binding (Assistant mode only)
+  selectedTools: string[]; // Array of tool IDs
 }
 
 const ENHANCEMENT_STRATEGIES = [
@@ -229,9 +227,9 @@ const STEP_CONFIGS = [
     gradientTo: LOGO_COLORS.accent3,       // Yellow-Green
   },
   {
-    label: 'System Prompt',
-    description: 'Define task engine behavior',
-    icon: <IconMessageCircle size={20} />,
+    label: 'Tools Binding',
+    description: 'Select tools for agent',
+    icon: <IconTool size={20} />,
     color: 'grape',
     gradientFrom: '#a855f7',               // Purple
     gradientTo: LOGO_COLORS.pilot,         // Purple (Pilot)
@@ -256,7 +254,6 @@ export function ConversationCreateWizard() {
   const [activeStep, setActiveStep] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [isCreating, setIsCreating] = useState(false);
-  const [selectedSystemPrompt, setSelectedSystemPrompt] = useState<any>(null);
   const [strategiesInfoModalOpen, setStrategiesInfoModalOpen] = useState(false);
   const [comparisonMode, setComparisonMode] = useState(false);
   const [selectedForComparison, setSelectedForComparison] = useState<string[]>([]);
@@ -269,6 +266,7 @@ export function ConversationCreateWizard() {
   // Fetch data
   const { data: providers, isLoading: providersLoading } = useGetActiveModelProviders();
   const { data: collections, isLoading: collectionsLoading } = useGetCollections();
+  const { data: tools, isLoading: toolsLoading } = useGetTools();
 
   // Form setup
   const form = useForm<ConversationFormData>({
@@ -287,8 +285,7 @@ export function ConversationCreateWizard() {
       selectedRerankerModel: null,
       enableLLMGeneration: true,
       enableKnowledgeAssistant: false, // RAG mode (default) - false, switched to true when Assistant selected
-      selectedSystemPromptId: undefined,
-      systemPromptTasks: [], // Initialize as empty array - will be populated when user selects a prompt
+      selectedTools: [], // Initialize as empty array - will be populated when user selects tools
     },
     validate: {
       conversationName: (value) =>
@@ -314,12 +311,12 @@ export function ConversationCreateWizard() {
     }
   }, []);
 
-  // Auto-select decomposition strategy when Assistant mode is selected
+  // Auto-select custom_variants strategy when Assistant mode is selected
   useEffect(() => {
     if (form.values.agentType === 'assistant') {
-      // Only change if not already set to decomposition (to avoid overwriting in edit mode)
-      if (form.values.selectedStrategy !== 'decomposition') {
-        form.setFieldValue('selectedStrategy', 'decomposition');
+      // Only change if not already set to custom_variants (to avoid overwriting in edit mode)
+      if (form.values.selectedStrategy !== 'custom_variants') {
+        form.setFieldValue('selectedStrategy', 'custom_variants');
       }
       // Ensure enableKnowledgeAssistant is true for assistant mode
       if (!form.values.enableKnowledgeAssistant) {
@@ -367,14 +364,13 @@ export function ConversationCreateWizard() {
           selectedRerankerModel: session.reranker?.provider?.model_name || null,
           enableLLMGeneration: session.answer_generation?.enabled || false,
           enableKnowledgeAssistant: session.assistant_config?.enabled || false,
-          selectedSystemPromptId: session.assistant_config?.system_prompt_tasks?.[0]?.id || null,
-          systemPromptTasks: session.assistant_config?.system_prompt_tasks || [],
+          selectedTools: session.assistant_config?.tools || [],
         });
 
-        console.log('[DEBUG loadExistingConversation] form.values.systemPromptTasks after setValues:', form.values.systemPromptTasks);
+        console.log('[DEBUG loadExistingConversation] form.values.selectedTools after setValues:', form.values.selectedTools);
 
-        // Set selected system prompt for display
-        if (session.assistant_config?.system_prompt_tasks?.[0]) {
+        // No need to set selectedSystemPrompt as tools are now standalone
+        if (false) { // Removed old system prompt logic
           const promptData = {
             id: session.assistant_config.system_prompt_tasks[0].id,
             title: session.assistant_config.system_prompt_tasks[0].title,
@@ -457,7 +453,7 @@ export function ConversationCreateWizard() {
     }
     setCompletedSteps((prev) => [...new Set([...prev, activeStep])]);
 
-    // Skip Step 6 (System Prompt) for RAG mode
+    // Skip Step 6 (Tools Binding) for RAG mode
     let nextStep = activeStep + 1;
     if (activeStep === 5 && form.values.agentType === 'rag') {
       nextStep = 7; // Skip to Review & Create for RAG mode
@@ -469,7 +465,7 @@ export function ConversationCreateWizard() {
   const handlePreviousStep = () => {
     if (activeStep > 0) {
       let prevStep = activeStep - 1;
-      // Skip Step 6 (System Prompt) when going back in RAG mode
+      // Skip Step 6 (Tools Binding) when going back in RAG mode
       if (activeStep === 7 && form.values.agentType === 'rag') {
         prevStep = 5; // Skip from Review & Create back to Generative Answer for RAG
       }
@@ -511,9 +507,7 @@ export function ConversationCreateWizard() {
       // Build nested configuration structure
       console.log('=== DEBUG: PRE-PAYLOAD STATE ===');
       console.log('agentType:', form.values.agentType);
-      console.log('selectedSystemPrompt state:', selectedSystemPrompt);
-      console.log('form.values.systemPromptTasks:', form.values.systemPromptTasks);
-      console.log('form.values.selectedSystemPromptId:', form.values.selectedSystemPromptId);
+      console.log('form.values.selectedTools:', form.values.selectedTools);
       console.log('isEditMode:', isEditMode);
       console.log('editingConversationId:', editingConversationId);
 
@@ -554,35 +548,18 @@ export function ConversationCreateWizard() {
           } : null,
         },
         // Complex nested assistant configuration
-        // RAG mode: assistant_config = { enabled: false, system_prompt_tasks: null }
-        // Assistant mode: assistant_config = { enabled: true, system_prompt_tasks: [...] }
+        // RAG mode: assistant_config = { enabled: false, tools: [] }
+        // Assistant mode: assistant_config = { enabled: true, tools: [...tool_ids] }
         assistant_config: {
           enabled: form.values.agentType === 'assistant',
-          system_prompt_tasks: form.values.agentType === 'assistant' ?
-            // Priority 1: Use selectedSystemPrompt if available
-            (selectedSystemPrompt ? [{
-              id: selectedSystemPrompt.id || '',
-              title: selectedSystemPrompt.title || selectedSystemPrompt.name || '',
-              content: selectedSystemPrompt.content || selectedSystemPrompt.system_prompt || '',
-              is_active: selectedSystemPrompt.is_active !== false,
-            }]
-              // Priority 2: Use form.values.systemPromptTasks if available
-              : (form.values.systemPromptTasks && form.values.systemPromptTasks.length > 0 ?
-                form.values.systemPromptTasks.map((task: any) => ({
-                  id: task.id || '',
-                  title: task.title || task.name || '',
-                  content: task.content || task.system_prompt || '',
-                  is_active: task.is_active !== false,
-                }))
-                : null))
-            : null,
+          tools: form.values.agentType === 'assistant' ? form.values.selectedTools : [],
         },
       };
 
       console.log('DEBUG: assistant_config in payload:', {
         enabled: payload.assistant_config.enabled,
-        system_prompt_tasks: payload.assistant_config.system_prompt_tasks,
-        system_prompt_tasks_count: payload.assistant_config.system_prompt_tasks?.length || 0,
+        tools: payload.assistant_config.tools,
+        tools_count: payload.assistant_config.tools?.length || 0,
       });
 
       // Use PUT for edit mode, POST for create mode
@@ -707,60 +684,91 @@ export function ConversationCreateWizard() {
             form={form}
             providers={providers}
             providersLoading={providersLoading}
-            onPromptSelected={(prompt) => {
-              form.setFieldValue('selectedSystemPromptId', prompt.id);
-              setSelectedSystemPrompt(prompt);
-              // Store the prompt as a system prompt task for assistant_config
-              if (prompt) {
-                form.setFieldValue('systemPromptTasks', [
-                  {
-                    id: prompt.id,
-                    title: prompt.title || prompt.name,
-                    content: prompt.content || prompt.system_prompt,
-                    is_active: prompt.is_active !== false,
-                  },
-                ]);
-              }
-            }}
-            selectedSystemPrompt={selectedSystemPrompt}
           />
         )}
 
-        {/* STEP 6: SYSTEM PROMPT (Assistant mode only) */}
+        {/* STEP 6: TOOLS BINDING (Assistant mode only) */}
         {form.values.agentType === 'assistant' && activeStep === 6 && (
-          <StepSystemPromptConfiguration
-            form={form}
-            onPromptSelected={(prompt) => {
-              console.log('=== [DEBUG Step 6] Prompt selected ===');
-              console.log('Prompt object:', JSON.stringify(prompt, null, 2));
-              console.log('Setting selectedSystemPromptId to:', prompt.id);
-              form.setFieldValue('selectedSystemPromptId', prompt.id);
+          <Card withBorder shadow="sm">
+            <Stack gap="lg">
+              <div>
+                <Text size="lg" fw={600} mb="xs">
+                  Select Tools for Agent
+                </Text>
+                <Text size="sm" c="dimmed">
+                  Choose which tools the assistant agent can use. Tools extend the agent's capabilities by allowing it to perform specialized tasks.
+                </Text>
+              </div>
 
-              console.log('Setting selectedSystemPrompt state');
-              setSelectedSystemPrompt(prompt);
+              {toolsLoading ? (
+                <Text size="sm" c="dimmed">Loading tools...</Text>
+              ) : !tools || tools.length === 0 ? (
+                <Alert icon={<IconAlertCircle size={16} />} color="yellow" variant="light">
+                  <Text size="sm">No tools available. Create tools in the Tools Management section first.</Text>
+                </Alert>
+              ) : (
+                <Stack gap="md">
+                  <Text size="sm" fw={500}>Available Tools ({tools.filter((t: any) => t.is_active).length} active)</Text>
+                  <div style={{ maxHeight: '400px', overflowY: 'auto', paddingRight: '8px' }}>
+                    <Stack gap="md">
+                      {tools.filter((t: any) => t.is_active).map((tool: any) => (
+                        <Card key={tool.id} withBorder p="sm" style={{ cursor: 'pointer' }} onClick={() => {
+                          const currentTools = form.values.selectedTools || [];
+                          const isSelected = currentTools.includes(tool.id);
+                          form.setFieldValue(
+                            'selectedTools',
+                            isSelected
+                              ? currentTools.filter((id: string) => id !== tool.id)
+                              : [...currentTools, tool.id]
+                          );
+                        }}>
+                          <Group justify="space-between" align="flex-start">
+                            <Group align="flex-start" gap="md" style={{ flex: 1 }}>
+                              <input
+                                type="checkbox"
+                                checked={form.values.selectedTools?.includes(tool.id) || false}
+                                onChange={() => {}} // Handled by card onClick
+                                style={{ marginTop: '4px', cursor: 'pointer' }}
+                              />
+                              <Stack gap="xs" style={{ flex: 1 }}>
+                                <div>
+                                  <Group gap="xs">
+                                    <Text fw={600} size="sm">{tool.display_name || tool.name}</Text>
+                                    <Badge size="sm" color={tool.tool_type === 'prompt_based' ? 'blue' : 'green'}>
+                                      {tool.tool_type === 'prompt_based' ? 'Prompt-Based' : 'MCP Remote'}
+                                    </Badge>
+                                  </Group>
+                                  <Text size="xs" c="dimmed">ID: {tool.name}</Text>
+                                </div>
+                                <Text size="sm" c="dark" lineClamp={2}>
+                                  {tool.description || 'No description'}
+                                </Text>
+                                {tool.tags && tool.tags.length > 0 && (
+                                  <Group gap="xs">
+                                    {tool.tags.map((tag: string) => (
+                                      <Badge key={tag} size="xs" variant="dot" color="gray">
+                                        {tag}
+                                      </Badge>
+                                    ))}
+                                  </Group>
+                                )}
+                              </Stack>
+                            </Group>
+                          </Group>
+                        </Card>
+                      ))}
+                    </Stack>
+                  </div>
+                </Stack>
+              )}
 
-              // Store the prompt as a system prompt task for assistant_config
-              if (prompt) {
-                const taskData = [
-                  {
-                    id: prompt.id,
-                    title: prompt.title || prompt.name,
-                    content: prompt.content || prompt.system_prompt,
-                    is_active: prompt.is_active !== false,
-                  },
-                ];
-                console.log('Setting systemPromptTasks to:', JSON.stringify(taskData, null, 2));
-                form.setFieldValue('systemPromptTasks', taskData);
-
-                // Verify immediately
-                console.log('Verification - form.values.systemPromptTasks:', form.values.systemPromptTasks);
-                console.log('Verification - selectedSystemPrompt state:', selectedSystemPrompt);
-              } else {
-                console.error('ERROR: prompt is null/undefined in onPromptSelected!');
-              }
-            }}
-            selectedSystemPrompt={selectedSystemPrompt}
-          />
+              {form.values.selectedTools && form.values.selectedTools.length > 0 && (
+                <Alert icon={<IconCheck size={16} />} color="blue" variant="light">
+                  <Text size="sm">{form.values.selectedTools.length} tool(s) selected</Text>
+                </Alert>
+              )}
+            </Stack>
+          </Card>
         )}
 
         {/* STEP 6 or 7: REVIEW & CREATE (depends on agent type) */}
@@ -864,7 +872,9 @@ export function ConversationCreateWizard() {
           {!comparisonMode ? (
             // Browse Mode - Accordion
             <Accordion variant="separated">
-              {ENHANCEMENT_STRATEGIES.map((strategy) => (
+              {ENHANCEMENT_STRATEGIES
+                .filter(strategy => form.values.agentType === 'assistant' || strategy.value !== 'custom_variants') // Hide custom_variants in RAG mode
+                .map((strategy) => (
                 <Accordion.Item key={strategy.value} value={strategy.value}>
                   <Accordion.Control>
                     <Group gap="sm">
@@ -937,7 +947,9 @@ export function ConversationCreateWizard() {
                 </Text>
               )}
               <Group gap="sm" wrap="wrap">
-                {ENHANCEMENT_STRATEGIES.map((strategy) => (
+                {ENHANCEMENT_STRATEGIES
+                  .filter(strategy => form.values.agentType === 'assistant' || strategy.value !== 'custom_variants') // Hide custom_variants in RAG mode
+                  .map((strategy) => (
                   <Button
                     key={strategy.value}
                     variant={selectedForComparison.includes(strategy.value) ? 'filled' : 'light'}
@@ -1036,9 +1048,12 @@ function StepAgentType({ form }: StepProps) {
             onClick={() => {
               form.setFieldValue('agentType', 'rag');
               form.setFieldValue('enableKnowledgeAssistant', false);
+              // RAG mode uses native strategy by default (or user can choose)
+              if (form.values.selectedStrategy === 'custom_variants') {
+                form.setFieldValue('selectedStrategy', 'native');
+              }
               // Clear assistant-only fields when switching to RAG mode
-              form.setFieldValue('systemPromptTasks', []);
-              form.setFieldValue('selectedSystemPromptId', null);
+              form.setFieldValue('selectedTools', []);
             }}
           >
             <Group gap="sm" mb="md">
@@ -1086,9 +1101,11 @@ function StepAgentType({ form }: StepProps) {
             onClick={() => {
               form.setFieldValue('agentType', 'assistant');
               form.setFieldValue('enableKnowledgeAssistant', true);
+              // Assistant mode always uses custom_variants strategy
+              form.setFieldValue('selectedStrategy', 'custom_variants');
               // Ensure assistant-only fields are initialized
-              if (!form.values.systemPromptTasks) {
-                form.setFieldValue('systemPromptTasks', []);
+              if (!form.values.selectedTools) {
+                form.setFieldValue('selectedTools', []);
               }
             }}
           >
@@ -1242,13 +1259,16 @@ function StepEnhancementStrategy({ form, onLearnClick, providers, providersLoadi
         <Alert icon={<IconRobot size={16} />} color="grape" variant="light">
           <Stack gap="xs">
             <Text size="sm" fw={600}>
-              🧠 Assistant Mode: Decomposition Strategy Recommended
+              🔒 Assistant Mode: Strategy Locked to Custom Variants
             </Text>
             <Text size="sm">
-              For Assistant agents, we recommend <strong>Decomposition</strong> strategy because it breaks complex user requests into simpler sub-questions. This allows the agent to gather comprehensive knowledge from the knowledge base before executing tasks.
+              In Assistant Mode, the enhancement strategy is <strong>automatically locked to Custom Variants</strong>. The supervisor agent will analyze user intent and generate query variants automatically before passing them to the RAG agent.
             </Text>
-            <Text size="xs" c="dimmed">
-              Example: "Create a report on SSL configuration" → Decomposes to: "What is SSL?", "How to configure SSL?", "SSL best practices" → Agent uses all retrieved knowledge to execute the task.
+            <Text size="xs" c="dimmed" mt="xs">
+              💡 How it works: Agent analyzes user query → Generates 3-5 query variants → Passes all variants to RAG in one call → Parallel search with RRF fusion → Returns unified results.
+            </Text>
+            <Text size="xs" c="dimmed" mt="xs">
+              ⚠️ This strategy cannot be changed for Assistant agents as it's core to the intent analysis workflow.
             </Text>
           </Stack>
         </Alert>
@@ -1265,12 +1285,20 @@ function StepEnhancementStrategy({ form, onLearnClick, providers, providersLoadi
           <Select
             label="Enhancement Strategy"
             placeholder="Select strategy"
-            data={ENHANCEMENT_STRATEGIES.map((s) => ({
-              value: s.value,
-              label: s.label,
-            }))}
+            data={ENHANCEMENT_STRATEGIES
+              .filter(s => isAssistantMode || s.value !== 'custom_variants') // Hide custom_variants in RAG mode
+              .map((s) => ({
+                value: s.value,
+                label: s.label,
+              }))}
             {...form.getInputProps('selectedStrategy')}
-            description="How to enhance queries for better retrieval"
+            description={
+              isAssistantMode
+                ? "🔒 Locked to 'Custom Variants' - Strategy is fixed for Assistant agents (agent generates variants automatically)"
+                : "How to enhance queries for better retrieval"
+            }
+            disabled={isAssistantMode}
+            styles={isAssistantMode ? { input: { opacity: 0.6, cursor: 'not-allowed', backgroundColor: 'var(--mantine-color-gray-1)' } } : undefined}
           />
         </div>
         <Button
@@ -1282,6 +1310,7 @@ function StepEnhancementStrategy({ form, onLearnClick, providers, providersLoadi
           style={{
             boxShadow: '0 2px 8px rgba(109, 40, 217, 0.3)',
           }}
+          disabled={isAssistantMode}
         >
           Learn & Compare
         </Button>
@@ -1955,38 +1984,54 @@ function StepReviewAndCreate({ form, providers, collections }: StepProps) {
         <Card withBorder p="md" bg="violet.1" style={{ borderColor: '#a78bfa' }}>
           <Stack gap="sm">
             <Group justify="space-between">
-              <Text fw={600}>Step 6: System Prompt Configuration</Text>
+              <Text fw={600}>Step 6: Tools Binding</Text>
               <Badge size="lg" color="violet">
-                {form.values.systemPromptTasks?.length || 0} Task{form.values.systemPromptTasks?.length !== 1 ? 's' : ''}
+                {form.values.selectedTools?.length || 0} Tool{form.values.selectedTools?.length !== 1 ? 's' : ''}
               </Badge>
             </Group>
-            {form.values.systemPromptTasks && form.values.systemPromptTasks.length > 0 ? (
+            {form.values.selectedTools && form.values.selectedTools.length > 0 ? (
               <Stack gap="sm">
                 <Stack gap="xs">
-                  {form.values.systemPromptTasks.map((task: any, index: number) => (
-                    <Card key={index} withBorder p="sm" bg="white" style={{ borderColor: '#d8b4fe' }}>
-                      <Stack gap="xs">
-                        <Group justify="space-between">
-                          <div style={{ flex: 1 }}>
-                            <Text fw={600} size="sm" c="dark">
-                              {task.title || task.name || `Task ${index + 1}`}
-                            </Text>
-                          </div>
-                          <Badge size="sm" color={task.is_active !== false ? 'green' : 'gray'}>
-                            {task.is_active !== false ? 'Active' : 'Inactive'}
-                          </Badge>
-                        </Group>
-                        <Text size="sm" c="dark" lineClamp={3}>
-                          {task.content || task.system_prompt || 'No content'}
-                        </Text>
-                      </Stack>
-                    </Card>
-                  ))}
+                  {form.values.selectedTools.map((toolId: string) => {
+                    const tool = tools?.find((t: any) => t.id === toolId);
+                    if (!tool) return null;
+                    return (
+                      <Card key={toolId} withBorder p="sm" bg="white" style={{ borderColor: '#d8b4fe' }}>
+                        <Stack gap="xs">
+                          <Group justify="space-between">
+                            <div style={{ flex: 1 }}>
+                              <Text fw={600} size="sm" c="dark">
+                                {tool.display_name || tool.name}
+                              </Text>
+                              <Text size="xs" c="dimmed">
+                                {tool.name}
+                              </Text>
+                            </div>
+                            <Badge size="sm" color={tool.tool_type === 'prompt_based' ? 'blue' : 'green'}>
+                              {tool.tool_type === 'prompt_based' ? 'Prompt-Based' : 'MCP Remote'}
+                            </Badge>
+                          </Group>
+                          <Text size="sm" c="dark" lineClamp={2}>
+                            {tool.description || 'No description'}
+                          </Text>
+                          {tool.tags && tool.tags.length > 0 && (
+                            <Group gap="xs">
+                              {tool.tags.map((tag: string) => (
+                                <Badge key={tag} size="xs" variant="dot" color="gray">
+                                  {tag}
+                                </Badge>
+                              ))}
+                            </Group>
+                          )}
+                        </Stack>
+                      </Card>
+                    );
+                  })}
                 </Stack>
               </Stack>
             ) : (
               <Alert icon={<IconAlertCircle size={16} />} color="yellow" variant="light">
-                <Text size="sm">No system prompt tasks configured</Text>
+                <Text size="sm">No tools selected</Text>
               </Alert>
             )}
           </Stack>
