@@ -33,7 +33,7 @@ def get_hyde_chain(llm_client: Any, config: Optional[Dict[str, Any]] = None):
         >>> print(result.content[:100])
         "Database connection pooling is configured through application.properties..."
     """
-    logger.debug(f"🔗 Creating HyDE Chain")
+    logger.debug(f"Creating HyDE Chain")
 
     # Get prompts (Opik tracking happens in Prompt class if enabled)
     system_prompt = HYDE_SYSTEM_PROMPT.prompt

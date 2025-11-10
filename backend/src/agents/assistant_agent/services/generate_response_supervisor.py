@@ -18,16 +18,16 @@ import litellm
 from langchain.agents import create_agent
 from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.messages import AIMessage, ToolMessage
-from langchain_core.tools import InjectedToolCallId, tool
 from loguru import logger
 from opik.integrations.langchain import OpikTracer
 from opik.integrations.litellm import opik_tracker
 
 # Import compatibility shim for opik with LangChain 1.0+ (MUST be first)
 import src.compat_langchain_load  # noqa: F401
+from src.agents.assistant_agent.tools.rag_knowledge_tool import (
+    create_rag_knowledge_tool,
+)
 from src.agents.common.prompts import MAIN_AGENT_SYSTEM_PROMPT
-from src.agents.rag_agent.graph import graph_dev as rag_workflow
-from src.agents.rag_agent.state import create_initial_state
 from src.agents.task_agent.tools import get_task_agent_tools
 from src.config import settings
 from src.domain.conversation import ConversationMessage
@@ -49,9 +49,9 @@ async def get_response_stream_supervisor(
     llm_model_name: str,
     conversation_id: str,
     collection_name: str,
-    selected_strategy: Optional[str] = None,
-    retrieval_strategy: Optional[str] = None,
-    enhancement_config: Optional[Dict[str, Any]] = None,
+    # Note: selected_strategy, retrieval_strategy, enhancement_config removed
+    # Supervisor ALWAYS uses 'custom_variants' (no LLM enhancement, supervisor generates variants)
+    # RRF is auto-enabled when multiple variants are passed to RAG
     enable_reranking: bool = True,
     relevance_threshold: float = 0.5,
     enable_llm_generation: bool = True,
@@ -66,10 +66,22 @@ async def get_response_stream_supervisor(
 
     The RAG agent is wrapped as a tool that the main ReAct agent invokes.
     Reference: https://docs.langchain.com/oss/python/langchain/multi-agent
+
+    **IMPORTANT**: The supervisor agent ALWAYS uses 'custom_variants' strategy.
+    The supervisor generates query variants through intent analysis and passes them
+    to the RAG agent for parallel search with RRF fusion.
     """
     start_time = time.time()
 
     try:
+        # Supervisor agent ALWAYS uses custom_variants strategy (hardcoded)
+        # The supervisor generates query variants through intent analysis
+        selected_strategy = "custom_variants"
+
+        logger.info(
+            f"Supervisor Agent Mode: Using strategy='custom_variants' (intent analysis + variant generation)"
+        )
+
         # Yield initialization START event
         yield {
             "type": "supervisor_started",
@@ -88,8 +100,10 @@ async def get_response_stream_supervisor(
             "user_id": user_id,
             "llm_provider_id": llm_provider_id,
             "llm_model_name": llm_model_name,
-            "enhancement_config": enhancement_config or {},
+            "enhancement_config": {},  # Empty - custom_variants doesn't use LLM enhancement
             "conversation_id": conversation_id,
+            "conversation_description": conversation_description,  # Added for RAG state creation
+            "selected_strategy": selected_strategy,  # Added - always 'custom_variants' for supervisor
             "enable_reranking": enable_reranking,
             "reranking_config": {
                 "relevance_threshold": relevance_threshold,
@@ -130,7 +144,7 @@ async def get_response_stream_supervisor(
             max_tokens=max_tokens,
         )
 
-        logger.info(f"✅ Created LLM client: {model_string}")
+        logger.info(f"Created LLM client: {model_string}")
 
         # Add LLM client to workflow config
         workflow_config["llm_client"] = llm_client
@@ -145,15 +159,13 @@ async def get_response_stream_supervisor(
                     user_id=user_id,
                 )
                 if selected_system_prompt:
-                    logger.info(
-                        f"📝 Using system prompt: '{selected_system_prompt.name}'"
-                    )
+                    logger.info(f"Using system prompt: '{selected_system_prompt.name}'")
                 else:
                     logger.warning(
-                        f"⚠️ System prompt not found: {selected_system_prompt_id}"
+                        f"System prompt not found: {selected_system_prompt_id}"
                     )
             except Exception as e:
-                logger.error(f"⚠️ Error retrieving system prompt: {e}")
+                logger.error(f"Error retrieving system prompt: {e}")
 
         # Track RAG execution state (shared across tool invocations)
         rag_execution_state = {
@@ -167,155 +179,70 @@ async def get_response_stream_supervisor(
         }
 
         # Build RAG agent description
+        # For custom_variants strategy: Tool description should just describe what it does,
+        # not how to use it (that's in the system prompt)
         default_rag_description = (
             "Retrieves and ranks relevant documents from the knowledge base. "
-            "This is the PRIMARY SOURCE OF TRUTH for accurate information. "
-            "ALWAYS call this tool FIRST to ground your response in factual knowledge. "
-            "Returns: Relevant context, documents, and metadata from the knowledge base."
+            "This is the PRIMARY SOURCE OF TRUTH for accurate information."
         )
 
-        # Add knowledge base context to description if available
+        # Use conversation description as the tool description if available
+        # This tells the agent what domain/topic the knowledge base covers
         if conversation_description and not rag_agent_description:
-            default_rag_description += (
-                f"\n\nKnowledge base domain: {conversation_description[:100]}"
+            final_rag_description = (
+                "Retrieves and ranks relevant documents from the knowledge base. "
+                f"Knowledge base domain: {conversation_description}"
             )
+        else:
+            final_rag_description = rag_agent_description or default_rag_description
 
-        final_rag_description = rag_agent_description or default_rag_description
-
-        # Create RAG tool wrapper (ASYNC)
-        @tool(
-            rag_agent_name,
-            description=final_rag_description,
+        # Create RAG tool using factory function from tools package
+        # All config is in workflow_config - no duplication
+        retrieve_knowledge_tool = create_rag_knowledge_tool(
+            rag_agent_name=rag_agent_name,
+            rag_agent_description=final_rag_description,
+            workflow_config=workflow_config,  # Contains ALL config including strategy, descriptions, IDs
+            rag_execution_state=rag_execution_state,
         )
-        async def retrieve_knowledge_tool(
-            search_query: str,
-            tool_call_id: Annotated[str, InjectedToolCallId],
-        ) -> str:
-            """
-            Wrapper tool for RAG agent - keeps RAG agent completely unchanged.
-            Converts query → RAG state, invokes RAG, extracts result → tool response.
-            """
-            logger.info(f"🔍 RAG Tool invoked with query: {search_query}")
+
+        # Get task agent tools - dynamic or hardcoded fallback
+        task_tools = []
+
+        # Load conversation to check for dynamic tool configuration
+        conversation = conversation_history_service.get_conversation(conversation_id)
+
+        if (
+            conversation
+            and conversation.assistant_config
+            and conversation.assistant_config.tools
+        ):
+            # Use dynamic tools from conversation configuration
+            from src.agents.assistant_agent.tools import get_dynamic_task_tools
 
             try:
-                # Create RAG agent input state using the same function as RAG websocket
-                rag_input_state = create_initial_state(
-                    query=search_query,
-                    top_k=workflow_config["top_k"],
-                    config=workflow_config,
-                    selected_strategy=selected_strategy,
-                    conversation_description=conversation_description,
+                task_tools = await get_dynamic_task_tools(
+                    conversation.assistant_config, llm_client, conversation.user_id
                 )
-
-                # Configure Opik tracing for RAG invocation (if enabled)
-                rag_config = {}
-                if settings.AGENT_TRACING_ENABLED:
-                    # Build tags for RAG tool trace
-                    rag_trace_tags = [
-                        "rag_agent",
-                        "tool_invocation",
-                        f"strategy:{selected_strategy or 'native'}",
-                        f"provider:{llm_provider_id}",
-                        f"model:{llm_model_name}",
-                        f"collection:{collection_name}",
-                        f"parent:supervisor",
-                    ]
-
-                    # Create OpikTracer for RAG workflow
-                    rag_opik_tracer = OpikTracer(
-                        graph=rag_workflow.get_graph(xray=True),
-                        tags=rag_trace_tags,
-                    )
-
-                    rag_config = {
-                        "callbacks": [rag_opik_tracer],
-                    }
-                    logger.debug("✅ OpikTracer configured for RAG tool invocation")
-
                 logger.info(
-                    f"📊 Invoking RAG agent workflow with strategy={selected_strategy}..."
+                    f"Loaded {len(task_tools)} dynamic tools from conversation config"
                 )
-                rag_result = await rag_workflow.ainvoke(
-                    rag_input_state, config=rag_config
-                )
-
-                # Extract results from RAG agent's custom state
-                final_answer = rag_result.get("final_answer", "No answer generated")
-                retrieved_documents = rag_result.get("retrieved_documents", [])
-                judged_documents = rag_result.get("judged_documents", [])
-                query_info = rag_result.get("query_info", {})
-
-                # Update shared state
-                rag_execution_state["documents"] = retrieved_documents
-                rag_execution_state["total_docs"] = len(retrieved_documents)
-                rag_execution_state["relevant_docs"] = len(
-                    [d for d in (judged_documents or []) if d.get("is_relevant", False)]
-                )
-                rag_execution_state["final_answer"] = final_answer
-
-                # Extract enhancement info
-                if query_info:
-                    rag_execution_state["enhancement_strategy"] = query_info.get(
-                        "strategy_used", rag_execution_state["enhancement_strategy"]
-                    )
-                    rag_execution_state["enhanced_queries"] = query_info.get(
-                        "enhanced_queries", []
-                    )
-
-                logger.info(
-                    f"✅ RAG agent completed: {rag_execution_state['relevant_docs']}/{rag_execution_state['total_docs']} relevant docs"
-                )
-
-                # Format response for the main agent
-                source_urls = []
-                for doc in retrieved_documents:
-                    if doc.get("source_url") and doc["source_url"] not in source_urls:
-                        source_urls.append(doc["source_url"])
-
-                # Extract raw document content for passing to other tools (e.g., flow generator)
-                raw_context_parts = []
-                for i, doc in enumerate(retrieved_documents[:5], 1):  # Top 5 docs
-                    content = doc.get("content", "")
-                    if content:
-                        raw_context_parts.append(
-                            f"[Document {i}]\n{content[:1000]}"
-                        )  # First 1000 chars
-
-                raw_context = (
-                    "\n\n".join(raw_context_parts)
-                    if raw_context_parts
-                    else "No document content available"
-                )
-
-                tool_response = f"""**Retrieved Knowledge:**
-{final_answer}
-
-**Sources:** {len(source_urls)} unique sources, {rag_execution_state['total_docs']} total documents, {rag_execution_state['relevant_docs']} relevant.
-**Source URLs:** {', '.join(source_urls[:5])}{'...' if len(source_urls) > 5 else ''}
-
-**Raw Documentation Context (for code/flow generation):**
-{raw_context}
-
-**Important Instructions:**
-- Use this retrieved knowledge as the foundation for your response
-- If generating code/flows (MuleSoft, Python, etc.), pass the "Raw Documentation Context" to the generation tool's retrieved_context parameter
-- This ensures generated code follows documented best practices and patterns"""
-
-                return tool_response
-
             except Exception as e:
-                logger.error(f"❌ RAG tool error: {e}")
-                logger.error(f"Traceback: {traceback.format_exc()}")
-                return f"Error retrieving knowledge: {str(e)}"
-
-        # Get task agent tools
-        task_tools = get_task_agent_tools()
+                logger.error(
+                    f"Failed to load dynamic tools, falling back to defaults: {e}"
+                )
+                task_tools = get_task_agent_tools()
+        else:
+            # Fallback to hardcoded default tools for backward compatibility
+            task_tools = get_task_agent_tools()
+            logger.info(
+                f"No dynamic tools configured, using {len(task_tools)} default hardcoded tools"
+            )
 
         # Combine RAG tool + task tools
         all_tools = [retrieve_knowledge_tool] + task_tools
 
         logger.info(
-            f"🛠️ Created {len(all_tools)} tools: 1 RAG tool + {len(task_tools)} task tools"
+            f"Created {len(all_tools)} tools total: 1 RAG tool + {len(task_tools)} task tools"
         )
 
         # Build system prompt for main agent
@@ -337,7 +264,7 @@ async def get_response_stream_supervisor(
         system_prompt = "\n".join(system_prompt_parts)
 
         # Create main ReAct agent with all tools
-        logger.info("🤖 Creating main ReAct agent with Tool Calling pattern")
+        logger.info("Creating main ReAct agent with Tool Calling pattern")
 
         main_agent = create_agent(
             model=llm_client,
@@ -345,7 +272,7 @@ async def get_response_stream_supervisor(
             system_prompt=system_prompt,
         )
 
-        logger.info("✅ Main ReAct agent created successfully")
+        logger.info("Main ReAct agent created successfully")
 
         # Configure Opik tracing (if enabled)
         config_for_stream = {
@@ -361,7 +288,7 @@ async def get_response_stream_supervisor(
 
             # Enable LiteLLM tracking for cost and token usage
             opik_tracker.track_litellm()
-            logger.debug("✅ LiteLLM tracking enabled for cost and token usage")
+            logger.debug("LiteLLM tracking enabled for cost and token usage")
 
             # Build tags for Opik trace
             trace_tags = [
@@ -384,7 +311,7 @@ async def get_response_stream_supervisor(
 
             # Add tracer to config callbacks
             config_for_stream["callbacks"] = [opik_tracer]
-            logger.debug("✅ OpikTracer configured for supervisor agent")
+            logger.debug("OpikTracer configured for supervisor agent")
         else:
             logger.debug(
                 f"Agent tracing disabled: Supervisor config: strategy={selected_strategy}, collection={collection_name}"
@@ -407,7 +334,7 @@ async def get_response_stream_supervisor(
         }
 
         # Execute main agent and stream events
-        logger.info("📊 Starting main agent execution...")
+        logger.info("Starting main agent execution")
 
         # Track state
         final_messages = []
@@ -433,7 +360,7 @@ async def get_response_stream_supervisor(
 
                         if tool_name and tool_name not in tools_used:
                             tools_used.append(tool_name)
-                            logger.info(f"🔧 Tool call detected: {tool_name}")
+                            logger.info(f"Tool call detected: {tool_name}")
 
                             # Emit RAG agent execution event
                             if tool_name == rag_agent_name:
@@ -468,7 +395,7 @@ async def get_response_stream_supervisor(
                 if isinstance(final_output, dict) and "messages" in final_output:
                     final_messages = final_output["messages"]
                     logger.info(
-                        f"✅ Main agent completed with {len(final_messages)} messages"
+                        f"Main agent completed with {len(final_messages)} messages"
                     )
 
         # Extract final response
@@ -488,7 +415,7 @@ async def get_response_stream_supervisor(
                     )
                     break
 
-        logger.info(f"📝 Final response length: {len(final_response)}")
+        logger.info(f"Final response length: {len(final_response)}")
 
         # Emit completion events
         yield {
@@ -580,9 +507,9 @@ async def get_response_stream_supervisor(
             )
             conversation_history_service.add_message(conversation_id, assistant_message)
 
-            logger.info(f"✅ Saved messages to conversation {conversation_id}")
+            logger.info(f"Saved messages to conversation {conversation_id}")
         except Exception as e:
-            logger.error(f"❌ Failed to save conversation: {e}")
+            logger.error(f"Failed to save conversation: {e}")
 
         # Final result with RAG documents if available
         final_result = {
@@ -615,11 +542,11 @@ async def get_response_stream_supervisor(
 
         yield final_result
 
-        logger.info(f"✅ Tool Calling Pattern completed in {execution_time_ms:.2f}ms")
+        logger.info(f"Tool Calling Pattern completed in {execution_time_ms:.2f}ms")
 
     except Exception as e:
         execution_time_ms = (time.time() - start_time) * 1000
-        logger.error(f"❌ Tool Calling Pattern failed: {e}")
+        logger.error(f"Tool Calling Pattern failed: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
 
         yield {

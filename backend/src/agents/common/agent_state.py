@@ -49,8 +49,8 @@ class AgentState(MessagesState):
     conversation_id: str = ""
     intent: str = "unknown"
 
-    # System Prompt Integration (Phase 1)
-    system_prompt_task: Optional[Any] = None  # SystemPromptTask object if selected
+    # System Prompt Integration (deprecated - tools now used instead)
+    system_prompt_task: Optional[Any] = None  # Legacy field, not used
 
     # Conversation enrichment
     conversation_description: Optional[str] = None  # Knowledge base/collection description

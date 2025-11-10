@@ -51,6 +51,20 @@ export const paths = {
         roleCreate: '/dashboard/management/users/roles/create',
         roleEdit: (roleId: string) => `/dashboard/management/users/roles/${roleId}/edit`,
       },
+      tools: {
+        root: '/dashboard/management/tools',
+        list: '/dashboard/management/tools',
+        create: '/dashboard/management/tools/create',
+        edit: (toolId: string) => `/dashboard/management/tools/${toolId}/edit`,
+        view: (toolId: string) => `/dashboard/management/tools/${toolId}`,
+      },
+      mcpServers: {
+        root: '/dashboard/management/mcp-servers',
+        list: '/dashboard/management/mcp-servers',
+        create: '/dashboard/management/mcp-servers/create',
+        edit: (serverId: string) => `/dashboard/management/mcp-servers/${serverId}/edit`,
+        view: (serverId: string) => `/dashboard/management/mcp-servers/${serverId}`,
+      },
     },
     apps: {
       root: '/dashboard/apps',

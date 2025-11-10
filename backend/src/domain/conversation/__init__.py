@@ -2,6 +2,7 @@
 Conversation Domain Package
 
 Contains all domain models and aggregates for conversation management.
+Note: Tools are now in src/domain/tool as standalone entities.
 """
 
 from .models import (
@@ -14,16 +15,12 @@ from .models import (
     QueryEnhancementStrategy,
     RerankerConfig,
     RetrievalStrategy,
-    SystemPrompt,
-    SystemPromptTask,
     VectorDatabaseConfig,
 )
 
 __all__ = [
     "ConversationSession",
     "ConversationMessage",
-    "SystemPrompt",
-    "SystemPromptTask",
     "AssistantConfig",
     "EnhancementConfig",
     "VectorDatabaseConfig",

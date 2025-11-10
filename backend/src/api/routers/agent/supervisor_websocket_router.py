@@ -13,13 +13,13 @@ import traceback
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from loguru import logger
 
+from src.agents.assistant_agent.services.generate_response_supervisor import (
+    get_response_stream_supervisor,
+)
 from src.api.routers.auth.auth_router import decode_access_token
 from src.config import settings
 from src.services.conversation.conversation_history_service import (
     conversation_history_service,
-)
-from src.services.conversation.generate_response_supervisor import (
-    get_response_stream_supervisor,
 )
 
 router = APIRouter(tags=["Supervisor WebSocket"])
@@ -127,11 +127,11 @@ async def agent_query_supervisor_websocket(
 
     **Architecture**:
     - Main ReAct Agent (create_agent from langchain.agents)
-    - Tools: retrieve_knowledge (RAG), python_code_generator, task_planner, etc.
+    - Tools: retrieve_knowledge (RAG), task_planner, code_explainer, calculator, text_analyzer, etc.
     - Reference: https://docs.langchain.com/oss/python/langchain/multi-agent
     """
     logger.info("=" * 80)
-    logger.info("🚀 ∞ ASSISTANT AGENT ENDPOINT INVOKED | /ws/agent/query/supervisor")
+    logger.info("ASSISTANT AGENT ENDPOINT INVOKED | /ws/agent/query/supervisor")
     logger.info("=" * 80)
 
     # Validate JWT token
@@ -182,13 +182,13 @@ async def agent_query_supervisor_websocket(
                 # Initialize defaults
                 llm_provider_id = None
                 llm_model_name = None
-                selected_strategy = None
                 collection_name = None
-                enhancement_config = {}
                 enable_reranking = True
                 enable_llm_generation = True
                 top_k = 5
                 conversation_description = None
+                # Note: selected_strategy, enhancement_config, retrieval_strategy removed
+                # Supervisor ALWAYS uses 'custom_variants' (hardcoded in generate_response_supervisor)
 
                 # Load ALL settings from conversation (UI should NOT send these)
                 if conversation_id:
@@ -206,9 +206,9 @@ async def agent_query_supervisor_websocket(
                             config = extract_conversation_config(conversation)
                             llm_provider_id = config["llm_provider_id"]
                             llm_model_name = config["llm_model_name"]
-                            selected_strategy = config["selected_strategy"]
+                            # selected_strategy - ignored (supervisor always uses custom_variants)
                             collection_name = config["collection_name"]
-                            enhancement_config = config["enhancement_config"]
+                            # enhancement_config - ignored (custom_variants has no LLM enhancement)
                             enable_reranking = config["enable_reranking"]
                             relevance_threshold = config["relevance_threshold"]
                             enable_llm_generation = config["enable_llm_generation"]
@@ -217,21 +217,20 @@ async def agent_query_supervisor_websocket(
                                 "conversation_description"
                             ]
                             reranker_model_name = config["reranker_model_name"]
-
-                            # Retrieval strategy is auto-detected at runtime based on query variants
-                            retrieval_strategy = None
+                            # retrieval_strategy - auto-determined by RAG based on variant count
 
                             if conversation_description:
                                 logger.debug(
-                                    f"📝 Loaded conversation description: '{conversation_description[:50]}...'"
+                                    f"Loaded conversation description: '{conversation_description[:50]}...'"
                                 )
 
+                            # Note: Removed strategy={selected_strategy} since supervisor always uses 'custom_variants'
                             logger.info(
-                                f"📋 Loaded ALL settings from conversation: provider={llm_provider_id}, model={llm_model_name}, strategy={selected_strategy}, collection={collection_name}, reranking={enable_reranking}, llm_generation={enable_llm_generation}, top_k={top_k}"
+                                f"Loaded ALL settings from conversation: provider={llm_provider_id}, model={llm_model_name}, collection={collection_name}, reranking={enable_reranking}, llm_generation={enable_llm_generation}, top_k={top_k}"
                             )
                         else:
                             error_msg = f"Conversation not found: {conversation_id}"
-                            logger.error(f"❌ {error_msg}")
+                            logger.error(f"{error_msg}")
                             await websocket.send_text(
                                 json.dumps(
                                     {
@@ -245,7 +244,7 @@ async def agent_query_supervisor_websocket(
                             continue
                     except Exception as e:
                         error_msg = f"Failed to load conversation settings: {str(e)}"
-                        logger.error(f"❌ {error_msg}")
+                        logger.error(f"{error_msg}")
                         logger.error(f"Traceback: {traceback.format_exc()}")
                         await websocket.send_text(
                             json.dumps(
@@ -287,7 +286,7 @@ async def agent_query_supervisor_websocket(
                         missing.append("conversation_id")
 
                     error_msg = f"Missing required fields: {', '.join(missing)}"
-                    logger.error(f"❌ {error_msg}")
+                    logger.error(f"{error_msg}")
                     await websocket.send_text(
                         json.dumps(
                             {
@@ -313,7 +312,7 @@ async def agent_query_supervisor_websocket(
                 )
 
                 logger.info(
-                    f"🚀 Processing supervisor query: '{query[:50]}...' with strategy={selected_strategy}"
+                    f"🚀 Processing supervisor query: '{query[:50]}...' (supervisor always uses custom_variants strategy)"
                 )
 
                 # Configure agent names (following LangChain multi-agent best practices)
@@ -330,9 +329,11 @@ async def agent_query_supervisor_websocket(
                         "ALWAYS call this tool FIRST to ground your response in factual knowledge."
                     )
 
-                logger.debug(f"🤖 RAG agent configured: name={rag_agent_name}")
+                logger.debug(f"RAG agent configured: name={rag_agent_name}")
 
                 # Call Supervisor-specific function (Tool Calling Pattern)
+                # Note: selected_strategy, retrieval_strategy, enhancement_config removed
+                # Supervisor always uses custom_variants (no LLM enhancement needed)
                 stream = get_response_stream_supervisor(
                     query=query,
                     user_id=user_id,
@@ -340,9 +341,6 @@ async def agent_query_supervisor_websocket(
                     llm_model_name=llm_model_name,
                     conversation_id=conversation_id,
                     collection_name=collection_name,
-                    selected_strategy=selected_strategy,
-                    retrieval_strategy=retrieval_strategy,
-                    enhancement_config=enhancement_config,
                     enable_reranking=enable_reranking,
                     relevance_threshold=relevance_threshold,
                     enable_llm_generation=enable_llm_generation,
@@ -355,10 +353,10 @@ async def agent_query_supervisor_websocket(
                 # Stream events to WebSocket
                 async for chunk in stream:
                     chunk_type = chunk.get("type")
-                    logger.info(
-                        f"📡 Forwarding Supervisor event: type={chunk_type}, stage={chunk.get('stage')}"
+                    logger.debug(
+                        f"Forwarding Supervisor event: type={chunk_type}, stage={chunk.get('stage')}"
                     )
-                    logger.debug(f"📡 Full event payload: {json.dumps(chunk)}")
+                    logger.debug(f"Full event payload: {json.dumps(chunk)}")
 
                     if chunk_type in [
                         "supervisor_progress",
@@ -369,27 +367,27 @@ async def agent_query_supervisor_websocket(
                         "supervisor_error",
                     ]:
                         await websocket.send_text(json.dumps(chunk))
-                        logger.info(f"✅ Supervisor event sent to client successfully")
+                        logger.debug(f"Supervisor event sent to client successfully")
                     else:
                         logger.warning(
-                            f"⚠️ Skipping unexpected Supervisor event type: {chunk_type}"
+                            f"Skipping unexpected Supervisor event type: {chunk_type}"
                         )
 
-                logger.info(
-                    "✅ Supervisor query processing completed, waiting for next query..."
+                logger.debug(
+                    "Supervisor query processing completed, waiting for next query"
                 )
 
             except WebSocketDisconnect:
-                logger.debug(f"📤 WebSocket disconnected by client")
+                logger.debug(f"WebSocket disconnected by client")
                 return
             except asyncio.TimeoutError:
                 logger.debug(
-                    f"⏱️ WebSocket receive timeout after {timeout}s - closing connection"
+                    f"WebSocket receive timeout after {timeout}s - closing connection"
                 )
                 await websocket.close(code=1000, reason="Connection idle timeout")
                 return
             except json.JSONDecodeError:
-                logger.error("❌ Invalid JSON received")
+                logger.error("Invalid JSON received")
                 try:
                     await websocket.send_text(
                         json.dumps(
@@ -406,7 +404,7 @@ async def agent_query_supervisor_websocket(
                         f"Could not send error message to client (connection may be closed): {send_error}"
                     )
             except Exception as e:
-                logger.error(f"❌ Error processing Supervisor message: {str(e)}")
+                logger.error(f"Error processing Supervisor message: {str(e)}")
                 logger.error(f"Traceback: {traceback.format_exc()}")
                 try:
                     await websocket.send_text(
@@ -425,9 +423,9 @@ async def agent_query_supervisor_websocket(
                     )
 
     except WebSocketDisconnect:
-        logger.info(f"❌ Supervisor WebSocket disconnected for user: {user_id}")
+        logger.debug(f"Supervisor WebSocket disconnected for user: {user_id}")
     except Exception as e:
-        logger.error(f"❌ Supervisor WebSocket error: {str(e)}")
+        logger.error(f"Supervisor WebSocket error: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
         try:
             await websocket.close(code=1011, reason="Internal server error")

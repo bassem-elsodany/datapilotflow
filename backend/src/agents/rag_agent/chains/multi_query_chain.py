@@ -33,7 +33,7 @@ def get_multi_query_chain(llm_client: Any, config: Optional[Dict[str, Any]] = No
         >>> print(result.content)
         "1. What are microservices deployment strategies?\\n2. How to containerize..."
     """
-    logger.debug(f"🔗 Creating Multi-Query Chain")
+    logger.debug(f"Creating Multi-Query Chain")
 
     # Get prompts (Opik tracking happens in Prompt class if enabled)
     system_prompt = MULTI_QUERY_SYSTEM_PROMPT.prompt

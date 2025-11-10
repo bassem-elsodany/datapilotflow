@@ -26,7 +26,7 @@ def get_augmented_chain(llm_client: Any, config: Optional[Dict[str, Any]] = None
     Returns:
         A runnable chain (prompt | model)
     """
-    logger.debug(f"🔗 Creating Augmented Chain")
+    logger.debug(f"Creating Augmented Chain")
 
     # Create the prompt (using Python f-string format, not Jinja2)
     prompt = ChatPromptTemplate.from_messages(

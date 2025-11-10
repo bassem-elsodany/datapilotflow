@@ -4,8 +4,10 @@ Conversation Domain Models
 This module contains all domain models for conversation management including:
 - ConversationSession: Main conversation with history
 - ConversationMessage: Individual messages in conversation
-- Configuration models: Nested configuration for conversations
-- SystemPromptTask: Reusable system prompts
+- Configuration models: Nested configuration for conversations (RAG, Assistant, Answer Gen)
+
+Note: Tools are now managed as standalone entities (see src/domain/tool)
+and referenced by ID in AssistantConfig.tools
 """
 
 import uuid
@@ -20,6 +22,7 @@ class QueryEnhancementStrategy(str, Enum):
 
     NONE = "none"
     AUGMENTED = "augmented"
+    CUSTOM_VARIANTS = "custom_variants"
     MULTI_QUERY = "multi_query"
     HYDE = "hyde"
     DECOMPOSITION = "decomposition"
@@ -78,61 +81,16 @@ class AnswerGenerationConfig:
     provider: Optional[ProviderConfig] = None  # LLM provider for answer generation
 
 
-@dataclass
-class SystemPrompt:
-    """Embedded system prompt for a conversation."""
-
-    id: str  # UUID identifier
-    title: str  # Prompt title
-    content: str  # Actual prompt content
-
-
-@dataclass
-class SystemPromptTask:
-    """Represents a reusable system prompt template for a conversation."""
-
-    id: str  # UUID identifier
-    name: str  # e.g., "Code Reviewer", "Document Summarizer", "Technical Writer"
-    system_prompt: str = ""  # The actual system prompt template
-    description: Optional[str] = None  # Description of what this prompt does
-    tags: Optional[List[str]] = None  # Tags for organization and filtering
-    is_active: bool = True  # Whether this prompt is active and available for use
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-
-    def __post_init__(self):
-        if self.id is None or self.id == "":
-            self.id = str(uuid.uuid4())
-        if self.created_at is None:
-            self.created_at = datetime.utcnow()
-        if self.updated_at is None:
-            self.updated_at = datetime.utcnow()
-        if self.tags is None:
-            self.tags = []
-
-    @property
-    def is_empty(self) -> bool:
-        """Check if the prompt is empty."""
-        return not self.system_prompt or self.system_prompt.strip() == ""
+# NOTE: AssistantTool and SystemPromptTask classes have been removed.
+# Tools are now managed as standalone entities in src/domain/tool and referenced by ID in AssistantConfig.
 
 
 @dataclass
 class AssistantConfig:
-    """Complex nested structure for Assistant mode configuration."""
+    """Configuration for Assistant mode (supervisor agent with tools)."""
 
     enabled: bool  # Whether Assistant mode is enabled (true) or RAG mode (false)
-    system_prompt_tasks: Optional[List[SystemPromptTask]] = (
-        None  # System prompt tasks for the assistant
-    )
-
-    def get_active_prompt(self) -> Optional[SystemPromptTask]:
-        """Get the active system prompt task."""
-        if not self.system_prompt_tasks:
-            return None
-        for task in self.system_prompt_tasks:
-            if task.is_active:
-                return task
-        return None
+    tools: Optional[List[str]] = None  # List of tool IDs bound to this conversation agent
 
 
 @dataclass

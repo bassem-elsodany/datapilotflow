@@ -1,0 +1,83 @@
+"""
+Custom Variants Strategy Node.
+
+This is a passthrough node that accepts user-provided query variants
+without any LLM enhancement. It enables parallel search + RRF for
+custom query lists.
+
+Similar to 'native' but supports multiple queries → RRF retrieval.
+"""
+
+from typing import List, Union
+
+from loguru import logger
+
+from ..state import RAGWorkflowState as WorkflowState
+
+
+async def custom_variants_node(state: WorkflowState) -> WorkflowState:
+    """
+    Accept user-provided custom query variants (no LLM enhancement).
+
+    This strategy enables parallel retrieval + RRF for user-defined variants
+    without generating new variants via LLM. It's a passthrough node that
+    simply places user variants in the correct state field for RRF processing.
+
+    Args:
+        state: Current workflow state
+
+    Returns:
+        Updated state with custom variants stored in augmented_queries
+    """
+    logger.info("[NODE START] custom_variants_node")
+
+    query = state["query"]
+
+    # Handle both input formats:
+    # 1. query is already a list: ["variant1", "variant2", "variant3"]
+    # 2. query is string + custom_variants field exists
+    if isinstance(query, list):
+        variants = query
+        logger.info(f"Received {len(variants)} custom variants from query field (list)")
+    else:
+        # Check if custom_variants provided separately
+        custom_variants = state.get("custom_variants", [])
+        if custom_variants:
+            # Include original query + custom variants
+            variants = [query] + list(custom_variants)
+            logger.info(
+                f"Received original query + {len(custom_variants)} custom variants"
+            )
+        else:
+            # Fallback: single query only
+            variants = [query]
+            logger.info("No custom variants provided, using single query")
+
+    # Validate: ensure all variants are strings and non-empty
+    variants = [str(v).strip() for v in variants if v and str(v).strip()]
+
+    if not variants:
+        logger.warning("No valid variants found, falling back to original query")
+        # Fallback to original query if it's a string
+        if isinstance(state["query"], str) and state["query"].strip():
+            variants = [state["query"]]
+        else:
+            variants = []
+
+    logger.debug(
+        f"Custom Variants Strategy: Using {len(variants)} user-provided variants"
+    )
+    logger.debug("-" * 80)
+    for idx, variant in enumerate(variants, 1):
+        logger.debug(f"   VARIANT [{idx}/{len(variants)}]: '{variant}'")
+    logger.debug("-" * 80)
+
+    # Store in augmented_queries field (same as augmented strategy)
+    # This triggers RRF in document_retriever when len > 1
+    state["augmented_queries"] = variants
+    state["enhancement_strategies_applied"] = ["custom_variants"]
+
+    logger.info(
+        f"[NODE FINISH] custom_variants_node - Stored {len(variants)} variants in state"
+    )
+    return state

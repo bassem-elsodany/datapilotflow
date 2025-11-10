@@ -108,6 +108,20 @@ const ENHANCEMENT_STRATEGIES = [
     }
   },
   {
+    value: 'custom_variants',
+    label: 'Custom Variants',
+    description: 'User-provided query variations (no LLM cost)',
+    details: 'Accepts pre-defined query variants from you without any LLM enhancement. Searches all variants in parallel and uses RRF to merge results. Perfect for when you know exactly what variations to search for maximum control.',
+    useCases: ['Multi-language search', 'Pre-computed variants', 'Zero LLM cost', 'Full control over variations', 'API integration'],
+    pros: ['No LLM cost', 'Full user control', 'Fast (parallel search)', 'Predictable results', 'Great for automation'],
+    cons: ['Requires manual variant creation', 'No AI suggestions', 'Quality depends on user input'],
+    color: 'cyan',
+    example: {
+      original: 'Send as list: ["SSL configuration", "TLS setup", "HTTPS encryption"]',
+      output: 'Uses your variants:\n1. "SSL configuration"\n2. "TLS setup"\n3. "HTTPS encryption"\n\nSearches all in parallel with RRF fusion. No LLM enhancement cost.'
+    }
+  },
+  {
     value: 'multi_query',
     label: 'Multi-Query',
     description: 'Rephrase the same question in different ways',
@@ -2144,13 +2158,13 @@ export default function ConversationWindow() {
                     let changesMessage = [];
 
                     if (newMode === 'agent') {
-                      // 1. Set strategy to decomposition
-                      if (selectedStrategy !== 'decomposition') {
+                      // 1. Set strategy to custom_variants
+                      if (selectedStrategy !== 'custom_variants') {
                         const previousStrategy = selectedStrategy;
-                        setSelectedStrategy('decomposition');
-                        strategyUpdate = 'decomposition';
-                        changesMessage.push(`• Strategy: "${previousStrategy || 'native'}" → "decomposition"`);
-                        console.log(`🔄 [STRATEGY AUTO-CHANGED] ${previousStrategy || 'native'} → decomposition (Assistant Agent mode)`);
+                        setSelectedStrategy('custom_variants');
+                        strategyUpdate = 'custom_variants';
+                        changesMessage.push(`• Strategy: "${previousStrategy || 'native'}" → "custom_variants"`);
+                        console.log(`🔄 [STRATEGY AUTO-CHANGED] ${previousStrategy || 'native'} → custom_variants (Assistant Agent mode)`);
                       }
 
                       // 2. Disable LLM generation (supervisor handles everything)
@@ -2197,15 +2211,21 @@ export default function ConversationWindow() {
                 </Badge>
               </Tooltip>
 
-              {/* Strategy Badge Button with Menu */}
-              <Menu shadow="md" width={300} position="bottom-start">
+              {/* Strategy Badge Button with Menu (disabled in Assistant mode) */}
+              <Menu shadow="md" width={300} position="bottom-start" disabled={messageMode === 'agent'}>
                 <Menu.Target>
-                  <Tooltip label="Click to change query enhancement strategy">
+                  <Tooltip 
+                    label={
+                      messageMode === 'agent' 
+                        ? "Strategy is locked to 'Custom Variants' in Assistant Mode - the agent generates query variants automatically"
+                        : "Click to change query enhancement strategy"
+                    }
+                  >
                     <Badge
                       variant="light"
                       color="grape"
                       leftSection={<IconSettings size={14} />}
-                      style={{ cursor: 'pointer' }}
+                      style={{ cursor: messageMode === 'agent' ? 'not-allowed' : 'pointer', opacity: messageMode === 'agent' ? 0.6 : 1 }}
                       size="md"
                     >
                       {ENHANCEMENT_STRATEGIES.find(s => s.value === selectedStrategy)?.label || 'Strategy'}
@@ -2219,7 +2239,9 @@ export default function ConversationWindow() {
 
                 <Menu.Dropdown>
                   <Menu.Label>Query Enhancement Strategy</Menu.Label>
-                  {ENHANCEMENT_STRATEGIES.map((strategy) => (
+                  {ENHANCEMENT_STRATEGIES
+                    .filter(strategy => messageMode === 'agent' || strategy.value !== 'custom_variants') // Hide custom_variants in RAG mode
+                    .map((strategy) => (
                     <Menu.Item
                       key={strategy.value}
                       leftSection={selectedStrategy === strategy.value ? <IconCheck size={16} /> : <div style={{ width: 16 }} />}
@@ -2491,13 +2513,21 @@ export default function ConversationWindow() {
           <Select
             label="Enhancement Strategy"
             placeholder="Select strategy"
-            data={ENHANCEMENT_STRATEGIES.map((s) => ({
-              value: s.value,
-              label: s.label,
-            }))}
+            data={ENHANCEMENT_STRATEGIES
+              .filter(s => messageMode === 'agent' || s.value !== 'custom_variants') // Hide custom_variants in RAG mode
+              .map((s) => ({
+                value: s.value,
+                label: s.label,
+              }))}
             value={selectedStrategy}
             onChange={(value) => setSelectedStrategy(value || 'native')}
-            description="Select how your queries will be enhanced for better retrieval"
+            description={
+              messageMode === 'agent'
+                ? "⚠️ Strategy is locked to 'Custom Variants' in Assistant Mode - the agent generates query variants automatically"
+                : "Select how your queries will be enhanced for better retrieval"
+            }
+            disabled={messageMode === 'agent'}
+            styles={messageMode === 'agent' ? { input: { opacity: 0.6, cursor: 'not-allowed' } } : undefined}
           />
 
           {/* RRF Info Alert for multi-variant strategies */}
@@ -2927,7 +2957,9 @@ export default function ConversationWindow() {
                   },
                 }}
               >
-                {ENHANCEMENT_STRATEGIES.map((strategy) => (
+                {ENHANCEMENT_STRATEGIES
+                  .filter(strategy => messageMode === 'agent' || strategy.value !== 'custom_variants') // Hide custom_variants in RAG mode
+                  .map((strategy) => (
                   <Accordion.Item
                     key={strategy.value}
                     value={strategy.value}
@@ -3052,7 +3084,9 @@ export default function ConversationWindow() {
                   </Alert>
 
                   <Stack gap="xs">
-                    {ENHANCEMENT_STRATEGIES.map((strategy) => (
+                    {ENHANCEMENT_STRATEGIES
+                      .filter(strategy => messageMode === 'agent' || strategy.value !== 'custom_variants') // Hide custom_variants in RAG mode
+                      .map((strategy) => (
                       <Card
                         key={strategy.value}
                         padding="md"

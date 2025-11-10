@@ -21,7 +21,6 @@ from src.domain.conversation import (
     EnhancementConfig,
     ProviderConfig,
     RerankerConfig,
-    SystemPromptTask,
     VectorDatabaseConfig,
 )
 from src.domain.user import User
@@ -98,27 +97,14 @@ class SystemPromptRequest(BaseModel):
     content: str = Field(..., description="System prompt content")
 
 
-class SystemPromptTaskRequest(BaseModel):
-    """Request model for system prompt task (for assistant_config)."""
-
-    id: Optional[str] = Field(
-        None, description="System prompt task ID (auto-generated if not provided)"
-    )
-    title: str = Field(
-        ..., min_length=1, max_length=100, description="System prompt task title"
-    )
-    content: str = Field(..., min_length=10, description="System prompt task content")
-    is_active: bool = Field(True, description="Whether this prompt is active")
-
-
 class AssistantConfigRequest(BaseModel):
-    """Request model for complex nested Assistant mode configuration."""
+    """Request model for Assistant mode configuration."""
 
     enabled: bool = Field(
         True, description="Whether Assistant mode is enabled (true) or RAG mode (false)"
     )
-    system_prompt_tasks: Optional[List[SystemPromptTaskRequest]] = Field(
-        None, description="System prompt tasks for the assistant"
+    tools: Optional[List[str]] = Field(
+        default_factory=list, description="List of tool IDs bound to this conversation agent"
     )
 
 
@@ -224,29 +210,12 @@ def _serialize_conversation_to_response(session: "ConversationSession") -> dict:
             ),
         }
 
-    # Assistant configuration (complex nested structure)
+    # Assistant configuration (tool bindings)
     if session.assistant_config:
         response["assistant_config"] = {
             "enabled": session.assistant_config.enabled,
+            "tools": session.assistant_config.tools if session.assistant_config.tools else [],
         }
-        if session.assistant_config.system_prompt_tasks:
-            response["assistant_config"]["system_prompt_tasks"] = [
-                {
-                    "id": task.id,
-                    "title": task.name,  # SystemPromptTask uses 'name', map to 'title' for API
-                    "content": task.system_prompt,  # SystemPromptTask uses 'system_prompt', map to 'content' for API
-                    "created_at": (
-                        task.created_at.isoformat() if task.created_at else None
-                    ),
-                    "updated_at": (
-                        task.updated_at.isoformat() if task.updated_at else None
-                    ),
-                    "is_active": task.is_active,
-                }
-                for task in session.assistant_config.system_prompt_tasks
-            ]
-        else:
-            response["assistant_config"]["system_prompt_tasks"] = None
 
     return response
 
@@ -301,25 +270,14 @@ class UpdateSessionConfigRequest(BaseModel):
     )
 
 
-class SystemPromptTaskResponse(BaseModel):
-    """Response model for a system prompt task in assistant_config."""
-
-    id: str = Field(..., description="System prompt task ID")
-    title: str = Field(..., description="System prompt task title")
-    content: str = Field(..., description="System prompt task content")
-    created_at: Optional[str] = Field(None, description="Creation timestamp")
-    updated_at: Optional[str] = Field(None, description="Last update timestamp")
-    is_active: bool = Field(True, description="Whether this prompt is active")
-
-
 class AssistantConfigResponse(BaseModel):
-    """Response model for complex nested Assistant mode configuration."""
+    """Response model for Assistant mode configuration."""
 
     enabled: bool = Field(
         ..., description="Whether Assistant mode is enabled (true) or RAG mode (false)"
     )
-    system_prompt_tasks: Optional[List[SystemPromptTaskResponse]] = Field(
-        None, description="System prompt tasks for the assistant"
+    tools: List[str] = Field(
+        default_factory=list, description="List of tool IDs bound to this conversation agent"
     )
 
 
@@ -414,55 +372,14 @@ async def create_conversation_session(
             )
 
         # Build assistant_config if provided
-        logger.info(
-            f"[DEBUG] create_request.assistant_config: {create_request.assistant_config}"
-        )
-        if create_request.assistant_config:
-            logger.info(
-                f"[DEBUG] assistant_config exists: enabled={create_request.assistant_config.enabled}"
-            )
-            logger.info(
-                f"[DEBUG] system_prompt_tasks from request: {create_request.assistant_config.system_prompt_tasks}"
-            )
-
         assistant_config = None
         if create_request.assistant_config:
-            system_prompt_tasks = None
-            if create_request.assistant_config.system_prompt_tasks:
-                logger.info(
-                    f"[DEBUG] Found {len(create_request.assistant_config.system_prompt_tasks)} system_prompt_tasks in request"
-                )
-                # Log each task for debugging
-                for i, task in enumerate(
-                    create_request.assistant_config.system_prompt_tasks
-                ):
-                    logger.info(
-                        f"[DEBUG] Task {i}: id={task.id}, title={task.title[:50] if task.title else 'None'}..., content_length={len(task.content) if task.content else 0}"
-                    )
-
-                system_prompt_tasks = [
-                    SystemPromptTask(
-                        id=task.id
-                        or "",  # Use provided ID if exists, otherwise will be generated in __post_init__
-                        name=task.title,  # API uses 'title', SystemPromptTask uses 'name'
-                        system_prompt=task.content,  # API uses 'content', SystemPromptTask uses 'system_prompt'
-                        is_active=task.is_active,
-                    )
-                    for task in create_request.assistant_config.system_prompt_tasks
-                ]
-                logger.info(
-                    f"[DEBUG] Created {len(system_prompt_tasks)} SystemPromptTask objects successfully"
-                )
-            else:
-                logger.warning(
-                    f"[DEBUG] system_prompt_tasks is None or empty in request! assistant_config.enabled={create_request.assistant_config.enabled}, assistant_config.system_prompt_tasks={create_request.assistant_config.system_prompt_tasks}"
-                )
             assistant_config = AssistantConfig(
                 enabled=create_request.assistant_config.enabled,
-                system_prompt_tasks=system_prompt_tasks,
+                tools=create_request.assistant_config.tools if create_request.assistant_config.tools else [],
             )
             logger.info(
-                f"[DEBUG] Created AssistantConfig: enabled={assistant_config.enabled}, tasks_count={len(system_prompt_tasks) if system_prompt_tasks else 0}"
+                f"Created AssistantConfig: enabled={assistant_config.enabled}, tools_count={len(assistant_config.tools)}"
             )
 
         session_id = conversation_history_service.create_conversation(
@@ -775,51 +692,19 @@ async def update_conversation_session(
                 "provider": provider,
             }
 
-        # Assistant configuration (complex nested structure)
+        # Assistant configuration (tool bindings)
         if config_request.assistant_config is not None:
             logger.info(
-                f"[DEBUG UPDATE] assistant_config exists: enabled={config_request.assistant_config.enabled}"
-            )
-            logger.info(
-                f"[DEBUG UPDATE] system_prompt_tasks from request: {config_request.assistant_config.system_prompt_tasks}"
+                f"Updating assistant_config: enabled={config_request.assistant_config.enabled}"
             )
 
             assistant_config_dict = {
                 "enabled": config_request.assistant_config.enabled,
+                "tools": config_request.assistant_config.tools if config_request.assistant_config.tools else [],
             }
-            if config_request.assistant_config.system_prompt_tasks:
-                logger.info(
-                    f"[DEBUG UPDATE] Found {len(config_request.assistant_config.system_prompt_tasks)} system_prompt_tasks in request"
-                )
-                # Log each task for debugging
-                for i, task in enumerate(
-                    config_request.assistant_config.system_prompt_tasks
-                ):
-                    logger.info(
-                        f"[DEBUG UPDATE] Task {i}: id={task.id}, title={task.title[:50] if task.title else 'None'}..., content_length={len(task.content) if task.content else 0}"
-                    )
-
-                # Create proper SystemPromptTask objects and serialize them
-                system_prompt_tasks = [
-                    SystemPromptTask(
-                        id=task.id or "",
-                        name=task.title,  # API uses 'title', SystemPromptTask uses 'name'
-                        system_prompt=task.content,  # API uses 'content', SystemPromptTask uses 'system_prompt'
-                        is_active=task.is_active,
-                    )
-                    for task in config_request.assistant_config.system_prompt_tasks
-                ]
-                assistant_config_dict["system_prompt_tasks"] = [
-                    asdict(task) for task in system_prompt_tasks
-                ]
-                logger.info(
-                    f"[DEBUG UPDATE] Created and serialized {len(system_prompt_tasks)} SystemPromptTask objects"
-                )
-            else:
-                logger.warning(
-                    f"[DEBUG UPDATE] system_prompt_tasks is None or empty in request! assistant_config.enabled={config_request.assistant_config.enabled}, system_prompt_tasks={config_request.assistant_config.system_prompt_tasks}"
-                )
-                assistant_config_dict["system_prompt_tasks"] = None
+            logger.info(
+                f"Updating AssistantConfig: enabled={config_request.assistant_config.enabled}, tools_count={len(assistant_config_dict['tools'])}"
+            )
             update_doc["assistant_config"] = assistant_config_dict
 
         if not update_doc:

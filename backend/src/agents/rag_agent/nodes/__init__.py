@@ -6,6 +6,7 @@ This package contains all the LangGraph nodes for the workflow execution.
 
 from .answer_generator import answer_generator
 from .augmented_strategy_node import augmented_strategy_node
+from .custom_variants_node import custom_variants_node
 from .decomposition_strategy_node import decomposition_strategy_node
 from .document_judger import document_judger
 from .document_retriever import document_retriever
@@ -18,6 +19,7 @@ __version__ = "1.0.0"
 __all__ = [
     # Strategy nodes (query enhancement)
     "augmented_strategy_node",
+    "custom_variants_node",
     "hyde_strategy_node",
     "decomposition_strategy_node",
     "multi_query_strategy_node",

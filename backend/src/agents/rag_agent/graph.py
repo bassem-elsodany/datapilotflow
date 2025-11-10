@@ -23,6 +23,7 @@ from loguru import logger
 from src.agents.rag_agent.nodes import (
     answer_generator,
     augmented_strategy_node,
+    custom_variants_node,
     decomposition_strategy_node,
     document_judger,
     document_retriever,
@@ -63,6 +64,7 @@ def get_graph() -> CompiledStateGraph:
         # Map strategy names to node names
         strategy_map = {
             "augmented": "augmented_strategy_node",
+            "custom_variants": "custom_variants_node",
             "hyde": "hyde_strategy_node",
             "decomposition": "decomposition_strategy_node",
             "multi_query": "multi_query_strategy_node",
@@ -70,7 +72,7 @@ def get_graph() -> CompiledStateGraph:
         }
 
         node_name = strategy_map.get(selected, "document_retriever")
-        logger.info(f"🎯 Routing to strategy: {selected} → {node_name}")
+        logger.info(f"Routing to strategy: {selected} to {node_name}")
 
         return node_name
 
@@ -85,22 +87,22 @@ def get_graph() -> CompiledStateGraph:
         enable_llm_generation = config.get("enable_llm_generation", True)
 
         logger.info(
-            f"🔀 Routing decision after retrieval: enable_reranking={enable_reranking}, "
+            f"Routing decision after retrieval: enable_reranking={enable_reranking}, "
             f"enable_llm_generation={enable_llm_generation}"
         )
         logger.debug(f"Config keys: {list(config.keys())}")
 
         if enable_reranking:
-            logger.info("➡️  Routing to document_judger (reranking enabled)")
+            logger.info("Routing to document_judger (reranking enabled)")
             return "document_judger"
         elif enable_llm_generation:
             logger.info(
-                "➡️  Routing to answer_generator (reranking disabled, LLM generation enabled)"
+                "Routing to answer_generator (reranking disabled, LLM generation enabled)"
             )
             return "answer_generator"
         else:
             logger.info(
-                "➡️  Routing to raw_response_formatter (reranking disabled, LLM generation disabled)"
+                "Routing to raw_response_formatter (reranking disabled, LLM generation disabled)"
             )
             return "raw_response_formatter"
 
@@ -114,12 +116,10 @@ def get_graph() -> CompiledStateGraph:
         enable_llm_generation = config.get("enable_llm_generation", True)
 
         if enable_llm_generation:
-            logger.info("➡️  Routing to answer_generator (LLM generation enabled)")
+            logger.info("Routing to answer_generator (LLM generation enabled)")
             return "answer_generator"
         else:
-            logger.info(
-                "➡️  Routing to raw_response_formatter (LLM generation disabled)"
-            )
+            logger.info("Routing to raw_response_formatter (LLM generation disabled)")
             return "raw_response_formatter"
 
     # Create the state graph
@@ -127,6 +127,7 @@ def get_graph() -> CompiledStateGraph:
 
     # Add strategy nodes (query enhancement)
     graph_builder.add_node("augmented_strategy_node", augmented_strategy_node)
+    graph_builder.add_node("custom_variants_node", custom_variants_node)
     graph_builder.add_node("hyde_strategy_node", hyde_strategy_node)
     graph_builder.add_node("decomposition_strategy_node", decomposition_strategy_node)
     graph_builder.add_node("multi_query_strategy_node", multi_query_strategy_node)
@@ -144,6 +145,7 @@ def get_graph() -> CompiledStateGraph:
         route_to_strategy,
         {
             "augmented_strategy_node": "augmented_strategy_node",
+            "custom_variants_node": "custom_variants_node",
             "hyde_strategy_node": "hyde_strategy_node",
             "decomposition_strategy_node": "decomposition_strategy_node",
             "multi_query_strategy_node": "multi_query_strategy_node",
@@ -153,6 +155,7 @@ def get_graph() -> CompiledStateGraph:
 
     # All strategy nodes → document_retriever
     graph_builder.add_edge("augmented_strategy_node", "document_retriever")
+    graph_builder.add_edge("custom_variants_node", "document_retriever")
     graph_builder.add_edge("hyde_strategy_node", "document_retriever")
     graph_builder.add_edge("decomposition_strategy_node", "document_retriever")
     graph_builder.add_edge("multi_query_strategy_node", "document_retriever")

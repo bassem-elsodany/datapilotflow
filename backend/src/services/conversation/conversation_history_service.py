@@ -74,7 +74,6 @@ from src.domain.conversation import (
     EnhancementConfig,
     ProviderConfig,
     RerankerConfig,
-    SystemPromptTask,
     VectorDatabaseConfig,
 )
 
@@ -119,8 +118,8 @@ class ConversationHistoryService:
             reranker: Reranker configuration
             answer_generation: Answer generation configuration
             tags: Tags for organization
-            assistant_config: Complex nested configuration for Assistant mode
-                Required - contains enabled boolean and optional system_prompt_tasks
+            assistant_config: Configuration for Assistant mode
+                Required - contains enabled boolean and tools list (tool IDs)
         """
 
         # Validate enhancement provider if provided
@@ -214,17 +213,16 @@ class ConversationHistoryService:
 
         assistant_config_dict = {
             "enabled": assistant_config.enabled,
+            "tools": assistant_config.tools if assistant_config.tools else [],
         }
-        if assistant_config.system_prompt_tasks:
-            assistant_config_dict["system_prompt_tasks"] = [
-                asdict(task) for task in assistant_config.system_prompt_tasks
-            ]
+        
+        if assistant_config.tools:
             logger.info(
-                f"[DEBUG] System prompt tasks being saved: {assistant_config_dict['system_prompt_tasks']}"
+                f"Saving {len(assistant_config.tools)} tool IDs to conversation: {assistant_config.tools}"
             )
         else:
-            assistant_config_dict["system_prompt_tasks"] = None
-            logger.info("[DEBUG] No system prompt tasks to save")
+            logger.debug("No tools configured for this conversation")
+
         conversation_data["assistant_config"] = assistant_config_dict
 
         # Insert and get the MongoDB _id
@@ -337,15 +335,13 @@ class ConversationHistoryService:
                 assistant_config = None
                 if doc.get("assistant_config"):
                     ac = doc["assistant_config"]
-                    system_prompt_tasks = None
-                    if ac.get("system_prompt_tasks"):
-                        system_prompt_tasks = []
-                        for spt_dict in ac["system_prompt_tasks"]:
-                            spt = self._dict_to_system_prompt_task(spt_dict)
-                            system_prompt_tasks.append(spt)
+                    
+                    # Tools are now just a list of tool IDs (strings)
+                    tools = ac.get("tools", [])
+                    
                     assistant_config = AssistantConfig(
                         enabled=ac.get("enabled", False),
-                        system_prompt_tasks=system_prompt_tasks,
+                        tools=tools if tools else [],
                     )
 
                 session = ConversationSession(
@@ -487,15 +483,13 @@ class ConversationHistoryService:
             assistant_config = None
             if doc.get("assistant_config"):
                 ac = doc["assistant_config"]
-                system_prompt_tasks = None
-                if ac.get("system_prompt_tasks"):
-                    system_prompt_tasks = []
-                    for spt_dict in ac["system_prompt_tasks"]:
-                        spt = self._dict_to_system_prompt_task(spt_dict)
-                        system_prompt_tasks.append(spt)
+                
+                # Tools are now just a list of tool IDs (strings)
+                tools = ac.get("tools", [])
+                
                 assistant_config = AssistantConfig(
                     enabled=ac.get("enabled", False),
-                    system_prompt_tasks=system_prompt_tasks,
+                    tools=tools if tools else [],
                 )
 
             session = ConversationSession(
@@ -838,17 +832,12 @@ class ConversationHistoryService:
                 }
                 update_data["$set"]["answer_generation"] = answer_gen_dict
 
-            # Update assistant_config (complex nested structure for Assistant mode)
+            # Update assistant_config (configuration for Assistant mode with tool IDs)
             if assistant_config is not None:
                 assistant_config_dict = {
                     "enabled": assistant_config.enabled,
+                    "tools": assistant_config.tools if assistant_config.tools else [],
                 }
-                if assistant_config.system_prompt_tasks:
-                    assistant_config_dict["system_prompt_tasks"] = [
-                        asdict(task) for task in assistant_config.system_prompt_tasks
-                    ]
-                else:
-                    assistant_config_dict["system_prompt_tasks"] = None
                 update_data["$set"]["assistant_config"] = assistant_config_dict
 
             result = self.collection.update_one(
@@ -874,29 +863,16 @@ class ConversationHistoryService:
         """Get conversation with expanded provider details.
 
         NOTE: Currently returns only the conversation session.
-        LLM provider expansion is handled through the assistant_config.system_prompt_tasks.
+        LLM provider expansion is handled through the answer_generation config.
         """
         session = self.get_conversation(conversation_id, user_id)
         if not session:
             return None
 
         result = {"session": session, "llm_provider": None}
-        # Provider details are now embedded in system_prompt_tasks or answer_generation config
+        # Provider details are embedded in answer_generation config
         return result
 
-    @staticmethod
-    def _dict_to_system_prompt_task(prompt_dict: Dict[str, Any]) -> SystemPromptTask:
-        """Convert a dictionary to SystemPromptTask object."""
-        return SystemPromptTask(
-            id=prompt_dict.get("id", ""),
-            name=prompt_dict.get("name", ""),
-            system_prompt=prompt_dict.get("system_prompt", ""),
-            description=prompt_dict.get("description"),
-            tags=prompt_dict.get("tags", []),
-            is_active=prompt_dict.get("is_active", True),
-            created_at=prompt_dict.get("created_at"),
-            updated_at=prompt_dict.get("updated_at"),
-        )
 
 
 # Global instance

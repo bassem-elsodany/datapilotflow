@@ -27,7 +27,7 @@ def get_answer_generation_chain(
     Returns:
         A runnable chain (prompt | model)
     """
-    logger.debug(f"🔗 Creating Answer Generation Chain")
+    logger.debug(f"Creating Answer Generation Chain")
 
     # Create the prompt (using Python f-string format, not Jinja2)
     prompt = ChatPromptTemplate.from_messages(

@@ -44,11 +44,13 @@ from src.api.routers import (
     pipeline_router,
     rag_router,
     supervisor_router,
+    tools_router,
     vectordb_collection_router,
 )
 from src.api.routers.knowledge.knowledge_source_preview_router import (
     router as knowledge_source_preview_router,
 )
+from src.api.routers.tools import mcp_servers_router
 
 # Job timeline endpoints are now part of the knowledge job router
 from src.api.routers.users import roles_router, users_router
@@ -67,13 +69,13 @@ async def initialize_system_if_needed():
         system_success = await admin_init_service.initialize_system_if_needed()
 
         if not system_success:
-            logger.error("❌ System initialization failed")
+            logger.error("System initialization failed")
             return False
 
         # Get the admin user ID for initialization
         admin_user = admin_init_service.auth_dao.get_user_by_username("admin")
         if not admin_user:
-            logger.error("❌ Admin user not found for system initialization")
+            logger.error("Admin user not found for system initialization")
             return False
 
         # Initialize predefined unified model providers
@@ -85,16 +87,16 @@ async def initialize_system_if_needed():
         )
 
         if model_provider_success:
-            logger.info("✅ System initialization completed successfully!")
+            logger.info("System initialization completed successfully!")
             return True
         else:
             logger.warning(
-                "⚠️ System initialized but model provider initialization failed"
+                "System initialized but model provider initialization failed"
             )
             return True  # Still return True as core system is initialized
 
     except Exception as e:
-        logger.error(f"❌ Error during system initialization: {e}")
+        logger.error(f"Error during system initialization: {e}")
         return False
 
 
@@ -108,7 +110,7 @@ async def lifespan(app: FastAPI):
     await initialize_system_if_needed()
 
     logger.info("DataPilotFlow API ready and running")
-    logger.info("✅ RAG Agent configured for independent stateless query processing")
+    logger.info("RAG Agent configured for independent stateless query processing")
 
     yield  # Application is running
 
@@ -118,7 +120,7 @@ async def lifespan(app: FastAPI):
         try:
             opik_tracer = OpikTracer()
             opik_tracer.flush()
-            logger.info("✅ Opik tracer flushed successfully")
+            logger.info("Opik tracer flushed successfully")
         except Exception as e:
             logger.error(f"Error flushing Opik tracer: {e}")
 
@@ -167,6 +169,14 @@ app.include_router(rag_router, prefix=API_PREFIX, tags=["RAG WebSocket"])
 app.include_router(supervisor_router, prefix=API_PREFIX, tags=["Supervisor WebSocket"])
 app.include_router(
     conversation_router, prefix=API_PREFIX, tags=["Conversations Management"]
+)
+app.include_router(
+    tools_router, prefix=f"{API_PREFIX}/tools", tags=["Tools Management"]
+)
+app.include_router(
+    mcp_servers_router,
+    prefix=f"{API_PREFIX}/mcp-servers",
+    tags=["MCP Servers Management"],
 )
 app.include_router(
     notification_router, prefix=API_PREFIX, tags=["Notifications Management"]

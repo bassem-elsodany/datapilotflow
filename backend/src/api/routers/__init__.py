@@ -19,6 +19,7 @@ from .knowledge.llm_content_filter_router import router as llm_content_filter_ro
 from .knowledge.pipeline_router import router as pipeline_router
 from .model_provider import router as model_provider_router
 from .notifications import notification_router, notification_websocket_router
+from .tools import tools_router
 from .vectordb.collection_router import router as vectordb_collection_router
 
 __all__ = [
@@ -35,6 +36,7 @@ __all__ = [
     "pipeline_router",
     "model_provider_router",
     "conversation_router",
+    "tools_router",
     "notification_router",
     "notification_websocket_router",
     "health_router",

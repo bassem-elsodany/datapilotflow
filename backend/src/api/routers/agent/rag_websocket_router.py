@@ -13,12 +13,12 @@ import traceback
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from loguru import logger
 
+from src.agents.rag_agent.services.generate_response_rag import get_response_stream_rag
 from src.api.routers.auth.auth_router import decode_access_token
 from src.config import settings
 from src.services.conversation.conversation_history_service import (
     conversation_history_service,
 )
-from src.services.conversation.generate_response_rag import get_response_stream_rag
 
 router = APIRouter(tags=["RAG WebSocket"])
 
@@ -138,7 +138,7 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
     - Lower latency compared to supervisor with multiple agents
     """
     logger.info("=" * 80)
-    logger.info("🚀 📚 RAG AGENT ENDPOINT INVOKED | /ws/agent/query/rag")
+    logger.info("RAG AGENT ENDPOINT INVOKED | /ws/agent/query/rag")
     logger.info("=" * 80)
 
     # Validate JWT token
@@ -181,7 +181,7 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
 
                 # Log the incoming query
                 logger.info(
-                    f"📨 [RAG QUERY RECEIVED] Query: {query[:100]}{'...' if len(query) > 100 else ''} | Conversation ID: {conversation_id}"
+                    f"[RAG QUERY RECEIVED] Query: {query[:100]}{'...' if len(query) > 100 else ''} | Conversation ID: {conversation_id}"
                 )
 
                 # Initialize defaults
@@ -228,15 +228,15 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
 
                             if conversation_description:
                                 logger.debug(
-                                    f"📝 Loaded conversation description: '{conversation_description[:50]}...'"
+                                    f"Loaded conversation description: '{conversation_description[:50]}...'"
                                 )
 
                             logger.info(
-                                f"📋 Loaded ALL settings from conversation: provider={llm_provider_id}, model={llm_model_name}, strategy={selected_strategy}, collection={collection_name}, reranking={enable_reranking}, llm_generation={enable_llm_generation}, top_k={top_k}"
+                                f"Loaded ALL settings from conversation: provider={llm_provider_id}, model={llm_model_name}, strategy={selected_strategy}, collection={collection_name}, reranking={enable_reranking}, llm_generation={enable_llm_generation}, top_k={top_k}"
                             )
                         else:
                             error_msg = f"Conversation not found: {conversation_id}"
-                            logger.error(f"❌ {error_msg}")
+                            logger.error(f"{error_msg}")
                             await websocket.send_text(
                                 json.dumps(
                                     {
@@ -250,7 +250,7 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
                             continue
                     except Exception as e:
                         error_msg = f"Failed to load conversation settings: {str(e)}"
-                        logger.error(f"❌ {error_msg}")
+                        logger.error(f"{error_msg}")
                         logger.error(f"Traceback: {traceback.format_exc()}")
                         await websocket.send_text(
                             json.dumps(
@@ -292,7 +292,7 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
                         missing.append("conversation_id")
 
                     error_msg = f"Missing required fields: {', '.join(missing)}"
-                    logger.error(f"❌ {error_msg}")
+                    logger.error(f"{error_msg}")
                     await websocket.send_text(
                         json.dumps(
                             {
@@ -318,7 +318,7 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
                 )
 
                 logger.info(
-                    f"🚀 Processing RAG query: '{query[:50]}...' with strategy={selected_strategy}"
+                    f"Processing RAG query: '{query[:50]}...' with strategy={selected_strategy}"
                 )
 
                 # Call RAG-specific function
@@ -344,9 +344,9 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
                     chunk_type = chunk.get("type")
                     chunk_stage = chunk.get("stage")
                     logger.debug(
-                        f"📡 [RAG EVENT] Received from backend: type={chunk_type}, stage={chunk_stage}"
+                        f"[RAG EVENT] Received from backend: type={chunk_type}, stage={chunk_stage}"
                     )
-                    logger.debug(f"📡 [RAG EVENT DATA] {json.dumps(chunk)}")
+                    logger.debug(f"[RAG EVENT DATA] {json.dumps(chunk)}")
 
                     if chunk_type in [
                         "workflow_progress",
@@ -355,30 +355,28 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
                         "streaming_response",
                     ]:
                         logger.debug(
-                            f"📡 [RAG SEND] Sending to client: type={chunk_type}, stage={chunk_stage}"
+                            f"[RAG SEND] Sending to client: type={chunk_type}, stage={chunk_stage}"
                         )
                         await websocket.send_text(json.dumps(chunk))
-                        logger.debug(f"✅ [RAG SENT] Event sent to client")
+                        logger.debug(f"[RAG SENT] Event sent to client")
                     else:
                         logger.warning(
-                            f"⚠️ Skipping unexpected RAG event type: {chunk_type}"
+                            f"Skipping unexpected RAG event type: {chunk_type}"
                         )
 
-                logger.info(
-                    "✅ RAG query processing completed, waiting for next query..."
-                )
+                logger.debug("RAG query processing completed, waiting for next query")
 
             except WebSocketDisconnect:
-                logger.debug(f"📤 WebSocket disconnected by client")
+                logger.debug(f"WebSocket disconnected by client")
                 return
             except asyncio.TimeoutError:
                 logger.debug(
-                    f"⏱️ WebSocket receive timeout after {timeout}s - closing connection"
+                    f"WebSocket receive timeout after {timeout}s - closing connection"
                 )
                 await websocket.close(code=1000, reason="Connection idle timeout")
                 return
             except json.JSONDecodeError:
-                logger.error("❌ Invalid JSON received")
+                logger.error("Invalid JSON received")
                 await websocket.send_text(
                     json.dumps(
                         {
@@ -390,7 +388,7 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
                     )
                 )
             except Exception as e:
-                logger.error(f"❌ Error processing RAG message: {str(e)}")
+                logger.error(f"Error processing RAG message: {str(e)}")
                 logger.error(f"Traceback: {traceback.format_exc()}")
                 try:
                     await websocket.send_text(
@@ -409,9 +407,9 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
                     )
 
     except WebSocketDisconnect:
-        logger.info(f"❌ RAG WebSocket disconnected for user: {user_id}")
+        logger.debug(f"RAG WebSocket disconnected for user: {user_id}")
     except Exception as e:
-        logger.error(f"❌ RAG WebSocket error: {str(e)}")
+        logger.error(f"RAG WebSocket error: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
         try:
             await websocket.close(code=1011, reason="Internal server error")

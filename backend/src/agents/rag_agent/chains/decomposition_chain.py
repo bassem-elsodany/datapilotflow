@@ -33,7 +33,7 @@ def get_decomposition_chain(llm_client: Any, config: Optional[Dict[str, Any]] = 
         >>> print(result.content)
         "COMPLEX\\n1. How to set up authentication?\\n2. How to configure rate limiting?"
     """
-    logger.debug(f"🔗 Creating Decomposition Chain")
+    logger.debug(f"Creating Decomposition Chain")
 
     # Get prompts (Opik tracking happens in Prompt class if enabled)
     system_prompt = DECOMPOSITION_SYSTEM_PROMPT.prompt

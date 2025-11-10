@@ -2,6 +2,8 @@ import { paths } from '@/routes/paths';
 import { ElementType } from 'react';
 import {
   PiBrainDuotone,
+  PiCpuDuotone,
+  PiGearSixDuotone,
   PiMagnifyingGlassDuotone,
   PiStarDuotone,
   PiTreeStructureDuotone,
@@ -60,6 +62,16 @@ export const menu: MenuItem[] = [
     header: 'Management',
     section: [
       {
+        name: 'Model Providers',
+        icon: PiCpuDuotone,
+        href: paths.dashboard.management.modelProviders.list,
+      },
+      {
+        name: 'Tools',
+        icon: PiGearSixDuotone,
+        href: paths.dashboard.management.tools.list,
+      },
+      {
         name: 'Knowledge',
         icon: PiBrainDuotone,
         href: paths.dashboard.management.knowledge.root,
@@ -68,10 +80,6 @@ export const menu: MenuItem[] = [
             name: 'Configuration',
             href: paths.dashboard.management.knowledgeSources.configs,
             dropdownItems: [
-              {
-                name: 'Model Providers',
-                href: paths.dashboard.management.modelProviders.list,
-              },
               {
                 name: 'Crawling Sources',
                 href: paths.dashboard.management.knowledgeSources.configs,
@@ -82,7 +90,6 @@ export const menu: MenuItem[] = [
               },
             ],
           },
-          // Processing section removed - ingestion now handled through knowledge source configs
           {
             name: 'Monitoring',
             href: paths.dashboard.management.knowledge.status,

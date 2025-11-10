@@ -562,7 +562,7 @@ class MilvusClientWrapper(Generic[T]):
             self.collection.upsert(data)
             self.collection.flush()
 
-            logger.info(f"✅ Upserted {len(documents)} documents into Milvus (automatic deduplication enabled)")
+            logger.info(f"Upserted {len(documents)} documents into Milvus (automatic deduplication enabled)")
 
         except Exception as e:
             logger.error(f"Error upserting documents into Milvus: {e}")

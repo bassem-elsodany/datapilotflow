@@ -11,35 +11,6 @@ from loguru import logger
 
 
 @tool
-def python_code_generator(task_description: str, requirements: str = "") -> str:
-    """
-    Generate Python code for a given task.
-
-    Args:
-        task_description: Description of what the code should do
-        requirements: Optional specific requirements or constraints
-
-    Returns:
-        Generated Python code as a string
-    """
-    logger.info(f"🐍 Generating Python code for: {task_description[:50]}...")
-
-    # This is a placeholder - in a real implementation, this would use
-    # an LLM to generate actual code
-    return f"""# Generated code for: {task_description}
-
-# Requirements: {requirements if requirements else 'None specified'}
-
-def main():
-    # TODO: Implement the solution
-    pass
-
-if __name__ == "__main__":
-    main()
-"""
-
-
-@tool
 def code_explainer(code_snippet: str, focus_area: str = "") -> str:
     """
     Explain what a code snippet does.
@@ -51,7 +22,7 @@ def code_explainer(code_snippet: str, focus_area: str = "") -> str:
     Returns:
         Detailed explanation of the code
     """
-    logger.info(f"📖 Explaining code snippet ({len(code_snippet)} chars)...")
+    logger.info(f"Explaining code snippet ({len(code_snippet)} chars)...")
 
     return f"""Code Explanation:
 
@@ -78,7 +49,7 @@ def task_planner(goal: str, constraints: str = "") -> str:
     Returns:
         A step-by-step plan
     """
-    logger.info(f"📋 Planning task: {goal[:50]}...")
+    logger.info(f"Planning task: {goal[:50]}...")
 
     return f"""Task Plan: {goal}
 
@@ -118,7 +89,7 @@ def calculator(expression: str) -> str:
     Returns:
         The result of the calculation
     """
-    logger.info(f"🔢 Calculating: {expression}")
+    logger.info(f"Calculating: {expression}")
 
     try:
         # Safe evaluation of mathematical expressions
@@ -141,7 +112,7 @@ def text_analyzer(text: str, analysis_type: str = "summary") -> str:
     Returns:
         Analysis results
     """
-    logger.info(f"📊 Analyzing text ({len(text)} chars) - type: {analysis_type}")
+    logger.info(f"Analyzing text ({len(text)} chars) - type: {analysis_type}")
 
     if analysis_type == "summary":
         return (
@@ -188,7 +159,7 @@ def mulesoft_flow_generator(
     Returns:
         Complete MuleSoft flow XML configuration with explanations, OR a request for more specific context
     """
-    logger.info(f"🔧 Generating MuleSoft flow: {flow_description[:80]}...")
+    logger.info(f"Generating MuleSoft flow: {flow_description[:80]}...")
     logger.debug(
         f"Context length: {len(retrieved_context)} chars, Requirements: {requirements[:50] if requirements else 'None'}"
     )
@@ -358,7 +329,6 @@ def get_task_agent_tools() -> List:
     """
     return [
         mulesoft_flow_generator,  # MuleSoft-specific tool first
-        python_code_generator,
         code_explainer,
         task_planner,
         calculator,
@@ -370,7 +340,6 @@ __version__ = "1.0.0"
 
 __all__ = [
     "mulesoft_flow_generator",
-    "python_code_generator",
     "code_explainer",
     "task_planner",
     "calculator",
