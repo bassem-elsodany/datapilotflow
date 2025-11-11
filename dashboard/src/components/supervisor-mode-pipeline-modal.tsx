@@ -139,7 +139,7 @@ export function SupervisorModePipelineModal({
             <Stack gap="xs">
               <Text size="xs" fw={500} c="cyan.7">✅ Initialization Complete</Text>
               {data.agents_available && (
-                <Text size="xs" c="dimmed">
+                <Text size="xs">
                   <strong>Agents:</strong> {data.agents_available.join(', ')}
                 </Text>
               )}
@@ -160,7 +160,7 @@ export function SupervisorModePipelineModal({
                 🎯 Intent: {data.intent || 'unknown'}
               </Text>
               {data.intent_description && (
-                <Text size="xs" c="dimmed" style={{ fontStyle: 'italic' }}>
+                <Text size="xs" style={{ fontStyle: 'italic' }}>
                   {data.intent_description}
                 </Text>
               )}
@@ -196,7 +196,7 @@ export function SupervisorModePipelineModal({
                 )}
               </Group>
               {data.strategy_used && (
-                <Text size="xs" c="dimmed">
+                <Text size="xs">
                   <strong>Strategy:</strong> {data.strategy_used}
                 </Text>
               )}
@@ -215,7 +215,7 @@ export function SupervisorModePipelineModal({
                 </Badge>
               )}
               {data.used_rag_context && data.context_documents && (
-                <Text size="xs" c="dimmed">
+                <Text size="xs">
                   Used context from <strong>{data.context_documents}</strong> documents
                 </Text>
               )}
@@ -763,130 +763,6 @@ export function SupervisorModePipelineModal({
             ))}
           </Group>
 
-          {/* Expanded RAG Subflow (under RAG Agent Execution node) */}
-          {activeStages.find(s => s.id === 'rag_agent_executing' && s.substages) && expandedStages.has('rag_agent_executing') && (
-            <Box style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              {/* Vertical Arrow Connector */}
-              <Box
-                style={{
-                  width: '2px',
-                  height: '20px',
-                  background: theme.colors.cyan[4],
-                  position: 'relative',
-                  marginTop: '8px'
-                }}
-              >
-                <Box
-                  style={{
-                    position: 'absolute',
-                    bottom: '-5px',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    width: 0,
-                    height: 0,
-                    borderLeft: '5px solid transparent',
-                    borderRight: '5px solid transparent',
-                    borderTop: `6px solid ${theme.colors.cyan[4]}`
-                  }}
-                />
-              </Box>
-
-              {/* Subflow Box */}
-              <Box
-                mt="xs"
-                p="md"
-                style={{
-                  background: 'linear-gradient(135deg, #e7f5ff 0%, #d0ebff 100%)',
-                  borderRadius: '12px',
-                  border: `2px solid ${theme.colors.cyan[3]}`,
-                  boxShadow: '0 4px 12px rgba(34, 139, 230, 0.15)',
-                  width: 'fit-content'
-                }}
-              >
-                <Group gap="xs" mb="sm" justify="center">
-                  <IconDatabase size={16} style={{ color: theme.colors.cyan[7] }} />
-                  <Text size="sm" fw={600} c="cyan.7">
-                    RAG Pipeline Stages
-                  </Text>
-                </Group>
-
-                <Box>
-                  <Group justify="center" gap="md" wrap="nowrap">
-                    <Box style={{ textAlign: 'center' }}>
-                      <ThemeIcon size={44} radius="xl" variant="light" color="violet">
-                        <IconSparkles size={22} />
-                      </ThemeIcon>
-                      <Text size="xs" mt={6} fw={500}>Query</Text>
-                      <Text size="xs" c="dimmed">Enhancement</Text>
-                      {completedStages.includes('rag_agent_executing') && (
-                        <ThemeIcon size={18} radius="xl" color="green" variant="filled" mt={4} mx="auto">
-                          <IconCheck size={12} />
-                        </ThemeIcon>
-                      )}
-                    </Box>
-
-                    <Text size="xl" c="cyan.6" fw={700}>→</Text>
-
-                  <Box style={{ textAlign: 'center' }}>
-                    <ThemeIcon size={44} radius="xl" variant="light" color="blue">
-                      <IconDatabase size={22} />
-                    </ThemeIcon>
-                    <Text size="xs" mt={6} fw={500}>Document</Text>
-                    <Text size="xs" c="dimmed">Retrieval</Text>
-                    {completedStages.includes('rag_agent_executing') && (
-                      <ThemeIcon size={18} radius="xl" color="green" variant="filled" mt={4} mx="auto">
-                        <IconCheck size={12} />
-                      </ThemeIcon>
-                    )}
-                  </Box>
-
-                  <Text size="xl" c="cyan.6" fw={700}>→</Text>
-
-                  <Box style={{ textAlign: 'center' }}>
-                    <ThemeIcon size={44} radius="xl" variant="light" color="orange">
-                      <IconScale size={22} />
-                    </ThemeIcon>
-                    <Text size="xs" mt={6} fw={500}>Judge</Text>
-                    <Text size="xs" c="dimmed">Ranker</Text>
-                    {completedStages.includes('rag_agent_executing') && (
-                      <ThemeIcon size={18} radius="xl" color="green" variant="filled" mt={4} mx="auto">
-                        <IconCheck size={12} />
-                      </ThemeIcon>
-                    )}
-                  </Box>
-                  </Group>
-                </Box>
-
-                {/* Enhanced Queries Output - shown below Query Enhancement stage */}
-                {metadata.enhancedQueries && metadata.enhancedQueries.length > 0 && (
-                  <Box mt="md" pt="md" style={{ borderTop: `2px solid ${theme.colors.violet[2]}` }}>
-                    <Group gap="xs" mb="xs">
-                      <ThemeIcon size="sm" color="violet" variant="filled">
-                        <IconSparkles size={14} />
-                      </ThemeIcon>
-                      <Text size="xs" fw={700} c="violet.9">
-                        ENHANCED QUERIES OUTPUT
-                      </Text>
-                      <Badge size="xs" variant="dot" color="violet">
-                        {getStrategyLabel(metadata.strategy || 'unknown')}
-                      </Badge>
-                    </Group>
-                    <Text size="xs" c="violet.8" style={{ lineHeight: 1.5 }}>
-                      {metadata.enhancedQueries.map((query, index) => (
-                        <span key={index}>
-                          <Text component="span" size="xs" fw={600} c="violet.6" style={{ marginRight: '4px' }}>
-                            [{index + 1}]
-                          </Text>
-                          {query}
-                          {index < metadata.enhancedQueries!.length - 1 && ' • '}
-                        </span>
-                      ))}
-                    </Text>
-                  </Box>
-                )}
-              </Box>
-            </Box>
-          )}
         </Box>
 
         {/* Query Comparison - Original Query and Enhanced Variants at Bottom */}
@@ -909,7 +785,7 @@ export function SupervisorModePipelineModal({
                 <ThemeIcon size="sm" color="indigo" variant="light">
                   <IconMessageCircle size={14} />
                 </ThemeIcon>
-                <Text size="xs" fw={600} c="dimmed">ORIGINAL QUERY</Text>
+                <Text size="xs" fw={600} c="indigo.7">ORIGINAL QUERY</Text>
               </Group>
               <Text size="sm" style={{ wordBreak: 'break-word' }}>
                 {metadata.originalQuery}
