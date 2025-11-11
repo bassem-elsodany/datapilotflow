@@ -2117,12 +2117,12 @@ export default function ConversationWindow() {
                         console.log(`🔄 [STRATEGY AUTO-CHANGED] ${previousStrategy || 'native'} → custom_variants (Assistant Agent mode)`);
                       }
 
-                      // 2. Disable LLM generation (supervisor handles everything)
-                      if (enableLLMGeneration) {
-                        setEnableLLMGeneration(false);
-                        disableLLM = true;
-                        changesMessage.push(`• LLM Generation: "enabled" → "disabled"`);
-                        console.log(`🔄 [LLM GENERATION DISABLED] Supervisor agent handles response generation (Assistant Agent mode)`);
+                      // 2. Enable LLM generation (supervisor uses task agent tools for generation)
+                      if (!enableLLMGeneration) {
+                        setEnableLLMGeneration(true);
+                        disableLLM = false;
+                        changesMessage.push(`• LLM Generation: "disabled" → "enabled"`);
+                        console.log(`🔄 [LLM GENERATION ENABLED] Supervisor agent calls task agent tools for response generation (Assistant Agent mode)`);
                       }
 
                       // Show notification if any changes were made
@@ -2138,7 +2138,7 @@ export default function ConversationWindow() {
                                 <div key={idx} style={{ fontSize: '12px', marginLeft: '4px' }}>{msg}</div>
                               ))}
                               <div style={{ marginTop: '8px', fontSize: '11px', opacity: 0.8 }}>
-                                Assistant Agent uses full context from vector search and handles response generation internally.
+                                Assistant Agent orchestrates RAG retrieval and calls task agent tools for response generation.
                               </div>
                             </div>
                           ),
@@ -2153,7 +2153,7 @@ export default function ConversationWindow() {
                     handleQuickUpdate({
                       mode: newMode,
                       ...(strategyUpdate && { strategy: strategyUpdate }),
-                      ...(disableLLM && { enableLLMGeneration: false })
+                      ...(newMode === 'agent' && !enableLLMGeneration && { enableLLMGeneration: true })
                     });
                   }}
                 >
