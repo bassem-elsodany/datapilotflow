@@ -181,8 +181,9 @@ class MilvusRetriever(BaseRetriever):
         """
         try:
             logger.info("   " + "▼" * 50)
-            logger.info(f"   🔎 MILVUS RETRIEVER (ASYNC): Starting vector search")
-            logger.info(f"   📝 Query: '{query[:150]}...'")
+            logger.info(
+                f"   🔎 MILVUS RETRIEVER (ASYNC): Starting vector search , Query: '{query[:150]}...'"
+            )
 
             # Get collection configuration (MongoDB call - wrap in thread)
             vectordb_service = get_vectordb_collection_service()
@@ -198,11 +199,9 @@ class MilvusRetriever(BaseRetriever):
             embedding_model_name = collection_config.embedding_model_name
             vector_dimension = collection_config.vector_dimension
 
-            logger.info(f"   ⚙️  Collection: {self.collection_name}")
-            logger.info(f"   ⚙️  Embedding model: {embedding_model_name}")
-            logger.info(f"   ⚙️  Vector dimension: {vector_dimension}")
-            logger.info(f"   ⚙️  Top K: {self.top_k}")
-
+            logger.info(
+                f"   ⚙️  Collection: {self.collection_name}, Embedding model: {embedding_model_name}, Vector dimension: {vector_dimension}, Top K: {self.top_k}"
+            )
             model_provider_service = get_model_provider_service()
             provider = await asyncio.to_thread(
                 model_provider_service.get_model_provider,

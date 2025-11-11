@@ -28,6 +28,19 @@ import src.compat_langchain_load  # noqa: F401
 from src.agents.assistant_agent.tools.rag_knowledge_tool import (
     create_rag_knowledge_tool,
 )
+from src.agents.assistant_agent.tools.tool_middleware import (
+    apply_middleware_to_tools,
+)
+from src.agents.assistant_agent.services.error_retry_middleware import (
+    execute_with_retry,
+    RetryConfig,
+    create_circuit_breakers,
+)
+from src.agents.assistant_agent.services.agent_state import (
+    SupervisorAgentState,
+    create_initial_state,
+    extract_execution_metrics,
+)
 from src.agents.common.prompts import MAIN_AGENT_SYSTEM_PROMPT
 from src.agents.task_agent.tools import get_task_agent_tools
 from src.config import settings
@@ -41,22 +54,6 @@ from src.services.model_provider.model_provider_service import (
 
 # Enable dropping unsupported params for different LLM providers
 litellm.drop_params = True
-
-
-# Agent State Schema for better context management
-class SupervisorAgentState(TypedDict, total=False):
-    """Enhanced agent state tracking RAG context and tool execution details.
-
-    This replaces module-level storage with proper state management,
-    making RAG context part of the agent's execution state.
-    """
-    messages: List[Dict[str, Any]]
-    rag_documents: List[Dict[str, Any]]  # Raw RAG documents retrieved
-    rag_context: str  # Formatted RAG context string (22k+ chars)
-    rag_context_size: int  # Track context size for monitoring
-    tools_used: List[str]  # Track which tools have been called
-    task_tools_executed: List[str]  # Task tools that have run
-    error_messages: List[str]  # Any errors encountered
 
 
 def _format_rag_documents_as_context(documents: List[Dict[str, Any]]) -> str:
@@ -335,9 +332,26 @@ async def get_response_stream_supervisor(
             f"Created {len(all_tools)} tools total: 1 RAG tool + {len(task_tools)} task tools"
         )
 
+        # Apply tool middleware for timeouts and validation
+        logger.info("Applying tool middleware (timeouts + validation)")
+        try:
+            all_tools = apply_middleware_to_tools(
+                all_tools,
+                timeout_seconds=60.0,  # 60s timeout for all tools
+                validate_input=True,
+                validate_output=True,
+            )
+            logger.info("✅ Tool middleware applied successfully")
+        except Exception as e:
+            logger.warning(f"Failed to apply tool middleware: {e}. Using tools without middleware.")
+
         # Store original task tools for reference
         response_state["original_task_tools"] = task_tools
         response_state["all_tools"] = all_tools
+
+        # Create circuit breakers for error resilience
+        circuit_breakers = create_circuit_breakers()
+        logger.info("✅ Circuit breakers initialized")
 
         # Build system prompt for main agent
         system_prompt_parts = []
@@ -363,17 +377,9 @@ async def get_response_stream_supervisor(
         logger.debug(f"System prompt length: {len(system_prompt)} characters")
         logger.debug(f"System prompt first 500 chars: {system_prompt[:500]}...")
 
-        # Initialize agent state for tracking RAG context and tool execution
-        agent_state: SupervisorAgentState = {
-            "messages": [{"role": "user", "content": query}],
-            "rag_documents": [],
-            "rag_context": "",
-            "rag_context_size": 0,
-            "tools_used": [],
-            "task_tools_executed": [],
-            "error_messages": [],
-        }
-        logger.debug(f"Initialized agent state for query: {query[:100]}...")
+        # Initialize agent state using LangGraph MessagesState pattern
+        agent_state: SupervisorAgentState = create_initial_state(query)
+        logger.debug(f"Initialized LangGraph agent state for query: {query[:100]}...")
 
         main_agent = create_agent(
             model=llm_client,
@@ -448,7 +454,7 @@ async def get_response_stream_supervisor(
         }
 
         # Execute main agent and stream events
-        logger.info("Starting main agent execution")
+        logger.info("Starting main agent execution with error resilience")
 
         # Track state
         final_messages = []
@@ -456,18 +462,36 @@ async def get_response_stream_supervisor(
         rag_tool_called = False
         retrieved_rag_documents = None  # Track RAG results for injection into task tools
 
-        # Stream events from main agent with explicit error tracking
+        # Stream events from main agent with explicit error tracking and retry logic
         try:
-            # Stream agent execution with both event-based and value-based tracking
-            # astream_events: Low-level event tracking (tool calls, etc.)
-            # stream: High-level state tracking (agent progress)
-            logger.info("Starting agent execution with dual streaming (events + values)")
+            # Configure retry for agent execution
+            retry_config = RetryConfig(
+                max_attempts=3,
+                initial_delay_ms=500,
+                max_delay_ms=5000,
+                exponential_base=2.0,
+                jitter=True,
+            )
 
-            async for event in main_agent.astream_events(
-                {"messages": [{"role": "user", "content": query}]},
-                config=config_for_stream,
-                version="v2",
-            ):
+            # Execute agent with retry logic and circuit breaker
+            async def agent_execution():
+                """Execute agent with astream_events"""
+                event_stream = main_agent.astream_events(
+                    {"messages": [{"role": "user", "content": query}]},
+                    config=config_for_stream,
+                    version="v2",
+                )
+                return event_stream
+
+            logger.info("Starting agent execution with retry protection and circuit breaker")
+            event_iterator = await execute_with_retry(
+                agent_execution,
+                func_name="main_agent_execution",
+                retry_config=retry_config,
+                circuit_breaker=circuit_breakers.get("llm_client"),
+            )
+
+            async for event in event_iterator:
                 event_type = event.get("event", "")
                 event_name = event.get("name", "")
                 event_data = event.get("data", {})
@@ -519,10 +543,11 @@ async def get_response_stream_supervisor(
                                                 f"✅ Formatted RAG context: {len(rag_context_str)} chars"
                                             )
 
-                                            # Store RAG context in agent state (ONLY source of truth)
-                                            agent_state["rag_documents"] = retrieved_rag_documents
-                                            agent_state["rag_context"] = rag_context_str
-                                            agent_state["rag_context_size"] = len(rag_context_str)
+                                            # Store RAG context in agent state using LangGraph method
+                                            agent_state.set_rag_context(
+                                                retrieved_rag_documents,
+                                                rag_context_str
+                                            )
                                             logger.info(
                                                 f"✅ RAG context stored in agent_state: {len(retrieved_rag_documents)} documents ({len(rag_context_str)} chars)"
                                             )
@@ -556,11 +581,8 @@ async def get_response_stream_supervisor(
 
                                 if tool_name and tool_name not in tools_used:
                                     tools_used.append(tool_name)
-                                    # Also track in agent state
-                                    if "tools_used" not in agent_state:
-                                        agent_state["tools_used"] = []
-                                    if tool_name not in agent_state["tools_used"]:
-                                        agent_state["tools_used"].append(tool_name)
+                                    # Also track in agent state using LangGraph method
+                                    agent_state.add_tool_used(tool_name)
                                     logger.info(f"Tool call detected: {tool_name}")
 
                                     # Emit RAG agent execution event
@@ -579,11 +601,8 @@ async def get_response_stream_supervisor(
 
                                     # Emit task tool execution event
                                     elif tool_name in [t.name for t in task_tools]:
-                                        # Track task tool execution in agent state
-                                        if "task_tools_executed" not in agent_state:
-                                            agent_state["task_tools_executed"] = []
-                                        if tool_name not in agent_state["task_tools_executed"]:
-                                            agent_state["task_tools_executed"].append(tool_name)
+                                        # Track task tool execution in agent state using LangGraph method
+                                        agent_state.add_task_tool_executed(tool_name)
                                         logger.debug(f"[AGENT STATE] Task tool added to execution list: {tool_name}")
 
                                         # RAG context already in agent_state, no need to set again

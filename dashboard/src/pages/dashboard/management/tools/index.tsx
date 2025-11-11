@@ -10,6 +10,7 @@ import {
   Button,
   Card,
   Center,
+  Checkbox,
   Divider,
   Group,
   Loader,
@@ -96,6 +97,7 @@ export default function ToolsManagementPage() {
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterActive, setFilterActive] = useState<boolean | null>(null);
+  const [selectedToolIds, setSelectedToolIds] = useState<Set<string>>(new Set());
 
   // Fetch MCP servers and tools
   const { data: mcpServers = [], isLoading: serversLoading, refetch: refetchServers } = useGetMCPServers();
@@ -182,6 +184,11 @@ export default function ToolsManagementPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingServerId, serverFormModalOpened]);
 
+  // Clear selections when filters change
+  useEffect(() => {
+    setSelectedToolIds(new Set());
+  }, [selectedServerId, searchQuery, filterActive]);
+
   // Sort MCP servers
   const sortedServers = useMemo(() => {
     const sorted = sortBy(mcpServers, serverSortStatus.columnAccessor);
@@ -219,29 +226,71 @@ export default function ToolsManagementPage() {
   }, [tools, selectedServerId, searchQuery, filterActive, sortStatus]);
 
   const handleDeleteTool = async () => {
-    if (!selectedTool) return;
+    if (!selectedTool && selectedToolIds.size === 0) return;
 
     try {
-      await deleteToolMutation.mutateAsync({
-        toolId: selectedTool.id,
-      });
+      // Bulk delete
+      if (selectedToolIds.size > 0) {
+        const deletePromises = Array.from(selectedToolIds).map(toolId =>
+          deleteToolMutation.mutateAsync({ toolId })
+        );
+        await Promise.all(deletePromises);
 
-      notifications.show({
-        title: 'Success',
-        message: 'Tool deleted successfully',
-        color: 'green',
-      });
+        notifications.show({
+          title: 'Success',
+          message: `${selectedToolIds.size} tool(s) deleted successfully`,
+          color: 'green',
+        });
+
+        setSelectedToolIds(new Set());
+      } 
+      // Single delete
+      else if (selectedTool) {
+        await deleteToolMutation.mutateAsync({
+          toolId: selectedTool.id,
+        });
+
+        notifications.show({
+          title: 'Success',
+          message: 'Tool deleted successfully',
+          color: 'green',
+        });
+
+        setSelectedTool(null);
+      }
 
       closeDeleteModal();
-      setSelectedTool(null);
       refetchTools();
     } catch (error: any) {
       notifications.show({
         title: 'Error',
-        message: error.response?.data?.detail || 'Failed to delete tool',
+        message: error.response?.data?.detail || 'Failed to delete tool(s)',
         color: 'red',
       });
     }
+  };
+
+  const handleToggleToolSelection = (toolId: string) => {
+    const newSelected = new Set(selectedToolIds);
+    if (newSelected.has(toolId)) {
+      newSelected.delete(toolId);
+    } else {
+      newSelected.add(toolId);
+    }
+    setSelectedToolIds(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedToolIds.size === filteredTools.length) {
+      setSelectedToolIds(new Set());
+    } else {
+      setSelectedToolIds(new Set(filteredTools.map(tool => tool.id)));
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedToolIds.size === 0) return;
+    openDeleteModal();
   };
 
   const handleQuickToggle = async (tool: Tool) => {
@@ -509,6 +558,24 @@ export default function ToolsManagementPage() {
 
   const columns: DataTableColumn<Tool>[] = [
     {
+      accessor: 'checkbox',
+      title: (
+        <Checkbox
+          checked={selectedToolIds.size === filteredTools.length && filteredTools.length > 0}
+          indeterminate={selectedToolIds.size > 0 && selectedToolIds.size < filteredTools.length}
+          onChange={handleSelectAll}
+        />
+      ),
+      render: (tool) => (
+        <Checkbox
+          checked={selectedToolIds.has(tool.id)}
+          onChange={() => handleToggleToolSelection(tool.id)}
+          onClick={(e) => e.stopPropagation()}
+        />
+      ),
+      width: 40,
+    },
+    {
       accessor: 'name',
       title: 'Tool Name',
       sortable: true,
@@ -712,6 +779,16 @@ export default function ToolsManagementPage() {
                 </Text>
               </div>
               <Group>
+                {selectedToolIds.size > 0 && (
+                  <Button
+                    leftSection={<IconTrash size={16} />}
+                    color="red"
+                    variant="light"
+                    onClick={handleBulkDelete}
+                  >
+                    Delete Selected ({selectedToolIds.size})
+                  </Button>
+                )}
                 <TextInput
                   placeholder="Search tools..."
                   value={searchQuery}
@@ -792,35 +869,40 @@ export default function ToolsManagementPage() {
           closeDeleteModal();
           setSelectedTool(null);
         }}
-        title="Delete Tool"
+        title={selectedToolIds.size > 0 ? "Delete Multiple Tools" : "Delete Tool"}
       >
-        {selectedTool && (
-          <Stack gap="md">
+        <Stack gap="md">
+          {selectedToolIds.size > 0 ? (
+            <Text>
+              Are you sure you want to delete <strong>{selectedToolIds.size} tool(s)</strong>?
+              This action cannot be undone.
+            </Text>
+          ) : selectedTool ? (
             <Text>
               Are you sure you want to delete <strong>{selectedTool.display_name}</strong>?
               This action cannot be undone.
             </Text>
+          ) : null}
 
-            <Group justify="flex-end">
-              <Button
-                variant="subtle"
-                onClick={() => {
-                  closeDeleteModal();
-                  setSelectedTool(null);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                color="red"
-                onClick={handleDeleteTool}
-                loading={deleteToolMutation.isPending}
-              >
-                Delete Tool
-              </Button>
-            </Group>
-          </Stack>
-        )}
+          <Group justify="flex-end">
+            <Button
+              variant="subtle"
+              onClick={() => {
+                closeDeleteModal();
+                setSelectedTool(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              onClick={handleDeleteTool}
+              loading={deleteToolMutation.isPending}
+            >
+              {selectedToolIds.size > 0 ? `Delete ${selectedToolIds.size} Tool(s)` : 'Delete Tool'}
+            </Button>
+          </Group>
+        </Stack>
       </Modal>
 
       {/* Delete MCP Server Confirmation Modal */}

@@ -110,19 +110,9 @@ def reciprocal_rank_fusion(
             doc_appearances[doc_id] += 1
             new_score = doc_scores[doc_id]
 
-            logger.info(f"   📄 Doc (rank={rank}): chunk_id={doc_id[:40]}...")
             logger.info(
-                f"      RRF formula: 1/(k+rank) = 1/({k}+{rank}) = {rrf_score:.6f}"
+                f"   📄 Doc (rank={rank}): source_url={doc.get('source_url', 'N/A')[:100]},  RRF formula: 1/(k+rank) = 1/({k}+{rank}) = {rrf_score:.6f}, Score update: {old_score:.6f} + {rrf_score:.6f} = {new_score:.6f}, Appeared in {doc_appearances[doc_id]} result set(s) so far"
             )
-            logger.info(
-                f"      Score update: {old_score:.6f} + {rrf_score:.6f} = {new_score:.6f}"
-            )
-            logger.info(
-                f"      Appeared in {doc_appearances[doc_id]} result set(s) so far"
-            )
-            if is_new_doc:
-                logger.info(f"      [NEW DOCUMENT]")
-
     if not doc_scores:
         logger.warning("⚠️ RRF: No documents found in any result set")
         return []
@@ -207,12 +197,11 @@ async def parallel_retrieval(
         """Retrieve documents for a single query."""
         try:
             logger.info("")
-            logger.info("🔥" * 40)
+            logger.info("⚡" * 40)
             logger.info(
-                f"🚀 VECTOR SEARCH [{query_idx + 1}/{len(queries)}] - STARTING NOW!"
+                f"🚀 VECTOR SEARCH [{query_idx + 1}/{len(queries)}] - STARTING NOW!, Query Variant: '{query}'"
             )
-            logger.info(f"📝 QUERY VARIANT: '{query}'")
-            logger.info("🔥" * 40)
+            logger.info("⚡" * 40)
 
             # Use async retriever (calls _aget_relevant_documents)
             logger.info(f"⚙️  Calling Milvus retriever.ainvoke() (async)...")
@@ -256,10 +245,8 @@ async def parallel_retrieval(
                     res.get("text", "")[:100] if res.get("text") else "NO TEXT"
                 )
                 logger.info(
-                    f"   Doc [{idx}]: chunk={chunk_id}, distance={distance:.4f}"
+                    f"   Doc [{idx}]: source_url={source}, distance={distance:.4f}"
                 )
-                logger.info(f"           source={source}")
-                logger.info(f"           preview='{text_preview}...'")
             logger.info("-" * 80)
             return results
 

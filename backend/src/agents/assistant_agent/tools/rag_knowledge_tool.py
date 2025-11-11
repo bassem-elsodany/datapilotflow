@@ -6,7 +6,7 @@ multi-variant query parsing for intention analysis and comprehensive retrieval.
 """
 
 import traceback
-from typing import Annotated, Any, Dict, Optional
+from typing import Annotated, Any, Dict, List, Optional, Union
 
 from langchain_core.tools import InjectedToolCallId, tool
 from loguru import logger
@@ -59,7 +59,7 @@ def create_rag_knowledge_tool(
         description=rag_agent_description,
     )
     async def retrieve_knowledge_tool(
-        search_query: str,
+        search_query: Union[str, List[str]],
         tool_call_id: Annotated[str, InjectedToolCallId],
     ) -> str:
         """
@@ -68,17 +68,28 @@ def create_rag_knowledge_tool(
 
         Supports multi-variant queries from agent:
         - Single query: "your query here"
-        - Multiple variants: '["variant1", "variant2", "variant3"]' (JSON array string)
+        - Multiple variants as list: ["variant1", "variant2", "variant3"]
+        - Multiple variants as JSON string: '["variant1", "variant2", "variant3"]'
         """
-        logger.info(f"RAG Tool invoked with query: {search_query}")
+        logger.info(f"RAG Tool invoked with query type={type(search_query).__name__}")
 
         try:
             # === PARSE AGENT'S QUERY INPUT ===
-            # Agent may send single query OR JSON array of variants
+            # Agent may send single query string OR list of variants OR JSON array string
             query_input = search_query  # Default: use as-is
 
-            # Detect if agent provided JSON array of variants
-            if isinstance(search_query, str) and search_query.strip().startswith("["):
+            # Handle if agent provided a Python list of variants (from tool calling)
+            if isinstance(search_query, list):
+                logger.info(f"[INTENT ANALYSIS] Agent provided {len(search_query)} query variants as list")
+                logger.info("=" * 100)
+                variants = [str(v).strip() for v in search_query if v and str(v).strip()]
+                if variants:
+                    for idx, variant in enumerate(variants, 1):
+                        logger.info(f"   VARIANT [{idx}/{len(variants)}]: '{variant}'")
+                    logger.info("=" * 100)
+                    query_input = variants
+            # Detect if agent provided JSON array string of variants
+            elif isinstance(search_query, str) and search_query.strip().startswith("["):
                 try:
                     import json
 
@@ -201,12 +212,15 @@ def create_rag_knowledge_tool(
                                 if k not in ["text", "content", "id", "source_url", "chunk_id"]},
                 })
 
-            # Format response as JSON for machine parsing + human-readable text
+            # Format response as JSON for machine parsing
+            # NOTE: Do NOT include final_answer here - the supervisor agent needs to call task tools
+            # to generate the final answer using these retrieved documents as context.
+            # If we return a complete answer, the LLM will think the question is answered and won't call task tools.
             tool_response_data = {
                 "type": "rag_retrieval_result",
-                "answer": final_answer,  # Rich markdown formatted answer
-                "documents": documents_for_tools,  # Flat document list for backward compatibility
-                "structured_documents": structured_documents,  # Structured docs with metadata (from raw formatter)
+                "message": f"Retrieved {len(documents_for_tools)} relevant documents from knowledge base",
+                "documents": documents_for_tools,  # Flat document list for task tools to use
+                "structured_documents": structured_documents,  # Structured docs with metadata
                 "metadata": {
                     "total_documents": rag_execution_state['total_docs'],
                     "relevant_documents": rag_execution_state['relevant_docs'],
@@ -219,7 +233,7 @@ def create_rag_knowledge_tool(
             tool_response = json.dumps(tool_response_data, indent=2)
 
             logger.info(
-                f"RAG tool returning {len(documents_for_tools)} documents in structured JSON format"
+                f"RAG tool returning {len(documents_for_tools)} documents in structured JSON format (WITHOUT final answer - task tools will generate that)"
             )
 
             return tool_response
