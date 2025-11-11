@@ -10,22 +10,21 @@ Migrates from plain TypedDict to LangGraph patterns for better:
 
 from typing import Annotated, List, Dict, Any, Optional
 from operator import add
-from langgraph.graph import MessagesState
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
-class SupervisorAgentState(MessagesState):
+class SupervisorAgentState(BaseModel):
     """
-    Enhanced agent state using LangGraph MessagesState.
+    Enhanced agent state using LangGraph patterns.
 
-    Extends MessagesState for:
-    - Built-in message handling and validation
-    - Message list reducers with 'add' operator
+    Provides:
+    - Message handling and validation
+    - List reducers with 'add' operator for Annotated fields
     - Proper state composition
-    - Type safety via Pydantic integration
+    - Type safety via Pydantic
 
     Fields:
-    - messages: Inherited from MessagesState (list of messages)
+    - messages: List of message dicts with role and content
     - rag_documents: Raw documents retrieved from RAG
     - rag_context: Formatted context string (22k+ chars)
     - rag_context_size: Size of RAG context in characters
@@ -35,18 +34,25 @@ class SupervisorAgentState(MessagesState):
     - execution_metadata: Additional execution tracking data
     """
 
+    # Message handling
+    messages: List[Dict[str, Any]] = Field(default_factory=list)
+
     # RAG context fields
     rag_documents: Optional[List[Dict[str, Any]]] = None
     rag_context: str = ""
     rag_context_size: int = 0
 
     # Tool tracking - use Annotated with 'add' operator for list reduction
-    tools_used: Annotated[List[str], add] = []
-    task_tools_executed: Annotated[List[str], add] = []
-    error_messages: Annotated[List[str], add] = []
+    tools_used: Annotated[List[str], add] = Field(default_factory=list)
+    task_tools_executed: Annotated[List[str], add] = Field(default_factory=list)
+    error_messages: Annotated[List[str], add] = Field(default_factory=list)
 
     # Execution metadata
-    execution_metadata: Dict[str, Any] = {}
+    execution_metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    class Config:
+        """Pydantic config for compatibility"""
+        arbitrary_types_allowed = True
 
     def __init__(self, **data):
         """
@@ -56,6 +62,22 @@ class SupervisorAgentState(MessagesState):
             **data: State field values
         """
         super().__init__(**data)
+
+    def __getitem__(self, key: str) -> Any:
+        """Support dict-like access for compatibility"""
+        return getattr(self, key, None)
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        """Support dict-like assignment for compatibility"""
+        setattr(self, key, value)
+
+    def __contains__(self, key: str) -> bool:
+        """Support 'in' operator for dict-like compatibility"""
+        return hasattr(self, key)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Support dict.get() for compatibility"""
+        return getattr(self, key, default)
 
     def add_tool_used(self, tool_name: str) -> None:
         """
@@ -197,10 +219,8 @@ def create_initial_state(query: str) -> SupervisorAgentState:
     Returns:
         Initialized SupervisorAgentState
     """
-    from langchain_core.messages import HumanMessage
-
     return SupervisorAgentState(
-        messages=[HumanMessage(content=query)],
+        messages=[{"role": "user", "content": query}],
         rag_documents=None,
         rag_context="",
         rag_context_size=0,
