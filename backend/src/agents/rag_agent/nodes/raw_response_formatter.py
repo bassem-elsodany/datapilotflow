@@ -52,34 +52,96 @@ def raw_response_formatter(state: WorkflowState) -> WorkflowState:
             logger.info("✅ [NODE FINISH] raw_response_formatter (no documents)")
             return state
 
-        # Build structured raw response
+        # Build structured raw response with rich Markdown formatting
         response_parts = []
+
+        # Add header with disclaimer
+        disclaimer = (
+            "# Raw Results Mode\n\n"
+            "> Showing unmodified documents from knowledge base.\n"
+            "> These are the exact chunks retrieved without AI summarization or modification.\n\n"
+        )
+        response_parts.append(disclaimer)
+
+        # Add summary
         response_parts.append(f"**Found {len(relevant_docs)} relevant document(s):**\n")
+
+        # Store structured documents for task tools
+        structured_docs = []
 
         for i, doc in enumerate(relevant_docs, 1):
             # Handle both dict and string document formats
             if isinstance(doc, dict):
                 doc_text = doc.get("text", "")
+                doc_source = doc.get("source_url", "")
+                doc_chunk_id = doc.get("chunk_id", "")
+                doc_metadata = doc.get("metadata", {})
+                relevance_score = doc.get("relevance_score")
+                relevance_label = doc.get("relevance_label")
             elif isinstance(doc, str):
                 doc_text = doc
+                doc_source = ""
+                doc_chunk_id = ""
+                doc_metadata = {}
+                relevance_score = None
+                relevance_label = None
             else:
                 doc_text = str(doc)
+                doc_source = ""
+                doc_chunk_id = ""
+                doc_metadata = {}
+                relevance_score = None
+                relevance_label = None
 
-            # Format document section
-            response_parts.append(f"\n---\n\n### Document {i}\n")
+            # Store structured document for task tools
+            structured_doc = {
+                "index": i,
+                "content": doc_text,
+                "source": doc_source,
+                "chunk_id": doc_chunk_id,
+                "metadata": doc_metadata,
+                "relevance_score": relevance_score,
+                "relevance_label": relevance_label,
+            }
+            structured_docs.append(structured_doc)
 
-            # Add document content directly (metadata is shown in UI separately)
-            response_parts.append(doc_text)
+            # Format document header with metadata
+            doc_header = f"\n---\n\n## Document {i}"
+            if doc_chunk_id:
+                doc_header += f" | `{doc_chunk_id}`"
+            doc_header += "\n"
+
+            response_parts.append(doc_header)
+
+            # Add metadata section if available
+            metadata_parts = []
+            if doc_source:
+                metadata_parts.append(f"**Source:** `{doc_source}`")
+            if relevance_score is not None:
+                relevance_pct = int(relevance_score * 100) if isinstance(relevance_score, float) else relevance_score
+                metadata_parts.append(f"**Relevance Score:** {relevance_pct}%")
+            if relevance_label is not None:
+                relevance_status = "✓ Relevant" if relevance_label == 1 else "✗ Not Relevant"
+                metadata_parts.append(f"**Label:** {relevance_status}")
+
+            if metadata_parts:
+                response_parts.append("\n".join(metadata_parts))
+                response_parts.append("\n")
+
+            # Detect and format code blocks
+            if "```" in doc_text or any(lang in doc_text.lower() for lang in ["import ", "function ", "class ", "def ", "var ", "const "]):
+                # Likely contains code, keep as-is (already has code markers)
+                response_parts.append(f"{doc_text}\n")
+            else:
+                # Regular text content
+                response_parts.append(f"{doc_text}\n")
 
         # Join all parts
-        raw_response = "\n".join(response_parts)
+        raw_response = "".join(response_parts)
 
-        # Add disclaimer at the top
-        disclaimer = (
-            "**Raw Results Mode** - Showing unmodified documents from knowledge base.\n"
-            "These are the exact chunks retrieved without AI summarization or modification.\n"
-        )
-        raw_response = disclaimer + "\n" + raw_response
+        # Store structured documents in state for task tools to access
+        state["structured_documents"] = structured_docs
+        logger.info(f"✅ Created {len(structured_docs)} structured documents for task tools")
 
         # Build context (same as documents, for compatibility)
         context_parts = []

@@ -158,6 +158,7 @@ def create_rag_knowledge_tool(
             final_answer = rag_result.get("final_answer", "No answer generated")
             retrieved_documents = rag_result.get("retrieved_documents", [])
             judged_documents = rag_result.get("judged_documents", [])
+            structured_documents = rag_result.get("structured_documents", [])  # New: structured docs from raw formatter
             query_info = rag_result.get("query_info", {})
 
             # Update shared state
@@ -203,8 +204,9 @@ def create_rag_knowledge_tool(
             # Format response as JSON for machine parsing + human-readable text
             tool_response_data = {
                 "type": "rag_retrieval_result",
-                "answer": final_answer,
-                "documents": documents_for_tools,
+                "answer": final_answer,  # Rich markdown formatted answer
+                "documents": documents_for_tools,  # Flat document list for backward compatibility
+                "structured_documents": structured_documents,  # Structured docs with metadata (from raw formatter)
                 "metadata": {
                     "total_documents": rag_execution_state['total_docs'],
                     "relevant_documents": rag_execution_state['relevant_docs'],
