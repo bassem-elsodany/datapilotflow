@@ -75,7 +75,7 @@ class ToolFactory:
 
     @staticmethod
     def create_prompt_based_tool_from_domain(
-        tool: Tool, llm_client: Optional[Any] = None
+        tool: Tool, llm_client: Optional[Any] = None, rag_context: Optional[str] = None
     ) -> Any:
         """
         Create a LangChain tool from a Tool domain object (prompt-based).
@@ -83,6 +83,7 @@ class ToolFactory:
         Args:
             tool: Tool domain object from database
             llm_client: Optional LLM client for executing the tool
+            rag_context: Optional RAG documents/context to inject into tool (deprecated - use context var)
 
         Returns:
             LangChain tool function
@@ -101,27 +102,64 @@ class ToolFactory:
         system_prompt = prompt_config.system_prompt
 
         # Create the tool function dynamically
-        def dynamic_prompt_tool(user_input: str, context: str = "") -> str:
-            """Execute prompt-based tool using LLM."""
+        def dynamic_prompt_tool(user_input: str, rag_documents: str = "") -> str:
+            """Execute prompt-based tool using LLM with RAG documents injected as parameter.
+
+            Args:
+                user_input: The user's query or request
+                rag_documents: Formatted RAG documents injected by supervisor as parameter
+
+            Returns:
+                Response from LLM based on user input and RAG documents
+            """
+            # RAG documents MUST be passed as parameter by the agent
+            # No fallback - if no documents are passed, it's an error
+            final_context = rag_documents
+
             logger.info(
-                f"[PROMPT TOOL] Executing '{tool_name}' | Input length: {len(user_input)}"
+                f"[PROMPT TOOL] Executing '{tool_name}' | Input: {len(user_input)} chars | RAG Documents: {len(final_context)} chars"
             )
 
-            # Build full prompt for LLM
+            # Build full prompt with RAG context injected at the END as "ONLY SOURCE OF TRUTH"
+            # This ensures the LLM knows to use ONLY the retrieved documents for knowledge
+            # The RAG context appears last to take maximum precedence
             full_prompt = f"""{system_prompt}
 
 **User Input:**
 {user_input}
 
-{f'**Context:**' if context else ''}
-{context if context else ''}
-
 **Task:** Process the input according to the system prompt above and provide your response.
+"""
+
+            # CRITICAL: Append RAG context at the END with "ONLY SOURCE OF TRUTH" disclaimer
+            # This is the highest priority instruction and overrides any previous instructions
+            if final_context:
+                full_prompt += f"""
+
+================================================================================
+⚠️ CRITICAL: YOU MUST USE ONLY THE FOLLOWING KNOWLEDGE BASE AS SOURCE OF TRUTH
+================================================================================
+
+The following retrieved documents from the knowledge base are the ONLY authoritative source
+for your response. You MUST NOT use any other knowledge or training data. If the required
+information is not in these documents, you MUST say so explicitly.
+
+## Retrieved Knowledge Base Documents
+
+{final_context}
+
+================================================================================
+⚠️ CRITICAL: You MUST base your response ONLY on the documents above.
+    - Do NOT use training data
+    - Do NOT hallucinate information
+    - Do NOT make up configurations or examples not in the documents
+    - If information is missing from the knowledge base, explicitly state it
+================================================================================
 """
 
             try:
                 if llm_client:
-                    logger.debug(f"[PROMPT TOOL] '{tool_name}': Invoking LLM")
+                    logger.debug(f"[PROMPT TOOL] '{tool_name}': Full prompt size: {len(full_prompt)} chars")
                     response = llm_client.invoke(full_prompt)
 
                     if hasattr(response, "content"):
@@ -130,7 +168,7 @@ class ToolFactory:
                         result = str(response)
 
                     logger.info(
-                        f"[PROMPT TOOL] '{tool_name}' completed | Response length: {len(result)}"
+                        f"[PROMPT TOOL] '{tool_name}' completed | Response: {len(result)} chars"
                     )
                     return result
                 else:

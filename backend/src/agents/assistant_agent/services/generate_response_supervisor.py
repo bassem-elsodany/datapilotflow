@@ -8,6 +8,8 @@ The RAG agent is wrapped as a tool that the main ReAct agent can invoke.
 """
 
 import asyncio
+import contextvars
+import json
 import time
 import traceback
 import uuid
@@ -40,6 +42,35 @@ from src.services.model_provider.model_provider_service import (
 
 # Enable dropping unsupported params for different LLM providers
 litellm.drop_params = True
+
+# Context variable for sharing RAG documents with task tools
+_rag_context_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "rag_context", default=None
+)
+
+
+def _format_rag_documents_as_context(documents: List[Dict[str, Any]]) -> str:
+    """
+    Format RAG documents into a context string for task tools.
+    Only includes document content - no metadata (to save tokens).
+
+    Args:
+        documents: List of document dictionaries from RAG
+
+    Returns:
+        Formatted context string with document content only
+    """
+    if not documents:
+        return ""
+
+    context_parts = []
+    for idx, doc in enumerate(documents, 1):
+        # RAG tool returns 'content', also support 'text' for backward compatibility
+        text = doc.get("content") or doc.get("text") or ""
+        if text.strip():
+            context_parts.append(f"## Document {idx}\n{text}\n")
+
+    return "".join(context_parts)
 
 
 async def get_response_stream_supervisor(
@@ -287,12 +318,16 @@ async def get_response_stream_supervisor(
                 f"No dynamic tools configured, using {len(task_tools)} default hardcoded tools"
             )
 
-        # Combine RAG tool + task tools
+        # Combine RAG tool + task tools (without RAG context initially)
         all_tools = [retrieve_knowledge_tool] + task_tools
 
         logger.info(
             f"Created {len(all_tools)} tools total: 1 RAG tool + {len(task_tools)} task tools"
         )
+
+        # Store original task tools for reference (RAG context will be injected dynamically)
+        response_state["original_task_tools"] = task_tools
+        response_state["all_tools"] = all_tools
 
         # Build system prompt for main agent
         system_prompt_parts = []
@@ -312,8 +347,11 @@ async def get_response_stream_supervisor(
 
         system_prompt = "\n".join(system_prompt_parts)
 
-        # Create main ReAct agent with all tools
+        # Create main ReAct agent with Tool Calling pattern
         logger.info("Creating main ReAct agent with Tool Calling pattern")
+        logger.info(f"Passing {len(all_tools)} tools to agent: {[t.name for t in all_tools]}")
+        logger.debug(f"System prompt length: {len(system_prompt)} characters")
+        logger.debug(f"System prompt first 500 chars: {system_prompt[:500]}...")
 
         main_agent = create_agent(
             model=llm_client,
@@ -322,6 +360,7 @@ async def get_response_stream_supervisor(
         )
 
         logger.info("Main ReAct agent created successfully")
+        logger.info(f"✅ Agent created with {len(all_tools)} tools: {[t.name for t in all_tools]}")
 
         # Configure Opik tracing (if enabled)
         config_for_stream = {
@@ -406,6 +445,66 @@ async def get_response_stream_supervisor(
                 event_name = event.get("name", "")
                 event_data = event.get("data", {})
 
+                # Early extraction of RAG documents (on_tool_end event)
+                # This must happen before checking tool calls to ensure context is available
+                if event_type == "on_tool_end":
+                    try:
+                        tool_name = event.get("name", "")
+
+                        # Track tool execution (add to tools_used if not already there)
+                        if tool_name and tool_name not in tools_used:
+                            tools_used.append(tool_name)
+                            logger.info(f"✅ Tool execution completed: {tool_name}")
+
+                        if tool_name == rag_agent_name:
+                            # Extract RAG documents from tool output
+                            tool_output = event_data.get("output", "")
+                            logger.debug(f"RAG tool end event: output type={type(tool_output).__name__}, length={len(str(tool_output)) if tool_output else 0}")
+
+                            if tool_output:
+                                # Handle ToolMessage objects from LangChain
+                                # ToolMessage has a 'content' attribute
+                                if hasattr(tool_output, "content"):
+                                    tool_output_content = tool_output.content
+                                    logger.debug(f"Extracted ToolMessage.content: type={type(tool_output_content).__name__}, length={len(str(tool_output_content)) if tool_output_content else 0}")
+                                else:
+                                    tool_output_content = tool_output
+
+                                if tool_output_content:
+                                    try:
+                                        # Handle both string and dict outputs
+                                        if isinstance(tool_output_content, str):
+                                            rag_response = json.loads(tool_output_content)
+                                        else:
+                                            rag_response = tool_output_content
+
+                                        if isinstance(rag_response, dict) and "documents" in rag_response:
+                                            retrieved_rag_documents = rag_response.get("documents", [])
+                                            logger.info(
+                                                f"✅ RAG tool execution completed: Extracted {len(retrieved_rag_documents)} documents from {len(str(tool_output_content))} chars"
+                                            )
+
+                                            # Format RAG documents as context string
+                                            rag_context_str = _format_rag_documents_as_context(
+                                                retrieved_rag_documents
+                                            )
+                                            logger.info(
+                                                f"✅ Formatted RAG context: {len(rag_context_str)} chars"
+                                            )
+
+                                            # Set context variable for task tools to access
+                                            # Task tools MUST use the rag_documents parameter passed by the agent
+                                            _rag_context_var.set(rag_context_str)
+                                            logger.info(
+                                                f"✅ RAG context set in context variable ({len(rag_context_str)} chars)"
+                                            )
+                                        else:
+                                            logger.debug(f"RAG response missing 'documents' key. Keys: {rag_response.keys() if isinstance(rag_response, dict) else 'N/A'}")
+                                    except (json.JSONDecodeError, TypeError) as parse_error:
+                                        logger.warning(f"RAG tool output not valid JSON: {parse_error}")
+                    except Exception as e:
+                        logger.warning(f"Error processing RAG tool end event: {e} | {traceback.format_exc()}")
+
                 # Track tool calls with error detection
                 try:
                     if event_type == "on_chat_model_stream":
@@ -431,6 +530,16 @@ async def get_response_stream_supervisor(
 
                                     # Emit task tool execution event
                                     elif tool_name in [t.name for t in task_tools]:
+                                        # Set RAG context if available before task tool executes
+                                        if retrieved_rag_documents:
+                                            rag_context_str = _format_rag_documents_as_context(
+                                                retrieved_rag_documents
+                                            )
+                                            _rag_context_var.set(rag_context_str)
+                                            logger.info(
+                                                f"Set RAG context ({len(rag_context_str)} chars) for task tool: {tool_name}"
+                                            )
+
                                         yield {
                                             "type": "supervisor_progress",
                                             "stage": "task_agent_executing",
@@ -467,7 +576,6 @@ async def get_response_stream_supervisor(
                                         tool_name = msg.get("name", "")
                                         if tool_name == rag_agent_name:
                                             # Parse RAG response as JSON
-                                            import json
                                             content = msg.get("content", "")
                                             if content:
                                                 try:
@@ -483,7 +591,6 @@ async def get_response_stream_supervisor(
                                         # Handle langchain message objects
                                         if getattr(msg, "name", "") == rag_agent_name:
                                             try:
-                                                import json
                                                 content = getattr(msg, "content", "")
                                                 if content:
                                                     rag_response = json.loads(content)
