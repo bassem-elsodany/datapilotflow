@@ -938,7 +938,7 @@ async def get_response_stream_supervisor(
             },
         }
 
-        # Add RAG documents if RAG tool was called
+        # Add RAG documents and metadata if RAG tool was called
         if rag_tool_called:
             final_result["documents"] = rag_execution_state["documents"]
             final_result["metadata"]["document_count"] = rag_execution_state[
@@ -950,6 +950,24 @@ async def get_response_stream_supervisor(
             final_result["metadata"]["enhanced_queries"] = rag_execution_state[
                 "enhanced_queries"
             ]
+
+            # Add source details for each document
+            final_result["metadata"]["document_sources"] = [
+                {
+                    "title": doc.get("title", "Unknown"),
+                    "source": doc.get("source", doc.get("source_url", "Unknown")),
+                    "distance": doc.get("distance", None),
+                }
+                for doc in rag_execution_state["documents"]
+            ]
+
+            # Add search variants for transparency
+            final_result["metadata"]["search_variants"] = rag_execution_state.get(
+                "enhanced_queries", []
+            )
+            final_result["metadata"]["rag_strategy"] = rag_execution_state.get(
+                "enhancement_strategy", "unknown"
+            )
         else:
             final_result["documents"] = []
 
