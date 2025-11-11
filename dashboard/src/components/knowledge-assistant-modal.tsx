@@ -231,41 +231,103 @@ export function KnowledgeAssistantModal({
                 )}
               </Group>
               {data.sources_used !== undefined && (
-                <Text size="xs" c="dimmed">
+                <Text size="xs">
                   From <strong>{data.sources_used}</strong> source{data.sources_used !== 1 ? 's' : ''}
                 </Text>
               )}
 
-              {/* Display document sources if available */}
+              {/* Display document sources if available - EXPANDABLE */}
               {data.document_sources && Array.isArray(data.document_sources) && data.document_sources.length > 0 && (
-                <Stack gap="xs" mt="sm">
-                  <Text size="xs" fw={600} c="teal.7">📚 Document Sources:</Text>
-                  {data.document_sources.map((doc: any, idx: number) => (
-                    <Group key={idx} gap="xs" wrap="nowrap">
-                      <Text size="xs" style={{ flex: 1 }}>
-                        <strong>{doc.title || 'Unknown'}</strong>
-                        {doc.source && <Text size="xs">({doc.source})</Text>}
-                        {doc.distance !== null && doc.distance !== undefined && (
-                          <Badge size="xs" variant="filled" color="cyan" ml="xs">
-                            Distance: {(doc.distance as number).toFixed(3)}
-                          </Badge>
-                        )}
-                      </Text>
-                    </Group>
-                  ))}
-                </Stack>
+                <Box mt="sm">
+                  <Group
+                    gap="xs"
+                    mb="xs"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => {
+                      setExpandedStages(prev => {
+                        const next = new Set(prev);
+                        if (next.has('document_sources')) {
+                          next.delete('document_sources');
+                        } else {
+                          next.add('document_sources');
+                        }
+                        return next;
+                      });
+                    }}
+                  >
+                    <IconChevronDown
+                      size={16}
+                      style={{
+                        transform: expandedStages.has('document_sources') ? 'rotate(0deg)' : 'rotate(-90deg)',
+                        transition: 'transform 200ms',
+                        color: theme.colors.teal[7],
+                      }}
+                    />
+                    <Text size="xs" fw={600} c="teal.7">📚 Document Sources ({data.document_sources.length})</Text>
+                  </Group>
+                  <Collapse in={expandedStages.has('document_sources')} transitionDuration={200}>
+                    <Stack gap="xs" pl="md" pb="xs" style={{ borderLeft: `2px solid ${theme.colors.teal[3]}` }}>
+                      {data.document_sources.map((doc: any, idx: number) => (
+                        <Box key={idx}>
+                          <Text size="xs" fw={500}>
+                            {idx + 1}. <strong>{doc.title || 'Unknown'}</strong>
+                          </Text>
+                          {doc.source && (
+                            <Text size="xs">
+                              <strong>URL:</strong> {doc.source}
+                            </Text>
+                          )}
+                          {doc.distance !== null && doc.distance !== undefined && (
+                            <Badge size="xs" variant="filled" color="cyan" mt={4}>
+                              Relevance: {(doc.distance as number).toFixed(3)}
+                            </Badge>
+                          )}
+                        </Box>
+                      ))}
+                    </Stack>
+                  </Collapse>
+                </Box>
               )}
 
-              {/* Display search variants if available */}
+              {/* Display search variants if available - EXPANDABLE */}
               {data.search_variants && Array.isArray(data.search_variants) && data.search_variants.length > 0 && (
-                <Stack gap="xs" mt="sm">
-                  <Text size="xs" fw={600} c="teal.7">🔍 Search Variants:</Text>
-                  {data.search_variants.map((variant: string, idx: number) => (
-                    <Text key={idx} size="xs">
-                      • {variant}
-                    </Text>
-                  ))}
-                </Stack>
+                <Box mt="sm">
+                  <Group
+                    gap="xs"
+                    mb="xs"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => {
+                      setExpandedStages(prev => {
+                        const next = new Set(prev);
+                        if (next.has('search_variants')) {
+                          next.delete('search_variants');
+                        } else {
+                          next.add('search_variants');
+                        }
+                        return next;
+                      });
+                    }}
+                  >
+                    <IconChevronDown
+                      size={16}
+                      style={{
+                        transform: expandedStages.has('search_variants') ? 'rotate(0deg)' : 'rotate(-90deg)',
+                        transition: 'transform 200ms',
+                        color: theme.colors.teal[7],
+                      }}
+                    />
+                    <Text size="xs" fw={600} c="teal.7">🔍 Search Variants ({data.search_variants.length})</Text>
+                  </Group>
+                  <Collapse in={expandedStages.has('search_variants')} transitionDuration={200}>
+                    <Stack gap="xs" pl="md" pb="xs" style={{ borderLeft: `2px solid ${theme.colors.teal[3]}` }}>
+                      {data.search_variants.map((variant: string, idx: number) => (
+                        <Text key={idx} size="xs" fw={500}>
+                          {idx + 1}. {variant}
+                        </Text>
+                      ))}
+                    </Stack>
+                  </Collapse>
+                </Box>
               )}
             </Stack>
           </Card>
