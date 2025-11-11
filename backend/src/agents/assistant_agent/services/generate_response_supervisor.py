@@ -645,6 +645,12 @@ async def get_response_stream_supervisor(
                                                 f"✅ RAG context stored in agent_state: {len(retrieved_rag_documents)} documents ({len(rag_context_str)} chars)"
                                             )
 
+                                            # CRITICAL: Store documents in rag_execution_state for metadata
+                                            rag_execution_state["documents"] = retrieved_rag_documents
+                                            rag_execution_state["total_docs"] = len(retrieved_rag_documents)
+                                            rag_execution_state["relevant_docs"] = len(retrieved_rag_documents)
+                                            logger.info(f"✅ Stored {len(retrieved_rag_documents)} documents in rag_execution_state for metadata")
+
                                             # Emit RAG documents extracted COMPLETE event
                                             yield {
                                                 "type": "workflow_progress",
