@@ -75,10 +75,12 @@ export function useSupervisorWorkflowProgress() {
           };
 
           // Determine next active stage based on what just completed
-          // New stage flow: supervisor_init_complete → agent_execution_starting → rag_agent_executing → rag_documents_extracted → task_agent_executing (optional) → response_generation_complete → response_streaming_started → workflow_complete
+          // Updated stage flow to match RAG pattern: stage_complete events mark completion
+          // Frontend marks them as completed, and next stage naturally becomes active when its START event arrives
           let nextActiveStage = null;
 
-          if (completedStage === 'supervisor_init_complete') {
+          // The stage flow based on completion:
+          if (completedStage === 'supervisor_init') {
             nextActiveStage = 'agent_execution_starting';
           } else if (completedStage === 'agent_execution_starting') {
             nextActiveStage = 'rag_agent_executing';

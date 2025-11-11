@@ -485,9 +485,9 @@ async def get_response_stream_supervisor(
         response_state["initialization_complete"] = True
         logger.info("Supervisor initialization completed successfully")
 
-        # Yield initialization complete event
+        # Yield supervisor initialization START event
         yield {
-            "type": "supervisor_progress",
+            "type": "workflow_progress",
             "stage": "supervisor_init_complete",
             "message": "Multi-Agent System initialized (Tool Calling Pattern)",
             "data": {
@@ -504,9 +504,9 @@ async def get_response_stream_supervisor(
         # Execute main agent and stream events
         logger.info("Starting main agent execution with error resilience")
 
-        # Emit agent execution starting event
+        # Emit agent execution STARTING event (no _complete suffix - just the stage name)
         yield {
-            "type": "supervisor_progress",
+            "type": "workflow_progress",
             "stage": "agent_execution_starting",
             "message": "Agent analyzing query and preparing execution plan",
             "execution_time_ms": (time.time() - start_time) * 1000,
@@ -516,6 +516,7 @@ async def get_response_stream_supervisor(
         final_messages = []
         tools_used = []
         rag_tool_called = False
+        agent_execution_complete_emitted = False  # Track if we've emitted agent_execution_starting_complete
         retrieved_rag_documents = (
             None  # Track RAG results for injection into task tools
         )
@@ -566,6 +567,26 @@ async def get_response_stream_supervisor(
                         if tool_name and tool_name not in tools_used:
                             tools_used.append(tool_name)
                             logger.info(f"✅ Tool execution completed: {tool_name}")
+
+                        # Emit tool completion events
+                        if tool_name == rag_agent_name:
+                            # Will emit rag_agent_executing_complete after documents extracted
+                            pass
+                        elif tool_name in [t.name for t in task_tools]:
+                            # Emit task agent execution COMPLETE event
+                            yield {
+                                "type": "workflow_progress",
+                                "stage": f"{tool_name}_complete",
+                                "message": f"Task execution completed: {tool_name}",
+                                "data": {
+                                    "tool_name": tool_name,
+                                    "tools_used": agent_state.get("tools_used", []),
+                                },
+                                "execution_time_ms": (
+                                    time.time() - start_time
+                                )
+                                * 1000,
+                            }
 
                         if tool_name == rag_agent_name:
                             # Extract RAG documents from tool output
@@ -624,16 +645,12 @@ async def get_response_stream_supervisor(
                                                 f"✅ RAG context stored in agent_state: {len(retrieved_rag_documents)} documents ({len(rag_context_str)} chars)"
                                             )
 
-                                            # Emit RAG documents extracted progress event
+                                            # Emit RAG documents extracted COMPLETE event
                                             yield {
-                                                "type": "supervisor_progress",
+                                                "type": "workflow_progress",
                                                 "stage": "rag_documents_extracted",
                                                 "message": f"RAG Complete: Extracted {len(retrieved_rag_documents)} documents",
-                                                "execution_time_ms": (
-                                                    time.time() - start_time
-                                                )
-                                                * 1000,
-                                                "agent_state": {
+                                                "data": {
                                                     "rag_documents_count": len(
                                                         retrieved_rag_documents
                                                     ),
@@ -644,6 +661,48 @@ async def get_response_stream_supervisor(
                                                         "tools_used", []
                                                     ),
                                                 },
+                                                "execution_time_ms": (
+                                                    time.time() - start_time
+                                                )
+                                                * 1000,
+                                            }
+
+                                            # Emit agent execution COMPLETE event (after RAG retrieval)
+                                            if not agent_execution_complete_emitted:
+                                                agent_execution_complete_emitted = True
+                                                yield {
+                                                    "type": "workflow_progress",
+                                                    "stage": "agent_execution_starting_complete",
+                                                    "message": "Agent execution planning completed",
+                                                    "data": {
+                                                        "rag_documents_count": len(
+                                                            retrieved_rag_documents
+                                                        ),
+                                                        "tools_used": agent_state.get(
+                                                            "tools_used", []
+                                                        ),
+                                                    },
+                                                    "execution_time_ms": (
+                                                        time.time() - start_time
+                                                    )
+                                                    * 1000,
+                                                }
+
+                                            # Emit RAG agent execution COMPLETE event
+                                            yield {
+                                                "type": "workflow_progress",
+                                                "stage": "rag_agent_executing_complete",
+                                                "message": f"RAG agent execution completed with {len(retrieved_rag_documents)} documents",
+                                                "data": {
+                                                    "document_count": len(retrieved_rag_documents),
+                                                    "context_size": len(rag_context_str),
+                                                    "strategy": rag_execution_state.get("enhancement_strategy", "unknown"),
+                                                    "tools_used": agent_state.get("tools_used", []),
+                                                },
+                                                "execution_time_ms": (
+                                                    time.time() - start_time
+                                                )
+                                                * 1000,
                                             }
                                         else:
                                             logger.debug(
@@ -675,25 +734,17 @@ async def get_response_stream_supervisor(
                                     agent_state.add_tool_used(tool_name)
                                     logger.info(f"Tool call detected: {tool_name}")
 
-                                    # Emit RAG agent execution event
+                                    # Emit RAG agent execution START event
                                     if tool_name == rag_agent_name:
                                         rag_tool_called = True
                                         yield {
-                                            "type": "supervisor_progress",
+                                            "type": "workflow_progress",
                                             "stage": "rag_agent_executing",
                                             "message": f"{rag_agent_name.replace('_', ' ').title()}: Retrieving and ranking documents",
                                             "execution_time_ms": (
                                                 time.time() - start_time
                                             )
                                             * 1000,
-                                            "agent_state": {
-                                                "tools_used": agent_state.get(
-                                                    "tools_used", []
-                                                ),
-                                                "rag_context_size": agent_state.get(
-                                                    "rag_context_size", 0
-                                                ),
-                                            },
                                         }
 
                                     # Emit task tool execution event
@@ -708,27 +759,13 @@ async def get_response_stream_supervisor(
                                         # Task tools will read from agent_state["rag_context"]
 
                                         yield {
-                                            "type": "supervisor_progress",
+                                            "type": "workflow_progress",
                                             "stage": "task_agent_executing",
                                             "message": f"Task Tool: Executing {tool_name}",
                                             "execution_time_ms": (
                                                 time.time() - start_time
                                             )
                                             * 1000,
-                                            "agent_state": {
-                                                "tools_used": agent_state.get(
-                                                    "tools_used", []
-                                                ),
-                                                "task_tools_executed": agent_state.get(
-                                                    "task_tools_executed", []
-                                                ),
-                                                "rag_context_size": agent_state.get(
-                                                    "rag_context_size", 0
-                                                ),
-                                                "rag_documents_count": len(
-                                                    agent_state.get("rag_documents", [])
-                                                ),
-                                            },
                                         }
                 except Exception as e:
                     # Tool call tracking error - log but continue
@@ -855,7 +892,7 @@ async def get_response_stream_supervisor(
 
         # Emit completion events
         yield {
-            "type": "supervisor_progress",
+            "type": "workflow_progress",
             "stage": "response_generation_complete",
             "message": "Final response generated",
             "data": {
@@ -871,7 +908,7 @@ async def get_response_stream_supervisor(
             try:
                 # Emit response streaming started event
                 yield {
-                    "type": "supervisor_progress",
+                    "type": "workflow_progress",
                     "stage": "response_streaming_started",
                     "message": "Streaming response to client",
                     "execution_time_ms": (time.time() - start_time) * 1000,
