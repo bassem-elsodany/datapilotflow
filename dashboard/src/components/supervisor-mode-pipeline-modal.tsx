@@ -239,11 +239,11 @@ export function SupervisorModePipelineModal({
                   <Text size="xs" fw={600} c="teal.7">📚 Document Sources:</Text>
                   {data.document_sources.map((doc: any, idx: number) => (
                     <Group key={idx} gap="xs" wrap="nowrap">
-                      <Text size="xs" c="dimmed" style={{ flex: 1 }}>
+                      <Text size="xs" style={{ flex: 1 }}>
                         <strong>{doc.title || 'Unknown'}</strong>
-                        {doc.source && <Text size="xs" c="dimmed">({doc.source})</Text>}
+                        {doc.source && <Text size="xs">({doc.source})</Text>}
                         {doc.distance !== null && doc.distance !== undefined && (
-                          <Badge size="xs" variant="light" color="cyan" ml="xs">
+                          <Badge size="xs" variant="filled" color="cyan" ml="xs">
                             Distance: {(doc.distance as number).toFixed(3)}
                           </Badge>
                         )}
@@ -258,7 +258,7 @@ export function SupervisorModePipelineModal({
                 <Stack gap="xs" mt="sm">
                   <Text size="xs" fw={600} c="teal.7">🔍 Search Variants:</Text>
                   {data.search_variants.map((variant: string, idx: number) => (
-                    <Text key={idx} size="xs" c="dimmed">
+                    <Text key={idx} size="xs">
                       • {variant}
                     </Text>
                   ))}
