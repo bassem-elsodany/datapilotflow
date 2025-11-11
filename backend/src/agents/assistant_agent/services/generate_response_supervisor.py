@@ -893,6 +893,23 @@ async def get_response_stream_supervisor(
                                 }
                             )
 
+                        # Add comprehensive metadata to first chunk
+                        if rag_tool_called:
+                            metadata["document_sources"] = [
+                                {
+                                    "title": doc.get("title", "Unknown"),
+                                    "source": doc.get("source", doc.get("source_url", "Unknown")),
+                                    "distance": doc.get("distance", None),
+                                }
+                                for doc in rag_execution_state["documents"]
+                            ]
+                            metadata["search_variants"] = rag_execution_state.get(
+                                "enhanced_queries", []
+                            )
+                            metadata["rag_strategy"] = rag_execution_state.get(
+                                "enhancement_strategy", "unknown"
+                            )
+
                         yield {
                             "type": "streaming_response",
                             "chunk": chunk,
@@ -900,10 +917,14 @@ async def get_response_stream_supervisor(
                             "execution_time_ms": execution_time_ms,
                         }
                     else:
-                        # Subsequent chunks
+                        # Subsequent chunks - include minimal metadata
                         yield {
                             "type": "streaming_response",
                             "chunk": chunk,
+                            "metadata": {
+                                "tools_used": tools_used,
+                                "orchestrator_type": "tool_calling_pattern",
+                            },
                             "execution_time_ms": execution_time_ms,
                         }
             except Exception as e:
