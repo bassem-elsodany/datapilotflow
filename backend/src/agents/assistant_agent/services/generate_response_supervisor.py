@@ -30,6 +30,8 @@ from src.agents.assistant_agent.tools.rag_knowledge_tool import (
 )
 from src.agents.assistant_agent.tools.tool_middleware import (
     apply_middleware_to_tools,
+    inject_rag_context_to_task_tool,
+    set_current_agent_state,
 )
 from src.agents.assistant_agent.services.error_retry_middleware import (
     execute_with_retry,
@@ -325,6 +327,20 @@ async def get_response_stream_supervisor(
                 f"No dynamic tools configured, using {len(task_tools)} default hardcoded tools"
             )
 
+        # Inject RAG context injection into task tools
+        # This wraps each task tool so it will receive RAG context as a parameter at call time
+        logger.info("Applying RAG context injection to task tools")
+        try:
+            task_tools_with_rag = []
+            for task_tool in task_tools:
+                wrapped_tool = inject_rag_context_to_task_tool(task_tool)
+                task_tools_with_rag.append(wrapped_tool)
+            task_tools = task_tools_with_rag
+            logger.info(f"✅ RAG context injection applied to {len(task_tools)} task tools")
+        except Exception as e:
+            logger.warning(f"Failed to apply RAG context injection to task tools: {e}")
+            # Continue with unwrapped tools
+
         # Combine RAG tool + task tools
         all_tools = [retrieve_knowledge_tool] + task_tools
 
@@ -380,6 +396,10 @@ async def get_response_stream_supervisor(
         # Initialize agent state using LangGraph MessagesState pattern
         agent_state: SupervisorAgentState = create_initial_state(query)
         logger.debug(f"Initialized LangGraph agent state for query: {query[:100]}...")
+
+        # Set agent state for RAG context injection (tools will retrieve from here)
+        set_current_agent_state(agent_state)
+        logger.debug("Agent state set in tool middleware for RAG context injection")
 
         main_agent = create_agent(
             model=llm_client,

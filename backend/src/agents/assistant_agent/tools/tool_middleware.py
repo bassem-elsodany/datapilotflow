@@ -15,6 +15,20 @@ from typing import Any, Callable, Optional, List, Dict
 from langchain_core.tools import BaseTool, ToolException
 from loguru import logger
 
+# Module-level storage for current agent state (set by supervisor)
+_current_agent_state: Optional[Any] = None
+
+
+def set_current_agent_state(agent_state: Any) -> None:
+    """Set the current agent state for RAG context injection."""
+    global _current_agent_state
+    _current_agent_state = agent_state
+
+
+def get_current_agent_state() -> Optional[Any]:
+    """Get the current agent state."""
+    return _current_agent_state
+
 
 class ToolTimeoutError(ToolException):
     """Raised when tool execution exceeds timeout"""
@@ -222,6 +236,66 @@ def create_tool_middleware(
     else:
         tool.func = wrapped_sync_func
         logger.debug(f"[TOOL MIDDLEWARE] {tool_name}: Applied sync middleware (no timeout)")
+
+    return tool
+
+
+def inject_rag_context_to_task_tool(tool: BaseTool) -> BaseTool:
+    """
+    Wrap a task tool to automatically inject RAG context as a parameter.
+    RAG context is retrieved from the current agent state at runtime.
+
+    Args:
+        tool: The task tool to wrap
+
+    Returns:
+        Wrapped tool with RAG context injection
+    """
+    tool_name = tool.name
+    original_func = tool.func
+
+    def wrapped_with_rag_context(*args, **kwargs) -> str:
+        """Wrapper that injects RAG context from current agent_state."""
+        # Get RAG context from current agent state at call time
+        current_state = get_current_agent_state()
+        rag_context = current_state.get("rag_context", "") if current_state else ""
+
+        # Inject as rag_documents parameter
+        kwargs["rag_documents"] = rag_context
+
+        logger.debug(
+            f"[RAG INJECTION] {tool_name}: Injected {len(rag_context)} chars of RAG context"
+        )
+
+        # Call original function with RAG context
+        return original_func(*args, **kwargs)
+
+    async def wrapped_with_rag_context_async(*args, **kwargs) -> str:
+        """Async wrapper that injects RAG context from current agent_state."""
+        # Get RAG context from current agent state at call time
+        current_state = get_current_agent_state()
+        rag_context = current_state.get("rag_context", "") if current_state else ""
+
+        # Inject as rag_documents parameter
+        kwargs["rag_documents"] = rag_context
+
+        logger.debug(
+            f"[RAG INJECTION] {tool_name}: Injected {len(rag_context)} chars of RAG context"
+        )
+
+        # Call original function with RAG context
+        if asyncio.iscoroutinefunction(original_func):
+            return await original_func(*args, **kwargs)
+        else:
+            return original_func(*args, **kwargs)
+
+    # Replace function based on whether it's async or sync
+    if asyncio.iscoroutinefunction(original_func):
+        tool.func = wrapped_with_rag_context_async
+        logger.debug(f"[RAG INJECTION] {tool_name}: Applied async RAG context injection")
+    else:
+        tool.func = wrapped_with_rag_context
+        logger.debug(f"[RAG INJECTION] {tool_name}: Applied sync RAG context injection")
 
     return tool
 
