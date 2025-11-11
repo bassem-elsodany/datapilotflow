@@ -1162,105 +1162,10 @@ export default function ConversationWindow() {
           }));
           break;
 
+        // DEPRECATED: supervisor_progress is now replaced with workflow_progress
+        // All supervisor progress events now use 'workflow_progress' type and are routed through handleSupervisorWorkflowProgress
         case 'supervisor_progress':
-          // Handle ALL supervisor progress events (intent_detection, intent_detected, rag_agent_executing, task_agent_executing, response_generation)
-          const supervisorStage = data?.stage || stage;
-          console.log(`🔄 [SUPERVISOR EVENT] stage=${supervisorStage}, type=${type}`, data);
-
-          setWorkflowState(prev => {
-            const newCompleted = [...prev.completedStages];
-            const newStageDetails = { ...prev.stageDetails };
-
-            // Extract intent from data if available
-            const detectedIntent = data?.data?.intent || prev.intent;
-
-            // Handle COMPLETE events - these mark a stage as done and move to next
-            if (supervisorStage.endsWith('_complete')) {
-              const completedStage = supervisorStage.replace('_complete', '');
-
-              // Store detailed data for the completed stage
-              newStageDetails[completedStage] = {
-                message: data?.message || '',
-                data: data?.data || {},
-                timestamp: new Date().toISOString(),
-                execution_time_ms: data?.execution_time_ms || 0,
-              };
-              console.log(`✅ ${completedStage} COMPLETED, stored details:`, newStageDetails[completedStage]);
-
-              // Mark the stage as completed
-              if (!newCompleted.includes(completedStage)) {
-                newCompleted.push(completedStage);
-              }
-
-              // Determine NEXT active stage based on what just completed
-              let nextActiveStage = null;
-
-              if (completedStage === 'supervisor_init') {
-                nextActiveStage = 'intent_detection';
-              } else if (completedStage === 'intent_detection') {
-                // Move to RAG or Task based on intent
-                if (detectedIntent === 'rag_only' || detectedIntent === 'rag_then_task') {
-                  nextActiveStage = 'rag_agent_executing';
-                } else if (detectedIntent === 'task_only') {
-                  nextActiveStage = 'task_agent_executing';
-                } else {
-                  nextActiveStage = 'rag_agent_executing'; // Default to RAG
-                }
-              } else if (completedStage === 'rag_agent_executing') {
-                // Move to Task or Response Generation based on intent
-                if (detectedIntent === 'rag_then_task') {
-                  nextActiveStage = 'task_agent_executing';
-                } else {
-                  nextActiveStage = 'response_generation';
-                }
-              } else if (completedStage === 'task_agent_executing') {
-                nextActiveStage = 'response_generation';
-              } else if (completedStage === 'response_generation') {
-                nextActiveStage = 'completed';
-              } else {
-                nextActiveStage = completedStage; // Stay on current if unknown
-              }
-
-              console.log(`✅ ${completedStage} COMPLETED → moving to ${nextActiveStage}`);
-
-              // Capture enhanced queries if this is query_enhancement_complete
-              let updateState: any = {
-                ...prev,
-                currentStage: nextActiveStage,
-                completedStages: newCompleted,
-                intent: detectedIntent,
-                stageDetails: newStageDetails,
-              };
-
-              // Capture from query_enhancement_complete event
-              if (completedStage === 'query_enhancement' && data?.data?.query_variants) {
-                updateState.enhancedQueries = data.data.query_variants;
-                updateState.strategy = data.data.strategy || prev.strategy;
-                console.log(`✨ Enhanced queries captured from query_enhancement_complete:`, data.data.query_variants);
-              }
-
-              // Also capture from rag_agent_executing_complete event (for supervisor mode)
-              if (completedStage === 'rag_agent_executing' && data?.data?.query_variants) {
-                updateState.enhancedQueries = data.data.query_variants;
-                updateState.strategy = data.data.strategy_used || prev.strategy;
-                console.log(`✨ Enhanced queries captured from rag_agent_executing_complete:`, data.data.query_variants);
-              }
-
-              return updateState;
-            } else {
-              // For START events (e.g. 'intent_detection', 'rag_agent_executing')
-              // These directly become the current active stage
-              console.log(`🟢 ${supervisorStage} STARTED`);
-
-              return {
-                ...prev,
-                currentStage: supervisorStage,
-                completedStages: newCompleted,
-                intent: detectedIntent,
-                stageDetails: newStageDetails,
-              };
-            }
-          });
+          console.warn('⚠️ Deprecated supervisor_progress event received - should be workflow_progress');
           break;
 
         case 'completed':
