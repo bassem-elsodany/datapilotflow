@@ -1137,13 +1137,20 @@ export default function ConversationWindow() {
 
         case 'workflow_progress': {
           // Route to appropriate handler based on mode
+          console.log('📡 [WORKFLOW_PROGRESS] Event received:', {
+            stage: data?.stage,
+            message: data?.message,
+            enableKnowledgeAssistant,
+            messageMode
+          });
+
           if (enableKnowledgeAssistant) {
             // Supervisor mode - use supervisor handler
-            console.log('🤖 Routing to SUPERVISOR workflow handler');
+            console.log('🤖 Routing to SUPERVISOR workflow handler for stage:', data?.stage);
             handleSupervisorWorkflowProgress(data, workflowState, setWorkflowState);
           } else {
             // RAG mode - use RAG handler
-            console.log('🎭 Routing to RAG workflow handler');
+            console.log('🎭 Routing to RAG workflow handler for stage:', data?.stage);
             handleRAGWorkflowProgress(data, workflowState, setWorkflowState);
           }
           break;
