@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from typing import Annotated, Any, AsyncGenerator, Dict, List, Optional, TypedDict
 
 import litellm
-from langchain.agents import create_agent, wrap_tool_call
+from langchain.agents import create_agent
 from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.messages import AIMessage, ToolMessage
 from loguru import logger
@@ -57,65 +57,6 @@ class SupervisorAgentState(TypedDict, total=False):
     tools_used: List[str]  # Track which tools have been called
     task_tools_executed: List[str]  # Task tools that have run
     error_messages: List[str]  # Any errors encountered
-
-
-def _create_tool_error_handler(tool_name: str):
-    """
-    Create a tool error handler that returns graceful error messages.
-
-    Instead of crashing the agent, returns ToolMessage with error details
-    so the agent can recover or try alternative approaches.
-
-    Args:
-        tool_name: Name of the tool being wrapped
-
-    Returns:
-        Error handler function for wrap_tool_call
-    """
-    def handle_error(error: Exception) -> str:
-        """Handle tool execution errors gracefully."""
-        error_msg = (
-            f"Tool '{tool_name}' execution failed: {str(error)}. "
-            f"Please try reformulating your request or check the tool parameters."
-        )
-        logger.error(f"[TOOL ERROR] {tool_name}: {error_msg}")
-        logger.error(f"[TOOL ERROR] Traceback: {traceback.format_exc()}")
-        return error_msg
-
-    return handle_error
-
-
-def _wrap_tools_with_error_handling(tools: List[Any]) -> List[Any]:
-    """
-    Wrap all tools with error handling middleware.
-
-    This ensures that tool failures return graceful error messages
-    instead of crashing the agent or the entire workflow.
-
-    Args:
-        tools: List of LangChain tools
-
-    Returns:
-        List of tools wrapped with error handling
-    """
-    wrapped_tools = []
-
-    for tool in tools:
-        try:
-            # Create error handler specific to this tool
-            error_handler = _create_tool_error_handler(tool.name)
-
-            # Wrap the tool with error handling
-            wrapped_tool = wrap_tool_call(tool, error_handler=error_handler)
-            wrapped_tools.append(wrapped_tool)
-
-            logger.debug(f"Wrapped tool '{tool.name}' with error handling")
-        except Exception as e:
-            # If wrapping fails, use the original tool but log the issue
-            logger.warning(f"Failed to wrap tool '{tool.name}' with error handling: {e}")
-            wrapped_tools.append(tool)
-
-    return wrapped_tools
 
 
 def _format_rag_documents_as_context(documents: List[Dict[str, Any]]) -> str:
@@ -387,26 +328,16 @@ async def get_response_stream_supervisor(
                 f"No dynamic tools configured, using {len(task_tools)} default hardcoded tools"
             )
 
-        # Combine RAG tool + task tools (without RAG context initially)
+        # Combine RAG tool + task tools
         all_tools = [retrieve_knowledge_tool] + task_tools
 
         logger.info(
             f"Created {len(all_tools)} tools total: 1 RAG tool + {len(task_tools)} task tools"
         )
 
-        # Wrap all tools with error handling middleware (LangChain best practice)
-        # This ensures graceful error handling instead of agent crashes
-        logger.info("Applying error handling wrappers to tools")
-        try:
-            wrapped_tools = _wrap_tools_with_error_handling(all_tools)
-            logger.info(f"✅ Wrapped {len(wrapped_tools)} tools with error handling")
-        except Exception as e:
-            logger.warning(f"Failed to wrap tools with error handling, using originals: {e}")
-            wrapped_tools = all_tools
-
-        # Store original task tools for reference (RAG context will be injected dynamically)
+        # Store original task tools for reference
         response_state["original_task_tools"] = task_tools
-        response_state["all_tools"] = wrapped_tools
+        response_state["all_tools"] = all_tools
 
         # Build system prompt for main agent
         system_prompt_parts = []
@@ -428,7 +359,7 @@ async def get_response_stream_supervisor(
 
         # Create main ReAct agent with Tool Calling pattern (LangChain recommended)
         logger.info("Creating main ReAct agent with Tool Calling pattern")
-        logger.info(f"Passing {len(wrapped_tools)} tools to agent: {[t.name for t in wrapped_tools]}")
+        logger.info(f"Passing {len(all_tools)} tools to agent: {[t.name for t in all_tools]}")
         logger.debug(f"System prompt length: {len(system_prompt)} characters")
         logger.debug(f"System prompt first 500 chars: {system_prompt[:500]}...")
 
@@ -446,7 +377,7 @@ async def get_response_stream_supervisor(
 
         main_agent = create_agent(
             model=llm_client,
-            tools=wrapped_tools,
+            tools=all_tools,
             system_prompt=system_prompt,
         )
 
