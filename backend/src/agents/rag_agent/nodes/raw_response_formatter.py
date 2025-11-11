@@ -57,14 +57,14 @@ def raw_response_formatter(state: WorkflowState) -> WorkflowState:
 
         # Add header with disclaimer
         disclaimer = (
-            "# Raw Results Mode\n\n"
+            "# Raw Results Mode\n"
             "> Showing unmodified documents from knowledge base.\n"
-            "> These are the exact chunks retrieved without AI summarization or modification.\n\n"
+            "> These are the exact chunks retrieved without AI summarization or modification.\n"
         )
         response_parts.append(disclaimer)
 
         # Add summary
-        response_parts.append(f"**Found {len(relevant_docs)} relevant document(s):**\n")
+        response_parts.append(f"\n**Found {len(relevant_docs)} relevant document(s):**\n")
 
         # Store structured documents for task tools
         structured_docs = []
@@ -106,7 +106,7 @@ def raw_response_formatter(state: WorkflowState) -> WorkflowState:
             structured_docs.append(structured_doc)
 
             # Format document header with metadata
-            doc_header = f"\n---\n\n## Document {i}"
+            doc_header = f"\n---\n## Document {i}"
             if doc_chunk_id:
                 doc_header += f" | `{doc_chunk_id}`"
             doc_header += "\n"
@@ -126,15 +126,12 @@ def raw_response_formatter(state: WorkflowState) -> WorkflowState:
 
             if metadata_parts:
                 response_parts.append("\n".join(metadata_parts))
-                response_parts.append("\n")
+                response_parts.append("\n\n")
 
-            # Detect and format code blocks
-            if "```" in doc_text or any(lang in doc_text.lower() for lang in ["import ", "function ", "class ", "def ", "var ", "const "]):
-                # Likely contains code, keep as-is (already has code markers)
-                response_parts.append(f"{doc_text}\n")
-            else:
-                # Regular text content
-                response_parts.append(f"{doc_text}\n")
+            # Add document content (preserve newlines in content)
+            response_parts.append(doc_text)
+            if doc_text and not doc_text.endswith("\n"):
+                response_parts.append("\n")
 
         # Join all parts
         raw_response = "".join(response_parts)
