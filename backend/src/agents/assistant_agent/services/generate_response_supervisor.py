@@ -458,6 +458,11 @@ async def get_response_stream_supervisor(
 
         # Stream events from main agent with explicit error tracking
         try:
+            # Stream agent execution with both event-based and value-based tracking
+            # astream_events: Low-level event tracking (tool calls, etc.)
+            # stream: High-level state tracking (agent progress)
+            logger.info("Starting agent execution with dual streaming (events + values)")
+
             async for event in main_agent.astream_events(
                 {"messages": [{"role": "user", "content": query}]},
                 config=config_for_stream,
@@ -521,6 +526,19 @@ async def get_response_stream_supervisor(
                                             logger.info(
                                                 f"✅ RAG context stored in agent_state: {len(retrieved_rag_documents)} documents ({len(rag_context_str)} chars)"
                                             )
+
+                                            # Emit RAG documents extracted progress event
+                                            yield {
+                                                "type": "supervisor_progress",
+                                                "stage": "rag_documents_extracted",
+                                                "message": f"RAG Complete: Extracted {len(retrieved_rag_documents)} documents",
+                                                "execution_time_ms": (time.time() - start_time) * 1000,
+                                                "agent_state": {
+                                                    "rag_documents_count": len(retrieved_rag_documents),
+                                                    "rag_context_size": len(rag_context_str),
+                                                    "tools_used": agent_state.get("tools_used", []),
+                                                },
+                                            }
                                         else:
                                             logger.debug(f"RAG response missing 'documents' key. Keys: {rag_response.keys() if isinstance(rag_response, dict) else 'N/A'}")
                                     except (json.JSONDecodeError, TypeError) as parse_error:
@@ -552,8 +570,11 @@ async def get_response_stream_supervisor(
                                             "type": "supervisor_progress",
                                             "stage": "rag_agent_executing",
                                             "message": f"{rag_agent_name.replace('_', ' ').title()}: Retrieving and ranking documents",
-                                            "execution_time_ms": (time.time() - start_time)
-                                            * 1000,
+                                            "execution_time_ms": (time.time() - start_time) * 1000,
+                                            "agent_state": {
+                                                "tools_used": agent_state.get("tools_used", []),
+                                                "rag_context_size": agent_state.get("rag_context_size", 0),
+                                            },
                                         }
 
                                     # Emit task tool execution event
@@ -572,8 +593,13 @@ async def get_response_stream_supervisor(
                                             "type": "supervisor_progress",
                                             "stage": "task_agent_executing",
                                             "message": f"Task Tool: Executing {tool_name}",
-                                            "execution_time_ms": (time.time() - start_time)
-                                            * 1000,
+                                            "execution_time_ms": (time.time() - start_time) * 1000,
+                                            "agent_state": {
+                                                "tools_used": agent_state.get("tools_used", []),
+                                                "task_tools_executed": agent_state.get("task_tools_executed", []),
+                                                "rag_context_size": agent_state.get("rag_context_size", 0),
+                                                "rag_documents_count": len(agent_state.get("rag_documents", [])),
+                                            },
                                         }
                 except Exception as e:
                     # Tool call tracking error - log but continue
