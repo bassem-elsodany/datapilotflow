@@ -25,7 +25,14 @@ export function useSupervisorWorkflowProgress() {
     const supervisorStage = data?.stage || '';
     const isCompleteEvent = supervisorStage.endsWith('_complete');
 
-    console.log(`🤖 [SUPERVISOR WORKFLOW] ${isCompleteEvent ? '✅ COMPLETE' : '▶️ START'} - ${supervisorStage}`);
+    console.log(`🤖 [SUPERVISOR WORKFLOW] EVENT RECEIVED:`, {
+      stage: supervisorStage,
+      type: isCompleteEvent ? '✅ COMPLETE' : '▶️ START',
+      message: data?.message,
+      hasData: !!data?.data,
+      currentStage: currentWorkflowState?.currentStage,
+      completedStages: currentWorkflowState?.completedStages
+    });
 
     if (isCompleteEvent) {
       // COMPLETE EVENT: Store data and schedule delayed completion
