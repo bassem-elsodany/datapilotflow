@@ -393,6 +393,7 @@ async def get_response_stream_supervisor(
         final_messages = []
         tools_used = []
         rag_tool_called = False
+        retrieved_rag_documents = None  # Track RAG results for injection into task tools
 
         # Stream events from main agent with explicit error tracking
         try:
@@ -458,6 +459,40 @@ async def get_response_stream_supervisor(
                             logger.info(
                                 f"Main agent completed with {len(final_messages)} messages"
                             )
+
+                            # Extract RAG documents from message history for task tools
+                            try:
+                                for msg in final_messages:
+                                    if isinstance(msg, dict) and msg.get("role") == "tool":
+                                        tool_name = msg.get("name", "")
+                                        if tool_name == rag_agent_name:
+                                            # Parse RAG response as JSON
+                                            import json
+                                            content = msg.get("content", "")
+                                            if content:
+                                                try:
+                                                    rag_response = json.loads(content)
+                                                    if isinstance(rag_response, dict) and "documents" in rag_response:
+                                                        retrieved_rag_documents = rag_response.get("documents", [])
+                                                        logger.info(
+                                                            f"Extracted {len(retrieved_rag_documents)} documents from RAG response"
+                                                        )
+                                                except json.JSONDecodeError:
+                                                    logger.warning("Could not parse RAG response as JSON")
+                                    elif hasattr(msg, "type") and msg.type == "tool":
+                                        # Handle langchain message objects
+                                        if getattr(msg, "name", "") == rag_agent_name:
+                                            try:
+                                                import json
+                                                content = getattr(msg, "content", "")
+                                                if content:
+                                                    rag_response = json.loads(content)
+                                                    if isinstance(rag_response, dict) and "documents" in rag_response:
+                                                        retrieved_rag_documents = rag_response.get("documents", [])
+                                            except (json.JSONDecodeError, AttributeError):
+                                                pass
+                            except Exception as e:
+                                logger.warning(f"Error extracting RAG documents: {e}")
                     except Exception as e:
                         error_msg = f"Error capturing final output: {str(e)}"
                         logger.error(error_msg)

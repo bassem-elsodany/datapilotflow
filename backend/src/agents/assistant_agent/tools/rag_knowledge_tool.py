@@ -181,40 +181,44 @@ def create_rag_knowledge_tool(
                 f"RAG agent completed: {rag_execution_state['relevant_docs']}/{rag_execution_state['total_docs']} relevant docs"
             )
 
-            # Format response for the main agent
+            # Format response for the main agent with both human-readable and machine-parseable content
+            import json
+
             source_urls = []
             for doc in retrieved_documents:
                 if doc.get("source_url") and doc["source_url"] not in source_urls:
                     source_urls.append(doc["source_url"])
 
-            # Extract raw document content for passing to other tools (e.g., flow generator)
-            raw_context_parts = []
-            for i, doc in enumerate(retrieved_documents[:5], 1):  # Top 5 docs
-                content = doc.get("content", "")
-                if content:
-                    raw_context_parts.append(
-                        f"[Document {i}]\n{content[:1000]}"
-                    )  # First 1000 chars
+            # Build structured document list for task tools to consume
+            documents_for_tools = []
+            for i, doc in enumerate(retrieved_documents[:10], 1):  # Top 10 docs
+                documents_for_tools.append({
+                    "id": doc.get("id") or doc.get("chunk_id", f"doc_{i}"),
+                    "content": doc.get("text") or doc.get("content", ""),
+                    "source": doc.get("source_url", ""),
+                    "metadata": {k: v for k, v in doc.items()
+                                if k not in ["text", "content", "id", "source_url", "chunk_id"]},
+                })
 
-            raw_context = (
-                "\n\n".join(raw_context_parts)
-                if raw_context_parts
-                else "No document content available"
+            # Format response as JSON for machine parsing + human-readable text
+            tool_response_data = {
+                "type": "rag_retrieval_result",
+                "answer": final_answer,
+                "documents": documents_for_tools,
+                "metadata": {
+                    "total_documents": rag_execution_state['total_docs'],
+                    "relevant_documents": rag_execution_state['relevant_docs'],
+                    "source_count": len(source_urls),
+                    "sources": source_urls[:10],
+                }
+            }
+
+            # Return as JSON string so agent can parse it
+            tool_response = json.dumps(tool_response_data, indent=2)
+
+            logger.info(
+                f"RAG tool returning {len(documents_for_tools)} documents in structured JSON format"
             )
-
-            tool_response = f"""**Retrieved Knowledge:**
-{final_answer}
-
-**Sources:** {len(source_urls)} unique sources, {rag_execution_state['total_docs']} total documents, {rag_execution_state['relevant_docs']} relevant.
-**Source URLs:** {', '.join(source_urls[:5])}{'...' if len(source_urls) > 5 else ''}
-
-**Raw Documentation Context (for code/flow generation):**
-{raw_context}
-
-**Important Instructions:**
-- Use this retrieved knowledge as the foundation for your response
-- If generating code/flows (MuleSoft, Python, etc.), pass the "Raw Documentation Context" to the generation tool's retrieved_context parameter
-- This ensures generated code follows documented best practices and patterns"""
 
             return tool_response
 
