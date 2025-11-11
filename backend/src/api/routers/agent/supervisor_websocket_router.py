@@ -366,6 +366,7 @@ async def agent_query_supervisor_websocket(
 
                         if chunk_type in [
                             "supervisor_progress",
+                            "workflow_progress",  # NEW: Added workflow_progress which supervisor now emits
                             "supervisor_started",
                             "workflow_complete",
                             "workflow_started",
