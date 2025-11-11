@@ -102,8 +102,11 @@ export function KnowledgeAssistantModal({
   };
 
   const renderStageDetails = (stageId: string) => {
-    const details = metadata?.stageDetails?.[stageId];
+    // Try both stageId and stageId_complete format (since backend stores as stageId_complete)
+    const details = metadata?.stageDetails?.[stageId] || metadata?.stageDetails?.[`${stageId}_complete`];
     if (!details || !details.data) return null;
+
+    console.log(`📊 [RENDER STAGE DETAILS] stageId=${stageId}, details found:`, details);
 
     const { data } = details;
 

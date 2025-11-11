@@ -112,8 +112,11 @@ export function SupervisorModePipelineModal({
 
   // Helper function to render detailed information for each stage
   const renderStageDetails = (stageId: string) => {
-    const details = metadata?.stageDetails?.[stageId];
+    // Try both stageId and stageId_complete format (since backend stores as stageId_complete)
+    const details = metadata?.stageDetails?.[stageId] || metadata?.stageDetails?.[`${stageId}_complete`];
     if (!details || !details.data) return null;
+
+    console.log(`📊 [RENDER STAGE DETAILS] stageId=${stageId}, details found:`, details);
 
     const { data, message } = details;
 
@@ -940,6 +943,30 @@ export function SupervisorModePipelineModal({
               )}
             </Stack>
           </Card>
+        )}
+
+        {/* Display Details for Completed Stages - METADATA SECTION */}
+        {completedStages.length > 0 && (
+          <Box mt="lg">
+            <Divider label={
+              <Badge size="sm" variant="filled" color="teal">
+                Stage Details & Sources
+              </Badge>
+            } labelPosition="center" />
+
+            {completedStages.map((stageId) => {
+              const stageDetails = metadata.stageDetails?.[stageId];
+              const renderContent = renderStageDetails(stageId);
+
+              if (!renderContent && !stageDetails) return null;
+
+              return (
+                <Box key={stageId} mt="sm">
+                  {renderContent && renderContent}
+                </Box>
+              );
+            })}
+          </Box>
         )}
       </Stack>
 
