@@ -5,6 +5,37 @@ This module implements the OFFICIAL LangChain multi-agent pattern:
 https://docs.langchain.com/oss/python/langchain/multi-agent
 
 The RAG agent is wrapped as a tool that the main ReAct agent can invoke.
+
+**ORCHESTRATION FLOW & UI PROGRESS STAGES:**
+
+Supervisor Orchestration → Progress Stages Sent to UI:
+
+1. supervisor_init_complete
+   └─ UI Display: "Initializing Multi-Agent System"
+
+2. agent_execution_starting
+   └─ UI Display: "Analyzing Query & Planning"
+
+3. rag_agent_executing
+   └─ UI Display: "Retrieving Knowledge Base Documents"
+
+4. rag_documents_extracted
+   └─ UI Display: "Processing Retrieved Documents"
+
+5. task_agent_executing (if generation tools needed)
+   └─ UI Display: "Generating Response with Tools"
+
+6. response_generation_complete
+   └─ UI Display: "Response Generated"
+
+7. response_streaming_started
+   └─ UI Display: "Streaming Response"
+
+8. workflow_complete
+   └─ UI Display: "Complete"
+
+**IMPORTANT: Frontend should map these stage names to UI progress nodes.
+DO NOT show "Intent Detection" - that is from old architecture.**
 """
 
 import asyncio
