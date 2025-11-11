@@ -22,7 +22,6 @@ from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from loguru import logger
 from opik.integrations.langchain import OpikTracer
-from opik.integrations.litellm import opik_tracker
 
 # Import compatibility shim for opik with LangChain 1.0+ (MUST be first)
 import src.compat_langchain_load  # noqa: F401
@@ -57,6 +56,10 @@ from src.services.model_provider.model_provider_service import (
 
 # Enable dropping unsupported params for different LLM providers
 litellm.drop_params = True
+
+# Enable Opik integration for cost and token tracking
+# This will track all LLM invocations automatically when OPIK_API_KEY is set
+litellm.callbacks = ["opik"]
 
 
 def _format_rag_documents_as_context(documents: List[Dict[str, Any]]) -> str:
@@ -212,6 +215,7 @@ async def get_response_stream_supervisor(
         # Create LLM client
         try:
             model_string = f"{provider.provider_type}/{llm_model_name}"
+
             llm_client = ChatLiteLLM(
                 model=model_string,
                 api_key=provider.api_key,
@@ -220,7 +224,6 @@ async def get_response_stream_supervisor(
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
-
             response_state["llm_client"] = llm_client  # Track for cleanup
             logger.info(f"Created LLM client: {model_string}")
         except Exception as e:
@@ -436,6 +439,7 @@ async def get_response_stream_supervisor(
             opik_tracer = OpikTracer(
                 graph=main_agent.get_graph(xray=True),
                 tags=trace_tags,
+                project_name=settings.COMET_PROJECT,
             )
 
             # Add tracer to config callbacks
@@ -715,39 +719,44 @@ async def get_response_stream_supervisor(
                             # Extract RAG documents from message history for task tools
                             try:
                                 for msg in final_messages:
-                                    if (
-                                        isinstance(msg, dict)
-                                        and msg.get("role") == "tool"
-                                    ):
-                                        tool_name = msg.get("name", "")
-                                        if tool_name == rag_agent_name:
-                                            # Parse RAG response as JSON
-                                            content = msg.get("content", "")
-                                            if content:
-                                                try:
-                                                    rag_response = json.loads(content)
-                                                    if (
-                                                        isinstance(rag_response, dict)
-                                                        and "documents" in rag_response
-                                                    ):
-                                                        retrieved_rag_documents = (
-                                                            rag_response.get(
-                                                                "documents", []
-                                                            )
-                                                        )
-                                                        logger.info(
-                                                            f"Extracted {len(retrieved_rag_documents)} documents from RAG response"
-                                                        )
-                                                except json.JSONDecodeError:
-                                                    logger.warning(
-                                                        "Could not parse RAG response as JSON"
-                                                    )
-                                    elif hasattr(msg, "type") and msg.type == "tool":
-                                        # Handle langchain message objects
-                                        if getattr(msg, "name", "") == rag_agent_name:
-                                            try:
-                                                content = getattr(msg, "content", "")
+                                    if isinstance(msg, dict):
+                                        # Handle dict messages
+                                        if msg.get("role") == "tool":
+                                            tool_name = msg.get("name", "")
+                                            if tool_name == rag_agent_name:
+                                                # Parse RAG response as JSON
+                                                content = msg.get("content", "")
                                                 if content:
+                                                    try:
+                                                        rag_response = json.loads(
+                                                            content
+                                                        )
+                                                        if (
+                                                            isinstance(
+                                                                rag_response, dict
+                                                            )
+                                                            and "documents"
+                                                            in rag_response
+                                                        ):
+                                                            retrieved_rag_documents = (
+                                                                rag_response.get(
+                                                                    "documents", []
+                                                                )
+                                                            )
+                                                            logger.info(
+                                                                f"Extracted {len(retrieved_rag_documents)} documents from RAG response"
+                                                            )
+                                                    except json.JSONDecodeError:
+                                                        logger.warning(
+                                                            "Could not parse RAG response as JSON"
+                                                        )
+                                    elif isinstance(msg, ToolMessage):
+                                        # Handle langchain ToolMessage objects
+                                        if msg.name == rag_agent_name:
+                                            try:
+                                                content = msg.content
+                                                # ToolMessage.content can be str or list, we need str for JSON parsing
+                                                if isinstance(content, str) and content:
                                                     rag_response = json.loads(content)
                                                     if (
                                                         isinstance(rag_response, dict)
@@ -788,14 +797,11 @@ async def get_response_stream_supervisor(
             if final_messages:
                 # Get last AI message content
                 for msg in reversed(final_messages):
-                    if isinstance(msg, AIMessage) or (
-                        isinstance(msg, dict) and msg.get("role") == "assistant"
-                    ):
-                        final_response = (
-                            msg.content
-                            if hasattr(msg, "content")
-                            else msg.get("content", "")
-                        )
+                    if isinstance(msg, AIMessage):
+                        final_response = msg.content
+                        break
+                    elif isinstance(msg, dict) and msg.get("role") == "assistant":
+                        final_response = msg.get("content", "")
                         break
 
             logger.info(f"Final response length: {len(final_response)}")
