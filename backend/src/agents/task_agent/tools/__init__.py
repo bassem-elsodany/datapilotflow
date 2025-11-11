@@ -10,6 +10,23 @@ from langchain_core.tools import tool
 from loguru import logger
 
 
+# Lazy import for LLM client to avoid circular imports
+_llm_client = None
+
+
+def get_llm_client():
+    """Get the LLM client for tool execution (lazy import to avoid circular deps)."""
+    global _llm_client
+    if _llm_client is None:
+        try:
+            from src.agents.assistant_agent.services.get_llm_client import get_llm_client as get_client
+            _llm_client = get_client()
+        except Exception as e:
+            logger.warning(f"Could not import LLM client for tools: {e}")
+            _llm_client = None
+    return _llm_client
+
+
 @tool
 def code_explainer(code_snippet: str, focus_area: str = "") -> str:
     """
@@ -140,16 +157,8 @@ def mulesoft_flow_generator(
     - Error handling
     - Flow logic and routing
 
-    IMPORTANT USAGE PATTERN:
-    1. First, retrieve general knowledge about the flow type from the knowledge base
-    2. Pass that context to this tool via retrieved_context parameter
-    3. If this tool indicates it needs MORE SPECIFIC information, retrieve additional context and call again
-    4. This tool will guide you on what additional context is needed
-
-    ITERATIVE REFINEMENT:
-    - If context is insufficient, this tool will return a message requesting specific additional information
-    - You (the main agent) should then retrieve that specific information and call this tool again
-    - This allows for precise, documentation-grounded flow generation
+    CRITICAL: This tool uses retrieved documentation to generate accurate, production-ready flows.
+    The RAG context is ESSENTIAL for generating flows that match your specific requirements.
 
     Args:
         flow_description: Description of the MuleSoft flow to generate (e.g., "HTTP listener with APIKit")
@@ -157,58 +166,91 @@ def mulesoft_flow_generator(
         requirements: Additional specific requirements or constraints
 
     Returns:
-        Complete MuleSoft flow XML configuration with explanations, OR a request for more specific context
+        Complete MuleSoft flow XML configuration with explanations based on the retrieved documentation
     """
     logger.info(f"Generating MuleSoft flow: {flow_description[:80]}...")
     logger.debug(
         f"Context length: {len(retrieved_context)} chars, Requirements: {requirements[:50] if requirements else 'None'}"
     )
 
-    # Check if we have sufficient context
-    has_sufficient_context = len(retrieved_context) > 200  # Basic check
+    # CRITICAL: The actual flow generation should be done by tool_factory's LLM-based wrapper
+    # This function is called by the LLM with RAG context already injected
+    # The LLM will use the retrieved_context parameter (injected as rag_documents)
+    # to generate flows that match the documentation
 
-    # Identify what specific information might be needed
-    flow_lower = flow_description.lower()
-    needs_apikit = "apikit" in flow_lower or "api kit" in flow_lower
-    needs_database = (
-        "database" in flow_lower or "db" in flow_lower or "sql" in flow_lower
-    )
-    needs_salesforce = "salesforce" in flow_lower or "sfdc" in flow_lower
-    needs_http = (
-        "http" in flow_lower or "rest" in flow_lower or "listener" in flow_lower
-    )
+    # If no context provided, inform the agent to retrieve context first
+    if not retrieved_context or len(retrieved_context) < 100:
+        return f"""⚠️ INSUFFICIENT CONTEXT
 
-    # If context is insufficient and we can identify specific needs, request more
-    if not has_sufficient_context and (
-        needs_apikit or needs_database or needs_salesforce
-    ):
-        missing_topics = []
-        if needs_apikit:
-            missing_topics.append("APIKit configuration and RAML/OAS setup")
-        if needs_database:
-            missing_topics.append("Database connector configuration")
-        if needs_salesforce:
-            missing_topics.append("Salesforce connector setup")
+To generate a high-quality MuleSoft flow for: "{flow_description}"
 
-        return f"""⚠️ INSUFFICIENT CONTEXT - Need More Specific Documentation
-
-To generate an accurate MuleSoft flow for: "{flow_description}"
-
-I need more detailed documentation about:
-{chr(10).join(f"  - {topic}" for topic in missing_topics)}
+I need detailed documentation from the knowledge base about:
+- MuleSoft flow architecture and patterns
+- APIKit configuration (if applicable)
+- Connector setup and configuration
+- DataWeave transformation examples
+- Error handling patterns
 
 **Action Required:**
-Please retrieve additional knowledge about these specific topics and call me again with the enriched context.
+Retrieve detailed MuleSoft documentation from the knowledge base matching your flow requirements,
+then call this tool again with the enriched context.
 
-**Example Query to Retrieve:**
-"Detailed documentation on {missing_topics[0]}"
+The retrieved documentation will be used to generate a precise, production-ready flow configuration."""
 
-Once you provide the specific documentation, I'll generate a complete, accurate flow configuration."""
+    # If context is provided, use LLM to generate intelligent response based on context
+    llm = get_llm_client()
+    if llm:
+        # Build prompt for LLM to generate flow using the retrieved context
+        generation_prompt = f"""You are an Advanced MuleSoft Integration Architect powered by Retrieval-Augmented Generation (RAG).
 
-    # Note: This is a structured template generator
-    # In production, this would use the retrieved_context to generate
-    # accurate flows based on actual MuleSoft documentation
+Generate a production-ready MuleSoft integration flow based on the requirements and retrieved documentation below.
 
+**User Request:** {flow_description}
+
+**Requirements:** {requirements if requirements else 'Standard best practices'}
+
+**Retrieved Knowledge Base Documentation:**
+
+{retrieved_context}
+
+---
+
+**Your Task:**
+Using ONLY the retrieved documentation above, generate:
+1. A complete, production-ready MuleSoft flow XML configuration
+2. Explanations of key architectural decisions
+3. Configuration instructions
+4. Testing guidance
+
+**CRITICAL CONSTRAINTS:**
+- Use ONLY the information from the retrieved documentation
+- Do NOT use general training knowledge
+- If information is missing, explicitly state what additional documentation is needed
+- Follow MuleSoft 4.x standards and best practices
+- Include comprehensive error handling
+- Generate complete XML, not templates or stubs
+
+---
+
+Generate the complete MuleSoft configuration now:"""
+
+        try:
+            logger.debug("Invoking LLM for MuleSoft flow generation with RAG context")
+            response = llm.invoke(generation_prompt)
+
+            if hasattr(response, "content"):
+                result = response.content
+            else:
+                result = str(response)
+
+            logger.info(f"MuleSoft flow generation completed | Response: {len(result)} chars")
+            return result
+        except Exception as e:
+            logger.error(f"Error invoking LLM for flow generation: {e}")
+            # Fall back to template if LLM fails
+            pass
+
+    # Fallback if no LLM available
     return f"""
 # MuleSoft Integration Flow: {flow_description}
 

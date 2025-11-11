@@ -59,7 +59,7 @@ litellm.drop_params = True
 
 # Enable Opik integration for cost and token tracking
 # This will track all LLM invocations automatically when OPIK_API_KEY is set
-litellm.callbacks = ["opik"]
+# litellm.callbacks = ["opik"]
 
 
 def _format_rag_documents_as_context(documents: List[Dict[str, Any]]) -> str:

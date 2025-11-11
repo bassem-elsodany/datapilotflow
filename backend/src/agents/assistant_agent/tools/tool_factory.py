@@ -103,19 +103,20 @@ class ToolFactory:
         system_prompt = prompt_config.system_prompt
 
         # Create the tool function dynamically
-        def dynamic_prompt_tool(user_input: str, rag_documents: str = "") -> str:
+        def dynamic_prompt_tool(user_input: str, rag_documents: str = "", retrieved_context: str = "") -> str:
             """Execute prompt-based tool using LLM with RAG documents injected as parameter.
 
             Args:
                 user_input: The user's query or request
                 rag_documents: Formatted RAG documents injected by supervisor as parameter
+                retrieved_context: Alternative parameter name for RAG context (for compatibility)
 
             Returns:
                 Response from LLM based on user input and RAG documents
             """
-            # RAG documents MUST be passed as parameter by supervisor/agent
-            # NO FALLBACK - if empty, tool executes without context
-            final_context = rag_documents
+            # RAG documents can come from either rag_documents or retrieved_context parameter
+            # Prefer rag_documents (injected by middleware), fall back to retrieved_context
+            final_context = rag_documents or retrieved_context
 
             logger.info(
                 f"[PROMPT TOOL] Executing '{tool_name}' | Input: {len(user_input)} chars | RAG Documents: {len(final_context)} chars"
