@@ -543,8 +543,16 @@ export default function ConversationWindow() {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
       setIsConnected(false); // Show connecting state
       await connectWebSocket();
-      // Wait a bit for the connection to be established
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Wait for the connection to be fully established (onopen callback must fire)
+      let waitCount = 0;
+      while (wsRef.current?.readyState !== WebSocket.OPEN && waitCount < 50) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        waitCount++;
+      }
+      if (wsRef.current?.readyState !== WebSocket.OPEN) {
+        console.error('❌ WebSocket did not reach OPEN state after 5 seconds');
+        throw new Error('WebSocket connection timeout');
+      }
     }
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
