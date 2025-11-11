@@ -13,18 +13,29 @@ import time
 import traceback
 import uuid
 from datetime import datetime, timezone
-from typing import Annotated, Any, AsyncGenerator, Dict, List, Optional, TypedDict
+from typing import Annotated, Any, AsyncGenerator, Dict, List, Optional, TypedDict, cast
 
 import litellm
 from langchain.agents import create_agent
 from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.runnables import RunnableConfig
 from loguru import logger
 from opik.integrations.langchain import OpikTracer
 from opik.integrations.litellm import opik_tracker
 
 # Import compatibility shim for opik with LangChain 1.0+ (MUST be first)
 import src.compat_langchain_load  # noqa: F401
+from src.agents.assistant_agent.services.agent_state import (
+    SupervisorAgentState,
+    create_initial_state,
+    extract_execution_metrics,
+)
+from src.agents.assistant_agent.services.error_retry_middleware import (
+    RetryConfig,
+    create_circuit_breakers,
+    execute_with_retry,
+)
 from src.agents.assistant_agent.tools.rag_knowledge_tool import (
     create_rag_knowledge_tool,
 )
@@ -32,16 +43,6 @@ from src.agents.assistant_agent.tools.tool_middleware import (
     apply_middleware_to_tools,
     inject_rag_context_to_task_tool,
     set_current_agent_state,
-)
-from src.agents.assistant_agent.services.error_retry_middleware import (
-    execute_with_retry,
-    RetryConfig,
-    create_circuit_breakers,
-)
-from src.agents.assistant_agent.services.agent_state import (
-    SupervisorAgentState,
-    create_initial_state,
-    extract_execution_metrics,
 )
 from src.agents.common.prompts import MAIN_AGENT_SYSTEM_PROMPT
 from src.agents.task_agent.tools import get_task_agent_tools
@@ -215,10 +216,11 @@ async def get_response_stream_supervisor(
                 model=model_string,
                 api_key=provider.api_key,
                 api_base=provider.endpoint if provider.endpoint else None,
-                timeout=provider.timeout if provider.timeout else 60,
+                timeout=provider.timeout if provider.timeout else 60,  # type: ignore[call-arg]
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
+
             response_state["llm_client"] = llm_client  # Track for cleanup
             logger.info(f"Created LLM client: {model_string}")
         except Exception as e:
@@ -233,28 +235,13 @@ async def get_response_stream_supervisor(
         workflow_config["llm_client"] = llm_client
 
         # Retrieve selected system prompt if provided
+        # TODO: Implement get_system_prompt method in ConversationHistoryService
+        # For now, system prompt selection is not implemented - always use default
         selected_system_prompt = None
         if selected_system_prompt_id:
-            try:
-                selected_system_prompt = conversation_history_service.get_system_prompt(
-                    conversation_id=conversation_id,
-                    prompt_id=selected_system_prompt_id,
-                    user_id=user_id,
-                )
-                if selected_system_prompt:
-                    logger.info(f"Using system prompt: '{selected_system_prompt.name}'")
-                else:
-                    # System prompt not found - log and continue (fallback to default)
-                    logger.warning(
-                        f"System prompt not found: {selected_system_prompt_id} - will use default prompt"
-                    )
-                    # Do NOT raise error here - fallback to default is acceptable
-            except Exception as e:
-                # System prompt retrieval failed - log and continue
-                error_msg = f"Error retrieving system prompt (will use default): {str(e)}"
-                logger.error(error_msg)
-                logger.error(f"Traceback: {traceback.format_exc()}")
-                # Do NOT set error_occurred here - this is not fatal
+            logger.warning(
+                f"System prompt selection requested (ID: {selected_system_prompt_id}) but not yet implemented - using default prompt"
+            )
 
         # Track RAG execution state (shared across tool invocations)
         rag_execution_state = {
@@ -336,7 +323,9 @@ async def get_response_stream_supervisor(
                 wrapped_tool = inject_rag_context_to_task_tool(task_tool)
                 task_tools_with_rag.append(wrapped_tool)
             task_tools = task_tools_with_rag
-            logger.info(f"✅ RAG context injection applied to {len(task_tools)} task tools")
+            logger.info(
+                f"✅ RAG context injection applied to {len(task_tools)} task tools"
+            )
         except Exception as e:
             logger.warning(f"Failed to apply RAG context injection to task tools: {e}")
             # Continue with unwrapped tools
@@ -359,7 +348,9 @@ async def get_response_stream_supervisor(
             )
             logger.info("✅ Tool middleware applied successfully")
         except Exception as e:
-            logger.warning(f"Failed to apply tool middleware: {e}. Using tools without middleware.")
+            logger.warning(
+                f"Failed to apply tool middleware: {e}. Using tools without middleware."
+            )
 
         # Store original task tools for reference
         response_state["original_task_tools"] = task_tools
@@ -389,7 +380,9 @@ async def get_response_stream_supervisor(
 
         # Create main ReAct agent with Tool Calling pattern (LangChain recommended)
         logger.info("Creating main ReAct agent with Tool Calling pattern")
-        logger.info(f"Passing {len(all_tools)} tools to agent: {[t.name for t in all_tools]}")
+        logger.info(
+            f"Passing {len(all_tools)} tools to agent: {[t.name for t in all_tools]}"
+        )
         logger.debug(f"System prompt length: {len(system_prompt)} characters")
         logger.debug(f"System prompt first 500 chars: {system_prompt[:500]}...")
 
@@ -408,12 +401,14 @@ async def get_response_stream_supervisor(
         )
 
         logger.info("Main ReAct agent created successfully")
-        logger.info(f"✅ Agent created with {len(all_tools)} tools: {[t.name for t in all_tools]}")
+        logger.info(
+            f"✅ Agent created with {len(all_tools)} tools: {[t.name for t in all_tools]}"
+        )
 
         # Configure Opik tracing (if enabled)
         config_for_stream = {
             "configurable": {"thread_id": str(uuid.uuid4())},
-            "recursion_limit": 50,
+            "recursion_limit": 10,
         }
 
         if settings.AGENT_TRACING_ENABLED:
@@ -421,10 +416,8 @@ async def get_response_stream_supervisor(
                 f"Agent tracing enabled: Supervisor config: strategy={selected_strategy}, "
                 f"collection={collection_name}, provider={llm_provider_id}, model={llm_model_name}"
             )
-
-            # Enable LiteLLM tracking for cost and token usage
-            opik_tracker.track_litellm()
-            logger.debug("LiteLLM tracking enabled for cost and token usage")
+            # OpikTracer will be added to config_for_stream callbacks below
+            logger.debug("Opik tracing configured via OpikTracer in config")
 
             # Build tags for Opik trace
             trace_tags = [
@@ -480,7 +473,9 @@ async def get_response_stream_supervisor(
         final_messages = []
         tools_used = []
         rag_tool_called = False
-        retrieved_rag_documents = None  # Track RAG results for injection into task tools
+        retrieved_rag_documents = (
+            None  # Track RAG results for injection into task tools
+        )
 
         # Stream events from main agent with explicit error tracking and retry logic
         try:
@@ -498,12 +493,14 @@ async def get_response_stream_supervisor(
                 """Execute agent with astream_events"""
                 event_stream = main_agent.astream_events(
                     {"messages": [{"role": "user", "content": query}]},
-                    config=config_for_stream,
+                    config=cast(RunnableConfig, config_for_stream),
                     version="v2",
                 )
                 return event_stream
 
-            logger.info("Starting agent execution with retry protection and circuit breaker")
+            logger.info(
+                "Starting agent execution with retry protection and circuit breaker"
+            )
             event_iterator = await execute_with_retry(
                 agent_execution,
                 func_name="main_agent_execution",
@@ -530,14 +527,18 @@ async def get_response_stream_supervisor(
                         if tool_name == rag_agent_name:
                             # Extract RAG documents from tool output
                             tool_output = event_data.get("output", "")
-                            logger.debug(f"RAG tool end event: output type={type(tool_output).__name__}, length={len(str(tool_output)) if tool_output else 0}")
+                            logger.debug(
+                                f"RAG tool end event: output type={type(tool_output).__name__}, length={len(str(tool_output)) if tool_output else 0}"
+                            )
 
                             if tool_output:
                                 # Handle ToolMessage objects from LangChain
                                 # ToolMessage has a 'content' attribute
                                 if hasattr(tool_output, "content"):
                                     tool_output_content = tool_output.content
-                                    logger.debug(f"Extracted ToolMessage.content: type={type(tool_output_content).__name__}, length={len(str(tool_output_content)) if tool_output_content else 0}")
+                                    logger.debug(
+                                        f"Extracted ToolMessage.content: type={type(tool_output_content).__name__}, length={len(str(tool_output_content)) if tool_output_content else 0}"
+                                    )
                                 else:
                                     tool_output_content = tool_output
 
@@ -545,19 +546,28 @@ async def get_response_stream_supervisor(
                                     try:
                                         # Handle both string and dict outputs
                                         if isinstance(tool_output_content, str):
-                                            rag_response = json.loads(tool_output_content)
+                                            rag_response = json.loads(
+                                                tool_output_content
+                                            )
                                         else:
                                             rag_response = tool_output_content
 
-                                        if isinstance(rag_response, dict) and "documents" in rag_response:
-                                            retrieved_rag_documents = rag_response.get("documents", [])
+                                        if (
+                                            isinstance(rag_response, dict)
+                                            and "documents" in rag_response
+                                        ):
+                                            retrieved_rag_documents = rag_response.get(
+                                                "documents", []
+                                            )
                                             logger.info(
                                                 f"✅ RAG tool execution completed: Extracted {len(retrieved_rag_documents)} documents from {len(str(tool_output_content))} chars"
                                             )
 
                                             # Format RAG documents as context string
-                                            rag_context_str = _format_rag_documents_as_context(
-                                                retrieved_rag_documents
+                                            rag_context_str = (
+                                                _format_rag_documents_as_context(
+                                                    retrieved_rag_documents
+                                                )
                                             )
                                             logger.info(
                                                 f"✅ Formatted RAG context: {len(rag_context_str)} chars"
@@ -565,8 +575,7 @@ async def get_response_stream_supervisor(
 
                                             # Store RAG context in agent state using LangGraph method
                                             agent_state.set_rag_context(
-                                                retrieved_rag_documents,
-                                                rag_context_str
+                                                retrieved_rag_documents, rag_context_str
                                             )
                                             logger.info(
                                                 f"✅ RAG context stored in agent_state: {len(retrieved_rag_documents)} documents ({len(rag_context_str)} chars)"
@@ -577,19 +586,37 @@ async def get_response_stream_supervisor(
                                                 "type": "supervisor_progress",
                                                 "stage": "rag_documents_extracted",
                                                 "message": f"RAG Complete: Extracted {len(retrieved_rag_documents)} documents",
-                                                "execution_time_ms": (time.time() - start_time) * 1000,
+                                                "execution_time_ms": (
+                                                    time.time() - start_time
+                                                )
+                                                * 1000,
                                                 "agent_state": {
-                                                    "rag_documents_count": len(retrieved_rag_documents),
-                                                    "rag_context_size": len(rag_context_str),
-                                                    "tools_used": agent_state.get("tools_used", []),
+                                                    "rag_documents_count": len(
+                                                        retrieved_rag_documents
+                                                    ),
+                                                    "rag_context_size": len(
+                                                        rag_context_str
+                                                    ),
+                                                    "tools_used": agent_state.get(
+                                                        "tools_used", []
+                                                    ),
                                                 },
                                             }
                                         else:
-                                            logger.debug(f"RAG response missing 'documents' key. Keys: {rag_response.keys() if isinstance(rag_response, dict) else 'N/A'}")
-                                    except (json.JSONDecodeError, TypeError) as parse_error:
-                                        logger.warning(f"RAG tool output not valid JSON: {parse_error}")
+                                            logger.debug(
+                                                f"RAG response missing 'documents' key. Keys: {rag_response.keys() if isinstance(rag_response, dict) else 'N/A'}"
+                                            )
+                                    except (
+                                        json.JSONDecodeError,
+                                        TypeError,
+                                    ) as parse_error:
+                                        logger.warning(
+                                            f"RAG tool output not valid JSON: {parse_error}"
+                                        )
                     except Exception as e:
-                        logger.warning(f"Error processing RAG tool end event: {e} | {traceback.format_exc()}")
+                        logger.warning(
+                            f"Error processing RAG tool end event: {e} | {traceback.format_exc()}"
+                        )
 
                 # Track tool calls with error detection
                 try:
@@ -612,10 +639,17 @@ async def get_response_stream_supervisor(
                                             "type": "supervisor_progress",
                                             "stage": "rag_agent_executing",
                                             "message": f"{rag_agent_name.replace('_', ' ').title()}: Retrieving and ranking documents",
-                                            "execution_time_ms": (time.time() - start_time) * 1000,
+                                            "execution_time_ms": (
+                                                time.time() - start_time
+                                            )
+                                            * 1000,
                                             "agent_state": {
-                                                "tools_used": agent_state.get("tools_used", []),
-                                                "rag_context_size": agent_state.get("rag_context_size", 0),
+                                                "tools_used": agent_state.get(
+                                                    "tools_used", []
+                                                ),
+                                                "rag_context_size": agent_state.get(
+                                                    "rag_context_size", 0
+                                                ),
                                             },
                                         }
 
@@ -623,7 +657,9 @@ async def get_response_stream_supervisor(
                                     elif tool_name in [t.name for t in task_tools]:
                                         # Track task tool execution in agent state using LangGraph method
                                         agent_state.add_task_tool_executed(tool_name)
-                                        logger.debug(f"[AGENT STATE] Task tool added to execution list: {tool_name}")
+                                        logger.debug(
+                                            f"[AGENT STATE] Task tool added to execution list: {tool_name}"
+                                        )
 
                                         # RAG context already in agent_state, no need to set again
                                         # Task tools will read from agent_state["rag_context"]
@@ -632,12 +668,23 @@ async def get_response_stream_supervisor(
                                             "type": "supervisor_progress",
                                             "stage": "task_agent_executing",
                                             "message": f"Task Tool: Executing {tool_name}",
-                                            "execution_time_ms": (time.time() - start_time) * 1000,
+                                            "execution_time_ms": (
+                                                time.time() - start_time
+                                            )
+                                            * 1000,
                                             "agent_state": {
-                                                "tools_used": agent_state.get("tools_used", []),
-                                                "task_tools_executed": agent_state.get("task_tools_executed", []),
-                                                "rag_context_size": agent_state.get("rag_context_size", 0),
-                                                "rag_documents_count": len(agent_state.get("rag_documents", [])),
+                                                "tools_used": agent_state.get(
+                                                    "tools_used", []
+                                                ),
+                                                "task_tools_executed": agent_state.get(
+                                                    "task_tools_executed", []
+                                                ),
+                                                "rag_context_size": agent_state.get(
+                                                    "rag_context_size", 0
+                                                ),
+                                                "rag_documents_count": len(
+                                                    agent_state.get("rag_documents", [])
+                                                ),
                                             },
                                         }
                 except Exception as e:
@@ -656,7 +703,10 @@ async def get_response_stream_supervisor(
                         else:
                             final_output = event_data
 
-                        if isinstance(final_output, dict) and "messages" in final_output:
+                        if (
+                            isinstance(final_output, dict)
+                            and "messages" in final_output
+                        ):
                             final_messages = final_output["messages"]
                             logger.info(
                                 f"Main agent completed with {len(final_messages)} messages"
@@ -665,7 +715,10 @@ async def get_response_stream_supervisor(
                             # Extract RAG documents from message history for task tools
                             try:
                                 for msg in final_messages:
-                                    if isinstance(msg, dict) and msg.get("role") == "tool":
+                                    if (
+                                        isinstance(msg, dict)
+                                        and msg.get("role") == "tool"
+                                    ):
                                         tool_name = msg.get("name", "")
                                         if tool_name == rag_agent_name:
                                             # Parse RAG response as JSON
@@ -673,13 +726,22 @@ async def get_response_stream_supervisor(
                                             if content:
                                                 try:
                                                     rag_response = json.loads(content)
-                                                    if isinstance(rag_response, dict) and "documents" in rag_response:
-                                                        retrieved_rag_documents = rag_response.get("documents", [])
+                                                    if (
+                                                        isinstance(rag_response, dict)
+                                                        and "documents" in rag_response
+                                                    ):
+                                                        retrieved_rag_documents = (
+                                                            rag_response.get(
+                                                                "documents", []
+                                                            )
+                                                        )
                                                         logger.info(
                                                             f"Extracted {len(retrieved_rag_documents)} documents from RAG response"
                                                         )
                                                 except json.JSONDecodeError:
-                                                    logger.warning("Could not parse RAG response as JSON")
+                                                    logger.warning(
+                                                        "Could not parse RAG response as JSON"
+                                                    )
                                     elif hasattr(msg, "type") and msg.type == "tool":
                                         # Handle langchain message objects
                                         if getattr(msg, "name", "") == rag_agent_name:
@@ -687,9 +749,19 @@ async def get_response_stream_supervisor(
                                                 content = getattr(msg, "content", "")
                                                 if content:
                                                     rag_response = json.loads(content)
-                                                    if isinstance(rag_response, dict) and "documents" in rag_response:
-                                                        retrieved_rag_documents = rag_response.get("documents", [])
-                                            except (json.JSONDecodeError, AttributeError):
+                                                    if (
+                                                        isinstance(rag_response, dict)
+                                                        and "documents" in rag_response
+                                                    ):
+                                                        retrieved_rag_documents = (
+                                                            rag_response.get(
+                                                                "documents", []
+                                                            )
+                                                        )
+                                            except (
+                                                json.JSONDecodeError,
+                                                AttributeError,
+                                            ):
                                                 pass
                             except Exception as e:
                                 logger.warning(f"Error extracting RAG documents: {e}")
@@ -779,7 +851,10 @@ async def get_response_stream_supervisor(
                                     and doc["source_url"] not in source_urls
                                 ):
                                     source_urls.append(doc["source_url"])
-                                if doc.get("chunk_id") and doc["chunk_id"] not in chunk_ids:
+                                if (
+                                    doc.get("chunk_id")
+                                    and doc["chunk_id"] not in chunk_ids
+                                ):
                                     chunk_ids.append(doc["chunk_id"])
 
                             metadata.update(
@@ -921,8 +996,7 @@ async def get_response_stream_supervisor(
             # Error after initialization but before streaming
             error_category = "execution_error"
             user_message = (
-                f"An error occurred while processing your query. "
-                f"Please try again."
+                f"An error occurred while processing your query. " f"Please try again."
             )
 
         # Yield error event ONLY if we haven't started streaming response
