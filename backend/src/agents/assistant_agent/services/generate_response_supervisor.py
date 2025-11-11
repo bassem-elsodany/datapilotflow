@@ -8,7 +8,6 @@ The RAG agent is wrapped as a tool that the main ReAct agent can invoke.
 """
 
 import asyncio
-import contextvars
 import json
 import time
 import traceback
@@ -29,7 +28,6 @@ import src.compat_langchain_load  # noqa: F401
 from src.agents.assistant_agent.tools.rag_knowledge_tool import (
     create_rag_knowledge_tool,
 )
-from src.agents.assistant_agent.tools.tool_factory import set_rag_context
 from src.agents.common.prompts import MAIN_AGENT_SYSTEM_PROMPT
 from src.agents.task_agent.tools import get_task_agent_tools
 from src.config import settings
@@ -43,11 +41,6 @@ from src.services.model_provider.model_provider_service import (
 
 # Enable dropping unsupported params for different LLM providers
 litellm.drop_params = True
-
-# Context variable for sharing RAG documents with task tools
-_rag_context_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
-    "rag_context", default=None
-)
 
 
 # Agent State Schema for better context management
@@ -590,19 +583,12 @@ async def get_response_stream_supervisor(
                                                 f"✅ Formatted RAG context: {len(rag_context_str)} chars"
                                             )
 
-                                            # Store RAG context in BOTH:
-                                            # 1. Agent state (proper state management - TypedDict)
-                                            # 2. Module-level storage (fallback for tools - works across async boundaries)
+                                            # Store RAG context in agent state (ONLY source of truth)
                                             agent_state["rag_documents"] = retrieved_rag_documents
                                             agent_state["rag_context"] = rag_context_str
                                             agent_state["rag_context_size"] = len(rag_context_str)
-                                            logger.debug(
-                                                f"[AGENT STATE] Updated with {len(retrieved_rag_documents)} RAG documents ({len(rag_context_str)} chars)"
-                                            )
-
-                                            set_rag_context(rag_context_str)
                                             logger.info(
-                                                f"✅ RAG context stored for task tools ({len(rag_context_str)} chars)"
+                                                f"✅ RAG context stored in agent_state: {len(retrieved_rag_documents)} documents ({len(rag_context_str)} chars)"
                                             )
                                         else:
                                             logger.debug(f"RAG response missing 'documents' key. Keys: {rag_response.keys() if isinstance(rag_response, dict) else 'N/A'}")
@@ -648,15 +634,8 @@ async def get_response_stream_supervisor(
                                             agent_state["task_tools_executed"].append(tool_name)
                                         logger.debug(f"[AGENT STATE] Task tool added to execution list: {tool_name}")
 
-                                        # Set RAG context if available before task tool executes
-                                        if retrieved_rag_documents:
-                                            rag_context_str = _format_rag_documents_as_context(
-                                                retrieved_rag_documents
-                                            )
-                                            set_rag_context(rag_context_str)
-                                            logger.info(
-                                                f"Set RAG context ({len(rag_context_str)} chars) for task tool: {tool_name}"
-                                            )
+                                        # RAG context already in agent_state, no need to set again
+                                        # Task tools will read from agent_state["rag_context"]
 
                                         yield {
                                             "type": "supervisor_progress",
