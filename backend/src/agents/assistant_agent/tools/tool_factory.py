@@ -120,8 +120,11 @@ class ToolFactory:
             # Module storage is set by supervisor before tool invocation
             final_context = rag_documents or _rag_context_storage.get("current", "")
 
+            # Log source of RAG context for debugging
+            context_source = "parameter" if rag_documents else "module_storage"
+
             logger.info(
-                f"[PROMPT TOOL] Executing '{tool_name}' | Input: {len(user_input)} chars | RAG Documents: {len(final_context)} chars"
+                f"[PROMPT TOOL] Executing '{tool_name}' | Input: {len(user_input)} chars | RAG Documents: {len(final_context)} chars (source: {context_source})"
             )
 
             # Build full prompt with RAG context injected at the END as "ONLY SOURCE OF TRUTH"
@@ -555,7 +558,7 @@ def set_rag_context(context: str) -> None:
     """
     global _rag_context_storage
     _rag_context_storage["current"] = context
-    logger.debug(f"[RAG CONTEXT] Updated module storage with {len(context)} chars of context")
+    logger.info(f"[RAG CONTEXT STORAGE] Stored {len(context)} chars in module-level storage for task tools")
 
 
 def get_rag_context() -> str:
