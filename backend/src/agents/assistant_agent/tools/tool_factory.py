@@ -20,6 +20,10 @@ from src.domain.tool import PromptBasedToolConfig, Tool, ToolType
 if TYPE_CHECKING:
     from src.domain.tool import MCPServerConfig
 
+# Module-level storage for RAG context - injected by supervisor before tool execution
+# This is the ONLY reliable way to pass RAG documents across async boundaries
+_rag_context_storage: Dict[str, str] = {}
+
 
 class ToolFactory:
     """Factory for creating LangChain tools from Tool domain model configurations."""
@@ -112,9 +116,9 @@ class ToolFactory:
             Returns:
                 Response from LLM based on user input and RAG documents
             """
-            # RAG documents MUST be passed as parameter by the agent
-            # No fallback - if no documents are passed, it's an error
-            final_context = rag_documents
+            # Try to get RAG context from parameter first, then fallback to module storage
+            # Module storage is set by supervisor before tool invocation
+            final_context = rag_documents or _rag_context_storage.get("current", "")
 
             logger.info(
                 f"[PROMPT TOOL] Executing '{tool_name}' | Input: {len(user_input)} chars | RAG Documents: {len(final_context)} chars"
@@ -537,3 +541,28 @@ async def get_dynamic_task_tools(
 
     logger.info(f"Successfully created {len(langchain_tools)} LangChain tools")
     return langchain_tools
+
+
+def set_rag_context(context: str) -> None:
+    """
+    Set RAG context that will be injected into all task tool executions.
+
+    This is called by the supervisor after RAG documents are retrieved and formatted.
+    The context is stored in module-level storage accessible to all tool invocations.
+
+    Args:
+        context: Formatted RAG documents as string (content only, no metadata)
+    """
+    global _rag_context_storage
+    _rag_context_storage["current"] = context
+    logger.debug(f"[RAG CONTEXT] Updated module storage with {len(context)} chars of context")
+
+
+def get_rag_context() -> str:
+    """
+    Get the currently stored RAG context.
+
+    Returns:
+        Formatted RAG documents string, or empty string if none set
+    """
+    return _rag_context_storage.get("current", "")

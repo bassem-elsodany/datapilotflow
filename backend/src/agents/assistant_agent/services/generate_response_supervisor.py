@@ -29,6 +29,7 @@ import src.compat_langchain_load  # noqa: F401
 from src.agents.assistant_agent.tools.rag_knowledge_tool import (
     create_rag_knowledge_tool,
 )
+from src.agents.assistant_agent.tools.tool_factory import set_rag_context
 from src.agents.common.prompts import MAIN_AGENT_SYSTEM_PROMPT
 from src.agents.task_agent.tools import get_task_agent_tools
 from src.config import settings
@@ -492,11 +493,11 @@ async def get_response_stream_supervisor(
                                                 f"✅ Formatted RAG context: {len(rag_context_str)} chars"
                                             )
 
-                                            # Set context variable for task tools to access
-                                            # Task tools MUST use the rag_documents parameter passed by the agent
-                                            _rag_context_var.set(rag_context_str)
+                                            # Store RAG context in module-level storage for task tools to access
+                                            # This is the ONLY reliable way to pass context across async boundaries
+                                            set_rag_context(rag_context_str)
                                             logger.info(
-                                                f"✅ RAG context set in context variable ({len(rag_context_str)} chars)"
+                                                f"✅ RAG context stored for task tools ({len(rag_context_str)} chars)"
                                             )
                                         else:
                                             logger.debug(f"RAG response missing 'documents' key. Keys: {rag_response.keys() if isinstance(rag_response, dict) else 'N/A'}")
@@ -535,7 +536,7 @@ async def get_response_stream_supervisor(
                                             rag_context_str = _format_rag_documents_as_context(
                                                 retrieved_rag_documents
                                             )
-                                            _rag_context_var.set(rag_context_str)
+                                            set_rag_context(rag_context_str)
                                             logger.info(
                                                 f"Set RAG context ({len(rag_context_str)} chars) for task tool: {tool_name}"
                                             )
