@@ -1005,6 +1005,14 @@ export default function ConversationWindow() {
           const textChunk = data?.data?.chunk || data?.chunk || chunk;
           const chunkMetadata = data?.metadata || data?.data?.metadata;
 
+          console.log('📨 [STREAMING_RESPONSE] Received metadata:', {
+            has_document_sources: !!chunkMetadata?.document_sources,
+            document_sources_count: chunkMetadata?.document_sources?.length || 0,
+            has_search_variants: !!chunkMetadata?.search_variants,
+            search_variants_count: chunkMetadata?.search_variants?.length || 0,
+            rag_strategy: chunkMetadata?.rag_strategy,
+          });
+
           if (textChunk) {
             setMessages(prev => {
               const lastMessage = prev[prev.length - 1];
@@ -1055,10 +1063,28 @@ export default function ConversationWindow() {
               // Only update if response_generation is not already in completed stages
               if (!prev.completedStages.includes('response_generation')) {
                 const newCompleted = [...prev.completedStages, 'response_generation'];
+                const newStageDetails = { ...prev.stageDetails };
+
+                // Store metadata in stageDetails for the modal to display
+                if (chunkMetadata) {
+                  newStageDetails['response_generation_complete'] = {
+                    message: 'Response generation complete',
+                    data: {
+                      document_sources: chunkMetadata.document_sources,
+                      search_variants: chunkMetadata.search_variants,
+                      rag_strategy: chunkMetadata.rag_strategy,
+                    },
+                    timestamp: new Date().toISOString(),
+                    execution_time_ms: data?.execution_time_ms || 0,
+                  };
+                  console.log('📦 [STAGE DETAILS] Updated response_generation_complete stageDetails:', newStageDetails['response_generation_complete']);
+                }
+
                 return {
                   ...prev,
                   completedStages: newCompleted,
-                  currentStage: 'response_generation' // Keep showing as current while streaming
+                  currentStage: 'response_generation', // Keep showing as current while streaming
+                  stageDetails: newStageDetails,
                 };
               }
               // Don't update if already completed - return same reference
@@ -1263,6 +1289,10 @@ export default function ConversationWindow() {
             document_count: data.data.document_count || 0,
             enhancement_strategy: data.data.enhancement_strategy,
             enhanced_queries: data.data.enhanced_queries || [],  // ALWAYS array
+            // New metadata fields from backend
+            document_sources: data.data.document_sources || data.metadata?.document_sources || [],
+            search_variants: data.data.search_variants || data.metadata?.search_variants || [],
+            rag_strategy: data.data.rag_strategy || data.metadata?.rag_strategy || data.data.enhancement_strategy,
           } : undefined;
 
           console.log('📦 Final metadata being stored:', metadata);

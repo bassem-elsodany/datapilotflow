@@ -210,6 +210,7 @@ export function SupervisorModePipelineModal({
         );
 
       case 'response_generation':
+      case 'response_generation_complete':
         return (
           <Card withBorder p="xs" mt="xs" style={{ backgroundColor: theme.colors.teal[0], borderColor: theme.colors.teal[3] }}>
             <Stack gap="xs">
@@ -230,6 +231,38 @@ export function SupervisorModePipelineModal({
                 <Text size="xs" c="dimmed">
                   From <strong>{data.sources_used}</strong> source{data.sources_used !== 1 ? 's' : ''}
                 </Text>
+              )}
+
+              {/* Display document sources if available */}
+              {data.document_sources && Array.isArray(data.document_sources) && data.document_sources.length > 0 && (
+                <Stack gap="xs" mt="sm">
+                  <Text size="xs" fw={600} c="teal.7">📚 Document Sources:</Text>
+                  {data.document_sources.map((doc: any, idx: number) => (
+                    <Group key={idx} gap="xs" wrap="nowrap">
+                      <Text size="xs" c="dimmed" style={{ flex: 1 }}>
+                        <strong>{doc.title || 'Unknown'}</strong>
+                        {doc.source && <Text size="xs" c="dimmed">({doc.source})</Text>}
+                        {doc.distance !== null && doc.distance !== undefined && (
+                          <Badge size="xs" variant="light" color="cyan" ml="xs">
+                            Distance: {(doc.distance as number).toFixed(3)}
+                          </Badge>
+                        )}
+                      </Text>
+                    </Group>
+                  ))}
+                </Stack>
+              )}
+
+              {/* Display search variants if available */}
+              {data.search_variants && Array.isArray(data.search_variants) && data.search_variants.length > 0 && (
+                <Stack gap="xs" mt="sm">
+                  <Text size="xs" fw={600} c="teal.7">🔍 Search Variants:</Text>
+                  {data.search_variants.map((variant: string, idx: number) => (
+                    <Text key={idx} size="xs" c="dimmed">
+                      • {variant}
+                    </Text>
+                  ))}
+                </Stack>
               )}
             </Stack>
           </Card>
