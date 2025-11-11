@@ -456,7 +456,10 @@ export function KnowledgeAssistantModal({
   }, [metadata, currentStage, completedStages, enableLLMGeneration]);
 
   function getStageStatus(stageId: string): 'pending' | 'active' | 'completed' | 'skipped' {
+    // Check if stage is marked as completed
     if (completedStages.includes(stageId)) return 'completed';
+
+    // Check if stage is currently active
     if (currentStage === stageId) return 'active';
 
     const stageOrder: string[] = [
@@ -475,8 +478,15 @@ export function KnowledgeAssistantModal({
     const currentIndex = currentStage ? stageOrder.indexOf(currentStage) : -1;
     const stageIndex = stageOrder.indexOf(stageId);
 
+    // If current stage is defined and this stage comes after it, it's pending
     if (currentIndex >= 0 && stageIndex > currentIndex) return 'pending';
+
+    // If current stage is not defined and this stage hasn't completed, it's pending
     if (currentIndex === -1 && !completedStages.includes(stageId)) return 'pending';
+
+    // If we get here, the stage has passed (before current), so it's completed
+    // This handles stages that come before the current stage in the order
+    if (stageIndex < currentIndex) return 'completed';
 
     return 'pending';
   }
