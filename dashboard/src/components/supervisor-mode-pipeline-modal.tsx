@@ -114,9 +114,20 @@ export function SupervisorModePipelineModal({
   const renderStageDetails = (stageId: string) => {
     // Try both stageId and stageId_complete format (since backend stores as stageId_complete)
     const details = metadata?.stageDetails?.[stageId] || metadata?.stageDetails?.[`${stageId}_complete`];
-    if (!details || !details.data) return null;
 
-    console.log(`📊 [RENDER STAGE DETAILS] stageId=${stageId}, details found:`, details);
+    console.log(`📊 [RENDER STAGE DETAILS] Checking stageId=${stageId}`, {
+      stageDetailsKeys: Object.keys(metadata?.stageDetails || {}),
+      hasDirectKey: !!metadata?.stageDetails?.[stageId],
+      hasCompleteKey: !!metadata?.stageDetails?.[`${stageId}_complete`],
+      details: details
+    });
+
+    if (!details || !details.data) {
+      console.log(`⚠️ [RENDER STAGE DETAILS] No data found for ${stageId} - skipping render`);
+      return null;
+    }
+
+    console.log(`✅ [RENDER STAGE DETAILS] Found data for ${stageId}:`, details);
 
     const { data, message } = details;
 
@@ -948,6 +959,7 @@ export function SupervisorModePipelineModal({
         {/* Display Details for Completed Stages - METADATA SECTION */}
         {completedStages.length > 0 && (
           <Box mt="lg">
+            {console.log('📋 [STAGE DETAILS SECTION] Rendering with completedStages:', completedStages, 'stageDetailsKeys:', Object.keys(metadata.stageDetails || {}))}
             <Divider label={
               <Badge size="sm" variant="filled" color="teal">
                 Stage Details & Sources
