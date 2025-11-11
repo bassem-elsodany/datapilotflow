@@ -2,7 +2,9 @@ import { useRef } from 'react';
 
 /**
  * Hook for handling Supervisor-specific workflow progress events
- * Supervisor has different stages: intent_detection → rag_agent_executing → task_agent_executing → response_generation
+ * Supervisor orchestration stages:
+ * supervisor_init_complete → agent_execution_starting → rag_agent_executing → rag_documents_extracted
+ * → task_agent_executing (optional) → response_generation_complete → response_streaming_started → workflow_complete
  */
 export function useSupervisorWorkflowProgress() {
   // Track timing for each stage
@@ -73,27 +75,23 @@ export function useSupervisorWorkflowProgress() {
           };
 
           // Determine next active stage based on what just completed
-          const detectedIntent = data?.data?.intent || prev.intent;
+          // New stage flow: supervisor_init_complete → agent_execution_starting → rag_agent_executing → rag_documents_extracted → task_agent_executing (optional) → response_generation_complete → response_streaming_started → workflow_complete
           let nextActiveStage = null;
 
-          if (completedStage === 'supervisor_init') {
-            nextActiveStage = 'intent_detection';
-          } else if (completedStage === 'intent_detection') {
-            if (detectedIntent === 'rag_only' || detectedIntent === 'rag_then_task') {
-              nextActiveStage = 'rag_agent_executing';
-            } else if (detectedIntent === 'task_only') {
-              nextActiveStage = 'task_agent_executing';
-            } else {
-              nextActiveStage = 'rag_agent_executing';
-            }
+          if (completedStage === 'supervisor_init_complete') {
+            nextActiveStage = 'agent_execution_starting';
+          } else if (completedStage === 'agent_execution_starting') {
+            nextActiveStage = 'rag_agent_executing';
           } else if (completedStage === 'rag_agent_executing') {
-            if (detectedIntent === 'rag_then_task') {
-              nextActiveStage = 'task_agent_executing';
-            } else {
-              nextActiveStage = 'response_generation';
-            }
+            nextActiveStage = 'rag_documents_extracted';
+          } else if (completedStage === 'rag_documents_extracted') {
+            nextActiveStage = 'task_agent_executing';
           } else if (completedStage === 'task_agent_executing') {
-            nextActiveStage = 'response_generation';
+            nextActiveStage = 'response_generation_complete';
+          } else if (completedStage === 'response_generation_complete') {
+            nextActiveStage = 'response_streaming_started';
+          } else if (completedStage === 'response_streaming_started') {
+            nextActiveStage = 'workflow_complete';
           }
 
           // Update current stage if next stage is determined

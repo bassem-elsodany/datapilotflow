@@ -246,120 +246,104 @@ export function SupervisorModePipelineModal({
     const allStages: WorkflowStage[] = [];
 
     // Add supervisor stages (always enabled in this component)
+    // NEW: Updated to match actual supervisor orchestration stages from backend
     allStages.push(
         {
-          id: 'supervisor_init',
-          name: 'Supervisor Orchestration',
-          description: 'Initializing multi-agent supervisor',
-          status: getStageStatus('supervisor_init'),
+          id: 'supervisor_init_complete',
+          name: 'Supervisor Initialization',
+          description: 'Initializing multi-agent supervisor system',
+          status: getStageStatus('supervisor_init_complete'),
           icon: <IconRobot size={20} />,
           color: 'grape',
           substages: [
             {
-              name: 'Supervisor agent initialized',
-              status: completedStages.includes('supervisor_init') ? 'completed' : 'active'
+              name: 'Multi-agent system initialized',
+              status: completedStages.includes('supervisor_init_complete') ? 'completed' : 'active'
             }
           ]
         },
         {
-          id: 'intent_detection',
-          name: 'Intent Detection',
-          description: 'Analyzing query to determine routing strategy',
-          status: getStageStatus('intent_detection'),
-          icon: <IconRoute size={20} />,
+          id: 'agent_execution_starting',
+          name: 'Query Analysis & Planning',
+          description: 'Agent analyzing query and creating execution plan',
+          status: getStageStatus('agent_execution_starting'),
+          icon: <IconBrain size={20} />,
           color: 'indigo',
-          metadata: {
-            intent: metadata.intent
-          },
           substages: [
             {
-              name: 'Analyzing user query intent',
-              status: completedStages.includes('intent_detection') ? 'completed' : 'active'
+              name: 'Analyzing user query intent and requirements',
+              status: completedStages.includes('agent_execution_starting') ? 'completed' : 'active'
             },
             {
-              name: metadata.intent ? `Detected: ${metadata.intent}` : 'Determining routing path',
-              status: completedStages.includes('intent_detected') || completedStages.includes('intent_detection') ? 'completed' : 'active',
-              metric: metadata.intent
+              name: 'Planning execution strategy',
+              status: completedStages.includes('agent_execution_starting') ? 'completed' : 'active'
             }
           ]
         },
         {
           id: 'rag_agent_executing',
-          name: 'RAG Agent Execution',
-          description: rerankingEnabled ? 'Retrieving and ranking relevant documents' : 'Retrieving relevant documents',
+          name: 'Knowledge Base Retrieval',
+          description: 'Retrieving and processing relevant documents',
           status: getStageStatus('rag_agent_executing'),
-          icon: <IconFileSearch size={20} />,
+          icon: <IconDatabase size={20} />,
           color: 'cyan',
           substages: [
             {
-              name: '✨ Query Enhancement',
-              status: (metadata.ragSubstages?.includes('query_enhancement') || completedStages.includes('rag_agent_executing')) ? 'completed' : 'active',
-              metric: metadata.strategy ? getStrategyLabel(metadata.strategy) : 'Native'
+              name: 'Searching knowledge base with multiple query variants',
+              status: completedStages.includes('rag_agent_executing') ? 'completed' : 'active',
+              metric: metadata.strategy ? getStrategyLabel(metadata.strategy) : 'custom_variants'
             },
             {
-              name: '🗄️ Document Retrieval',
-              status: (metadata.ragSubstages?.includes('document_retrieval') || completedStages.includes('rag_agent_executing')) ? 'completed' : 'active',
+              name: 'Retrieving and ranking documents by relevance',
+              status: completedStages.includes('rag_documents_extracted') || completedStages.includes('rag_agent_executing') ? 'completed' : 'active',
               metric: metadata.documentCount ? `${metadata.documentCount} docs` : undefined
-            },
-            // Only show Judge Ranker if reranking is enabled
-            ...(rerankingEnabled ? [{
-              name: '⚖️ Judge Ranker',
-              status: ((metadata.ragSubstages?.includes('document_judging') || completedStages.includes('rag_agent_executing')) ? 'completed' : 'active') as 'active' | 'completed',
-              metric: metadata.relevantCount ? `${metadata.relevantCount} relevant` : undefined
-            }] : [])
+            }
           ]
         }
       );
 
-      // Only add Task Agent if intent is rag_then_task
-      if (metadata.intent === 'rag_then_task') {
+      // Only add Task Agent if generation tools are needed
+      if (enableLLMGeneration) {
         allStages.push({
           id: 'task_agent_executing',
-          name: 'Task Agent Execution',
-          description: 'Executing task with RAG context',
+          name: 'Response Generation with Tools',
+          description: 'Executing generation tools with RAG context injected',
           status: getStageStatus('task_agent_executing'),
           icon: <IconTool size={20} />,
           color: 'teal',
           substages: [
             {
-              name: 'Task agent processing with knowledge',
+              name: 'Invoking generation tools with knowledge base context',
+              status: completedStages.includes('task_agent_executing') ? 'completed' : 'active'
+            },
+            {
+              name: 'Processing tool outputs',
               status: completedStages.includes('task_agent_executing') ? 'completed' : 'active'
             }
           ]
         });
       }
 
-      // Detailed RAG stages are hidden in Supervisor mode - they're internal to RAG Agent
-
-    // Add Response Generation stage (always last)
+    // Add Response Streaming stage (final stage)
     allStages.push({
-      id: 'response_generation',
-      name: enableLLMGeneration ? 'Response Generation' : 'Raw Response Formatting',
-      description: enableLLMGeneration
-        ? 'Generating AI response from context'
-        : 'Formatting raw documents without LLM processing',
-      status: getStageStatus('response_generation'),
-      icon: enableLLMGeneration ? <IconBrain size={20} /> : <IconFileSearch size={20} />,
+      id: 'response_streaming_started',
+      name: 'Response Streaming',
+      description: 'Streaming final response to client',
+      status: getStageStatus('response_streaming_started'),
+      icon: <IconSparkles size={20} />,
       color: 'green',
-      substages: enableLLMGeneration ? [
+      substages: [
         {
-          name: 'Building context from documents',
-          status: completedStages.includes('response_generation') ? 'completed' :
-            currentStage === 'response_generation' ? 'active' : 'completed'
+          name: 'Preparing response metadata and sources',
+          status: completedStages.includes('response_generation_complete') || completedStages.includes('response_streaming_started') ? 'completed' : 'active'
         },
         {
-          name: 'Streaming LLM response',
-          status: completedStages.includes('response_generation') ? 'completed' : 'active'
-        }
-      ] : [
-        {
-          name: 'Structuring documents for display',
-          status: completedStages.includes('response_generation') ? 'completed' :
-            currentStage === 'response_generation' ? 'active' : 'completed'
+          name: 'Streaming response chunks to client',
+          status: completedStages.includes('response_streaming_started') ? 'completed' : 'active'
         },
         {
-          name: 'Formatting raw content',
-          status: completedStages.includes('response_generation') ? 'completed' : 'active'
+          name: 'Response delivery complete',
+          status: completedStages.includes('workflow_complete') ? 'completed' : 'active'
         }
       ]
     });
@@ -377,15 +361,20 @@ export function SupervisorModePipelineModal({
     if (completedStages.includes(stageId)) return 'completed';
     if (currentStage === stageId) return 'active';
 
-    // Build supervisor stage order (Knowledge Assistant mode)
-    const stageOrder: string[] = ['supervisor_init', 'intent_detection', 'rag_agent_executing'];
+    // Build supervisor stage order - matches actual backend stages
+    const stageOrder: string[] = [
+      'supervisor_init_complete',
+      'agent_execution_starting',
+      'rag_agent_executing',
+      'rag_documents_extracted'
+    ];
 
-    // Only add task_agent to order if intent is rag_then_task
-    if (metadata.intent === 'rag_then_task') {
+    // Only add task_agent to order if generation tools are enabled
+    if (enableLLMGeneration) {
       stageOrder.push('task_agent_executing');
     }
 
-    stageOrder.push('response_generation');
+    stageOrder.push('response_generation_complete', 'response_streaming_started', 'workflow_complete');
 
     const currentIndex = currentStage ? stageOrder.indexOf(currentStage) : -1;
     const stageIndex = stageOrder.indexOf(stageId);
