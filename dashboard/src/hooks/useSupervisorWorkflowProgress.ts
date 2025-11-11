@@ -75,6 +75,9 @@ export function useSupervisorWorkflowProgress() {
             execution_time_ms: data?.execution_time_ms || 0,
           };
 
+          // Extract detected intent from data if available
+          const detectedIntent = data?.data?.intent || prev.intent;
+
           const newState: any = {
             ...prev,
             completedStages: newCompleted,
