@@ -350,32 +350,78 @@ async def agent_query_supervisor_websocket(
                     rag_agent_description=rag_agent_description,
                 )
 
-                # Stream events to WebSocket
-                async for chunk in stream:
-                    chunk_type = chunk.get("type")
-                    logger.debug(
-                        f"Forwarding Supervisor event: type={chunk_type}, stage={chunk.get('stage')}"
-                    )
-                    logger.debug(f"Full event payload: {json.dumps(chunk)}")
-
-                    if chunk_type in [
-                        "supervisor_progress",
-                        "supervisor_started",
-                        "workflow_complete",
-                        "workflow_started",
-                        "streaming_response",
-                        "supervisor_error",
-                    ]:
-                        await websocket.send_text(json.dumps(chunk))
-                        logger.debug(f"Supervisor event sent to client successfully")
-                    else:
-                        logger.warning(
-                            f"Skipping unexpected Supervisor event type: {chunk_type}"
+                # Stream events to WebSocket with error tracking
+                response_started = False
+                try:
+                    async for chunk in stream:
+                        chunk_type = chunk.get("type")
+                        logger.debug(
+                            f"Forwarding Supervisor event: type={chunk_type}, stage={chunk.get('stage')}"
                         )
+                        logger.debug(f"Full event payload: {json.dumps(chunk)}")
 
-                logger.debug(
-                    "Supervisor query processing completed, waiting for next query"
-                )
+                        # Track if we've started sending response content
+                        if chunk_type in ["streaming_response", "supervisor_error"]:
+                            response_started = True
+
+                        if chunk_type in [
+                            "supervisor_progress",
+                            "supervisor_started",
+                            "workflow_complete",
+                            "workflow_started",
+                            "streaming_response",
+                            "supervisor_error",
+                        ]:
+                            try:
+                                await websocket.send_text(json.dumps(chunk))
+                                logger.debug(f"Supervisor event sent to client successfully")
+                            except Exception as send_error:
+                                # Client connection lost while sending response
+                                if response_started:
+                                    # Response was partially sent
+                                    logger.warning(
+                                        f"WebSocket send error after response started: {send_error}"
+                                    )
+                                else:
+                                    logger.error(
+                                        f"WebSocket send error during initialization: {send_error}"
+                                    )
+                                raise
+                        else:
+                            logger.warning(
+                                f"Skipping unexpected Supervisor event type: {chunk_type}"
+                            )
+
+                    logger.debug(
+                        "Supervisor query processing completed successfully, waiting for next query"
+                    )
+
+                except Exception as stream_error:
+                    # Stream processing error - client may have disconnected
+                    if response_started:
+                        logger.warning(
+                            f"Stream error after response started (client may have disconnected): {stream_error}"
+                        )
+                    else:
+                        logger.error(
+                            f"Stream processing error (no response sent yet): {stream_error}"
+                        )
+                    # Continue to next query rather than closing connection
+                    try:
+                        await websocket.send_text(
+                            json.dumps(
+                                {
+                                    "type": "error",
+                                    "stage": "error",
+                                    "message": "Error processing request. Ready for next query.",
+                                    "timestamp": time.time(),
+                                }
+                            )
+                        )
+                    except Exception:
+                        # Cannot send to closed connection
+                        logger.debug("Cannot send error to closed WebSocket connection")
+                    continue
 
             except WebSocketDisconnect:
                 logger.debug(f"WebSocket disconnected by client")

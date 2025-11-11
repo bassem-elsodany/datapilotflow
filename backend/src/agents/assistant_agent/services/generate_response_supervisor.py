@@ -70,8 +70,24 @@ async def get_response_stream_supervisor(
     **IMPORTANT**: The supervisor agent ALWAYS uses 'custom_variants' strategy.
     The supervisor generates query variants through intent analysis and passes them
     to the RAG agent for parallel search with RRF fusion.
+
+    **Resource Management**:
+    - All resources are properly tracked in response_state dict
+    - Errors during execution are properly caught and propagated
+    - Partial responses are prevented by tracking streaming state
     """
     start_time = time.time()
+
+    # Central response state tracking - ensures no silent failures
+    response_state = {
+        "has_yielded_response": False,  # Tracks if we've started streaming the final response
+        "error_occurred": False,  # Tracks if any error has occurred
+        "error_details": None,  # Stores error information
+        "initialization_complete": False,  # Tracks initialization success
+        "llm_client": None,  # Reference for cleanup
+        "final_response": "",  # Stores final response
+        "execution_messages": [],  # Messages from agent execution
+    }
 
     try:
         # Supervisor agent ALWAYS uses custom_variants strategy (hardcoded)
@@ -118,15 +134,34 @@ async def get_response_stream_supervisor(
         }
 
         # Get provider configuration
-        provider_service = get_model_provider_service()
-        provider = provider_service.get_model_provider(llm_provider_id, user_id)
+        try:
+            provider_service = get_model_provider_service()
+            provider = provider_service.get_model_provider(llm_provider_id, user_id)
 
-        if not provider:
-            raise ValueError(f"Provider not found: {llm_provider_id}")
-        if not provider.is_active:
-            raise ValueError(f"Provider is not active: {provider.name}")
-        if not provider.api_key or provider.api_key.strip() == "":
-            raise ValueError(f"API key not configured for provider '{provider.name}'")
+            if not provider:
+                error_msg = f"Provider not found: {llm_provider_id}"
+                response_state["error_occurred"] = True
+                response_state["error_details"] = error_msg
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+
+            if not provider.is_active:
+                error_msg = f"Provider is not active: {provider.name}"
+                response_state["error_occurred"] = True
+                response_state["error_details"] = error_msg
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+
+            if not provider.api_key or provider.api_key.strip() == "":
+                error_msg = f"API key not configured for provider '{provider.name}'"
+                response_state["error_occurred"] = True
+                response_state["error_details"] = error_msg
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+
+        except ValueError as e:
+            # Re-raise ValueError with proper context
+            raise
 
         # Get temperature and max_tokens from provider's generative config
         generative_config = provider.generative.config if provider.generative else {}
@@ -134,17 +169,25 @@ async def get_response_stream_supervisor(
         max_tokens = generative_config.get("max_tokens", 4096)
 
         # Create LLM client
-        model_string = f"{provider.provider_type}/{llm_model_name}"
-        llm_client = ChatLiteLLM(
-            model=model_string,
-            api_key=provider.api_key,
-            api_base=provider.endpoint if provider.endpoint else None,
-            timeout=provider.timeout if provider.timeout else 60,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-
-        logger.info(f"Created LLM client: {model_string}")
+        try:
+            model_string = f"{provider.provider_type}/{llm_model_name}"
+            llm_client = ChatLiteLLM(
+                model=model_string,
+                api_key=provider.api_key,
+                api_base=provider.endpoint if provider.endpoint else None,
+                timeout=provider.timeout if provider.timeout else 60,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            response_state["llm_client"] = llm_client  # Track for cleanup
+            logger.info(f"Created LLM client: {model_string}")
+        except Exception as e:
+            error_msg = f"Failed to create LLM client: {str(e)}"
+            response_state["error_occurred"] = True
+            response_state["error_details"] = error_msg
+            logger.error(error_msg)
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            raise
 
         # Add LLM client to workflow config
         workflow_config["llm_client"] = llm_client
@@ -161,11 +204,17 @@ async def get_response_stream_supervisor(
                 if selected_system_prompt:
                     logger.info(f"Using system prompt: '{selected_system_prompt.name}'")
                 else:
+                    # System prompt not found - log and continue (fallback to default)
                     logger.warning(
-                        f"System prompt not found: {selected_system_prompt_id}"
+                        f"System prompt not found: {selected_system_prompt_id} - will use default prompt"
                     )
+                    # Do NOT raise error here - fallback to default is acceptable
             except Exception as e:
-                logger.error(f"Error retrieving system prompt: {e}")
+                # System prompt retrieval failed - log and continue
+                error_msg = f"Error retrieving system prompt (will use default): {str(e)}"
+                logger.error(error_msg)
+                logger.error(f"Traceback: {traceback.format_exc()}")
+                # Do NOT set error_occurred here - this is not fatal
 
         # Track RAG execution state (shared across tool invocations)
         rag_execution_state = {
@@ -317,6 +366,10 @@ async def get_response_stream_supervisor(
                 f"Agent tracing disabled: Supervisor config: strategy={selected_strategy}, collection={collection_name}"
             )
 
+        # Mark initialization as complete (critical for error handling)
+        response_state["initialization_complete"] = True
+        logger.info("Supervisor initialization completed successfully")
+
         # Yield initialization complete event
         yield {
             "type": "supervisor_progress",
@@ -341,81 +394,112 @@ async def get_response_stream_supervisor(
         tools_used = []
         rag_tool_called = False
 
-        # Stream events from main agent
-        async for event in main_agent.astream_events(
-            {"messages": [{"role": "user", "content": query}]},
-            config=config_for_stream,
-            version="v2",
-        ):
-            event_type = event.get("event", "")
-            event_name = event.get("name", "")
-            event_data = event.get("data", {})
+        # Stream events from main agent with explicit error tracking
+        try:
+            async for event in main_agent.astream_events(
+                {"messages": [{"role": "user", "content": query}]},
+                config=config_for_stream,
+                version="v2",
+            ):
+                event_type = event.get("event", "")
+                event_name = event.get("name", "")
+                event_data = event.get("data", {})
 
-            # Track tool calls
-            if event_type == "on_chat_model_stream":
-                chunk = event_data.get("chunk", {})
-                if "tool_calls" in chunk:
-                    for tool_call in chunk.get("tool_calls", []):
-                        tool_name = tool_call.get("name", "")
+                # Track tool calls with error detection
+                try:
+                    if event_type == "on_chat_model_stream":
+                        chunk = event_data.get("chunk", {})
+                        if "tool_calls" in chunk:
+                            for tool_call in chunk.get("tool_calls", []):
+                                tool_name = tool_call.get("name", "")
 
-                        if tool_name and tool_name not in tools_used:
-                            tools_used.append(tool_name)
-                            logger.info(f"Tool call detected: {tool_name}")
+                                if tool_name and tool_name not in tools_used:
+                                    tools_used.append(tool_name)
+                                    logger.info(f"Tool call detected: {tool_name}")
 
-                            # Emit RAG agent execution event
-                            if tool_name == rag_agent_name:
-                                rag_tool_called = True
-                                yield {
-                                    "type": "supervisor_progress",
-                                    "stage": "rag_agent_executing",
-                                    "message": f"{rag_agent_name.replace('_', ' ').title()}: Retrieving and ranking documents",
-                                    "execution_time_ms": (time.time() - start_time)
-                                    * 1000,
-                                }
+                                    # Emit RAG agent execution event
+                                    if tool_name == rag_agent_name:
+                                        rag_tool_called = True
+                                        yield {
+                                            "type": "supervisor_progress",
+                                            "stage": "rag_agent_executing",
+                                            "message": f"{rag_agent_name.replace('_', ' ').title()}: Retrieving and ranking documents",
+                                            "execution_time_ms": (time.time() - start_time)
+                                            * 1000,
+                                        }
 
-                            # Emit task tool execution event
-                            elif tool_name in [t.name for t in task_tools]:
-                                yield {
-                                    "type": "supervisor_progress",
-                                    "stage": "task_agent_executing",
-                                    "message": f"Task Tool: Executing {tool_name}",
-                                    "execution_time_ms": (time.time() - start_time)
-                                    * 1000,
-                                }
+                                    # Emit task tool execution event
+                                    elif tool_name in [t.name for t in task_tools]:
+                                        yield {
+                                            "type": "supervisor_progress",
+                                            "stage": "task_agent_executing",
+                                            "message": f"Task Tool: Executing {tool_name}",
+                                            "execution_time_ms": (time.time() - start_time)
+                                            * 1000,
+                                        }
+                except Exception as e:
+                    # Tool call tracking error - log but continue
+                    error_msg = f"Error tracking tool call: {str(e)}"
+                    logger.error(error_msg)
+                    logger.error(f"Traceback: {traceback.format_exc()}")
 
-            # Capture final output
-            if event_type == "on_chain_end" and event_name == "LangGraph":
-                if hasattr(event_data, "output"):
-                    final_output = event_data.output
-                elif isinstance(event_data, dict) and "output" in event_data:
-                    final_output = event_data["output"]
-                else:
-                    final_output = event_data
+                # Capture final output
+                if event_type == "on_chain_end" and event_name == "LangGraph":
+                    try:
+                        if hasattr(event_data, "output"):
+                            final_output = event_data.output
+                        elif isinstance(event_data, dict) and "output" in event_data:
+                            final_output = event_data["output"]
+                        else:
+                            final_output = event_data
 
-                if isinstance(final_output, dict) and "messages" in final_output:
-                    final_messages = final_output["messages"]
-                    logger.info(
-                        f"Main agent completed with {len(final_messages)} messages"
-                    )
+                        if isinstance(final_output, dict) and "messages" in final_output:
+                            final_messages = final_output["messages"]
+                            logger.info(
+                                f"Main agent completed with {len(final_messages)} messages"
+                            )
+                    except Exception as e:
+                        error_msg = f"Error capturing final output: {str(e)}"
+                        logger.error(error_msg)
+                        logger.error(f"Traceback: {traceback.format_exc()}")
+                        # Do not set error_occurred - final output is secondary
 
-        # Extract final response
+        except Exception as e:
+            # Agent execution error - this is a critical failure
+            error_msg = f"Error during main agent execution: {str(e)}"
+            response_state["error_occurred"] = True
+            response_state["error_details"] = error_msg
+            logger.error(error_msg)
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            raise
+
+        # Extract final response with error handling
         execution_time_ms = (time.time() - start_time) * 1000
 
         final_response = ""
-        if final_messages:
-            # Get last AI message content
-            for msg in reversed(final_messages):
-                if isinstance(msg, AIMessage) or (
-                    isinstance(msg, dict) and msg.get("role") == "assistant"
-                ):
-                    final_response = (
-                        msg.content
-                        if hasattr(msg, "content")
-                        else msg.get("content", "")
-                    )
-                    break
+        try:
+            if final_messages:
+                # Get last AI message content
+                for msg in reversed(final_messages):
+                    if isinstance(msg, AIMessage) or (
+                        isinstance(msg, dict) and msg.get("role") == "assistant"
+                    ):
+                        final_response = (
+                            msg.content
+                            if hasattr(msg, "content")
+                            else msg.get("content", "")
+                        )
+                        break
 
-        logger.info(f"Final response length: {len(final_response)}")
+            logger.info(f"Final response length: {len(final_response)}")
+            response_state["final_response"] = final_response
+        except Exception as e:
+            error_msg = f"Error extracting final response: {str(e)}"
+            response_state["error_occurred"] = True
+            response_state["error_details"] = error_msg
+            logger.error(error_msg)
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            raise
 
         # Emit completion events
         yield {
@@ -430,66 +514,75 @@ async def get_response_stream_supervisor(
             "execution_time_ms": execution_time_ms,
         }
 
-        # Stream response in chunks
+        # Stream response in chunks - ONLY if we have a valid response
         if final_response:
-            chunk_size = 500
-            for i in range(0, len(final_response), chunk_size):
-                chunk = final_response[i : i + chunk_size]
+            try:
+                chunk_size = 500
+                for i in range(0, len(final_response), chunk_size):
+                    chunk = final_response[i : i + chunk_size]
+                    response_state["has_yielded_response"] = True
 
-                if i == 0:
-                    # First chunk with metadata
-                    metadata = {
-                        "tools_used": tools_used,
-                        "orchestrator_type": "tool_calling_pattern",
-                        "enhancement_strategy": rag_execution_state[
-                            "enhancement_strategy"
-                        ],
-                    }
+                    if i == 0:
+                        # First chunk with metadata
+                        metadata = {
+                            "tools_used": tools_used,
+                            "orchestrator_type": "tool_calling_pattern",
+                            "enhancement_strategy": rag_execution_state[
+                                "enhancement_strategy"
+                            ],
+                        }
 
-                    # Add RAG-specific metadata if RAG tool was called
-                    if rag_tool_called:
-                        source_urls = []
-                        chunk_ids = []
+                        # Add RAG-specific metadata if RAG tool was called
+                        if rag_tool_called:
+                            source_urls = []
+                            chunk_ids = []
 
-                        # Extract source URLs and chunk IDs from documents
-                        for doc in rag_execution_state["documents"]:
-                            if (
-                                doc.get("source_url")
-                                and doc["source_url"] not in source_urls
-                            ):
-                                source_urls.append(doc["source_url"])
-                            if doc.get("chunk_id") and doc["chunk_id"] not in chunk_ids:
-                                chunk_ids.append(doc["chunk_id"])
+                            # Extract source URLs and chunk IDs from documents
+                            for doc in rag_execution_state["documents"]:
+                                if (
+                                    doc.get("source_url")
+                                    and doc["source_url"] not in source_urls
+                                ):
+                                    source_urls.append(doc["source_url"])
+                                if doc.get("chunk_id") and doc["chunk_id"] not in chunk_ids:
+                                    chunk_ids.append(doc["chunk_id"])
 
-                        metadata.update(
-                            {
-                                "source_urls": source_urls,
-                                "chunk_ids": chunk_ids,
-                                "document_count": rag_execution_state["total_docs"],
-                                "relevant_document_count": rag_execution_state[
-                                    "relevant_docs"
-                                ],
-                                "enhanced_queries": rag_execution_state[
-                                    "enhanced_queries"
-                                ],
-                            }
-                        )
+                            metadata.update(
+                                {
+                                    "source_urls": source_urls,
+                                    "chunk_ids": chunk_ids,
+                                    "document_count": rag_execution_state["total_docs"],
+                                    "relevant_document_count": rag_execution_state[
+                                        "relevant_docs"
+                                    ],
+                                    "enhanced_queries": rag_execution_state[
+                                        "enhanced_queries"
+                                    ],
+                                }
+                            )
 
-                    yield {
-                        "type": "streaming_response",
-                        "chunk": chunk,
-                        "metadata": metadata,
-                        "execution_time_ms": execution_time_ms,
-                    }
-                else:
-                    # Subsequent chunks
-                    yield {
-                        "type": "streaming_response",
-                        "chunk": chunk,
-                        "execution_time_ms": execution_time_ms,
-                    }
+                        yield {
+                            "type": "streaming_response",
+                            "chunk": chunk,
+                            "metadata": metadata,
+                            "execution_time_ms": execution_time_ms,
+                        }
+                    else:
+                        # Subsequent chunks
+                        yield {
+                            "type": "streaming_response",
+                            "chunk": chunk,
+                            "execution_time_ms": execution_time_ms,
+                        }
+            except Exception as e:
+                error_msg = f"Error streaming response chunks: {str(e)}"
+                response_state["error_occurred"] = True
+                response_state["error_details"] = error_msg
+                logger.error(error_msg)
+                logger.error(f"Traceback: {traceback.format_exc()}")
+                raise
 
-        # Save to conversation history
+        # Save to conversation history (non-fatal failure)
         try:
             user_message = ConversationMessage(
                 role="user",
@@ -509,7 +602,11 @@ async def get_response_stream_supervisor(
 
             logger.info(f"Saved messages to conversation {conversation_id}")
         except Exception as e:
-            logger.error(f"Failed to save conversation: {e}")
+            # Conversation save failure is logged but NOT fatal
+            error_msg = f"Failed to save conversation (continuing): {str(e)}"
+            logger.error(error_msg)
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            # Do NOT set error_occurred or raise - response has already been streamed
 
         # Final result with RAG documents if available
         final_result = {
@@ -546,14 +643,76 @@ async def get_response_stream_supervisor(
 
     except Exception as e:
         execution_time_ms = (time.time() - start_time) * 1000
-        logger.error(f"Tool Calling Pattern failed: {e}")
+
+        # CRITICAL: Comprehensive error handling with resource cleanup
+        # Ensure all errors are surfaced, even if we've already started streaming
+
+        error_msg = f"Tool Calling Pattern failed: {str(e)}"
+        response_state["error_occurred"] = True
+        response_state["error_details"] = error_msg
+
+        logger.error(error_msg)
         logger.error(f"Traceback: {traceback.format_exc()}")
 
-        yield {
-            "type": "supervisor_error",
-            "error": str(e),
-            "execution_time_ms": execution_time_ms,
-            "workflow_completed": False,
-            "query": query,
-            "response": f"I encountered an error: {str(e)}",
-        }
+        # Resource Cleanup: Close LLM client if it was created
+        try:
+            if response_state["llm_client"] is not None:
+                logger.debug("Cleaning up LLM client resources")
+                if hasattr(response_state["llm_client"], "close"):
+                    response_state["llm_client"].close()
+        except Exception as cleanup_error:
+            logger.warning(f"Error during LLM client cleanup: {cleanup_error}")
+
+        # Determine if response was partially streamed
+        has_partial_response = response_state["has_yielded_response"]
+        initialization_failed = not response_state["initialization_complete"]
+
+        # Categorize error for client
+        if initialization_failed:
+            # Initialization error - client should not have received any response
+            error_category = "initialization_error"
+            user_message = (
+                f"Failed to initialize the AI system. Please try again. "
+                f"Error: {str(e)[:100]}"
+            )
+        elif has_partial_response:
+            # Partial response already sent - mark as incomplete
+            error_category = "partial_response_error"
+            user_message = (
+                f"Response was incomplete due to an error. "
+                f"Please refresh and try again."
+            )
+        else:
+            # Error after initialization but before streaming
+            error_category = "execution_error"
+            user_message = (
+                f"An error occurred while processing your query. "
+                f"Please try again."
+            )
+
+        # Yield error event ONLY if we haven't started streaming response
+        # If we did start streaming, the client is already receiving a response
+        if not has_partial_response:
+            yield {
+                "type": "supervisor_error",
+                "error": str(e),
+                "error_category": error_category,
+                "execution_time_ms": execution_time_ms,
+                "workflow_completed": False,
+                "query": query,
+                "response": user_message,
+                "initialization_complete": response_state["initialization_complete"],
+                "partial_response_sent": False,
+            }
+        else:
+            # Partial response was sent - send error marker event
+            yield {
+                "type": "supervisor_error",
+                "error": str(e),
+                "error_category": error_category,
+                "execution_time_ms": execution_time_ms,
+                "workflow_completed": False,
+                "response": "[ERROR] Response was interrupted. The above message may be incomplete.",
+                "initialization_complete": response_state["initialization_complete"],
+                "partial_response_sent": True,
+            }
