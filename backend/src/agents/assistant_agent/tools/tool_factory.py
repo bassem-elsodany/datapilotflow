@@ -122,6 +122,11 @@ class ToolFactory:
                 f"[PROMPT TOOL] Executing '{tool_name}' | Input: {len(user_input)} chars | RAG Documents: {len(final_context)} chars"
             )
 
+            # DEBUG: Log RAG context preview to see what's available
+            if final_context and len(final_context) > 100:
+                context_preview = final_context[:800]
+                logger.debug(f"[RAG CONTEXT PREVIEW] {tool_name}:\n{context_preview}\n---END PREVIEW---")
+
             # Build full prompt with RAG context injected at the END as "ONLY SOURCE OF TRUTH"
             # This ensures the LLM knows to use ONLY the retrieved documents for knowledge
             # The RAG context appears last to take maximum precedence
