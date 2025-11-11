@@ -127,30 +127,44 @@ export function KnowledgeAssistantModal({
           </Card>
         );
 
-      case 'intent_detection':
+      case 'agent_execution_starting':
         return (
           <Card withBorder p="xs" mt="xs" style={{ backgroundColor: theme.colors.violet[0], borderColor: theme.colors.violet[3] }}>
             <Stack gap="xs">
               <Text size="xs" fw={600} c="violet.7">
-                🎯 Intent: {data.intent || 'unknown'}
+                🧠 Agent Planning
               </Text>
-              {data.intent_description && (
-                <Text size="xs" c="dimmed" style={{ fontStyle: 'italic' }}>
-                  {data.intent_description}
-                </Text>
-              )}
+              <Text size="xs" c="dimmed">
+                Analyzing query and creating execution plan
+              </Text>
+            </Stack>
+          </Card>
+        );
+
+      case 'rag_documents_extracted':
+        return (
+          <Card withBorder p="xs" mt="xs" style={{ backgroundColor: theme.colors.blue[0], borderColor: theme.colors.blue[3] }}>
+            <Stack gap="xs">
+              <Text size="xs" fw={600} c="blue.7">
+                📚 Documents Extracted
+              </Text>
               <Group gap="xs">
-                {data.routing_decision && (
-                  <Badge size="xs" variant="light" color="violet">
-                    → {data.routing_decision}
+                {data.document_count && (
+                  <Badge size="xs" variant="filled" color="green">
+                    {data.document_count} documents
                   </Badge>
                 )}
-                {data.detection_time_ms && (
-                  <Badge size="xs" variant="light" color="grape">
-                    {Math.round(data.detection_time_ms)}ms
+                {data.relevant_document_count && (
+                  <Badge size="xs" variant="filled" color="orange">
+                    {data.relevant_document_count} relevant
                   </Badge>
                 )}
               </Group>
+              {data.rag_strategy && (
+                <Text size="xs" c="dimmed">
+                  <strong>Strategy:</strong> {data.rag_strategy}
+                </Text>
+              )}
             </Stack>
           </Card>
         );
@@ -234,38 +248,34 @@ export function KnowledgeAssistantModal({
 
     allStages.push(
       {
-        id: 'supervisor_init',
-        name: 'Supervisor Orchestration',
-        description: 'Initializing multi-agent supervisor',
-        status: getStageStatus('supervisor_init'),
+        id: 'supervisor_init_complete',
+        name: 'Supervisor Initialization',
+        description: 'Initializing multi-agent supervisor system',
+        status: getStageStatus('supervisor_init_complete'),
         icon: <IconRobot size={20} />,
         color: 'grape',
         substages: [
           {
-            name: 'Supervisor agent initialized',
-            status: completedStages.includes('supervisor_init') ? 'completed' : 'active'
+            name: 'Multi-agent system initialized',
+            status: completedStages.includes('supervisor_init_complete') ? 'completed' : 'active'
           }
         ]
       },
       {
-        id: 'intent_detection',
-        name: 'Intent Detection',
-        description: 'Analyzing query to determine routing strategy',
-        status: getStageStatus('intent_detection'),
-        icon: <IconRoute size={20} />,
+        id: 'agent_execution_starting',
+        name: 'Query Analysis & Planning',
+        description: 'Agent analyzing query and creating execution plan',
+        status: getStageStatus('agent_execution_starting'),
+        icon: <IconBrain size={20} />,
         color: 'indigo',
-        metadata: {
-          intent: metadata.intent
-        },
         substages: [
           {
-            name: 'Analyzing user query intent',
-            status: completedStages.includes('intent_detection') ? 'completed' : 'active'
+            name: 'Analyzing query requirements',
+            status: completedStages.includes('agent_execution_starting') ? 'completed' : 'active'
           },
           {
-            name: metadata.intent ? `Detected: ${metadata.intent}` : 'Determining routing path',
-            status: completedStages.includes('intent_detected') || completedStages.includes('intent_detection') ? 'completed' : 'active',
-            metric: metadata.intent
+            name: 'Planning execution strategy',
+            status: completedStages.includes('agent_execution_starting') ? 'completed' : 'active'
           }
         ]
       },
@@ -354,13 +364,18 @@ export function KnowledgeAssistantModal({
     if (completedStages.includes(stageId)) return 'completed';
     if (currentStage === stageId) return 'active';
 
-    const stageOrder: string[] = ['supervisor_init', 'intent_detection', 'rag_agent_executing'];
+    const stageOrder: string[] = [
+      'supervisor_init_complete',
+      'agent_execution_starting',
+      'rag_agent_executing',
+      'rag_documents_extracted'
+    ];
 
-    if (metadata.intent === 'rag_then_task') {
+    if (enableLLMGeneration) {
       stageOrder.push('task_agent_executing');
     }
 
-    stageOrder.push('response_generation');
+    stageOrder.push('response_generation_complete', 'response_streaming_started', 'workflow_complete');
 
     const currentIndex = currentStage ? stageOrder.indexOf(currentStage) : -1;
     const stageIndex = stageOrder.indexOf(stageId);
