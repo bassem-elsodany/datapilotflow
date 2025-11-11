@@ -134,7 +134,11 @@ async def agent_query_supervisor_websocket(
     logger.info("ASSISTANT AGENT ENDPOINT INVOKED | /ws/agent/query/supervisor")
     logger.info("=" * 80)
 
-    # Validate JWT token
+    # IMPORTANT: Accept connection FIRST before validating
+    # This prevents "Need to call accept first" error
+    await websocket.accept()
+
+    # Validate JWT token AFTER accepting connection
     timeout = settings.WEBSOCKET_TIMEOUT
 
     try:
@@ -157,8 +161,6 @@ async def agent_query_supervisor_websocket(
         logger.warning(f"WebSocket authentication failed: {e}")
         await websocket.close(code=1008, reason="Authentication failed")
         return
-
-    await websocket.accept()
     logger.info(
         f"Supervisor WebSocket connected for user: {user_id} with timeout: {timeout}"
     )
