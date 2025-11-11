@@ -473,6 +473,14 @@ async def get_response_stream_supervisor(
         # Execute main agent and stream events
         logger.info("Starting main agent execution with error resilience")
 
+        # Emit agent execution starting event
+        yield {
+            "type": "supervisor_progress",
+            "stage": "agent_execution_starting",
+            "message": "Agent analyzing query and preparing execution plan",
+            "execution_time_ms": (time.time() - start_time) * 1000,
+        }
+
         # Track state
         final_messages = []
         tools_used = []
@@ -830,6 +838,14 @@ async def get_response_stream_supervisor(
         # Stream response in chunks - ONLY if we have a valid response
         if final_response:
             try:
+                # Emit response streaming started event
+                yield {
+                    "type": "supervisor_progress",
+                    "stage": "response_streaming_started",
+                    "message": "Streaming response to client",
+                    "execution_time_ms": (time.time() - start_time) * 1000,
+                }
+
                 chunk_size = 500
                 for i in range(0, len(final_response), chunk_size):
                     chunk = final_response[i : i + chunk_size]
