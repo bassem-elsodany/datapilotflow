@@ -174,6 +174,11 @@ export function SupervisorModePipelineModal({
 
       // Only add Task Agent if generation tools are needed
       if (enableLLMGeneration) {
+        // Get tool name from stage details if available
+        const taskStageDetails = metadata.stageDetails?.task_agent_executing;
+        const toolName = taskStageDetails?.tool_name || taskStageDetails?.data?.tool_name;
+        const displayToolName = toolName ? ` (${toolName})` : '';
+        
         allStages.push({
           id: 'task_agent_executing',
           name: 'Response Generation with Tools',
@@ -183,7 +188,7 @@ export function SupervisorModePipelineModal({
           color: 'teal',
           substages: [
             {
-              name: 'Invoking generation tools with knowledge base context',
+              name: `Invoking generation tools with knowledge base context${displayToolName}`,
               status: completedStages.includes('task_agent_executing') ? 'completed' : 'active'
             },
             {

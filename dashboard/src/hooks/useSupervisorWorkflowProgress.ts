@@ -38,7 +38,28 @@ export function useSupervisorWorkflowProgress() {
 
     if (isCompleteEvent) {
       // COMPLETE EVENT: Store data and schedule delayed completion
-      const completedStage = supervisorStage.replace('_complete', '');
+      let completedStage = supervisorStage.replace('_complete', '');
+      
+      // Map tool-specific completion events to task_agent_executing stage
+      // Known workflow stages that should NOT be mapped
+      const knownWorkflowStages = [
+        'supervisor_init',
+        'agent_execution_starting',
+        'rag_agent_executing',
+        'rag_documents_extracted',
+        'task_agent_executing',
+        'response_generation',
+        'response_streaming_started',
+        'workflow'
+      ];
+      
+      // If this is not a known workflow stage, it's a task tool completion
+      // Map it to task_agent_executing
+      if (!knownWorkflowStages.includes(completedStage)) {
+        console.log(`🔧 [SUPERVISOR] Mapping tool completion "${completedStage}" to "task_agent_executing"`);
+        completedStage = 'task_agent_executing';
+      }
+      
       console.log(`✅ [SUPERVISOR COMPLETE] ${completedStage} - scheduling completion after ${MINIMUM_LOADER_DISPLAY_MS}ms`);
 
       const elapsedSinceActive = Date.now() - (stageTimingsRef.current[completedStage]?.activeTime || 0);
@@ -75,6 +96,7 @@ export function useSupervisorWorkflowProgress() {
             data: data?.data || {},
             timestamp: new Date().toISOString(),
             execution_time_ms: data?.execution_time_ms || 0,
+            tool_name: data?.data?.tool_name,  // Capture specific tool name for task_agent_executing
           };
 
           // Extract detected intent from data if available
