@@ -781,17 +781,29 @@ async def get_response_stream_supervisor(
                     if event_type == "on_chat_model_stream":
                         chunk = event_data.get("chunk", {})
                         
-                        # Debug: Log chunk structure to understand format
-                        if hasattr(chunk, 'content'):
-                            content_chunk = chunk.content if isinstance(chunk.content, str) else ""
-                        else:
-                            content_chunk = chunk.get("content", "") if isinstance(chunk, dict) else ""
+                        # Debug: Log ALL chunk events to see what we're getting
+                        logger.info(f"[STREAM EVENT] chunk type={type(chunk).__name__}, has_content={hasattr(chunk, 'content')}, chunk_keys={chunk.keys() if isinstance(chunk, dict) else 'N/A'}")
                         
+                        # Try multiple ways to extract content
+                        content_chunk = ""
+                        if hasattr(chunk, "content"):
+                            content_chunk = chunk.content if isinstance(chunk.content, str) else ""
+                            if content_chunk:
+                                logger.info(f"[STREAM] Got content from chunk.content: {content_chunk[:50]}...")
+                        elif isinstance(chunk, dict) and "content" in chunk:
+                            content_chunk = chunk.get("content", "")
+                            if content_chunk:
+                                logger.info(f"[STREAM] Got content from chunk['content']: {content_chunk[:50]}...")
+
                         # Stream content chunks to frontend in real-time (WHILE generating)
-                        if content_chunk and isinstance(content_chunk, str) and content_chunk.strip():
+                        if (
+                            content_chunk
+                            and isinstance(content_chunk, str)
+                            and content_chunk.strip()
+                        ):
                             # Stream this chunk immediately to the frontend
                             # This allows users to see response building up behind the modal
-                            logger.debug(f"[STREAMING] Chunk: {content_chunk[:50]}...")
+                            logger.info(f"[STREAMING NOW] Yielding chunk: {content_chunk[:50]}...")
                             yield {
                                 "type": "streaming_response",
                                 "chunk": content_chunk,
