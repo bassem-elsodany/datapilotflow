@@ -123,8 +123,8 @@ export function useSupervisorWorkflowProgress() {
           } else if (completedStage === 'rag_documents_extracted') {
             nextActiveStage = 'task_agent_executing';
           } else if (completedStage === 'task_agent_executing') {
-            nextActiveStage = 'response_generation_complete';
-          } else if (completedStage === 'response_generation_complete') {
+            nextActiveStage = 'response_generation';
+          } else if (completedStage === 'response_generation') {
             nextActiveStage = 'response_streaming_started';
           } else if (completedStage === 'response_streaming_started') {
             nextActiveStage = 'workflow_complete';
