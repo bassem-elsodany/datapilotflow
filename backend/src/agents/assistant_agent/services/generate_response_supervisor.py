@@ -284,7 +284,7 @@ async def get_response_stream_supervisor(
             "relevant_docs": 0,
             "documents": [],
             "enhanced_queries": [],
-            "enhancement_strategy": selected_strategy or "native",
+            "enhancement_strategy": selected_strategy or "custom_variants",
             "final_answer": "",
         }
 
@@ -457,7 +457,7 @@ async def get_response_stream_supervisor(
             trace_tags = [
                 "supervisor_agent",
                 "tool_calling_pattern",
-                f"strategy:{selected_strategy or 'native'}",
+                f"strategy:{selected_strategy or 'custom_variants'}",
                 f"provider:{llm_provider_id}",
                 f"model:{llm_model_name}",
                 f"collection:{collection_name}",
@@ -516,7 +516,9 @@ async def get_response_stream_supervisor(
         final_messages = []
         tools_used = []
         rag_tool_called = False
-        agent_execution_complete_emitted = False  # Track if we've emitted agent_execution_starting_complete
+        agent_execution_complete_emitted = (
+            False  # Track if we've emitted agent_execution_starting_complete
+        )
         retrieved_rag_documents = (
             None  # Track RAG results for injection into task tools
         )
@@ -582,17 +584,14 @@ async def get_response_stream_supervisor(
                                     "tool_name": tool_name,
                                     "tools_used": agent_state.get("tools_used", []),
                                 },
-                                "execution_time_ms": (
-                                    time.time() - start_time
-                                )
-                                * 1000,
+                                "execution_time_ms": (time.time() - start_time) * 1000,
                             }
 
                         if tool_name == rag_agent_name:
                             # Extract RAG documents from tool output
                             tool_output = event_data.get("output", "")
-                            logger.debug(
-                                f"RAG tool end event: output type={type(tool_output).__name__}, length={len(str(tool_output)) if tool_output else 0}"
+                            logger.info(
+                                f"🔍 RAG tool end event: output type={type(tool_output).__name__}, length={len(str(tool_output)) if tool_output else 0}, has_output={bool(tool_output)}"
                             )
 
                             if tool_output:
@@ -607,14 +606,27 @@ async def get_response_stream_supervisor(
                                     tool_output_content = tool_output
 
                                 if tool_output_content:
+                                    logger.info(
+                                        f"🔍 Processing tool_output_content, type={type(tool_output_content).__name__}"
+                                    )
                                     try:
                                         # Handle both string and dict outputs
                                         if isinstance(tool_output_content, str):
+                                            logger.info(
+                                                f"🔍 Parsing JSON from string: {tool_output_content[:200]}..."
+                                            )
                                             rag_response = json.loads(
                                                 tool_output_content
                                             )
                                         else:
+                                            logger.info(
+                                                f"🔍 Using dict output directly"
+                                            )
                                             rag_response = tool_output_content
+
+                                        logger.info(
+                                            f"🔍 rag_response type={type(rag_response).__name__}, has_documents={'documents' in rag_response if isinstance(rag_response, dict) else False}"
+                                        )
 
                                         if (
                                             isinstance(rag_response, dict)
@@ -646,10 +658,18 @@ async def get_response_stream_supervisor(
                                             )
 
                                             # CRITICAL: Store documents in rag_execution_state for metadata
-                                            rag_execution_state["documents"] = retrieved_rag_documents
-                                            rag_execution_state["total_docs"] = len(retrieved_rag_documents)
-                                            rag_execution_state["relevant_docs"] = len(retrieved_rag_documents)
-                                            logger.info(f"✅ Stored {len(retrieved_rag_documents)} documents in rag_execution_state for metadata")
+                                            rag_execution_state["documents"] = (
+                                                retrieved_rag_documents
+                                            )
+                                            rag_execution_state["total_docs"] = len(
+                                                retrieved_rag_documents
+                                            )
+                                            rag_execution_state["relevant_docs"] = len(
+                                                retrieved_rag_documents
+                                            )
+                                            logger.info(
+                                                f"✅ Stored {len(retrieved_rag_documents)} documents in rag_execution_state for metadata"
+                                            )
 
                                             # Emit RAG documents extracted COMPLETE event
                                             yield {
@@ -665,6 +685,9 @@ async def get_response_stream_supervisor(
                                                     ),
                                                     "tools_used": agent_state.get(
                                                         "tools_used", []
+                                                    ),
+                                                    "enhanced_queries": rag_execution_state.get(
+                                                        "enhanced_queries", []
                                                     ),
                                                 },
                                                 "execution_time_ms": (
@@ -700,10 +723,19 @@ async def get_response_stream_supervisor(
                                                 "stage": "rag_agent_executing_complete",
                                                 "message": f"RAG agent execution completed with {len(retrieved_rag_documents)} documents",
                                                 "data": {
-                                                    "document_count": len(retrieved_rag_documents),
-                                                    "context_size": len(rag_context_str),
-                                                    "strategy": rag_execution_state.get("enhancement_strategy", "unknown"),
-                                                    "tools_used": agent_state.get("tools_used", []),
+                                                    "document_count": len(
+                                                        retrieved_rag_documents
+                                                    ),
+                                                    "context_size": len(
+                                                        rag_context_str
+                                                    ),
+                                                    "strategy": rag_execution_state.get(
+                                                        "enhancement_strategy",
+                                                        "unknown",
+                                                    ),
+                                                    "tools_used": agent_state.get(
+                                                        "tools_used", []
+                                                    ),
                                                 },
                                                 "execution_time_ms": (
                                                     time.time() - start_time
@@ -972,7 +1004,9 @@ async def get_response_stream_supervisor(
                             metadata["document_sources"] = [
                                 {
                                     "title": doc.get("title", "Unknown"),
-                                    "source": doc.get("source", doc.get("source_url", "Unknown")),
+                                    "source": doc.get(
+                                        "source", doc.get("source_url", "Unknown")
+                                    ),
                                     "distance": doc.get("distance", None),
                                 }
                                 for doc in rag_execution_state["documents"]
@@ -1049,8 +1083,17 @@ async def get_response_stream_supervisor(
             },
         }
 
-        # Add RAG documents and metadata if RAG tool was called
-        if rag_tool_called:
+        # Add RAG documents and metadata if we have documents (more reliable than rag_tool_called flag)
+        has_rag_documents = (
+            rag_execution_state.get("documents")
+            and len(rag_execution_state.get("documents", [])) > 0
+        )
+
+        logger.info(
+            f"Final result preparation: rag_tool_called={rag_tool_called}, has_rag_documents={has_rag_documents}, document_count={len(rag_execution_state.get('documents', []))}"
+        )
+
+        if has_rag_documents:
             final_result["documents"] = rag_execution_state["documents"]
             final_result["metadata"]["document_count"] = rag_execution_state[
                 "total_docs"
@@ -1061,6 +1104,33 @@ async def get_response_stream_supervisor(
             final_result["metadata"]["enhanced_queries"] = rag_execution_state[
                 "enhanced_queries"
             ]
+
+            # Extract source URLs and chunk IDs from documents
+            source_urls = []
+            chunk_ids = []
+            for doc in rag_execution_state["documents"]:
+                # Try multiple paths for source_url (top-level, nested in metadata, or 'source' field)
+                source_url = doc.get("source_url") or doc.get("source")
+                if not source_url and doc.get("metadata", {}).get("metadata"):
+                    source_url = doc["metadata"]["metadata"].get("source_url")
+
+                if source_url and source_url not in source_urls:
+                    source_urls.append(source_url)
+
+                # Try multiple paths for chunk_id (top-level or nested in metadata)
+                chunk_id = doc.get("chunk_id")
+                if not chunk_id and doc.get("metadata", {}).get("metadata"):
+                    chunk_id = doc["metadata"]["metadata"].get("chunk_id")
+
+                if chunk_id and chunk_id not in chunk_ids:
+                    chunk_ids.append(chunk_id)
+
+            logger.info(
+                f"📦 Extracted {len(source_urls)} source URLs and {len(chunk_ids)} chunk IDs from {len(rag_execution_state['documents'])} documents"
+            )
+
+            final_result["metadata"]["source_urls"] = source_urls
+            final_result["metadata"]["chunk_ids"] = chunk_ids
 
             # Add source details for each document
             final_result["metadata"]["document_sources"] = [

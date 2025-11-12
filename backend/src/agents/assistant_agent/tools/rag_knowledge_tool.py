@@ -48,7 +48,7 @@ def create_rag_knowledge_tool(
     """
 
     # Extract config values from workflow_config (single source of truth)
-    selected_strategy = workflow_config.get("selected_strategy", "native")
+    selected_strategy = workflow_config.get("selected_strategy", "custom_variants")
     conversation_description = workflow_config.get("conversation_description")
     llm_provider_id = workflow_config.get("llm_provider_id")
     llm_model_name = workflow_config.get("llm_model_name")
@@ -80,9 +80,13 @@ def create_rag_knowledge_tool(
 
             # Handle if agent provided a Python list of variants (from tool calling)
             if isinstance(search_query, list):
-                logger.info(f"[INTENT ANALYSIS] Agent provided {len(search_query)} query variants as list")
+                logger.info(
+                    f"[INTENT ANALYSIS] Agent provided {len(search_query)} query variants as list"
+                )
                 logger.info("=" * 100)
-                variants = [str(v).strip() for v in search_query if v and str(v).strip()]
+                variants = [
+                    str(v).strip() for v in search_query if v and str(v).strip()
+                ]
                 if variants:
                     for idx, variant in enumerate(variants, 1):
                         logger.info(f"   VARIANT [{idx}/{len(variants)}]: '{variant}'")
@@ -169,7 +173,9 @@ def create_rag_knowledge_tool(
             final_answer = rag_result.get("final_answer", "No answer generated")
             retrieved_documents = rag_result.get("retrieved_documents", [])
             judged_documents = rag_result.get("judged_documents", [])
-            structured_documents = rag_result.get("structured_documents", [])  # New: structured docs from raw formatter
+            structured_documents = rag_result.get(
+                "structured_documents", []
+            )  # New: structured docs from raw formatter
             query_info = rag_result.get("query_info", {})
 
             # Update shared state
@@ -204,13 +210,19 @@ def create_rag_knowledge_tool(
             # Build structured document list for task tools to consume
             documents_for_tools = []
             for i, doc in enumerate(retrieved_documents[:10], 1):  # Top 10 docs
-                documents_for_tools.append({
-                    "id": doc.get("id") or doc.get("chunk_id", f"doc_{i}"),
-                    "content": doc.get("text") or doc.get("content", ""),
-                    "source": doc.get("source_url", ""),
-                    "metadata": {k: v for k, v in doc.items()
-                                if k not in ["text", "content", "id", "source_url", "chunk_id"]},
-                })
+                documents_for_tools.append(
+                    {
+                        "id": doc.get("id") or doc.get("chunk_id", f"doc_{i}"),
+                        "content": doc.get("text") or doc.get("content", ""),
+                        "source": doc.get("source_url", ""),
+                        "metadata": {
+                            k: v
+                            for k, v in doc.items()
+                            if k
+                            not in ["text", "content", "id", "source_url", "chunk_id"]
+                        },
+                    }
+                )
 
             # Format response as JSON for machine parsing
             # NOTE: Do NOT include final_answer here - the supervisor agent needs to call task tools
@@ -222,11 +234,11 @@ def create_rag_knowledge_tool(
                 "documents": documents_for_tools,  # Flat document list for task tools to use
                 "structured_documents": structured_documents,  # Structured docs with metadata
                 "metadata": {
-                    "total_documents": rag_execution_state['total_docs'],
-                    "relevant_documents": rag_execution_state['relevant_docs'],
+                    "total_documents": rag_execution_state["total_docs"],
+                    "relevant_documents": rag_execution_state["relevant_docs"],
                     "source_count": len(source_urls),
                     "sources": source_urls[:10],
-                }
+                },
             }
 
             # Return as JSON string so agent can parse it

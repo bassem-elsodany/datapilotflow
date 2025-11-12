@@ -377,7 +377,9 @@ async def agent_query_supervisor_websocket(
                         ]:
                             try:
                                 await websocket.send_text(json.dumps(chunk))
-                                logger.debug(f"Supervisor event sent to client successfully")
+                                logger.debug(
+                                    f"Supervisor event sent to client successfully"
+                                )
                             except Exception as send_error:
                                 # Client connection lost while sending response
                                 if response_started:
@@ -435,6 +437,13 @@ async def agent_query_supervisor_websocket(
                 )
                 await websocket.close(code=1000, reason="Connection idle timeout")
                 return
+            except RuntimeError as e:
+                # Handle WebSocket connection errors (closed/not accepted)
+                if "WebSocket" in str(e) or "not connected" in str(e):
+                    logger.debug(f"WebSocket connection error: {e} - closing handler")
+                    return
+                # Re-raise if it's not a WebSocket connection error
+                raise
             except json.JSONDecodeError:
                 logger.error("Invalid JSON received")
                 try:
@@ -470,6 +479,11 @@ async def agent_query_supervisor_websocket(
                     logger.debug(
                         f"Could not send error message to client (connection may be closed): {send_error}"
                     )
+                # Break out of loop if we can't recover from the error
+                logger.warning(
+                    "Unrecoverable error in WebSocket handler - closing connection"
+                )
+                return
 
     except WebSocketDisconnect:
         logger.debug(f"Supervisor WebSocket disconnected for user: {user_id}")

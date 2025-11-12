@@ -1102,20 +1102,79 @@ export default function ConversationWindow() {
           break;
 
         case 'workflow_complete':
-          // Handle workflow completion - close the modal and finalize streaming message
-          console.log('✅ [WORKFLOW COMPLETE] Closing RAG pipeline modal');
+          // Handle workflow completion from supervisor - extract metadata and close modal
+          console.log('✅ [WORKFLOW COMPLETE] Processing completion with metadata:', data);
+          console.log('📋 [WORKFLOW COMPLETE] Data structure:', {
+            hasDocuments: !!data.documents,
+            documentsLength: data.documents?.length,
+            hasMetadata: !!data.metadata,
+            metadataKeys: data.metadata ? Object.keys(data.metadata) : [],
+            metadata: data.metadata
+          });
+
+          // Extract source URLs from documents if available
+          const sourceUrls: string[] = [];
+          const chunkIds: string[] = [];
+          if (data.documents && Array.isArray(data.documents)) {
+            data.documents.forEach((doc: any) => {
+              const sourceUrl = doc.source_url || doc.source;
+              if (sourceUrl && !sourceUrls.includes(sourceUrl)) {
+                sourceUrls.push(sourceUrl);
+              }
+              const chunkId = doc.chunk_id || doc.id;
+              if (chunkId && !chunkIds.includes(chunkId)) {
+                chunkIds.push(chunkId);
+              }
+            });
+          }
+
+          // Extract metadata from workflow_complete event (supervisor uses this structure)
+          const workflowMetadata = data.metadata ? {
+            source_urls: data.metadata.source_urls || sourceUrls,
+            correlation_ids: data.metadata.correlation_ids || [],
+            chunk_ids: data.metadata.chunk_ids || chunkIds,
+            document_count: data.metadata.document_count || data.documents?.length || 0,
+            enhancement_strategy: data.metadata.enhancement_strategy || data.metadata.rag_strategy,
+            enhanced_queries: data.metadata.enhanced_queries || data.metadata.search_variants || [],
+            // Document sources and variants
+            document_sources: data.metadata.document_sources || [],
+            search_variants: data.metadata.search_variants || data.metadata.enhanced_queries || [],
+            rag_strategy: data.metadata.rag_strategy || data.metadata.enhancement_strategy,
+          } : undefined;
+
+          console.log('📦 [WORKFLOW COMPLETE] Extracted metadata:', workflowMetadata);
 
           // Stop loading indicator
           setIsLoading(false);
 
+          // Update the last streaming message with metadata
+          if (workflowMetadata) {
+            setMessages(prev => {
+              const lastMessage = prev[prev.length - 1];
+              if (lastMessage && lastMessage.role === 'assistant' && lastMessage.isStreaming) {
+                console.log('📝 [WORKFLOW COMPLETE] Updating last message with metadata');
+                return [
+                  ...prev.slice(0, -1),
+                  {
+                    ...lastMessage,
+                    isStreaming: false,
+                    metadata: workflowMetadata,
+                  }
+                ];
+              }
+              return prev;
+            });
+          }
+
           // Finalize the streaming message to apply markdown formatting
           finalizeStreamingMessages();
 
-          // Close the modal
+          // Close the modal and update workflow state
           setWorkflowState(prev => ({
             ...prev,
             isActive: false,
             currentStage: null,
+            enhancedQueries: workflowMetadata?.enhanced_queries || prev.enhancedQueries,
           }));
           break;
 
@@ -1168,12 +1227,21 @@ export default function ConversationWindow() {
         case 'supervisor_init':
           // Handle supervisor initialization
           console.log('🤖 Supervisor agent started');
+          // Get the original query from the most recent user message
+          const supervisorOriginalQuery = 
+            (messages.length > 0 && messages[messages.length - 1].role === 'user'
+              ? messages[messages.length - 1].content
+              : inputMessage);
+          
           setWorkflowState(prev => ({
             ...prev,
             currentStage: 'supervisor_init',
             completedStages: [],
             isActive: true,
             ragSubstages: [],  // Reset substages on new workflow
+            originalQuery: supervisorOriginalQuery,  // Set original query for modal display
+            enhancedQueries: null,  // Reset enhanced queries
+            strategy: 'custom_variants',  // Supervisor always uses custom_variants
           }));
           break;
 
