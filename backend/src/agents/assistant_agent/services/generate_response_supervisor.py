@@ -742,7 +742,7 @@ async def get_response_stream_supervisor(
                                                 )
                                                 * 1000,
                                             }
-                                            
+
                                             # Emit task agent execution START event
                                             # This marks the beginning of task tool execution phase
                                             yield {
@@ -750,7 +750,9 @@ async def get_response_stream_supervisor(
                                                 "stage": "task_agent_executing",
                                                 "message": "Starting task tool execution with RAG context",
                                                 "data": {
-                                                    "available_tools": [t.name for t in task_tools],
+                                                    "available_tools": [
+                                                        t.name for t in task_tools
+                                                    ],
                                                     "rag_context_available": True,
                                                 },
                                                 "execution_time_ms": (
@@ -921,6 +923,17 @@ async def get_response_stream_supervisor(
 
         # Extract final response with error handling
         execution_time_ms = (time.time() - start_time) * 1000
+        
+        # Emit response generation START event
+        yield {
+            "type": "workflow_progress",
+            "stage": "response_generation",
+            "message": "Generating final response",
+            "data": {
+                "tools_used": tools_used,
+            },
+            "execution_time_ms": execution_time_ms,
+        }
 
         final_response = ""
         try:
@@ -944,7 +957,7 @@ async def get_response_stream_supervisor(
             logger.error(f"Traceback: {traceback.format_exc()}")
             raise
 
-        # Emit completion events
+        # Emit response generation COMPLETE event
         yield {
             "type": "workflow_progress",
             "stage": "response_generation_complete",
@@ -1058,6 +1071,18 @@ async def get_response_stream_supervisor(
                 logger.error(error_msg)
                 logger.error(f"Traceback: {traceback.format_exc()}")
                 raise
+            
+            # Emit response streaming COMPLETE event
+            yield {
+                "type": "workflow_progress",
+                "stage": "response_streaming_started_complete",
+                "message": "Response streaming completed",
+                "data": {
+                    "total_chunks": len(final_response) // 500 + (1 if len(final_response) % 500 else 0),
+                    "response_length": len(final_response),
+                },
+                "execution_time_ms": (time.time() - start_time) * 1000,
+            }
 
         # Extract metadata from RAG execution state BEFORE saving to database
         has_rag_documents = (

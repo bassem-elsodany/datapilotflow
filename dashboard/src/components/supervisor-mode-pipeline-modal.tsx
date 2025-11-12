@@ -198,6 +198,26 @@ export function SupervisorModePipelineModal({
         ]
       });
 
+    // Add Response Generation stage
+    allStages.push({
+      id: 'response_generation',
+      name: 'Response Generation',
+      description: 'Generating final response from agent output',
+      status: getStageStatus('response_generation'),
+      icon: <IconMessageCircle size={20} />,
+      color: 'violet',
+      substages: [
+        {
+          name: 'Extracting and formatting final response',
+          status: completedStages.includes('response_generation') ? 'completed' : 'active'
+        },
+        {
+          name: 'Preparing response metadata',
+          status: completedStages.includes('response_generation') ? 'completed' : 'active'
+        }
+      ]
+    });
+
     // Add Response Streaming stage (final stage)
     allStages.push({
       id: 'response_streaming_started',
@@ -207,10 +227,6 @@ export function SupervisorModePipelineModal({
       icon: <IconSparkles size={20} />,
       color: 'green',
       substages: [
-        {
-          name: 'Preparing response metadata and sources',
-          status: completedStages.includes('response_generation_complete') || completedStages.includes('response_streaming_started') ? 'completed' : 'active'
-        },
         {
           name: 'Streaming response chunks to client',
           status: completedStages.includes('response_streaming_started') ? 'completed' : 'active'
@@ -246,8 +262,8 @@ export function SupervisorModePipelineModal({
       'rag_agent_executing',
       'rag_documents_extracted',
       'task_agent_executing',  // Always present in supervisor mode
-      'response_generation_complete',
-      'response_streaming_started',
+      'response_generation',  // Generating final response
+      'response_streaming_started',  // Streaming to client
       'workflow_complete'
     ];
 
