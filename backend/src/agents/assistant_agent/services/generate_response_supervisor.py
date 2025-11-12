@@ -781,11 +781,17 @@ async def get_response_stream_supervisor(
                     if event_type == "on_chat_model_stream":
                         chunk = event_data.get("chunk", {})
                         
+                        # Debug: Log chunk structure to understand format
+                        if hasattr(chunk, 'content'):
+                            content_chunk = chunk.content if isinstance(chunk.content, str) else ""
+                        else:
+                            content_chunk = chunk.get("content", "") if isinstance(chunk, dict) else ""
+                        
                         # Stream content chunks to frontend in real-time (WHILE generating)
-                        content_chunk = chunk.get("content", "")
                         if content_chunk and isinstance(content_chunk, str) and content_chunk.strip():
                             # Stream this chunk immediately to the frontend
                             # This allows users to see response building up behind the modal
+                            logger.debug(f"[STREAMING] Chunk: {content_chunk[:50]}...")
                             yield {
                                 "type": "streaming_response",
                                 "chunk": content_chunk,
@@ -795,7 +801,7 @@ async def get_response_stream_supervisor(
                                 },
                                 "execution_time_ms": (time.time() - start_time) * 1000,
                             }
-                        
+
                         # Track tool calls
                         if "tool_calls" in chunk:
                             for tool_call in chunk.get("tool_calls", []):
@@ -830,7 +836,7 @@ async def get_response_stream_supervisor(
 
                                         # RAG context already in agent_state, no need to set again
                                         # Task tools will read from agent_state["rag_context"]
-                                        
+
                                         # NOTE: We do NOT emit another task_agent_executing event here
                                         # The START event was already emitted after RAG completion
                                         # Emitting again would cause the stage to flicker/restart in the UI
