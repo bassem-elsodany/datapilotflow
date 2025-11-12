@@ -172,32 +172,31 @@ export function SupervisorModePipelineModal({
         }
       );
 
-      // Only add Task Agent if generation tools are needed
-      if (enableLLMGeneration) {
-        // Get tool name from stage details if available
-        const taskStageDetails = metadata.stageDetails?.task_agent_executing;
-        const toolName = taskStageDetails?.tool_name || taskStageDetails?.data?.tool_name;
-        const displayToolName = toolName ? ` (${toolName})` : '';
-        
-        allStages.push({
-          id: 'task_agent_executing',
-          name: 'Response Generation with Tools',
-          description: 'Executing generation tools with RAG context injected',
-          status: getStageStatus('task_agent_executing'),
-          icon: <IconTool size={20} />,
-          color: 'teal',
-          substages: [
-            {
-              name: `Invoking generation tools with knowledge base context${displayToolName}`,
-              status: completedStages.includes('task_agent_executing') ? 'completed' : 'active'
-            },
-            {
-              name: 'Processing tool outputs',
-              status: completedStages.includes('task_agent_executing') ? 'completed' : 'active'
-            }
-          ]
-        });
-      }
+      // Task Agent stage - ALWAYS present in supervisor mode
+      // Supervisor architecture requires task tools for response generation
+      // Get tool name from stage details if available
+      const taskStageDetails = metadata.stageDetails?.task_agent_executing;
+      const toolName = taskStageDetails?.tool_name || taskStageDetails?.data?.tool_name;
+      const displayToolName = toolName ? ` (${toolName})` : '';
+      
+      allStages.push({
+        id: 'task_agent_executing',
+        name: 'Response Generation with Tools',
+        description: 'Executing generation tools with RAG context injected',
+        status: getStageStatus('task_agent_executing'),
+        icon: <IconTool size={20} />,
+        color: 'teal',
+        substages: [
+          {
+            name: `Invoking generation tools with knowledge base context${displayToolName}`,
+            status: completedStages.includes('task_agent_executing') ? 'completed' : 'active'
+          },
+          {
+            name: 'Processing tool outputs',
+            status: completedStages.includes('task_agent_executing') ? 'completed' : 'active'
+          }
+        ]
+      });
 
     // Add Response Streaming stage (final stage)
     allStages.push({
@@ -228,8 +227,8 @@ export function SupervisorModePipelineModal({
     metadata,
     currentStage,
     completedStages,
-    rerankingEnabled,
-    enableLLMGeneration
+    rerankingEnabled
+    // Note: enableLLMGeneration removed - task stage is always present in supervisor mode
   ]);
 
   function getStageStatus(stageId: string): 'pending' | 'active' | 'completed' | 'skipped' {
@@ -240,19 +239,17 @@ export function SupervisorModePipelineModal({
     if (currentStage === stageId) return 'active';
 
     // Build supervisor stage order - matches actual backend stages
+    // task_agent_executing is ALWAYS included in supervisor mode (part of the architecture)
     const stageOrder: string[] = [
       'supervisor_init_complete',
       'agent_execution_starting',
       'rag_agent_executing',
-      'rag_documents_extracted'
+      'rag_documents_extracted',
+      'task_agent_executing',  // Always present in supervisor mode
+      'response_generation_complete',
+      'response_streaming_started',
+      'workflow_complete'
     ];
-
-    // Only add task_agent to order if generation tools are enabled
-    if (enableLLMGeneration) {
-      stageOrder.push('task_agent_executing');
-    }
-
-    stageOrder.push('response_generation_complete', 'response_streaming_started', 'workflow_complete');
 
     const currentIndex = currentStage ? stageOrder.indexOf(currentStage) : -1;
     const stageIndex = stageOrder.indexOf(stageId);
