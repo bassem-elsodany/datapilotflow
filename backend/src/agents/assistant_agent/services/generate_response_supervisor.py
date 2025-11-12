@@ -1043,7 +1043,50 @@ async def get_response_stream_supervisor(
                 logger.error(f"Traceback: {traceback.format_exc()}")
                 raise
 
-        # Save to conversation history (non-fatal failure)
+        # Extract metadata from RAG execution state BEFORE saving to database
+        has_rag_documents = (
+            rag_execution_state.get("documents")
+            and len(rag_execution_state.get("documents", [])) > 0
+        )
+        
+        logger.info(
+            f"Final result preparation: rag_tool_called={rag_tool_called}, has_rag_documents={has_rag_documents}, document_count={len(rag_execution_state.get('documents', []))}"
+        )
+        
+        # Initialize metadata variables
+        source_urls = []
+        chunk_ids = []
+        enhanced_queries = []
+        enhancement_strategy = rag_execution_state.get("enhancement_strategy", "unknown")
+        document_count = 0
+        
+        if has_rag_documents:
+            document_count = len(rag_execution_state["documents"])
+            enhanced_queries = rag_execution_state.get("enhanced_queries", [])
+            
+            # Extract source URLs and chunk IDs from documents
+            for doc in rag_execution_state["documents"]:
+                # Try multiple paths for source_url (top-level, nested in metadata, or 'source' field)
+                source_url = doc.get("source_url") or doc.get("source")
+                if not source_url and doc.get("metadata", {}).get("metadata"):
+                    source_url = doc["metadata"]["metadata"].get("source_url")
+                
+                if source_url and source_url not in source_urls:
+                    source_urls.append(source_url)
+                
+                # Try multiple paths for chunk_id (top-level or nested in metadata)
+                chunk_id = doc.get("chunk_id")
+                if not chunk_id and doc.get("metadata", {}).get("metadata"):
+                    chunk_id = doc["metadata"]["metadata"].get("chunk_id")
+                
+                if chunk_id and chunk_id not in chunk_ids:
+                    chunk_ids.append(chunk_id)
+
+            logger.info(
+                f"📦 Extracted {len(source_urls)} source URLs and {len(chunk_ids)} chunk IDs from {document_count} documents"
+            )
+
+        # Save to conversation history with metadata (non-fatal failure)
         try:
             user_message = ConversationMessage(
                 role="user",
@@ -1053,15 +1096,24 @@ async def get_response_stream_supervisor(
             )
             conversation_history_service.add_message(conversation_id, user_message)
 
+            # Save assistant message WITH metadata (matching RAG mode behavior)
             assistant_message = ConversationMessage(
                 role="assistant",
                 content=final_response,
                 timestamp=datetime.now(timezone.utc),
+                source_urls=source_urls,
+                chunk_ids=chunk_ids,
+                enhancement_strategy_used=enhancement_strategy,
+                enhanced_queries=enhanced_queries,
+                document_count=document_count,
                 processing_time_ms=int(execution_time_ms),
             )
             conversation_history_service.add_message(conversation_id, assistant_message)
 
-            logger.info(f"Saved messages to conversation {conversation_id}")
+            logger.info(
+                f"✅ [CONVERSATION] Saved assistant response with metadata to conversation {conversation_id} "
+                f"(sources={len(source_urls)}, chunks={len(chunk_ids)}, queries={len(enhanced_queries)}, docs={document_count})"
+            )
         except Exception as e:
             # Conversation save failure is logged but NOT fatal
             error_msg = f"Failed to save conversation (continuing): {str(e)}"
@@ -1079,19 +1131,9 @@ async def get_response_stream_supervisor(
             "metadata": {
                 "orchestrator_type": "tool_calling_pattern",
                 "tools_used": tools_used,
-                "enhancement_strategy": rag_execution_state["enhancement_strategy"],
+                "enhancement_strategy": enhancement_strategy,
             },
         }
-
-        # Add RAG documents and metadata if we have documents (more reliable than rag_tool_called flag)
-        has_rag_documents = (
-            rag_execution_state.get("documents")
-            and len(rag_execution_state.get("documents", [])) > 0
-        )
-
-        logger.info(
-            f"Final result preparation: rag_tool_called={rag_tool_called}, has_rag_documents={has_rag_documents}, document_count={len(rag_execution_state.get('documents', []))}"
-        )
 
         if has_rag_documents:
             final_result["documents"] = rag_execution_state["documents"]
@@ -1101,34 +1143,7 @@ async def get_response_stream_supervisor(
             final_result["metadata"]["relevant_document_count"] = rag_execution_state[
                 "relevant_docs"
             ]
-            final_result["metadata"]["enhanced_queries"] = rag_execution_state[
-                "enhanced_queries"
-            ]
-
-            # Extract source URLs and chunk IDs from documents
-            source_urls = []
-            chunk_ids = []
-            for doc in rag_execution_state["documents"]:
-                # Try multiple paths for source_url (top-level, nested in metadata, or 'source' field)
-                source_url = doc.get("source_url") or doc.get("source")
-                if not source_url and doc.get("metadata", {}).get("metadata"):
-                    source_url = doc["metadata"]["metadata"].get("source_url")
-
-                if source_url and source_url not in source_urls:
-                    source_urls.append(source_url)
-
-                # Try multiple paths for chunk_id (top-level or nested in metadata)
-                chunk_id = doc.get("chunk_id")
-                if not chunk_id and doc.get("metadata", {}).get("metadata"):
-                    chunk_id = doc["metadata"]["metadata"].get("chunk_id")
-
-                if chunk_id and chunk_id not in chunk_ids:
-                    chunk_ids.append(chunk_id)
-
-            logger.info(
-                f"📦 Extracted {len(source_urls)} source URLs and {len(chunk_ids)} chunk IDs from {len(rag_execution_state['documents'])} documents"
-            )
-
+            final_result["metadata"]["enhanced_queries"] = enhanced_queries
             final_result["metadata"]["source_urls"] = source_urls
             final_result["metadata"]["chunk_ids"] = chunk_ids
 
