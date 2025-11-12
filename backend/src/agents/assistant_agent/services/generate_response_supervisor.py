@@ -803,26 +803,20 @@ async def get_response_stream_supervisor(
                                             * 1000,
                                         }
 
-                                    # Emit task tool execution event
+                                    # Track task tool execution (no event emission to avoid duplicate START event)
                                     elif tool_name in [t.name for t in task_tools]:
                                         # Track task tool execution in agent state using LangGraph method
                                         agent_state.add_task_tool_executed(tool_name)
-                                        logger.debug(
-                                            f"[AGENT STATE] Task tool added to execution list: {tool_name}"
+                                        logger.info(
+                                            f"[TASK TOOL] Detected tool call: {tool_name} - task_agent_executing stage already active"
                                         )
 
                                         # RAG context already in agent_state, no need to set again
                                         # Task tools will read from agent_state["rag_context"]
-
-                                        yield {
-                                            "type": "workflow_progress",
-                                            "stage": "task_agent_executing",
-                                            "message": f"Task Tool: Executing {tool_name}",
-                                            "execution_time_ms": (
-                                                time.time() - start_time
-                                            )
-                                            * 1000,
-                                        }
+                                        
+                                        # NOTE: We do NOT emit another task_agent_executing event here
+                                        # The START event was already emitted after RAG completion
+                                        # Emitting again would cause the stage to flicker/restart in the UI
                 except Exception as e:
                     # Tool call tracking error - log but continue
                     error_msg = f"Error tracking tool call: {str(e)}"
@@ -923,7 +917,7 @@ async def get_response_stream_supervisor(
 
         # Extract final response with error handling
         execution_time_ms = (time.time() - start_time) * 1000
-        
+
         # Emit response generation START event
         yield {
             "type": "workflow_progress",
@@ -1071,14 +1065,15 @@ async def get_response_stream_supervisor(
                 logger.error(error_msg)
                 logger.error(f"Traceback: {traceback.format_exc()}")
                 raise
-            
+
             # Emit response streaming COMPLETE event
             yield {
                 "type": "workflow_progress",
                 "stage": "response_streaming_started_complete",
                 "message": "Response streaming completed",
                 "data": {
-                    "total_chunks": len(final_response) // 500 + (1 if len(final_response) % 500 else 0),
+                    "total_chunks": len(final_response) // 500
+                    + (1 if len(final_response) % 500 else 0),
                     "response_length": len(final_response),
                 },
                 "execution_time_ms": (time.time() - start_time) * 1000,
