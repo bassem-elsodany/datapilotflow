@@ -742,6 +742,22 @@ async def get_response_stream_supervisor(
                                                 )
                                                 * 1000,
                                             }
+                                            
+                                            # Emit task agent execution START event
+                                            # This marks the beginning of task tool execution phase
+                                            yield {
+                                                "type": "workflow_progress",
+                                                "stage": "task_agent_executing",
+                                                "message": "Starting task tool execution with RAG context",
+                                                "data": {
+                                                    "available_tools": [t.name for t in task_tools],
+                                                    "rag_context_available": True,
+                                                },
+                                                "execution_time_ms": (
+                                                    time.time() - start_time
+                                                )
+                                                * 1000,
+                                            }
                                         else:
                                             logger.debug(
                                                 f"RAG response missing 'documents' key. Keys: {rag_response.keys() if isinstance(rag_response, dict) else 'N/A'}"
@@ -1048,37 +1064,39 @@ async def get_response_stream_supervisor(
             rag_execution_state.get("documents")
             and len(rag_execution_state.get("documents", [])) > 0
         )
-        
+
         logger.info(
             f"Final result preparation: rag_tool_called={rag_tool_called}, has_rag_documents={has_rag_documents}, document_count={len(rag_execution_state.get('documents', []))}"
         )
-        
+
         # Initialize metadata variables
         source_urls = []
         chunk_ids = []
         enhanced_queries = []
-        enhancement_strategy = rag_execution_state.get("enhancement_strategy", "unknown")
+        enhancement_strategy = rag_execution_state.get(
+            "enhancement_strategy", "unknown"
+        )
         document_count = 0
-        
+
         if has_rag_documents:
             document_count = len(rag_execution_state["documents"])
             enhanced_queries = rag_execution_state.get("enhanced_queries", [])
-            
+
             # Extract source URLs and chunk IDs from documents
             for doc in rag_execution_state["documents"]:
                 # Try multiple paths for source_url (top-level, nested in metadata, or 'source' field)
                 source_url = doc.get("source_url") or doc.get("source")
                 if not source_url and doc.get("metadata", {}).get("metadata"):
                     source_url = doc["metadata"]["metadata"].get("source_url")
-                
+
                 if source_url and source_url not in source_urls:
                     source_urls.append(source_url)
-                
+
                 # Try multiple paths for chunk_id (top-level or nested in metadata)
                 chunk_id = doc.get("chunk_id")
                 if not chunk_id and doc.get("metadata", {}).get("metadata"):
                     chunk_id = doc["metadata"]["metadata"].get("chunk_id")
-                
+
                 if chunk_id and chunk_id not in chunk_ids:
                     chunk_ids.append(chunk_id)
 
