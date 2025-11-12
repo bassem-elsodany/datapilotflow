@@ -30,6 +30,8 @@ export function useSupervisorWorkflowProgress() {
       type: isCompleteEvent ? '✅ COMPLETE' : '▶️ START',
       message: data?.message,
       hasData: !!data?.data,
+      dataKeys: data?.data ? Object.keys(data.data) : [],
+      enhanced_queries: data?.data?.enhanced_queries,
       currentStage: currentWorkflowState?.currentStage,
       completedStages: currentWorkflowState?.completedStages
     });
@@ -124,6 +126,21 @@ export function useSupervisorWorkflowProgress() {
             }
           }
 
+          // Extract enhanced_queries from rag_documents_extracted stage for modal display
+          // This makes supervisor variants visible in the Knowledge Assistant Processing modal
+          if (completedStage === 'rag_documents_extracted' && data?.data) {
+            // enhanced_queries may come from different paths in the data
+            const enhancedQueries = 
+              data.data.enhanced_queries ||  // Direct path
+              data.data.tools_used?.enhanced_queries ||  // In tools metadata
+              [];
+            
+            if (Array.isArray(enhancedQueries) && enhancedQueries.length > 0) {
+              console.log(`📋 [SUPERVISOR] Extracting ${enhancedQueries.length} enhanced queries from rag_documents_extracted`, enhancedQueries);
+              newState.enhancedQueries = enhancedQueries;
+            }
+          }
+
           console.log(`✅ Supervisor ${completedStage} COMPLETED, next stage: ${nextActiveStage}`);
 
           return newState;
@@ -144,11 +161,33 @@ export function useSupervisorWorkflowProgress() {
       };
 
       setWorkflowState((prev: any) => {
-        if (prev.currentStage !== supervisorStage) {
-          return {
-            ...prev,
-            currentStage: supervisorStage,
-          };
+        const newState: any = {
+          ...prev,
+          currentStage: supervisorStage,
+        };
+
+        // Special handling for rag_documents_extracted (it's sent as a single event, not start+complete)
+        // Extract enhanced_queries from this event's data
+        if (supervisorStage === 'rag_documents_extracted' && data?.data) {
+          const enhancedQueries = 
+            data.data.enhanced_queries ||
+            data.data.tools_used?.enhanced_queries ||
+            [];
+          
+          console.log(`📋 [SUPERVISOR START EVENT] Checking for enhanced_queries in rag_documents_extracted:`, {
+            hasEnhancedQueries: !!data.data.enhanced_queries,
+            enhancedQueriesLength: enhancedQueries.length,
+            enhancedQueries: enhancedQueries
+          });
+          
+          if (Array.isArray(enhancedQueries) && enhancedQueries.length > 0) {
+            console.log(`📋 [SUPERVISOR] Extracting ${enhancedQueries.length} enhanced queries from rag_documents_extracted START event`, enhancedQueries);
+            newState.enhancedQueries = enhancedQueries;
+          }
+        }
+
+        if (prev.currentStage !== supervisorStage || newState.enhancedQueries !== prev.enhancedQueries) {
+          return newState;
         }
         return prev;
       });
