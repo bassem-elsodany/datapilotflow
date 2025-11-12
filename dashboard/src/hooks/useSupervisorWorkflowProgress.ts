@@ -123,12 +123,13 @@ export function useSupervisorWorkflowProgress() {
           } else if (completedStage === 'rag_documents_extracted') {
             nextActiveStage = 'task_agent_executing';
           } else if (completedStage === 'task_agent_executing') {
-            nextActiveStage = 'response_generation';
-          } else if (completedStage === 'response_generation') {
             nextActiveStage = 'response_streaming_started';
           } else if (completedStage === 'response_streaming_started') {
             nextActiveStage = 'workflow_complete';
           }
+          
+          // Note: response_generation is tracked as a substage completion, not a top-level stage
+          // It doesn't change the active stage, just updates substage progress within response_streaming_started
 
           // Update current stage if next stage is determined
           if (nextActiveStage) {
