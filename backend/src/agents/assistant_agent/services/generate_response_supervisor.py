@@ -776,10 +776,27 @@ async def get_response_stream_supervisor(
                             f"Error processing RAG tool end event: {e} | {traceback.format_exc()}"
                         )
 
-                # Track tool calls with error detection
+                # Track tool calls and stream content chunks in real-time
                 try:
                     if event_type == "on_chat_model_stream":
                         chunk = event_data.get("chunk", {})
+                        
+                        # Stream content chunks to frontend in real-time (WHILE generating)
+                        content_chunk = chunk.get("content", "")
+                        if content_chunk and isinstance(content_chunk, str) and content_chunk.strip():
+                            # Stream this chunk immediately to the frontend
+                            # This allows users to see response building up behind the modal
+                            yield {
+                                "type": "streaming_response",
+                                "chunk": content_chunk,
+                                "metadata": {
+                                    "tools_used": tools_used,
+                                    "orchestrator_type": "tool_calling_pattern",
+                                },
+                                "execution_time_ms": (time.time() - start_time) * 1000,
+                            }
+                        
+                        # Track tool calls
                         if "tool_calls" in chunk:
                             for tool_call in chunk.get("tool_calls", []):
                                 tool_name = tool_call.get("name", "")
@@ -819,7 +836,7 @@ async def get_response_stream_supervisor(
                                         # Emitting again would cause the stage to flicker/restart in the UI
                 except Exception as e:
                     # Tool call tracking error - log but continue
-                    error_msg = f"Error tracking tool call: {str(e)}"
+                    error_msg = f"Error streaming/tracking: {str(e)}"
                     logger.error(error_msg)
                     logger.error(f"Traceback: {traceback.format_exc()}")
 
