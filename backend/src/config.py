@@ -134,28 +134,31 @@ class Settings(BaseSettings):
             return f"mongodb://{user}:{pw}@{host}:{port}/admin"
         return f"mongodb://{host}:{port}/{db}"
 
-    # --- Observability Configuration ---
-    COMET_API_KEY: Optional[str] = Field(
-        default=None, description="API key for Comet ML and Opik services."
-    )
-    COMET_PROJECT: str = Field(
-        default="datapilotflow",
-        description="Project name for Comet ML and Opik tracking.",
-        min_length=1,
-    )
-
-    OBSERVABILITY_ENABLED: bool = Field(
-        default=False, description="Whether to enable Opik observability.", ge=0, le=1
-    )
-
     # --- Agent Tracing Configuration ---
+
     AGENT_TRACING_ENABLED: bool = Field(
         default=False,
-        description="Whether to enable agent tracing and prompt versioning with Opik",
+        description="Whether to enable agent tracing and prompt versioning",
     )
-    OPIK_URL_OVERRIDE: Optional[str] = Field(
+
+    AGENT_TRACING_API_KEY: Optional[str] = Field(
+        default=None,
+        description="API key for tracing agent activities",
+    )
+
+    AGENT_TRACING_URL: str = Field(
         default="http://localhost:5173/api",
-        description="Override Opik URL for custom deployment or testing",
+        description="URL for tracing agent activities",
+    )
+
+    AGENT_TRACING_PROJECT_NAME: str = Field(
+        default="datapilotflow",
+        description="Project name for tracing agent activities",
+    )
+
+    AGENT_TRACING_DEFAULT_ENVIRONMENT: str = Field(
+        default="development",
+        description="Default environment for tracing agent activities",
     )
 
     # --- RAG Configuration ---

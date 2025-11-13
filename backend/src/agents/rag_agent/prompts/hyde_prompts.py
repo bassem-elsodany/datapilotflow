@@ -8,7 +8,7 @@ query embeddings for document retrieval.
 from src.agents.common.base_prompt import Prompt
 
 HYDE_SYSTEM_PROMPT = Prompt(
-    name="rag_agent_hyde_system_prompt",
+    name="datapilotflow_rag_agent_hyde_system_prompt",
     prompt="""You are an AI assistant tasked with generating hypothetical answers for a RAG system using the HyDE (Hypothetical Document Embeddings) technique.
 
 ⚠️ CRITICAL RULES ⚠️
@@ -57,7 +57,7 @@ Return ONLY the hypothetical answer, nothing else. No preamble, no explanation."
 )
 
 HYDE_USER_PROMPT = Prompt(
-    name="rag_agent_hyde_user_prompt",
+    name="datapilotflow_rag_agent_hyde_user_prompt",
     prompt="""Question: {query}
 
 Generate a hypothetical answer that would be found in a relevant document:""",

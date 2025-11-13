@@ -10,7 +10,9 @@ from src.config import settings
 def configure() -> None:
     if settings.AGENT_TRACING_ENABLED:
         try:
-            client = OpikConfigurator(use_local=True, url=settings.OPIK_URL_OVERRIDE)
+            client = OpikConfigurator(
+                use_local=False, api_key=settings.AGENT_TRACING_API_KEY
+            )
             default_workspace = client._get_default_workspace()
             logger.info(f"Default workspace: {default_workspace}")
         except Exception:
@@ -19,15 +21,14 @@ def configure() -> None:
             )
             default_workspace = None
 
-        os.environ["OPIK_PROJECT_NAME"] = settings.COMET_PROJECT
+        os.environ["OPIK_PROJECT_NAME"] = settings.AGENT_TRACING_PROJECT_NAME
 
         try:
             opik.configure(
-                # api_key=settings.COMET_API_KEY,
-                # workspace=default_workspace,
-                use_local=True,
-                # url=settings.OPIK_URL_OVERRIDE,
-                # force=True,
+                api_key=settings.AGENT_TRACING_API_KEY,
+                workspace=default_workspace,
+                use_local=False,
+                force=True,
             )
             logger.info(
                 f"Opik configured successfully using workspace '{default_workspace}'"

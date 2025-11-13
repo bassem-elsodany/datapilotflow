@@ -1,9 +1,9 @@
 """
-SkillPilot - AI-augmented interview assistant
+DataPilotFlow - AI-powered RAG management and knowledge system
 """
 
-__version__ = "0.1.0" 
+__version__ = "0.1.0"
 
 
-# from infrastructure.opik_utils import configure
+# from infrastructure.langfuse_utils import configure
 # configure()

@@ -39,7 +39,7 @@ export function useSupervisorWorkflowProgress() {
     if (isCompleteEvent) {
       // COMPLETE EVENT: Store data and schedule delayed completion
       let completedStage = supervisorStage.replace('_complete', '');
-      
+
       // Map tool-specific completion events to task_agent_executing stage
       // Known workflow stages that should NOT be mapped
       const knownWorkflowStages = [
@@ -52,14 +52,14 @@ export function useSupervisorWorkflowProgress() {
         'response_streaming_started',
         'workflow'
       ];
-      
+
       // If this is not a known workflow stage, it's a task tool completion
       // Map it to task_agent_executing
       if (!knownWorkflowStages.includes(completedStage)) {
         console.log(`🔧 [SUPERVISOR] Mapping tool completion "${completedStage}" to "task_agent_executing"`);
         completedStage = 'task_agent_executing';
       }
-      
+
       console.log(`✅ [SUPERVISOR COMPLETE] ${completedStage} - scheduling completion after ${MINIMUM_LOADER_DISPLAY_MS}ms`);
 
       const elapsedSinceActive = Date.now() - (stageTimingsRef.current[completedStage]?.activeTime || 0);
@@ -127,7 +127,7 @@ export function useSupervisorWorkflowProgress() {
           } else if (completedStage === 'response_streaming_started') {
             nextActiveStage = 'workflow_complete';
           }
-          
+
           // Note: response_generation is tracked as a substage completion, not a top-level stage
           // It doesn't change the active stage, just updates substage progress within response_streaming_started
 
@@ -153,11 +153,11 @@ export function useSupervisorWorkflowProgress() {
           // This makes supervisor variants visible in the Knowledge Assistant Processing modal
           if (completedStage === 'rag_documents_extracted' && data?.data) {
             // enhanced_queries may come from different paths in the data
-            const enhancedQueries = 
+            const enhancedQueries =
               data.data.enhanced_queries ||  // Direct path
               data.data.tools_used?.enhanced_queries ||  // In tools metadata
               [];
-            
+
             if (Array.isArray(enhancedQueries) && enhancedQueries.length > 0) {
               console.log(`📋 [SUPERVISOR] Extracting ${enhancedQueries.length} enhanced queries from rag_documents_extracted`, enhancedQueries);
               newState.enhancedQueries = enhancedQueries;
@@ -184,25 +184,28 @@ export function useSupervisorWorkflowProgress() {
       };
 
       setWorkflowState((prev: any) => {
+        // CRITICAL: Explicitly preserve completedStages to prevent reset during state updates
+        // When chunks stream in, multiple START events fire and we must not lose completion state
         const newState: any = {
           ...prev,
           currentStage: supervisorStage,
+          completedStages: prev.completedStages || [], // Explicit preservation
         };
 
         // Special handling for rag_documents_extracted (it's sent as a single event, not start+complete)
         // Extract enhanced_queries from this event's data
         if (supervisorStage === 'rag_documents_extracted' && data?.data) {
-          const enhancedQueries = 
+          const enhancedQueries =
             data.data.enhanced_queries ||
             data.data.tools_used?.enhanced_queries ||
             [];
-          
+
           console.log(`📋 [SUPERVISOR START EVENT] Checking for enhanced_queries in rag_documents_extracted:`, {
             hasEnhancedQueries: !!data.data.enhanced_queries,
             enhancedQueriesLength: enhancedQueries.length,
             enhancedQueries: enhancedQueries
           });
-          
+
           if (Array.isArray(enhancedQueries) && enhancedQueries.length > 0) {
             console.log(`📋 [SUPERVISOR] Extracting ${enhancedQueries.length} enhanced queries from rag_documents_extracted START event`, enhancedQueries);
             newState.enhancedQueries = enhancedQueries;
@@ -210,6 +213,7 @@ export function useSupervisorWorkflowProgress() {
         }
 
         if (prev.currentStage !== supervisorStage || newState.enhancedQueries !== prev.enhancedQueries) {
+          console.log(`✅ [SUPERVISOR START] State update - completedStages preserved:`, newState.completedStages);
           return newState;
         }
         return prev;

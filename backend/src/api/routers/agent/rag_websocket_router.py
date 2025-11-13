@@ -343,10 +343,6 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
                 async for chunk in stream:
                     chunk_type = chunk.get("type")
                     chunk_stage = chunk.get("stage")
-                    logger.debug(
-                        f"[RAG EVENT] Received from backend: type={chunk_type}, stage={chunk_stage}"
-                    )
-                    logger.debug(f"[RAG EVENT DATA] {json.dumps(chunk)}")
 
                     if chunk_type in [
                         "workflow_progress",
@@ -354,11 +350,7 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
                         "workflow_error",
                         "streaming_response",
                     ]:
-                        logger.debug(
-                            f"[RAG SEND] Sending to client: type={chunk_type}, stage={chunk_stage}"
-                        )
                         await websocket.send_text(json.dumps(chunk))
-                        logger.debug(f"[RAG SENT] Event sent to client")
                     else:
                         logger.warning(
                             f"Skipping unexpected RAG event type: {chunk_type}"

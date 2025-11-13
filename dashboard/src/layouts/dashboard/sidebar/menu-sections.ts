@@ -6,7 +6,6 @@ import {
   PiGearSixDuotone,
   PiMagnifyingGlassDuotone,
   PiStarDuotone,
-  PiTreeStructureDuotone,
   PiUsersDuotone
 } from 'react-icons/pi';
 
@@ -103,11 +102,6 @@ export const menu: MenuItem[] = [
                 href: paths.dashboard.management.knowledge.vectorStatus,
               },
             ],
-          },
-          {
-            name: 'Pipeline Builder',
-            href: paths.dashboard.management.pipelineBuilder.root,
-            icon: PiTreeStructureDuotone,
           },
         ],
       },

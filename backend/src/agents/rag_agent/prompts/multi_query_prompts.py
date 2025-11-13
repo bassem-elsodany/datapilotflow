@@ -8,7 +8,7 @@ to improve retrieval coverage and capture different user intents.
 from src.agents.common.base_prompt import Prompt
 
 MULTI_QUERY_SYSTEM_PROMPT = Prompt(
-    name="rag_agent_multi_query_system_prompt",
+    name="datapilotflow_rag_agent_multi_query_system_prompt",
     prompt="""You are an AI assistant tasked with generating alternative phrasings of the user's query for a RAG system.
 
 ⚠️ CRITICAL RULES ⚠️
@@ -63,7 +63,7 @@ Just the raw JSON array.""",
 )
 
 MULTI_QUERY_USER_PROMPT = Prompt(
-    name="rag_agent_multi_query_user_prompt",
+    name="datapilotflow_rag_agent_multi_query_user_prompt",
     prompt="""Original Question: {query}
 
 Generate 3-5 alternative phrasings.

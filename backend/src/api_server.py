@@ -74,7 +74,7 @@ async def initialize_system_if_needed():
 
         # Get the admin user ID for initialization
         admin_user = admin_init_service.auth_dao.get_user_by_username("admin")
-        if not admin_user:
+        if not admin_user or not admin_user.id:
             logger.error("Admin user not found for system initialization")
             return False
 

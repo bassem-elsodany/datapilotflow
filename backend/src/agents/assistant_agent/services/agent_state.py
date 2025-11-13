@@ -114,15 +114,49 @@ class SupervisorAgentState(BaseModel):
         context_str: str
     ) -> None:
         """
-        Set RAG documents and formatted context.
+        ACCUMULATE RAG documents and formatted context (for multiple knowledge_expert calls).
+        
+        This supports the iterative enrichment workflow where the agent:
+        1. Calls knowledge_expert (gets initial docs)
+        2. Generates with task tool (might be incomplete)
+        3. Calls knowledge_expert AGAIN with new variants (gets more docs)
+        4. Generates again with ALL accumulated docs
+        
+        Documents are deduplicated by ID/chunk_id to avoid duplicates.
 
         Args:
-            documents: List of RAG documents
-            context_str: Formatted context string
+            documents: List of RAG documents to ADD
+            context_str: Formatted context string to APPEND
         """
-        self.rag_documents = documents
-        self.rag_context = context_str
-        self.rag_context_size = len(context_str)
+        # Initialize if None
+        if self.rag_documents is None:
+            self.rag_documents = []
+        
+        # Deduplicate: only add documents that aren't already in the list
+        existing_ids = {
+            doc.get("id") or doc.get("chunk_id") or doc.get("source_url")
+            for doc in self.rag_documents
+        }
+        
+        new_docs_added = 0
+        for doc in documents:
+            doc_id = doc.get("id") or doc.get("chunk_id") or doc.get("source_url")
+            if doc_id not in existing_ids:
+                self.rag_documents.append(doc)
+                existing_ids.add(doc_id)
+                new_docs_added += 1
+        
+        # Append context (with separator if not first call)
+        if self.rag_context:
+            self.rag_context += f"\n\n{'='*80}\n[ADDITIONAL KNOWLEDGE FROM ENRICHMENT]\n{'='*80}\n\n"
+        self.rag_context += context_str
+        self.rag_context_size = len(self.rag_context)
+        
+        from loguru import logger
+        logger.info(
+            f"[RAG ACCUMULATION] Added {new_docs_added} new documents (total: {len(self.rag_documents)}), "
+            f"context size: {self.rag_context_size} chars"
+        )
 
     def get_rag_context(self) -> str:
         """

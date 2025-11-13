@@ -9,7 +9,6 @@ import {
   IconBrain,
   IconCalendar,
   IconEdit,
-  IconMessageCircle,
   IconMessages,
   IconPlus,
   IconRobot,
@@ -49,9 +48,6 @@ export default function KnowledgeSearch() {
   const navigate = useNavigate();
   const [conversationHistory, setConversationHistory] = useState<Conversation[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [renameModalOpen, setRenameModalOpen] = useState(false);
-  const [sessionToRename, setSessionToRename] = useState<Conversation | null>(null);
-  const [newSessionName, setNewSessionName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<Conversation | null>(null);
@@ -173,36 +169,6 @@ export default function KnowledgeSearch() {
         color: 'red',
       });
     }
-  };
-
-  const renameSession = async (sessionToRename: { sessionId: string; newName: string }) => {
-    try {
-      const token = localStorage.getItem('jwt_token');
-      const response = await fetch(buildApiUrl(`/conversations/${sessionToRename.sessionId}/name`), {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ new_name: sessionToRename.newName }),
-      });
-
-      if (response.ok) {
-        await loadConversationHistory();
-        setRenameModalOpen(false);
-        setSessionToRename(null);
-      } else {
-        console.error('Failed to rename session:', response.status);
-      }
-    } catch (error) {
-      console.error('Error renaming session:', error);
-    }
-  };
-
-  const openRenameModal = (session: Conversation) => {
-    setSessionToRename(session);
-    setNewSessionName(session.sessionName);
-    setRenameModalOpen(true);
   };
 
   const openDeleteModal = (session: Conversation) => {
@@ -357,7 +323,7 @@ export default function KnowledgeSearch() {
         width: 180,
         render: (session) => (
           <Group gap="xs" wrap="nowrap">
-            <Tooltip label="Edit Configuration">
+            <Tooltip label="Edit Conversation">
               <ActionIcon
                 variant="light"
                 color="gray"
@@ -365,16 +331,6 @@ export default function KnowledgeSearch() {
                 onClick={() => editConversation(session.id)}
               >
                 <IconEdit size={18} />
-              </ActionIcon>
-            </Tooltip>
-            <Tooltip label="Rename">
-              <ActionIcon
-                variant="light"
-                color="gray"
-                size="md"
-                onClick={() => openRenameModal(session)}
-              >
-                <IconMessageCircle size={18} />
               </ActionIcon>
             </Tooltip>
             <Tooltip label="Delete">
@@ -421,7 +377,7 @@ export default function KnowledgeSearch() {
             <DataTable.Content>
               {filteredSessions.length === 0 && !isLoading ? (
                 <Box ta="center" py="xl">
-                  <IconMessageCircle size={48} color="var(--mantine-color-gray-4)" />
+                  <IconMessages size={48} color="var(--mantine-color-gray-4)" />
                   <Text size="lg" c="dimmed" mt="md">
                     No conversation agents found
                   </Text>
@@ -459,54 +415,6 @@ export default function KnowledgeSearch() {
           </DataTable.Container>
         </Grid.Col>
       </Grid>
-
-      {/* Rename Modal */}
-      <Modal
-        opened={renameModalOpen}
-        onClose={() => {
-          setRenameModalOpen(false);
-          setSessionToRename(null);
-        }}
-        title="Rename Conversation"
-        size="md"
-      >
-        <Stack gap="md">
-          <Text size="sm" c="dimmed">
-            Enter a new name for the conversation "{sessionToRename?.sessionName}".
-          </Text>
-          <TextInput
-            label="New Name"
-            value={newSessionName}
-            onChange={(e) => setNewSessionName(e.target.value)}
-            placeholder="Enter conversation name"
-            maxLength={100}
-          />
-          <Group justify="flex-end" gap="xs">
-            <Button
-              variant="subtle"
-              onClick={() => {
-                setRenameModalOpen(false);
-                setSessionToRename(null);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                if (sessionToRename && newSessionName.trim()) {
-                  renameSession({
-                    sessionId: sessionToRename.id,
-                    newName: newSessionName.trim()
-                  });
-                }
-              }}
-              disabled={!newSessionName.trim()}
-            >
-              Rename
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
 
       {/* Delete Confirmation Modal */}
       <Modal

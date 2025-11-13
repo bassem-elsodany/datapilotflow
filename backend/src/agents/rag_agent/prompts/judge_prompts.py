@@ -8,7 +8,7 @@ to answering the user's question.
 from src.agents.common.base_prompt import Prompt
 
 JUDGE_SYSTEM_PROMPT = Prompt(
-    name="rag_agent_judge_system_prompt",
+    name="datapilotflow_rag_agent_judge_system_prompt",
     prompt="""You are an intelligent evaluation assistant specialized in assessing document relevance for RAG systems. 
 
 **Your Role:** Determine whether a retrieved document contains information that can effectively help answer the user's question.
@@ -41,7 +41,7 @@ After providing your explanation, output ONLY your final verdict as a decimal nu
 )
 
 JUDGE_USER_PROMPT = Prompt(
-    name="rag_agent_judge_user_prompt",
+    name="datapilotflow_rag_agent_judge_user_prompt",
     prompt="""**User Question:**
 "{query}"
 

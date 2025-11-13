@@ -8,7 +8,7 @@ and the retrieved, judged documents.
 from src.agents.common.base_prompt import Prompt
 
 GENERATION_SYSTEM_PROMPT = Prompt(
-    name="rag_agent_generation_system_prompt",
+    name="datapilotflow_rag_agent_generation_system_prompt",
     prompt="""You are a comprehensive knowledge base assistant. Your goal is to provide detailed, well-structured answers to user questions using the provided context from retrieved documents.
 
 **YOUR RESPONSIBILITY:**
@@ -42,7 +42,7 @@ You have been given carefully retrieved documents from a knowledge base. Use the
 )
 
 GENERATION_USER_PROMPT = Prompt(
-    name="rag_agent_generation_user_prompt",
+    name="datapilotflow_rag_agent_generation_user_prompt",
     prompt="""**Retrieved Knowledge Base Documents:**
 {context}
 

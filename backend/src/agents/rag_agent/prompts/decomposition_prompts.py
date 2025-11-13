@@ -8,9 +8,9 @@ more manageable sub-questions for targeted retrieval.
 from src.agents.common.base_prompt import Prompt
 
 DECOMPOSITION_SYSTEM_PROMPT = Prompt(
-    name="rag_agent_decomposition_system_prompt",
-    tags=["decomposition"],
-    metadata={
+    name="datapilotflow_rag_agent_decomposition_system_prompt",
+    labels=["decomposition"],
+    config={
         "description": "Breaking down complex user queries into simpler sub-queries for a RAG system.",
         "tags": ["decomposition"],
     },
@@ -49,7 +49,7 @@ NO explanations, NO markdown, JUST the JSON array.""",
 )
 
 DECOMPOSITION_USER_PROMPT = Prompt(
-    name="rag_agent_decomposition_user_prompt",
+    name="datapilotflow_rag_agent_decomposition_user_prompt",
     prompt="""Original Question: {query}
 
 Generate 2-4 sub-queries that break down this question.

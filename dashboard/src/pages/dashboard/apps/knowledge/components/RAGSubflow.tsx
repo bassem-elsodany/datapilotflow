@@ -40,9 +40,9 @@ export function generateRAGSubflowNodes(parentId: string, baseX: number, baseY: 
     position: { x: baseX, y: baseY },
     data: {
       id: `${parentId}-enhancement`,
-      name: 'Enhancement',
+      name: 'Query Enhancement',
       type: 'enhancement',
-      description: 'Query strategy',
+      description: 'Optimize search queries',
       configured: enhancementConfigured,
     },
   });
@@ -55,9 +55,9 @@ export function generateRAGSubflowNodes(parentId: string, baseX: number, baseY: 
     position: { x: baseX + nodeSpacing, y: baseY },
     data: {
       id: `${parentId}-search`,
-      name: 'Search',
+      name: 'Vector Search',
       type: 'retrieval',
-      description: 'Vector search',
+      description: 'Search knowledge base',
       configured: !!config.collectionName && !!config.topK,
     },
   });
@@ -70,9 +70,9 @@ export function generateRAGSubflowNodes(parentId: string, baseX: number, baseY: 
       position: { x: baseX + nodeSpacing * 2, y: baseY },
       data: {
         id: `${parentId}-rerank`,
-        name: 'Rerank',
+        name: 'Rerank Results',
         type: 'reranking',
-        description: 'Filter results',
+        description: 'Filter & rank results',
         configured: !!config.selectedRerankerId && !!config.selectedRerankerModel,
       },
     });
@@ -87,9 +87,9 @@ export function generateRAGSubflowNodes(parentId: string, baseX: number, baseY: 
       position: { x: xPos, y: baseY },
       data: {
         id: `${parentId}-generate`,
-        name: 'Generate',
+        name: 'Generate Answer',
         type: 'llm',
-        description: 'Answer generation',
+        description: 'Generate LLM response',
         configured: !!config.selectedProviderId && !!config.selectedModel,
       },
     });

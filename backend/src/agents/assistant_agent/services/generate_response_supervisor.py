@@ -254,6 +254,7 @@ async def get_response_stream_supervisor(
                 timeout=provider.timeout if provider.timeout else 60,  # type: ignore[call-arg]
                 temperature=temperature,
                 max_tokens=max_tokens,
+                streaming=True,  # Enable streaming for real-time response chunks
             )
             response_state["llm_client"] = llm_client  # Track for cleanup
             logger.info(f"Created LLM client: {model_string}")
@@ -470,7 +471,7 @@ async def get_response_stream_supervisor(
             opik_tracer = OpikTracer(
                 graph=main_agent.get_graph(xray=True),
                 tags=trace_tags,
-                project_name=settings.COMET_PROJECT,
+                project_name=settings.AGENT_TRACING_PROJECT_NAME,
             )
 
             # Add tracer to config callbacks
@@ -780,20 +781,28 @@ async def get_response_stream_supervisor(
                 try:
                     if event_type == "on_chat_model_stream":
                         chunk = event_data.get("chunk", {})
-                        
+
                         # Debug: Log ALL chunk events to see what we're getting
-                        logger.info(f"[STREAM EVENT] chunk type={type(chunk).__name__}, has_content={hasattr(chunk, 'content')}, chunk_keys={chunk.keys() if isinstance(chunk, dict) else 'N/A'}")
-                        
+                        logger.info(
+                            f"[STREAM EVENT] chunk type={type(chunk).__name__}, has_content={hasattr(chunk, 'content')}, chunk_keys={chunk.keys() if isinstance(chunk, dict) else 'N/A'}"
+                        )
+
                         # Try multiple ways to extract content
                         content_chunk = ""
                         if hasattr(chunk, "content"):
-                            content_chunk = chunk.content if isinstance(chunk.content, str) else ""
+                            content_chunk = (
+                                chunk.content if isinstance(chunk.content, str) else ""
+                            )
                             if content_chunk:
-                                logger.info(f"[STREAM] Got content from chunk.content: {content_chunk[:50]}...")
+                                logger.info(
+                                    f"[STREAM] Got content from chunk.content: {content_chunk[:50]}..."
+                                )
                         elif isinstance(chunk, dict) and "content" in chunk:
                             content_chunk = chunk.get("content", "")
                             if content_chunk:
-                                logger.info(f"[STREAM] Got content from chunk['content']: {content_chunk[:50]}...")
+                                logger.info(
+                                    f"[STREAM] Got content from chunk['content']: {content_chunk[:50]}..."
+                                )
 
                         # Stream content chunks to frontend in real-time (WHILE generating)
                         if (
@@ -801,9 +810,41 @@ async def get_response_stream_supervisor(
                             and isinstance(content_chunk, str)
                             and content_chunk.strip()
                         ):
+                            # Emit response_generation START event on first chunk (once only)
+                            if (
+                                "response_generation_started"
+                                not in rag_execution_state.get("stages_emitted", set())
+                            ):
+                                logger.info(
+                                    "[FIRST CHUNK] Emitting response_generation START event"
+                                )
+                                rag_execution_state.setdefault(
+                                    "stages_emitted", set()
+                                ).add("response_generation_started")
+                                yield {
+                                    "type": "workflow_progress",
+                                    "stage": "response_generation",
+                                    "message": "Generating final response",
+                                    "data": {
+                                        "tools_used": tools_used,
+                                    },
+                                    "execution_time_ms": (time.time() - start_time)
+                                    * 1000,
+                                }
+                                # Also emit streaming started
+                                yield {
+                                    "type": "workflow_progress",
+                                    "stage": "response_streaming_started",
+                                    "message": "Streaming response to client",
+                                    "execution_time_ms": (time.time() - start_time)
+                                    * 1000,
+                                }
+
                             # Stream this chunk immediately to the frontend
                             # This allows users to see response building up behind the modal
-                            logger.info(f"[STREAMING NOW] Yielding chunk: {content_chunk[:50]}...")
+                            logger.info(
+                                f"[STREAMING NOW] Yielding chunk: {content_chunk[:50]}..."
+                            )
                             yield {
                                 "type": "streaming_response",
                                 "chunk": content_chunk,
@@ -951,30 +992,80 @@ async def get_response_stream_supervisor(
             raise
 
         # Extract final response with error handling
+        # Note: response_generation and response_streaming_started events
+        # are emitted when first chunk arrives (in on_chat_model_stream handler)
         execution_time_ms = (time.time() - start_time) * 1000
-
-        # Emit response generation START event
-        yield {
-            "type": "workflow_progress",
-            "stage": "response_generation",
-            "message": "Generating final response",
-            "data": {
-                "tools_used": tools_used,
-            },
-            "execution_time_ms": execution_time_ms,
-        }
 
         final_response = ""
         try:
             if final_messages:
-                # Get last AI message content
-                for msg in reversed(final_messages):
+                # DEBUG: Log all message types to identify the issue
+                logger.info(
+                    f"📋 [FINAL MESSAGES] Total messages: {len(final_messages)}"
+                )
+                for i, msg in enumerate(reversed(final_messages)):
                     if isinstance(msg, AIMessage):
-                        final_response = msg.content
-                        break
-                    elif isinstance(msg, dict) and msg.get("role") == "assistant":
-                        final_response = msg.get("content", "")
-                        break
+                        logger.info(
+                            f"📋 [MSG {i}] AIMessage - content_length={len(msg.content)}, preview={msg.content[:100]}..."
+                        )
+                    elif isinstance(msg, ToolMessage):
+                        logger.info(
+                            f"📋 [MSG {i}] ToolMessage - name={msg.name}, content_length={len(str(msg.content))}, preview={str(msg.content)[:100]}..."
+                        )
+                    elif isinstance(msg, dict):
+                        logger.info(
+                            f"📋 [MSG {i}] Dict - role={msg.get('role')}, content_length={len(str(msg.get('content', '')))}, preview={str(msg.get('content', ''))[:100]}..."
+                        )
+                    else:
+                        logger.info(f"📋 [MSG {i}] Unknown type: {type(msg)}")
+
+                # CRITICAL: Extract from ToolMessage (task tool output), NOT AIMessage (agent thinking)
+                # The agent's AIMessage contains reasoning/analysis, the ToolMessage contains the actual generated content
+                task_tool_output_found = False
+                for msg in reversed(final_messages):
+                    # Check for ToolMessage from task tools (mulesoft_flow_generator, etc.)
+                    if isinstance(msg, ToolMessage):
+                        # Check if it's from a task tool (not RAG)
+                        if msg.name != rag_agent_name and msg.name in [
+                            t.name for t in task_tools
+                        ]:
+                            final_response = str(msg.content)
+                            task_tool_output_found = True
+                            logger.info(
+                                f"✅ [EXTRACTED] Using ToolMessage from '{msg.name}': {final_response[:200]}..."
+                            )
+                            break
+                    elif isinstance(msg, dict) and msg.get("role") == "tool":
+                        # Dict-based tool message
+                        tool_name = msg.get("name", "")
+                        if tool_name != rag_agent_name and tool_name in [
+                            t.name for t in task_tools
+                        ]:
+                            final_response = str(msg.get("content", ""))
+                            task_tool_output_found = True
+                            logger.info(
+                                f"✅ [EXTRACTED] Using dict tool message from '{tool_name}': {final_response[:200]}..."
+                            )
+                            break
+
+                # Fallback to AIMessage if no task tool output found (for pure Q&A without generation)
+                if not task_tool_output_found:
+                    logger.warning(
+                        "⚠️ No task tool output found, falling back to AIMessage (might be agent reasoning or pure Q&A)"
+                    )
+                    for msg in reversed(final_messages):
+                        if isinstance(msg, AIMessage):
+                            final_response = msg.content
+                            logger.info(
+                                f"⚠️ [FALLBACK] Using AIMessage content: {final_response[:200]}..."
+                            )
+                            break
+                        elif isinstance(msg, dict) and msg.get("role") == "assistant":
+                            final_response = msg.get("content", "")
+                            logger.info(
+                                f"⚠️ [FALLBACK] Using dict assistant content: {final_response[:200]}..."
+                            )
+                            break
 
             logger.info(f"Final response length: {len(final_response)}")
             response_state["final_response"] = final_response
@@ -999,116 +1090,18 @@ async def get_response_stream_supervisor(
             "execution_time_ms": execution_time_ms,
         }
 
-        # Stream response in chunks - ONLY if we have a valid response
+        # Emit response streaming COMPLETE event
+        # Note: response_streaming_started was emitted when first chunk arrived
+        # Streaming happened in real-time via on_chat_model_stream events
         if final_response:
-            try:
-                # Emit response streaming started event
-                yield {
-                    "type": "workflow_progress",
-                    "stage": "response_streaming_started",
-                    "message": "Streaming response to client",
-                    "execution_time_ms": (time.time() - start_time) * 1000,
-                }
-
-                chunk_size = 500
-                for i in range(0, len(final_response), chunk_size):
-                    chunk = final_response[i : i + chunk_size]
-                    response_state["has_yielded_response"] = True
-
-                    if i == 0:
-                        # First chunk with metadata
-                        metadata = {
-                            "tools_used": tools_used,
-                            "orchestrator_type": "tool_calling_pattern",
-                            "enhancement_strategy": rag_execution_state[
-                                "enhancement_strategy"
-                            ],
-                        }
-
-                        # Add RAG-specific metadata if RAG tool was called
-                        if rag_tool_called:
-                            source_urls = []
-                            chunk_ids = []
-
-                            # Extract source URLs and chunk IDs from documents
-                            for doc in rag_execution_state["documents"]:
-                                if (
-                                    doc.get("source_url")
-                                    and doc["source_url"] not in source_urls
-                                ):
-                                    source_urls.append(doc["source_url"])
-                                if (
-                                    doc.get("chunk_id")
-                                    and doc["chunk_id"] not in chunk_ids
-                                ):
-                                    chunk_ids.append(doc["chunk_id"])
-
-                            metadata.update(
-                                {
-                                    "source_urls": source_urls,
-                                    "chunk_ids": chunk_ids,
-                                    "document_count": rag_execution_state["total_docs"],
-                                    "relevant_document_count": rag_execution_state[
-                                        "relevant_docs"
-                                    ],
-                                    "enhanced_queries": rag_execution_state[
-                                        "enhanced_queries"
-                                    ],
-                                }
-                            )
-
-                        # Add comprehensive metadata to first chunk
-                        if rag_tool_called:
-                            metadata["document_sources"] = [
-                                {
-                                    "title": doc.get("title", "Unknown"),
-                                    "source": doc.get(
-                                        "source", doc.get("source_url", "Unknown")
-                                    ),
-                                    "distance": doc.get("distance", None),
-                                }
-                                for doc in rag_execution_state["documents"]
-                            ]
-                            metadata["search_variants"] = rag_execution_state.get(
-                                "enhanced_queries", []
-                            )
-                            metadata["rag_strategy"] = rag_execution_state.get(
-                                "enhancement_strategy", "unknown"
-                            )
-
-                        yield {
-                            "type": "streaming_response",
-                            "chunk": chunk,
-                            "metadata": metadata,
-                            "execution_time_ms": execution_time_ms,
-                        }
-                    else:
-                        # Subsequent chunks - include minimal metadata
-                        yield {
-                            "type": "streaming_response",
-                            "chunk": chunk,
-                            "metadata": {
-                                "tools_used": tools_used,
-                                "orchestrator_type": "tool_calling_pattern",
-                            },
-                            "execution_time_ms": execution_time_ms,
-                        }
-            except Exception as e:
-                error_msg = f"Error streaming response chunks: {str(e)}"
-                response_state["error_occurred"] = True
-                response_state["error_details"] = error_msg
-                logger.error(error_msg)
-                logger.error(f"Traceback: {traceback.format_exc()}")
-                raise
-
-            # Emit response streaming COMPLETE event
+            response_state["has_yielded_response"] = True
             yield {
                 "type": "workflow_progress",
                 "stage": "response_streaming_started_complete",
                 "message": "Response streaming completed",
                 "data": {
-                    "total_chunks": len(final_response) // 500
-                    + (1 if len(final_response) % 500 else 0),
+                    "total_chunks": len(final_response)
+                    // 10,  # Approximate, actual chunks from LLM
                     "response_length": len(final_response),
                 },
                 "execution_time_ms": (time.time() - start_time) * 1000,

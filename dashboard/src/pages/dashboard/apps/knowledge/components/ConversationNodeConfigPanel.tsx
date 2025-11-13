@@ -6,7 +6,8 @@
  */
 
 import { SystemPromptManager } from '@/components/system-prompt-manager';
-import { ActionIcon, Box, Button, Divider, Group, NumberInput, Paper, Select, Stack, Switch, Text, TextInput, Textarea } from '@mantine/core';
+import { useGetTools } from '@/api/resources/tools';
+import { ActionIcon, Badge, Box, Button, Card, Divider, Group, NumberInput, Paper, Select, Stack, Switch, Text, TextInput, Textarea, Alert } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconAlertCircle, IconCheck, IconChevronDown, IconChevronUp, IconX } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
@@ -131,13 +132,19 @@ export function ConversationNodeConfigPanel({
 }: ConversationNodeConfigPanelProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [localConfig, setLocalConfig] = useState(config);
+  const { data: tools, isLoading: toolsLoading } = useGetTools();
 
   useEffect(() => {
     if (opened && node) {
       setIsExpanded(true);
-      setLocalConfig(config);
+      // In supervisor mode, force selectedStrategy to custom_variants
+      const isSupervisor = node.data.type === 'enhancement' && config.selectedTemplate?.type === 'supervisor';
+      const configToSet = isSupervisor
+        ? { ...config, selectedStrategy: 'custom_variants' }
+        : config;
+      setLocalConfig(configToSet);
     }
-  }, [node, opened]);
+  }, [node, opened, config]);
 
   if (!opened || !node) return null;
 
@@ -366,25 +373,18 @@ export function ConversationNodeConfigPanel({
               <Select
                 label="Enhancement Strategy"
                 data={ENHANCEMENT_STRATEGIES
-                  .filter(s => isSupervisorMode || s.value !== 'custom_variants') // Hide custom_variants in RAG mode
+                  .filter(s => isSupervisorMode ? s.value === 'custom_variants' : s.value !== 'custom_variants') // In supervisor mode, only show custom_variants. In RAG mode, show all except custom_variants
                   .map(s => ({ value: s.value, label: s.label }))}
-                value={localConfig.selectedStrategy || 'native'}
+                value={localConfig.selectedStrategy || (isSupervisorMode ? 'custom_variants' : 'native')}
                 onChange={(value) => {
-                  if (isSupervisorMode && value !== 'custom_variants' && value !== 'decomposition') {
-                    notifications.show({
-                      title: '⚠️ Not Recommended',
-                      message: 'In Supervisor Agent mode, custom_variants or decomposition strategies are recommended. Custom variants allows you to provide pre-defined query variations, while decomposition auto-generates sub-questions using LLM.',
-                      color: 'yellow',
-                      autoClose: 6000,
-                    });
-                  }
                   setLocalConfig({ ...localConfig, selectedStrategy: value });
                 }}
+                disabled={isSupervisorMode}
                 size="sm"
               />
 
-              {/* LLM Configuration - Show when non-native strategy is selected */}
-              {localConfig.selectedStrategy && localConfig.selectedStrategy !== 'native' && (
+              {/* LLM Configuration - Show when non-native strategy is selected (except custom_variants which doesn't need LLM) */}
+              {localConfig.selectedStrategy && localConfig.selectedStrategy !== 'native' && localConfig.selectedStrategy !== 'custom_variants' && (
                 <>
                   <Box p="xs" bg="cyan.0" style={{ borderRadius: '6px', border: '1px solid var(--mantine-color-cyan-2)' }}>
                     <Stack gap={2}>
@@ -435,6 +435,18 @@ export function ConversationNodeConfigPanel({
                     />
                   )}
                 </>
+              )}
+
+              {/* Custom Variants Info - Show when custom_variants is selected */}
+              {localConfig.selectedStrategy === 'custom_variants' && (
+                <Box p="xs" bg="cyan.0" style={{ borderRadius: '6px', border: '1px solid var(--mantine-color-cyan-2)' }}>
+                  <Stack gap={2}>
+                    <Text size="xs" fw={600} c="cyan.7">ℹ️ Custom Variants Strategy</Text>
+                    <Text size="xs" c="dimmed">
+                      Use pre-defined query variants without LLM cost. The Supervisor Agent will analyze user intent and generate variants automatically.
+                    </Text>
+                  </Stack>
+                </Box>
               )}
 
             </Stack>
@@ -784,48 +796,142 @@ export function ConversationNodeConfigPanel({
 
       case 'assistant':
         return (
-          <div style={{ padding: '12px' }}>
-            <Stack gap="md">
+          <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <Stack gap="md" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              {/* Header */}
               <div>
                 <Text size="xs" fw={600} mb={4}>
-                  System Prompts Configuration
+                  Tools Selection
                 </Text>
                 <Text size="xs" c="dimmed" mb="md">
-                  Define task-specific system prompts that guide the task engine behavior. These prompts are applied to knowledge base search results.
+                  Select enabled tools that the AI agent can use to perform tasks. The agent will choose which tools to use based on the user's request.
                 </Text>
               </div>
 
-              <SystemPromptManager
-                conversationId=""
-                selectedPromptId={localConfig.selectedSystemPromptId}
-                selectedPromptData={localConfig.selectedSystemPrompt}
-                existingPrompts={localConfig.systemPromptTasks || []}
-                onPromptSelected={(prompt) => {
-                  setLocalConfig({
-                    ...localConfig,
-                    selectedSystemPromptId: prompt?.id || null,
-                    selectedSystemPrompt: prompt
-                  });
-                }}
-                onPromptsChanged={(prompts) => {
-                  setLocalConfig({
-                    ...localConfig,
-                    systemPromptTasks: prompts
-                  });
-                }}
-              />
+              {/* Tools List Container - Scrollable */}
+              <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                {toolsLoading ? (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}>
+                    <Text size="sm" c="dimmed">Loading tools...</Text>
+                  </div>
+                ) : !tools || tools.length === 0 ? (
+                  <Alert icon={<IconAlertCircle size={16} />} color="yellow" variant="light">
+                    <Text size="sm">No tools available. Create tools in the Tools Management section first.</Text>
+                  </Alert>
+                ) : (
+                  <div style={{
+                    flex: 1,
+                    minHeight: 0,
+                    overflow: 'auto',
+                    paddingRight: '8px',
+                    scrollBehavior: 'smooth',
+                  }}>
+                    <Stack gap="xs">
+                      {tools.filter((t: any) => t.is_active).map((tool: any) => {
+                        const isSelected = localConfig.selectedTools?.includes(tool.id) || false;
+                        return (
+                          <Card
+                            key={tool.id}
+                            withBorder
+                            p="sm"
+                            style={{
+                              cursor: 'pointer',
+                              backgroundColor: isSelected ? '#f0f4ff' : 'white',
+                              borderColor: isSelected ? '#4c6ef5' : '#dee2e6',
+                              borderWidth: isSelected ? '2px' : '1px',
+                              transition: 'all 0.2s ease',
+                            }}
+                            onClick={() => {
+                              const currentTools = localConfig.selectedTools || [];
+                              setLocalConfig({
+                                ...localConfig,
+                                selectedTools: isSelected
+                                  ? currentTools.filter((id: string) => id !== tool.id)
+                                  : [...currentTools, tool.id]
+                              });
+                            }}
+                          >
+                            <Group align="flex-start" gap="sm">
+                              {/* Checkbox */}
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => {}}
+                                style={{
+                                  marginTop: '4px',
+                                  cursor: 'pointer',
+                                  width: '18px',
+                                  height: '18px',
+                                  minWidth: '18px',
+                                }}
+                              />
 
-              {localConfig.selectedSystemPrompt && (
-                <Paper p="sm" bg="grape.1" style={{ borderRadius: '6px', border: '1px solid var(--mantine-color-grape-2)' }}>
-                  <Stack gap="xs">
-                    <Text size="xs" fw={600} c="grape">
-                      Selected Prompt: {localConfig.selectedSystemPrompt.title || localConfig.selectedSystemPrompt.name}
+                              {/* Tool Info */}
+                              <Stack gap="xs" style={{ flex: 1 }}>
+                                {/* Tool Name and Type Badge */}
+                                <Group gap="xs" align="center">
+                                  <Text fw={600} size="sm" c={isSelected ? 'blue.7' : 'dark'} style={{ flex: 1 }}>
+                                    {tool.display_name || tool.name}
+                                  </Text>
+                                  <Badge
+                                    size="xs"
+                                    color={tool.tool_type === 'prompt_based' ? 'blue' : 'green'}
+                                    variant="light"
+                                  >
+                                    {tool.tool_type === 'prompt_based' ? 'Prompt' : 'MCP'}
+                                  </Badge>
+                                </Group>
+
+                                {/* Tool Description */}
+                                {tool.description && (
+                                  <Text size="xs" c="dimmed" lineClamp={2}>
+                                    {tool.description}
+                                  </Text>
+                                )}
+
+                                {/* Tool ID */}
+                                <Text size="xs" c="gray.5" style={{ fontFamily: 'monospace' }}>
+                                  {tool.name}
+                                </Text>
+
+                                {/* Tool Tags */}
+                                {tool.tags && tool.tags.length > 0 && (
+                                  <Group gap="xs">
+                                    {tool.tags.map((tag: string) => (
+                                      <Badge key={tag} size="xs" variant="dot" color="gray">
+                                        {tag}
+                                      </Badge>
+                                    ))}
+                                  </Group>
+                                )}
+                              </Stack>
+                            </Group>
+                          </Card>
+                        );
+                      })}
+                    </Stack>
+                  </div>
+                )}
+              </div>
+
+              {/* Selection Summary Footer */}
+              {localConfig.selectedTools && localConfig.selectedTools.length > 0 && (
+                <Box
+                  p="xs"
+                  bg="blue.0"
+                  style={{
+                    borderRadius: '6px',
+                    border: '1px solid var(--mantine-color-blue-2)',
+                    marginTop: 'auto',
+                  }}
+                >
+                  <Group gap="xs">
+                    <IconCheck size={16} color="var(--mantine-color-blue-6)" />
+                    <Text size="xs" fw={600} c="blue.7">
+                      {localConfig.selectedTools.length} tool{localConfig.selectedTools.length !== 1 ? 's' : ''} selected
                     </Text>
-                    <Text size="xs" c="dimmed" style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', maxHeight: '150px', overflow: 'auto' }}>
-                      {localConfig.selectedSystemPrompt.content || localConfig.selectedSystemPrompt.system_prompt}
-                    </Text>
-                  </Stack>
-                </Paper>
+                  </Group>
+                </Box>
               )}
             </Stack>
           </div>
@@ -929,9 +1035,9 @@ export function ConversationNodeConfigPanel({
         transform: 'translateY(-50%)',
         right: '0',
         height: 'auto',
-        maxHeight: '80vh',
+        maxHeight: '85%',
         zIndex: 100,
-        width: isExpanded ? '420px' : '50px',
+        width: isExpanded ? '550px' : '50px',
         maxWidth: '90vw',
         overflow: 'hidden',
         border: '2px solid #228be6',
@@ -1008,7 +1114,7 @@ export function ConversationNodeConfigPanel({
           style={{
             display: 'flex',
             flexDirection: 'column',
-            maxHeight: 'calc(80vh - 44px)',
+            maxHeight: 'calc(85% - 44px)',
             overflow: 'hidden',
           }}
         >

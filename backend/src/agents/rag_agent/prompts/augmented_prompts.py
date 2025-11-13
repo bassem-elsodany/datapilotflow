@@ -9,7 +9,7 @@ from query improvements.
 from src.agents.common.base_prompt import Prompt
 
 AUGMENTED_SYSTEM_PROMPT = Prompt(
-    name="rag_agent_augmented_system_prompt",
+    name="datapilotflow_rag_agent_augmented_system_prompt",
     prompt="""You are an AI assistant tasked with creating enhanced variants of the user's query for a RAG system using multiple transformation strategies.
 
 ⚠️ CRITICAL RULES ⚠️
@@ -56,8 +56,8 @@ Return ONLY a JSON object with transformation types and queries:
 }}
 
 Note: You may omit a transformation type if it doesn't apply to the query.""",
-    tags=["query_enhancement", "augmented", "retrieval", "multi_transform"],
-    metadata={
+    labels=["query_enhancement", "augmented", "retrieval", "multi_transform"],
+    config={
         "purpose": "Generate enhanced query variants using multiple transformation types",
         "output_format": "JSON object with transformation types",
         "strategy": "augmented_multi_transform",
@@ -65,7 +65,7 @@ Note: You may omit a transformation type if it doesn't apply to the query.""",
 )
 
 AUGMENTED_USER_PROMPT = Prompt(
-    name="rag_agent_augmented_user_prompt",
+    name="datapilotflow_rag_agent_augmented_user_prompt",
     prompt="""Original query: "{query}"
 
 Apply multiple transformation types to enhance this query:
@@ -84,8 +84,8 @@ Return as JSON object:
   "query_contraction": "...",
   "technical_reformulation": "..."
 }}""",
-    tags=["query_enhancement", "augmented", "user_input"],
-    metadata={
+    labels=["query_enhancement", "augmented", "user_input"],
+    config={
         "input_variables": ["query"],
         "output_format": "JSON object with transformation types",
     },

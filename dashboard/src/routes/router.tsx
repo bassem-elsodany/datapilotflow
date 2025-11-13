@@ -154,11 +154,6 @@ const router = createBrowserRouter([
               },
             ],
           },
-          /* ---------------------------- PIPELINE BUILDER --------------------------- */
-          {
-            path: paths.dashboard.management.pipelineBuilder.root,
-            element: LazyPage(() => import('@/pages/dashboard/management/pipeline-builder')),
-          },
           /* ---------------------------- MODEL PROVIDERS --------------------------- */
           {
             path: 'model-providers',

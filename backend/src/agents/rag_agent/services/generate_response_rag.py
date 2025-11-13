@@ -17,7 +17,6 @@ import litellm
 from langchain_community.chat_models import ChatLiteLLM
 from loguru import logger
 from opik.integrations.langchain import OpikTracer
-from opik.integrations.litellm import opik_tracker
 
 from src.agents.common.agent_state import AgentState
 from src.agents.rag_agent.graph import graph_dev as workflow
@@ -75,7 +74,6 @@ async def get_response_stream_rag(
                 f"Agent tracing enabled: Workflow config: strategy={selected_strategy}, collection={collection_name}, llm_provider_id={llm_provider_id}, llm_model_name={llm_model_name}"
             )
             # Enable LiteLLM tracking for cost and token usage
-            opik_tracker.track_litellm()
             logger.debug("LiteLLM tracking enabled for cost and token usage")
 
             # Build tags for Opik trace
@@ -93,8 +91,10 @@ async def get_response_stream_rag(
                 graph=workflow.get_graph(xray=True),
                 tags=trace_tags,
             )
+
             # Note: No thread_id needed - each query is independent (stateless RAG)
             config = {
+                "configurable": {"thread_id": uuid.uuid4()},
                 "callbacks": [opik_tracer],
             }
         else:
@@ -168,6 +168,7 @@ async def get_response_stream_rag(
             timeout=provider.timeout if provider.timeout else 60,
             temperature=temperature,
             max_tokens=max_tokens,
+            streaming=True,  # Enable streaming for real-time response chunks
         )
 
         logger.info(
@@ -272,8 +273,15 @@ async def get_response_stream_rag(
                 # Use last_stage which is tracked as nodes execute
                 # Note: on_chat_model_stream events don't have the node name, so we track by last_stage
 
+                logger.debug(
+                    f"[RAG STREAM EVENT] Received chunk - last_stage={last_stage}, last_step_for_streaming={last_step_for_streaming}"
+                )
+
                 # Only stream if we're in the actual last step
                 if last_stage != last_step_for_streaming:
+                    logger.debug(
+                        f"[RAG STREAM SKIP] Skipping chunk - not at last step yet"
+                    )
                     continue
 
                 chunk_data = event_data.get("chunk", {})
@@ -285,6 +293,9 @@ async def get_response_stream_rag(
                     content = str(chunk_data) if chunk_data else ""
 
                 if content:
+                    logger.info(
+                        f"[RAG STREAMING NOW] Yielding chunk: {content[:50]}..."
+                    )
                     # Emit metadata ONLY on the first chunk
                     if not first_llm_chunk_emitted:
                         first_llm_chunk_emitted = True
@@ -332,6 +343,21 @@ async def get_response_stream_rag(
                             "execution_time_ms": execution_time_ms,
                         }
                 continue
+
+            # Track when answer_generator starts (for real-time streaming)
+            if event_type == "on_chain_start" and node_name == "answer_generator":
+                logger.info(
+                    "[RAG] answer_generator node STARTED - setting last_stage to response_generation for streaming"
+                )
+                last_stage = "response_generation"
+                if not answer_generation_emitted:
+                    answer_generation_emitted = True
+                    yield {
+                        "type": "workflow_progress",
+                        "stage": "response_generation",
+                        "message": "Generating final response...",
+                        "execution_time_ms": (time.time() - start_time) * 1000,
+                    }
 
             # Skip non-node events
             if not event_type.startswith("on_chain"):
@@ -678,10 +704,12 @@ async def get_response_stream_rag(
             )
 
         # Emit the final_answer as streaming_response so frontend can display it
+        # NOTE: This is a FALLBACK for when real-time streaming didn't work
+        # If first_llm_chunk_emitted is True, chunks were already streamed in real-time
         final_answer = last_state.get("final_answer", "") if last_state else ""
-        if final_answer:
-            logger.critical(
-                f"🔴 [RAG EMIT RESPONSE] Emitting final_answer as streaming_response ({len(final_answer)} chars)"
+        if final_answer and not first_llm_chunk_emitted:
+            logger.warning(
+                f"⚠️ [RAG FALLBACK] Real-time streaming didn't work - emitting final_answer as post-generation chunks ({len(final_answer)} chars)"
             )
 
             # Emit metadata on first chunk only

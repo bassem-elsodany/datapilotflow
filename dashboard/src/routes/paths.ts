@@ -31,9 +31,6 @@ export const paths = {
         jobCreate: '/dashboard/management/knowledge-sources/job-create',
         jobEdit: (jobId: string) => `/dashboard/management/knowledge-sources/job-edit/${jobId}`,
       },
-      pipelineBuilder: {
-        root: '/dashboard/management/pipeline-builder',
-      },
       modelProviders: {
         root: '/dashboard/management/model-providers',
         list: '/dashboard/management/model-providers',
