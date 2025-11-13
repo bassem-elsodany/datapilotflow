@@ -164,9 +164,10 @@ function ConversationCanvasContent() {
   // Helper function to check if all RAG subflow nodes are configured
   const areRAGSubflowNodesConfigured = (): boolean => {
     // Enhancement is configured if selectedStrategy is set AND
-    // if it's non-native, LLM provider and model must also be set
+    // if it's non-native (and not custom_variants), LLM provider and model must also be set
+    // custom_variants doesn't need LLM since user provides pre-defined variants
     let enhancementConfigured = !!config.selectedStrategy;
-    if (enhancementConfigured && config.selectedStrategy !== 'native') {
+    if (enhancementConfigured && config.selectedStrategy !== 'native' && config.selectedStrategy !== 'custom_variants') {
       enhancementConfigured = !!config.selectedProviderId && !!config.selectedModel;
     }
 
@@ -216,9 +217,9 @@ function ConversationCanvasContent() {
       position: { x: startX, y: startY },
       data: {
         id: 'userQuery',
-        name: 'User Query',
+        name: 'User Input',
         type: 'userQuery',
-        description: 'Your question',
+        description: 'Ask your question',
         configured: true, // Always configured, it's just a starting point
       },
     });
@@ -235,13 +236,13 @@ function ConversationCanvasContent() {
         position: { x: startX + horizontalSpacing, y: startY },
         data: {
           id: 'retrieval',
-          name: 'Knowledge Retrieval',
+          name: 'Knowledge Search',
           type: 'retrieval',
           description: 'RAG Agent - Search knowledge base',
           configured: ragSubflowExpanded ? areRAGSubflowNodesConfigured() : false,
           isSubflowParent: true,
           subflowExpanded: ragSubflowExpanded,
-          subflowLabel: ragSubflowExpanded ? '▼ RAG Agent' : '▶ RAG Agent',
+          subflowLabel: ragSubflowExpanded ? '▼ RAG Pipeline' : '▶ RAG Pipeline',
         },
       });
 
@@ -269,13 +270,13 @@ function ConversationCanvasContent() {
         position: { x: startX + horizontalSpacing * 2, y: startY },
         data: {
           id: 'taskEngine',
-          name: 'Task Engine',
+          name: 'Task Execution',
           type: 'taskEngine',
-          description: 'Task Agent - System Prompts & Execution',
+          description: 'Task Agent - Execute tasks with tools',
           configured: areTaskSubflowNodesConfigured(),
           isSubflowParent: true,
           subflowExpanded: taskSubflowExpanded,
-          subflowLabel: taskSubflowExpanded ? '▼ Task Agent' : '▶ Task Agent',
+          subflowLabel: taskSubflowExpanded ? '▼ Task Pipeline' : '▶ Task Pipeline',
         },
       });
 
@@ -284,6 +285,7 @@ function ConversationCanvasContent() {
         const taskConfig: TaskAgentSubflowConfig = {
           enableKnowledgeAssistant: config.enableKnowledgeAssistant,
           selectedSystemPromptId: config.selectedSystemPromptId || undefined,
+          selectedTools: config.selectedTools || [],
         };
         const taskSubflowNodes = generateTaskAgentSubflowNodes('taskEngine', startX + horizontalSpacing * 2 - 30, startY + 80, taskConfig);
         nodeList.push(...taskSubflowNodes);
@@ -296,9 +298,9 @@ function ConversationCanvasContent() {
         position: { x: startX + horizontalSpacing * 3, y: startY },
         data: {
           id: 'response',
-          name: 'Response',
+          name: 'Final Response',
           type: 'response',
-          description: 'Generate final response',
+          description: 'Generate final answer',
           configured: true,
         },
       });
@@ -320,7 +322,7 @@ function ConversationCanvasContent() {
       position: { x: startX + horizontalSpacing, y: startY },
       data: {
         id: 'enhancement',
-        name: 'Query Strategy',
+        name: 'Query Enhancement',
         type: 'enhancement',
         description: ENHANCEMENT_STRATEGIES.find(s => s.value === config.selectedStrategy)?.label || 'Native RAG',
         configured: isEnhancementConfigured,
@@ -669,10 +671,11 @@ function ConversationCanvasContent() {
       }
 
       // Validate enhancement strategy requirements
-      if (config.selectedStrategy !== 'native' && (!config.selectedProviderId || !config.selectedModel)) {
+      // custom_variants doesn't require LLM since user provides pre-defined variants
+      if (config.selectedStrategy !== 'native' && config.selectedStrategy !== 'custom_variants' && (!config.selectedProviderId || !config.selectedModel)) {
         notifications.show({
           title: 'Error',
-          message: 'LLM provider and model are required for non-native enhancement strategies',
+          message: 'LLM provider and model are required for this enhancement strategy',
           color: 'red',
         });
         return;
@@ -691,10 +694,14 @@ function ConversationCanvasContent() {
       const token = localStorage.getItem('jwt_token');
 
       // Determine final strategy based on available configuration
-      // If user selected a non-native strategy but didn't configure provider/model, force to native
-      const finalStrategy = config.selectedStrategy !== 'native' && config.selectedProviderId && config.selectedModel
-        ? config.selectedStrategy
-        : 'native';
+      // custom_variants doesn't require LLM provider/model
+      // Other non-native strategies require both provider AND model
+      let finalStrategy = 'native';
+      if (config.selectedStrategy === 'custom_variants') {
+        finalStrategy = 'custom_variants';
+      } else if (config.selectedStrategy !== 'native' && config.selectedProviderId && config.selectedModel) {
+        finalStrategy = config.selectedStrategy;
+      }
 
       const payload: any = {
         name: config.conversationName.trim(),

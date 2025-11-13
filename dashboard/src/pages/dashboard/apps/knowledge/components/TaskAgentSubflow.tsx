@@ -10,6 +10,7 @@ import { Node, Edge } from 'reactflow';
 export interface TaskAgentSubflowConfig {
   enableKnowledgeAssistant: boolean;
   selectedSystemPromptId?: string;
+  selectedTools?: string[]; // Array of tool IDs
 }
 
 /**
@@ -20,18 +21,18 @@ export function generateTaskAgentSubflowNodes(parentId: string, baseX: number, b
   const nodes: Node[] = [];
   const nodeSpacing = 90; // Tighter spacing for grouped layout
 
-  // Sub-node 1: System Prompts
-  // Configured if: selectedSystemPromptId is set
+  // Sub-node 1: Tools
+  // Configured if: selectedTools array has items
   nodes.push({
     id: `${parentId}-prompts`,
     type: 'conversationNode',
     position: { x: baseX, y: baseY },
     data: {
       id: `${parentId}-prompts`,
-      name: 'System Prompts',
+      name: 'Tools Configuration',
       type: 'assistant',
-      description: 'Task instructions',
-      configured: !!config.selectedSystemPromptId,
+      description: 'Select enabled tools',
+      configured: !!(config.selectedTools && config.selectedTools.length > 0),
     },
   });
 
@@ -42,9 +43,9 @@ export function generateTaskAgentSubflowNodes(parentId: string, baseX: number, b
     position: { x: baseX + nodeSpacing, y: baseY },
     data: {
       id: `${parentId}-execution`,
-      name: 'Execution',
+      name: 'Task Execution',
       type: 'taskEngine',
-      description: 'Multi-task orchestration',
+      description: 'Execute tasks & tools',
       configured: config.enableKnowledgeAssistant,
     },
   });

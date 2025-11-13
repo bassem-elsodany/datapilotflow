@@ -173,14 +173,6 @@ export default function KnowledgeSourceJobDetails() {
         </Button>
         <Group>
           <Button
-            variant="light"
-            leftSection={<IconNetwork size={16} />}
-            component={Link}
-            to={`${paths.dashboard.management.pipelineBuilder.root}?fromJobId=${jobId}`}
-          >
-            Show Pipeline
-          </Button>
-          <Button
             variant="filled"
             leftSection={<IconEdit size={16} />}
             component={Link}

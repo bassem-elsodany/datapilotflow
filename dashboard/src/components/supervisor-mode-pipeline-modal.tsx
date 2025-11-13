@@ -299,31 +299,21 @@ export function SupervisorModePipelineModal({
       opened={opened}
       onClose={onClose}
       withCloseButton={false}
-      withOverlay={false}  // No dark overlay - see background clearly
+      withOverlay={false}
       centered={false}
       size="lg"
       padding="md"
       styles={{
         inner: {
-          alignItems: 'flex-start',  // Position at top instead of bottom
-          paddingTop: '20px',
-          paddingRight: '20px',
-          justifyContent: 'flex-end',  // Align to right side
+          alignItems: 'flex-end',
+          paddingBottom: '20px',
           pointerEvents: 'none',
         },
         content: {
           pointerEvents: 'auto',
-          backgroundColor: theme.colorScheme === 'dark' 
-            ? 'rgba(26, 27, 30, 0.85)'  // Dark mode: 85% opaque
-            : 'rgba(255, 255, 255, 0.85)',  // Light mode: 85% opaque (more transparent)
-          backdropFilter: 'blur(12px)',  // Stronger blur for glassmorphism effect
-          boxShadow: theme.colorScheme === 'dark'
-            ? '0 8px 32px rgba(0, 0, 0, 0.4)'
-            : '0 8px 32px rgba(0, 0, 0, 0.15)',
-          border: theme.colorScheme === 'dark'
-            ? '1px solid rgba(255, 255, 255, 0.1)'
-            : '1px solid rgba(0, 0, 0, 0.05)',
-          maxWidth: '500px',  // Constrain width so it doesn't cover entire screen
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          backdropFilter: 'blur(10px)',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)',
         },
         body: {
           padding: '12px 16px',
@@ -331,7 +321,7 @@ export function SupervisorModePipelineModal({
           overflowY: 'visible'
         }
       }}
-      transitionProps={{ transition: 'slide-down', duration: 300 }}
+      transitionProps={{ transition: 'slide-up', duration: 300 }}
     >
       <Stack gap="md">
         {/* Header with Progress */}

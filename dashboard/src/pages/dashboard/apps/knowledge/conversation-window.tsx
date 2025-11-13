@@ -46,7 +46,6 @@ import {
   IconCheck,
   IconChevronDown,
   IconDatabase,
-  IconEdit,
   IconHelp,
   IconInfoCircle,
   IconLoader,
@@ -1013,17 +1012,28 @@ export default function ConversationWindow() {
           const textChunk = data?.data?.chunk || data?.chunk || chunk;
           const chunkMetadata = data?.metadata || data?.data?.metadata;
 
-          console.log('📨 [STREAMING_RESPONSE] Received metadata:', {
+          console.log('📨 [STREAMING_RESPONSE] ===== CHUNK RECEIVED =====', {
+            textChunk_length: textChunk?.length || 0,
+            textChunk_preview: textChunk ? textChunk.substring(0, 50) : 'NO CHUNK',
             has_document_sources: !!chunkMetadata?.document_sources,
             document_sources_count: chunkMetadata?.document_sources?.length || 0,
             has_search_variants: !!chunkMetadata?.search_variants,
             search_variants_count: chunkMetadata?.search_variants?.length || 0,
             rag_strategy: chunkMetadata?.rag_strategy,
+            current_messages_count: messages.length,
           });
 
           if (textChunk) {
+            console.log('🔥 [STREAMING] About to update messages with chunk:', textChunk.substring(0, 50));
             setMessages(prev => {
               const lastMessage = prev[prev.length - 1];
+              console.log('🔍 [STREAMING] Last message state:', {
+                hasLastMessage: !!lastMessage,
+                lastMessageRole: lastMessage?.role,
+                isStreaming: lastMessage?.isStreaming,
+                lastMessageContentLength: lastMessage?.content?.length || 0,
+              });
+
               if (lastMessage && lastMessage.role === 'assistant' && lastMessage.isStreaming) {
                 // Check if this is the placeholder "Starting" message - replace it instead of appending
                 const isPlaceholder = lastMessage.content.includes('🤖 Starting conversation');
@@ -1040,6 +1050,7 @@ export default function ConversationWindow() {
                   updatedMessage.metadata = chunkMetadata;
                 }
 
+                console.log('✅ [STREAMING] UPDATING existing message, new length:', updatedMessage.content.length);
                 return [
                   ...prev.slice(0, -1),
                   updatedMessage
@@ -1058,6 +1069,7 @@ export default function ConversationWindow() {
                   newMessage.metadata = chunkMetadata;
                 }
 
+                console.log('✨ [STREAMING] CREATING new message, length:', newMessage.content.length);
                 return [
                   ...prev,
                   newMessage
@@ -1065,39 +1077,8 @@ export default function ConversationWindow() {
               }
             });
 
-            // Mark response_generation as completed when first streaming chunk arrives
-            // Use a ref to prevent multiple updates
-            setWorkflowState(prev => {
-              // Only update if response_generation is not already in completed stages
-              if (!prev.completedStages.includes('response_generation')) {
-                const newCompleted = [...prev.completedStages, 'response_generation'];
-                const newStageDetails = { ...prev.stageDetails };
-
-                // Store metadata in stageDetails for the modal to display
-                if (chunkMetadata) {
-                  newStageDetails['response_generation_complete'] = {
-                    message: 'Response generation complete',
-                    data: {
-                      document_sources: chunkMetadata.document_sources,
-                      search_variants: chunkMetadata.search_variants,
-                      rag_strategy: chunkMetadata.rag_strategy,
-                    },
-                    timestamp: new Date().toISOString(),
-                    execution_time_ms: data?.execution_time_ms || 0,
-                  };
-                  console.log('📦 [STAGE DETAILS] Updated response_generation_complete stageDetails:', newStageDetails['response_generation_complete']);
-                }
-
-                return {
-                  ...prev,
-                  completedStages: newCompleted,
-                  currentStage: 'response_generation', // Keep showing as current while streaming
-                  stageDetails: newStageDetails,
-                };
-              }
-              // Don't update if already completed - return same reference
-              return prev;
-            });
+            // Note: Stage completion is now handled by proper START/COMPLETE events from backend
+            // We no longer manually mark stages as complete here
           }
           break;
 
@@ -1147,24 +1128,26 @@ export default function ConversationWindow() {
           // Stop loading indicator
           setIsLoading(false);
 
-          // Update the last streaming message with metadata
-          if (workflowMetadata) {
-            setMessages(prev => {
-              const lastMessage = prev[prev.length - 1];
-              if (lastMessage && lastMessage.role === 'assistant' && lastMessage.isStreaming) {
-                console.log('📝 [WORKFLOW COMPLETE] Updating last message with metadata');
-                return [
-                  ...prev.slice(0, -1),
-                  {
-                    ...lastMessage,
-                    isStreaming: false,
-                    metadata: workflowMetadata,
-                  }
-                ];
-              }
-              return prev;
-            });
-          }
+          // Update the last streaming message with the full correct response and metadata
+          // CRITICAL: Use data.response (full correct response from backend) instead of accumulated chunks
+          // The chunks were just for visual feedback, the final response has proper formatting
+          setMessages(prev => {
+            const lastMessage = prev[prev.length - 1];
+            if (lastMessage && lastMessage.role === 'assistant' && lastMessage.isStreaming) {
+              console.log('📝 [WORKFLOW COMPLETE] Replacing accumulated chunks with full response');
+              console.log('📝 [WORKFLOW COMPLETE] Response length:', response?.length || 0);
+              return [
+                ...prev.slice(0, -1),
+                {
+                  ...lastMessage,
+                  content: response || lastMessage.content, // Use full response from backend
+                  isStreaming: false,
+                  metadata: workflowMetadata,
+                }
+              ];
+            }
+            return prev;
+          });
 
           // Finalize the streaming message to apply markdown formatting
           finalizeStreamingMessages();
@@ -1228,11 +1211,11 @@ export default function ConversationWindow() {
           // Handle supervisor initialization
           console.log('🤖 Supervisor agent started');
           // Get the original query from the most recent user message
-          const supervisorOriginalQuery = 
+          const supervisorOriginalQuery =
             (messages.length > 0 && messages[messages.length - 1].role === 'user'
               ? messages[messages.length - 1].content
               : inputMessage);
-          
+
           setWorkflowState(prev => ({
             ...prev,
             currentStage: 'supervisor_init',
@@ -1333,12 +1316,16 @@ export default function ConversationWindow() {
           setMessages(prev => {
             const lastMessage = prev[prev.length - 1];
             if (lastMessage && lastMessage.role === 'assistant' && lastMessage.isStreaming) {
-              // Finalize the streaming message (keep existing content, just mark as complete)
+              // Finalize the streaming message
+              // CRITICAL: Use full response from backend (not accumulated chunks)
+              // The chunks were just for visual feedback, the backend has the correctly formatted response
+              console.log('📝 [COMPLETED] Replacing accumulated chunks with full response');
+              console.log('📝 [COMPLETED] Response length:', response?.length || 0);
               return [
                 ...prev.slice(0, -1),
                 {
                   ...lastMessage,
-                  content: response || lastMessage.content, // Use response as fallback, prefer streamed content
+                  content: response || lastMessage.content, // Use full response from backend
                   isStreaming: false,
                   metadata: metadata
                 }
@@ -1748,11 +1735,6 @@ export default function ConversationWindow() {
                 loading={resetMessagesMutation.isPending}
               >
                 <IconRefresh size={16} />
-              </ActionIcon>
-            </Tooltip>
-            <Tooltip label="Edit session name">
-              <ActionIcon variant="subtle">
-                <IconEdit size={16} />
               </ActionIcon>
             </Tooltip>
             <Tooltip label="Delete session">
@@ -2232,9 +2214,9 @@ export default function ConversationWindow() {
               {/* Strategy Badge Button with Menu (disabled in Assistant mode) */}
               <Menu shadow="md" width={300} position="bottom-start" disabled={messageMode === 'agent'}>
                 <Menu.Target>
-                  <Tooltip 
+                  <Tooltip
                     label={
-                      messageMode === 'agent' 
+                      messageMode === 'agent'
                         ? "Strategy is locked to 'Custom Variants' in Assistant Mode - the agent generates query variants automatically"
                         : "Click to change query enhancement strategy"
                     }
@@ -2260,33 +2242,33 @@ export default function ConversationWindow() {
                   {ENHANCEMENT_STRATEGIES
                     .filter(strategy => messageMode === 'agent' || strategy.value !== 'custom_variants') // Hide custom_variants in RAG mode
                     .map((strategy) => (
-                    <Menu.Item
-                      key={strategy.value}
-                      leftSection={selectedStrategy === strategy.value ? <IconCheck size={16} /> : <div style={{ width: 16 }} />}
-                      onClick={() => {
-                        setSelectedStrategy(strategy.value);
-                        handleQuickUpdate({ strategy: strategy.value });
-                        notifications.show({
-                          title: 'Strategy Updated',
-                          message: `Query enhancement strategy changed to ${strategy.label}`,
-                          color: 'grape',
-                          icon: <IconCheck size={16} />,
-                        });
-                      }}
-                      style={{
-                        backgroundColor: selectedStrategy === strategy.value ? 'var(--mantine-color-grape-0)' : undefined
-                      }}
-                    >
-                      <div>
-                        <Text size="sm" fw={selectedStrategy === strategy.value ? 600 : 400}>
-                          {strategy.label}
-                        </Text>
-                        <Text size="xs" c="dimmed" lineClamp={2}>
-                          {strategy.description}
-                        </Text>
-                      </div>
-                    </Menu.Item>
-                  ))}
+                      <Menu.Item
+                        key={strategy.value}
+                        leftSection={selectedStrategy === strategy.value ? <IconCheck size={16} /> : <div style={{ width: 16 }} />}
+                        onClick={() => {
+                          setSelectedStrategy(strategy.value);
+                          handleQuickUpdate({ strategy: strategy.value });
+                          notifications.show({
+                            title: 'Strategy Updated',
+                            message: `Query enhancement strategy changed to ${strategy.label}`,
+                            color: 'grape',
+                            icon: <IconCheck size={16} />,
+                          });
+                        }}
+                        style={{
+                          backgroundColor: selectedStrategy === strategy.value ? 'var(--mantine-color-grape-0)' : undefined
+                        }}
+                      >
+                        <div>
+                          <Text size="sm" fw={selectedStrategy === strategy.value ? 600 : 400}>
+                            {strategy.label}
+                          </Text>
+                          <Text size="xs" c="dimmed" lineClamp={2}>
+                            {strategy.description}
+                          </Text>
+                        </div>
+                      </Menu.Item>
+                    ))}
                 </Menu.Dropdown>
               </Menu>
 
@@ -2978,101 +2960,101 @@ export default function ConversationWindow() {
                 {ENHANCEMENT_STRATEGIES
                   .filter(strategy => messageMode === 'agent' || strategy.value !== 'custom_variants') // Hide custom_variants in RAG mode
                   .map((strategy) => (
-                  <Accordion.Item
-                    key={strategy.value}
-                    value={strategy.value}
-                    style={{
-                      borderLeft: `4px solid var(--mantine-color-${strategy.color}-6)`,
-                    }}
-                  >
-                    <Accordion.Control>
-                      <Group justify="space-between" align="center" wrap="nowrap">
-                        <Group gap="xs">
-                          <ThemeIcon size="sm" color={strategy.color} variant="light">
-                            <IconSettings size={14} />
-                          </ThemeIcon>
-                          <div>
-                            <Text fw={600} size="sm">
-                              {strategy.label}
-                            </Text>
-                            <Text size="xs" c="dimmed">
-                              {strategy.description}
-                            </Text>
-                          </div>
-                        </Group>
-                        {selectedStrategy === strategy.value && (
-                          <Badge color="green" variant="light" leftSection={<IconCheck size={12} />}>
-                            Active
-                          </Badge>
-                        )}
-                      </Group>
-                    </Accordion.Control>
-                    <Accordion.Panel>
-                      <Stack gap="md" pt="xs">
-                        <Text size="sm">{strategy.details}</Text>
-
-                        <Grid gutter="md">
-                          <Grid.Col span={6}>
+                    <Accordion.Item
+                      key={strategy.value}
+                      value={strategy.value}
+                      style={{
+                        borderLeft: `4px solid var(--mantine-color-${strategy.color}-6)`,
+                      }}
+                    >
+                      <Accordion.Control>
+                        <Group justify="space-between" align="center" wrap="nowrap">
+                          <Group gap="xs">
+                            <ThemeIcon size="sm" color={strategy.color} variant="light">
+                              <IconSettings size={14} />
+                            </ThemeIcon>
                             <div>
-                              <Text size="xs" fw={600} c="green.7" mb={4}>
-                                ✓ Pros
+                              <Text fw={600} size="sm">
+                                {strategy.label}
                               </Text>
-                              <List size="xs" spacing={2}>
-                                {strategy.pros.map((pro, idx) => (
-                                  <List.Item key={idx}>{pro}</List.Item>
-                                ))}
-                              </List>
-                            </div>
-                          </Grid.Col>
-
-                          <Grid.Col span={6}>
-                            <div>
-                              <Text size="xs" fw={600} c="red.7" mb={4}>
-                                ✗ Cons
+                              <Text size="xs" c="dimmed">
+                                {strategy.description}
                               </Text>
-                              <List size="xs" spacing={2}>
-                                {strategy.cons.map((con, idx) => (
-                                  <List.Item key={idx}>{con}</List.Item>
-                                ))}
-                              </List>
                             </div>
-                          </Grid.Col>
-                        </Grid>
-
-                        <div>
-                          <Text size="xs" fw={600} c="blue.7" mb={4}>
-                            Best for:
-                          </Text>
-                          <Group gap={6}>
-                            {strategy.useCases.map((useCase, idx) => (
-                              <Badge key={idx} size="xs" variant="dot" color={strategy.color}>
-                                {useCase}
-                              </Badge>
-                            ))}
                           </Group>
-                        </div>
+                          {selectedStrategy === strategy.value && (
+                            <Badge color="green" variant="light" leftSection={<IconCheck size={12} />}>
+                              Active
+                            </Badge>
+                          )}
+                        </Group>
+                      </Accordion.Control>
+                      <Accordion.Panel>
+                        <Stack gap="md" pt="xs">
+                          <Text size="sm">{strategy.details}</Text>
 
-                        {strategy.example && (
-                          <Paper p="sm" withBorder bg="gray.0">
-                            <Stack gap="xs">
-                              <Text size="xs" fw={600} c="violet.7">
-                                📝 Example
-                              </Text>
+                          <Grid gutter="md">
+                            <Grid.Col span={6}>
                               <div>
-                                <Text size="xs" c="dimmed" mb={2}>Original Query:</Text>
-                                <Text size="xs" fw={500}>{strategy.example.original}</Text>
+                                <Text size="xs" fw={600} c="green.7" mb={4}>
+                                  ✓ Pros
+                                </Text>
+                                <List size="xs" spacing={2}>
+                                  {strategy.pros.map((pro, idx) => (
+                                    <List.Item key={idx}>{pro}</List.Item>
+                                  ))}
+                                </List>
                               </div>
+                            </Grid.Col>
+
+                            <Grid.Col span={6}>
                               <div>
-                                <Text size="xs" c="dimmed" mb={2}>Strategy Output:</Text>
-                                <Text size="xs" style={{ whiteSpace: 'pre-line' }}>{strategy.example.output}</Text>
+                                <Text size="xs" fw={600} c="red.7" mb={4}>
+                                  ✗ Cons
+                                </Text>
+                                <List size="xs" spacing={2}>
+                                  {strategy.cons.map((con, idx) => (
+                                    <List.Item key={idx}>{con}</List.Item>
+                                  ))}
+                                </List>
                               </div>
-                            </Stack>
-                          </Paper>
-                        )}
-                      </Stack>
-                    </Accordion.Panel>
-                  </Accordion.Item>
-                ))}
+                            </Grid.Col>
+                          </Grid>
+
+                          <div>
+                            <Text size="xs" fw={600} c="blue.7" mb={4}>
+                              Best for:
+                            </Text>
+                            <Group gap={6}>
+                              {strategy.useCases.map((useCase, idx) => (
+                                <Badge key={idx} size="xs" variant="dot" color={strategy.color}>
+                                  {useCase}
+                                </Badge>
+                              ))}
+                            </Group>
+                          </div>
+
+                          {strategy.example && (
+                            <Paper p="sm" withBorder bg="gray.0">
+                              <Stack gap="xs">
+                                <Text size="xs" fw={600} c="violet.7">
+                                  📝 Example
+                                </Text>
+                                <div>
+                                  <Text size="xs" c="dimmed" mb={2}>Original Query:</Text>
+                                  <Text size="xs" fw={500}>{strategy.example.original}</Text>
+                                </div>
+                                <div>
+                                  <Text size="xs" c="dimmed" mb={2}>Strategy Output:</Text>
+                                  <Text size="xs" style={{ whiteSpace: 'pre-line' }}>{strategy.example.output}</Text>
+                                </div>
+                              </Stack>
+                            </Paper>
+                          )}
+                        </Stack>
+                      </Accordion.Panel>
+                    </Accordion.Item>
+                  ))}
               </Accordion>
 
               <Divider />
@@ -3105,53 +3087,53 @@ export default function ConversationWindow() {
                     {ENHANCEMENT_STRATEGIES
                       .filter(strategy => messageMode === 'agent' || strategy.value !== 'custom_variants') // Hide custom_variants in RAG mode
                       .map((strategy) => (
-                      <Card
-                        key={strategy.value}
-                        padding="md"
-                        radius="md"
-                        withBorder
-                        style={{
-                          borderLeft: `4px solid var(--mantine-color-${strategy.color}-6)`,
-                          cursor: 'pointer',
-                          backgroundColor: selectedForComparison.includes(strategy.value)
-                            ? 'var(--mantine-color-violet-0)'
-                            : undefined,
-                        }}
-                        onClick={() => {
-                          if (selectedForComparison.includes(strategy.value)) {
-                            setSelectedForComparison(selectedForComparison.filter(s => s !== strategy.value));
-                          } else if (selectedForComparison.length < 2) {
-                            setSelectedForComparison([...selectedForComparison, strategy.value]);
-                          }
-                        }}
-                      >
-                        <Group justify="space-between" align="center">
-                          <Group gap="sm">
-                            <Checkbox
-                              checked={selectedForComparison.includes(strategy.value)}
-                              onChange={() => { }}
-                              color="violet"
-                            />
-                            <ThemeIcon size="sm" color={strategy.color} variant="light">
-                              <IconSettings size={14} />
-                            </ThemeIcon>
-                            <div>
-                              <Text fw={600} size="sm">
-                                {strategy.label}
-                              </Text>
-                              <Text size="xs" c="dimmed">
-                                {strategy.description}
-                              </Text>
-                            </div>
+                        <Card
+                          key={strategy.value}
+                          padding="md"
+                          radius="md"
+                          withBorder
+                          style={{
+                            borderLeft: `4px solid var(--mantine-color-${strategy.color}-6)`,
+                            cursor: 'pointer',
+                            backgroundColor: selectedForComparison.includes(strategy.value)
+                              ? 'var(--mantine-color-violet-0)'
+                              : undefined,
+                          }}
+                          onClick={() => {
+                            if (selectedForComparison.includes(strategy.value)) {
+                              setSelectedForComparison(selectedForComparison.filter(s => s !== strategy.value));
+                            } else if (selectedForComparison.length < 2) {
+                              setSelectedForComparison([...selectedForComparison, strategy.value]);
+                            }
+                          }}
+                        >
+                          <Group justify="space-between" align="center">
+                            <Group gap="sm">
+                              <Checkbox
+                                checked={selectedForComparison.includes(strategy.value)}
+                                onChange={() => { }}
+                                color="violet"
+                              />
+                              <ThemeIcon size="sm" color={strategy.color} variant="light">
+                                <IconSettings size={14} />
+                              </ThemeIcon>
+                              <div>
+                                <Text fw={600} size="sm">
+                                  {strategy.label}
+                                </Text>
+                                <Text size="xs" c="dimmed">
+                                  {strategy.description}
+                                </Text>
+                              </div>
+                            </Group>
+                            {selectedStrategy === strategy.value && (
+                              <Badge color="green" variant="light" size="sm">
+                                Active
+                              </Badge>
+                            )}
                           </Group>
-                          {selectedStrategy === strategy.value && (
-                            <Badge color="green" variant="light" size="sm">
-                              Active
-                            </Badge>
-                          )}
-                        </Group>
-                      </Card>
-                    ))}
+                        </Card>
+                      ))}
                   </Stack>
                 </Stack>
               ) : (
