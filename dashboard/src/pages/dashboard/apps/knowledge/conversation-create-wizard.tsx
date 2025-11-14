@@ -8,11 +8,14 @@
  * Step 3: Vector Database Selection
  * Step 4: Judge Ranker (Document ranking - optional)
  * Step 5: Generative Answer (LLM configuration, System Prompt)
- * Step 6: Review & Create
+ * Step 6: Tools Binding (Assistant mode - select tools)
+ * Step 7: Tool Instructions (Assistant mode - configure tool orchestration)
+ * Step 8: Review & Create
  */
 
 import { useGetActiveModelProviders } from '@/api/resources/model-providers';
 import { useGetTools } from '@/api/resources/tools';
+import { ToolInstructionsStep } from './tool-instructions-step';
 import { useGetCollections } from '@/api/resources/vectordb';
 import { ColorfulVerticalStepper } from '@/components/colorful-vertical-stepper';
 import { Page } from '@/components/page';
@@ -90,6 +93,9 @@ interface ConversationFormData {
 
   // Step 6 - Tools Binding (Assistant mode only)
   selectedTools: string[]; // Array of tool IDs
+
+  // Step 7 - Tool Instructions (Assistant mode only)
+  tool_instructions: string; // User's custom tool orchestration instructions
 }
 
 const ENHANCEMENT_STRATEGIES = [
@@ -235,6 +241,14 @@ const STEP_CONFIGS = [
     gradientTo: LOGO_COLORS.pilot,         // Purple (Pilot)
   },
   {
+    label: 'Tool Instructions',
+    description: 'Configure tool orchestration',
+    icon: <IconMessageCircle size={20} />,
+    color: 'indigo',
+    gradientFrom: '#6366f1',               // Indigo
+    gradientTo: '#a855f7',                 // Purple
+  },
+  {
     label: 'Review & Create',
     description: 'Confirm and submit',
     icon: <IconCheck size={20} />,
@@ -286,6 +300,7 @@ export function ConversationCreateWizard() {
       enableLLMGeneration: true,
       enableKnowledgeAssistant: false, // RAG mode (default) - false, switched to true when Assistant selected
       selectedTools: [], // Initialize as empty array - will be populated when user selects tools
+      tool_instructions: '', // Initialize as empty string - optional user-provided tool orchestration instructions
     },
     validate: {
       conversationName: (value) =>
@@ -365,6 +380,7 @@ export function ConversationCreateWizard() {
           enableLLMGeneration: session.answer_generation?.enabled || false,
           enableKnowledgeAssistant: session.assistant_config?.enabled || false,
           selectedTools: session.assistant_config?.tools || [],
+          tool_instructions: session.assistant_config?.tool_instructions || '',
         });
 
         console.log('[DEBUG loadExistingConversation] form.values.selectedTools after setValues:', form.values.selectedTools);
@@ -453,10 +469,10 @@ export function ConversationCreateWizard() {
     }
     setCompletedSteps((prev) => [...new Set([...prev, activeStep])]);
 
-    // Skip Step 6 (Tools Binding) for RAG mode
+    // Skip Steps 6 & 7 (Tools Binding & Tool Instructions) for RAG mode
     let nextStep = activeStep + 1;
     if (activeStep === 5 && form.values.agentType === 'rag') {
-      nextStep = 7; // Skip to Review & Create for RAG mode
+      nextStep = 8; // Skip to Review & Create for RAG mode
     }
 
     setActiveStep(nextStep);
@@ -465,8 +481,8 @@ export function ConversationCreateWizard() {
   const handlePreviousStep = () => {
     if (activeStep > 0) {
       let prevStep = activeStep - 1;
-      // Skip Step 6 (Tools Binding) when going back in RAG mode
-      if (activeStep === 7 && form.values.agentType === 'rag') {
+      // Skip Steps 6 & 7 (Tools Binding & Tool Instructions) when going back in RAG mode
+      if (activeStep === 8 && form.values.agentType === 'rag') {
         prevStep = 5; // Skip from Review & Create back to Generative Answer for RAG
       }
       setActiveStep(prevStep);
@@ -549,10 +565,11 @@ export function ConversationCreateWizard() {
         },
         // Complex nested assistant configuration
         // RAG mode: assistant_config = { enabled: false, tools: [] }
-        // Assistant mode: assistant_config = { enabled: true, tools: [...tool_ids] }
+        // Assistant mode: assistant_config = { enabled: true, tools: [...tool_ids], tool_instructions: "..." }
         assistant_config: {
           enabled: form.values.agentType === 'assistant',
           tools: form.values.agentType === 'assistant' ? form.values.selectedTools : [],
+          tool_instructions: form.values.agentType === 'assistant' ? form.values.tool_instructions : null,
         },
       };
 
@@ -617,16 +634,16 @@ export function ConversationCreateWizard() {
   // ========================================================================
 
   // Filter steps based on agent type
-  // RAG mode: exclude Step 6 (System Prompt)
+  // RAG mode: exclude Step 6 (Tools) and Step 7 (Tool Instructions)
   // Assistant mode: include all steps
   const visibleSteps = form.values.agentType === 'rag'
-    ? STEP_CONFIGS.filter((_, index) => index !== 6) // Remove System Prompt step (index 6)
+    ? STEP_CONFIGS.filter((_, index) => index !== 6 && index !== 7) // Remove Tools and Tool Instructions steps
     : STEP_CONFIGS;
 
   // Adjust activeStep display for stepper component based on filtered steps
-  // For RAG mode: steps 0-5 stay the same, step 7 becomes visual step 6
+  // For RAG mode: steps 0-5 stay the same, step 8 becomes visual step 6
   // For Assistant mode: no adjustment needed
-  const displayActiveStep = form.values.agentType === 'rag' && activeStep === 7 ? 6 : activeStep;
+  const displayActiveStep = form.values.agentType === 'rag' && activeStep === 8 ? 6 : activeStep;
 
   const pageTitle = isEditMode ? 'Edit Conversation Agent' : 'Create New Conversation Agent';
 
@@ -771,8 +788,16 @@ export function ConversationCreateWizard() {
           </Card>
         )}
 
-        {/* STEP 6 or 7: REVIEW & CREATE (depends on agent type) */}
-        {displayActiveStep === (form.values.agentType === 'assistant' ? 7 : 6) && (
+        {/* STEP 7: TOOL INSTRUCTIONS (Assistant mode only) */}
+        {form.values.agentType === 'assistant' && activeStep === 7 && (
+          <ToolInstructionsStep
+            form={form}
+            tools={tools || []}
+          />
+        )}
+
+        {/* STEP 8 or 6: REVIEW & CREATE (depends on agent type) */}
+        {displayActiveStep === (form.values.agentType === 'assistant' ? 8 : 6) && (
           <StepReviewAndCreate
             form={form}
             providers={providers}
