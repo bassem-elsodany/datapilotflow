@@ -316,15 +316,14 @@ async def create_conversation_session(
       },
       "assistant_config": {
         "enabled": boolean,
-        "system_prompt_tasks": [...] (optional)
+        "tools": ["tool_id_1", "tool_id_2"] (optional),
+        "tool_instructions": "string" (optional)
       },
       "tags": ["string"]
     }
     """
     try:
         # Convert request models to service dataclasses
-        # Note: system_prompt is now part of assistant_config.system_prompt_tasks
-        # (if provided in the request at all)
 
         enhancement = None
         if create_request.enhancement:
