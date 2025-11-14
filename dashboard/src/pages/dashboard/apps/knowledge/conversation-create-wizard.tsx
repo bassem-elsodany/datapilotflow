@@ -658,6 +658,7 @@ export function ConversationCreateWizard() {
         completedSteps={completedSteps}
         steps={visibleSteps}
         onStepClick={handleStepClick}
+        isEditMode={isEditMode}
       >
         {/* STEP 0: AGENT TYPE SELECTION */}
         {activeStep === 0 && <StepAgentType form={form} />}

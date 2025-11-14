@@ -18,6 +18,7 @@ interface ColorfulVerticalStepperProps {
   steps: StepConfig[];
   children: ReactNode;
   onStepClick?: (step: number) => void;
+  isEditMode?: boolean;
 }
 
 export function ColorfulVerticalStepper({
@@ -25,13 +26,19 @@ export function ColorfulVerticalStepper({
   completedSteps,
   steps,
   children,
-  onStepClick
+  onStepClick,
+  isEditMode = false
 }: ColorfulVerticalStepperProps) {
   const theme = useMantineTheme();
 
   const isStepCompleted = (step: number) => completedSteps.includes(step);
   const isStepActive = (step: number) => step === activeStep;
   const isStepClickable = (step: number) => {
+    // In edit mode, all steps are clickable
+    if (isEditMode) {
+      return true;
+    }
+    // In create mode, only allow clicking previous steps or completed steps
     return step < activeStep || completedSteps.includes(step);
   };
 
