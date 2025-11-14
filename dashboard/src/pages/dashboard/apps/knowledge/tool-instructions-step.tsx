@@ -27,7 +27,9 @@ export function ToolInstructionsStep({ form, tools, providers }: ToolInstruction
 
   // Update isExpanded whenever tool_instructions change (e.g., when loading existing conversation)
   useEffect(() => {
+    console.log('[DEBUG ToolInstructionsStep] useEffect triggered, tool_instructions:', form.values.tool_instructions);
     if (form.values.tool_instructions) {
+      console.log('[DEBUG ToolInstructionsStep] Setting isExpanded to true');
       setIsExpanded(true);
     }
   }, [form.values.tool_instructions]);
