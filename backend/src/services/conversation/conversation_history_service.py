@@ -214,14 +214,18 @@ class ConversationHistoryService:
         assistant_config_dict = {
             "enabled": assistant_config.enabled,
             "tools": assistant_config.tools if assistant_config.tools else [],
+            "tool_instructions": assistant_config.tool_instructions,
         }
-        
+
         if assistant_config.tools:
             logger.info(
                 f"Saving {len(assistant_config.tools)} tool IDs to conversation: {assistant_config.tools}"
             )
         else:
             logger.debug("No tools configured for this conversation")
+
+        if assistant_config.tool_instructions:
+            logger.info(f"Saving tool_instructions: {len(assistant_config.tool_instructions)} chars")
 
         conversation_data["assistant_config"] = assistant_config_dict
 
@@ -335,13 +339,15 @@ class ConversationHistoryService:
                 assistant_config = None
                 if doc.get("assistant_config"):
                     ac = doc["assistant_config"]
-                    
+
                     # Tools are now just a list of tool IDs (strings)
                     tools = ac.get("tools", [])
-                    
+                    tool_instructions = ac.get("tool_instructions")
+
                     assistant_config = AssistantConfig(
                         enabled=ac.get("enabled", False),
                         tools=tools if tools else [],
+                        tool_instructions=tool_instructions,
                     )
 
                 session = ConversationSession(
@@ -483,13 +489,15 @@ class ConversationHistoryService:
             assistant_config = None
             if doc.get("assistant_config"):
                 ac = doc["assistant_config"]
-                
+
                 # Tools are now just a list of tool IDs (strings)
                 tools = ac.get("tools", [])
-                
+                tool_instructions = ac.get("tool_instructions")
+
                 assistant_config = AssistantConfig(
                     enabled=ac.get("enabled", False),
                     tools=tools if tools else [],
+                    tool_instructions=tool_instructions,
                 )
 
             session = ConversationSession(
@@ -837,8 +845,12 @@ class ConversationHistoryService:
                 assistant_config_dict = {
                     "enabled": assistant_config.enabled,
                     "tools": assistant_config.tools if assistant_config.tools else [],
+                    "tool_instructions": assistant_config.tool_instructions,
                 }
                 update_data["$set"]["assistant_config"] = assistant_config_dict
+
+                if assistant_config.tool_instructions:
+                    logger.info(f"Updating tool_instructions: {len(assistant_config.tool_instructions)} chars")
 
             result = self.collection.update_one(
                 {"_id": ObjectId(conversation_id), "user_id": user_id}, update_data
