@@ -5,16 +5,15 @@ This subpackage contains all knowledge-related domain models for
 managing knowledge sources, extraction, and factory patterns.
 """
 
+from .document_splitter import *
 from .job_timeline import *
 from .knowledge import *
-from .document_splitter import *
 from .knowledge_job import *
 
 # from .knowledge_factory import *  # Deprecated - removed as part of API migration
 from .knowledge_source_config import *
 from .llm_content_filter_config import *
 from .vectordb_collection import *
-from .pipeline import *
 
 __all__ = [
     # Knowledge Models
@@ -54,15 +53,4 @@ __all__ = [
     "LLMContentFilterConfig",
     "LLMContentFilterConfigCreate",
     "LLMContentFilterConfigUpdate",
-    # Pipeline
-    "Pipeline",
-    "PipelineCreate",
-    "PipelineUpdate",
-    "PipelineNode",
-    "PipelineEdge",
-    "PipelineExecutionRequest",
-    "PipelineExecutionStatus",
-    "NodeType",
-    "NodeStatus",
-    "PipelineStatus",
 ]

@@ -400,28 +400,66 @@ async def get_response_stream_supervisor(
 
         # Base prompt: Use custom prompt if provided, otherwise use our standard main agent prompt
         if selected_system_prompt and selected_system_prompt.prompt_template:
-            system_prompt_parts.append(selected_system_prompt.prompt_template)
+            base_prompt = selected_system_prompt.prompt_template
         else:
             # Use the properly structured prompt from our prompts package
-            system_prompt_parts.append(MAIN_AGENT_SYSTEM_PROMPT.prompt)
+            base_prompt = MAIN_AGENT_SYSTEM_PROMPT.prompt
 
-        # Add knowledge base context if available
-        if conversation_description:
-            system_prompt_parts.append(
-                f"\n\n**Knowledge Base Context:**\n{conversation_description}"
-            )
-
-        # Add user-configured tool instructions if available
+        # If user has tool instructions, inject them INTO STEP 5 (where tool decisions are made)
         if (
             assistant_config
             and assistant_config.tool_instructions
             and assistant_config.tool_instructions.strip()
         ):
             logger.info(
-                "✅ User-configured tool instructions found - appending to prompt"
+                "✅ User-configured tool instructions found - injecting into STEP 5"
             )
+
+            # Find STEP 5 in the prompt
+            step_5_marker = "**STEP 5️⃣: EXECUTE TOOLS WITH COMPLETE CONTEXT**"
+            if step_5_marker in base_prompt:
+                # Find the injection point (right after the step header)
+                injection_point = base_prompt.find(step_5_marker) + len(step_5_marker)
+
+                # Create user instructions section with high priority
+                user_instructions_section = f"""
+
+🎯 **USER-SPECIFIC TOOL ORCHESTRATION (HIGHEST PRIORITY):**
+
+{assistant_config.tool_instructions}
+
+**NOTE:** The above instructions are user-configured and take PRECEDENCE over default tool usage patterns below.
+
+---
+"""
+                # Inject into the prompt
+                base_prompt = (
+                    base_prompt[:injection_point]
+                    + user_instructions_section
+                    + base_prompt[injection_point:]
+                )
+                logger.info(
+                    f"✅ Injected {len(assistant_config.tool_instructions)} chars of tool instructions into STEP 5"
+                )
+            else:
+                # Fallback: If STEP 5 not found (custom prompt), append at the end
+                logger.warning(
+                    "⚠️ STEP 5 marker not found in prompt - appending instructions at end"
+                )
+                system_prompt_parts.append(base_prompt)
+                system_prompt_parts.append(
+                    f"\n\n**User-Configured Tool Usage Instructions:**\n\n{assistant_config.tool_instructions}"
+                )
+                base_prompt = None  # Signal that we already appended
+
+        # Add the base prompt (if not already added in fallback path)
+        if base_prompt is not None:
+            system_prompt_parts.append(base_prompt)
+
+        # Add knowledge base context if available
+        if conversation_description:
             system_prompt_parts.append(
-                f"\n\n**User-Configured Tool Usage Instructions:**\n\n{assistant_config.tool_instructions}"
+                f"\n\n**Knowledge Base Context:**\n{conversation_description}"
             )
 
         system_prompt = "\n".join(system_prompt_parts)

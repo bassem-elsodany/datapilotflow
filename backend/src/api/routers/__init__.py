@@ -16,7 +16,6 @@ from .knowledge.knowledge_collection_router import knowledge_collection_router
 from .knowledge.knowledge_job_router import router as knowledge_job_router
 from .knowledge.knowledge_router import router as knowledge_router
 from .knowledge.llm_content_filter_router import router as llm_content_filter_router
-from .knowledge.pipeline_router import router as pipeline_router
 from .model_provider import router as model_provider_router
 from .notifications import notification_router, notification_websocket_router
 from .tools import tools_router
@@ -33,7 +32,6 @@ __all__ = [
     "document_splitter_router",
     "vectordb_collection_router",
     "llm_content_filter_router",
-    "pipeline_router",
     "model_provider_router",
     "conversation_router",
     "tools_router",

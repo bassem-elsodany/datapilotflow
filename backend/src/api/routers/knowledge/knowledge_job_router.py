@@ -28,8 +28,6 @@ from src.services.knowledge.knowledge_job_service import (
     KnowledgeJobService,
     get_knowledge_job_service,
 )
-from src.services.knowledge.pipeline_service import get_pipeline_service
-from src.domain.knowledge.pipeline import Pipeline
 
 router = APIRouter()
 
@@ -280,71 +278,6 @@ async def cancel_knowledge_job(
         logger.error(f"Error cancelling job {job_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
-
-
-@router.get("/{job_id}/pipeline", response_model=Pipeline)
-async def get_job_as_pipeline(
-    job_id: str,
-    current_user: User = Depends(get_current_user),
-    job_service: KnowledgeJobService = Depends(get_knowledge_job_service),
-):
-    """
-    Convert a knowledge job to a pipeline visualization.
-
-    This endpoint enables bidirectional compatibility between the wizard-based
-    job creation and the visual pipeline builder. Users who create jobs via
-    the wizard can visualize them as pipelines and edit them in the builder.
-
-    Args:
-        job_id: The ID of the job to convert to a pipeline
-        current_user: The authenticated user
-        job_service: The knowledge job service (injected)
-
-    Returns:
-        Pipeline object with nodes and edges representing the job
-
-    Raises:
-        404: If job or source config not found
-        500: If conversion fails
-    """
-    try:
-        # Get the job
-        job = job_service.get_knowledge_job(job_id, current_user.id)
-        if not job:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Knowledge job {job_id} not found",
-            )
-
-        # Get the source configuration
-        source_config = job_service.knowledge_source_service.get_knowledge_source_config(
-            job.knowledge_source_config_id, current_user.id
-        )
-        if not source_config:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Knowledge source config {job.knowledge_source_config_id} not found",
-            )
-
-        # Convert to pipeline
-        pipeline_service = get_pipeline_service()
-        pipeline = pipeline_service.convert_job_to_pipeline(
-            job=job,
-            source_config=source_config,
-            user_id=current_user.id,
-        )
-
-        logger.info(f"Converted job {job_id} to pipeline with {len(pipeline.nodes)} nodes")
-        return pipeline
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error converting job {job_id} to pipeline: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to convert job to pipeline: {str(e)}",
         )
 
 

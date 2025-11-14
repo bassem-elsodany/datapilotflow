@@ -2,14 +2,13 @@
  * Conversation Creation Wizard
  *
  * Multi-step wizard for creating conversations with:
- * Step 0: Agent Type Selection (RAG vs Assistant)
- * Step 1: Conversation Settings (Name, Description)
- * Step 2: Enhancement Strategy (Query enhancement options - requires LLM provider if non-native strategy selected)
- * Step 3: Vector Database Selection
- * Step 4: Judge Ranker (Document ranking - optional)
- * Step 5: Generative Answer (LLM configuration)
- * Step 6: Tools & Instructions (Assistant mode - select tools and configure orchestration)
- * Step 7: Review & Create
+ * Step 0: Agent Type & Settings (Mode selection + Name/Description)
+ * Step 1: Enhancement Strategy (Query enhancement options - requires LLM provider if non-native strategy selected)
+ * Step 2: Vector Database Selection
+ * Step 3: Judge Ranker (Document ranking - optional)
+ * Step 4: Generative Answer (LLM configuration)
+ * Step 5: Tools & Instructions (Assistant mode - select tools and configure orchestration)
+ * Step 6: Review & Create
  */
 
 import { useGetActiveModelProviders } from '@/api/resources/model-providers';
@@ -68,32 +67,32 @@ import { useLocation, useNavigate } from 'react-router-dom';
 // ============================================================================
 
 interface ConversationFormData {
-  // Step 0
+  // Step 0 - Agent Type & Settings
   agentType: 'rag' | 'assistant';
-
-  // Step 1
   conversationName: string;
   conversationDescription: string;
+
+  // Step 1 - Enhancement Strategy
+  selectedStrategy: string;
   selectedProviderId: string | null;
   selectedModel: string | null;
 
-  // Step 2
-  selectedStrategy: string;
+  // Step 2 - Vector Database
   collectionName: string;
   topK: number;
 
-  // Step 3
+  // Step 3 - Judge Ranker
   enableReranking: boolean;
   relevanceThreshold: number;
   selectedRerankerId: string | null;
   selectedRerankerModel: string | null;
+
+  // Step 4 - Generative Answer
   enableLLMGeneration: boolean;
   enableKnowledgeAssistant: boolean;
 
-  // Step 6 - Tools Binding (Assistant mode only)
+  // Step 5 - Tools Binding (Assistant mode only)
   selectedTools: string[]; // Array of tool IDs
-
-  // Step 7 - Tool Instructions (Assistant mode only)
   tool_instructions: string; // User's custom tool orchestration instructions
 }
 
@@ -184,20 +183,12 @@ const LOGO_COLORS = {
 
 const STEP_CONFIGS = [
   {
-    label: 'Agent Type',
-    description: 'Choose conversation mode',
+    label: 'Agent Type & Settings',
+    description: 'Choose mode and basic info',
     icon: <IconRobot size={20} />,
     color: 'blue',
     gradientFrom: LOGO_COLORS.data,        // Teal (Data)
     gradientTo: LOGO_COLORS.accent2,       // Vibrant Green
-  },
-  {
-    label: 'Conversation Settings',
-    description: 'Basic conversation info',
-    icon: <IconSettings size={20} />,
-    color: 'cyan',
-    gradientFrom: LOGO_COLORS.accent1,     // Soft Teal
-    gradientTo: LOGO_COLORS.data,          // Teal (Data)
   },
   {
     label: 'Enhancement Strategy',
@@ -421,33 +412,32 @@ export function ConversationCreateWizard() {
   const validateStep = (step: number): boolean => {
     switch (step) {
       case 0:
-        return true; // Agent type always valid
+        // Agent type & conversation settings - name required
+        return !!form.values.conversationName.trim();
       case 1:
-        return !!form.values.conversationName.trim(); // Conversation name required
-      case 2:
-        // If non-native enhancement strategy is selected, LLM provider & model are required for generating variants
+        // Enhancement Strategy - if non-native, LLM provider & model are required for generating variants
         if (form.values.selectedStrategy !== 'native') {
           return !!form.values.selectedProviderId && !!form.values.selectedModel;
         }
         return true; // Native strategy doesn't need LLM provider
+      case 2:
+        // Vector Database - collection & topK required
+        return !!form.values.collectionName && form.values.topK >= 5;
       case 3:
-        return !!form.values.collectionName && form.values.topK >= 5; // Collection & topK required
+        // Judge Ranker - all optional
+        return true;
       case 4:
-        return true; // Reranker all optional
-      case 5:
-        // Provider & model required only if generative answer enabled
+        // Generative Answer - provider & model required only if enabled
         if (form.values.enableLLMGeneration) {
           return !!form.values.selectedProviderId && !!form.values.selectedModel;
         }
-        return true; // All optional if generative answer disabled
+        return true;
+      case 5:
+        // Tools & Instructions - only for Assistant mode, always valid
+        return true;
       case 6:
-        // System Prompt step - only for Assistant mode, always valid
-        if (form.values.agentType === 'assistant') {
-          return true; // System prompt configuration always valid (optional to select)
-        }
-        return true; // Not a real step for RAG mode
-      case 7:
-        return true; // Review always valid
+        // Review & Create - always valid
+        return true;
       default:
         return false;
     }
@@ -464,10 +454,10 @@ export function ConversationCreateWizard() {
     }
     setCompletedSteps((prev) => [...new Set([...prev, activeStep])]);
 
-    // Skip Step 6 (Tools & Instructions) for RAG mode
+    // Skip Step 5 (Tools & Instructions) for RAG mode
     let nextStep = activeStep + 1;
-    if (activeStep === 5 && form.values.agentType === 'rag') {
-      nextStep = 7; // Skip to Review & Create for RAG mode
+    if (activeStep === 4 && form.values.agentType === 'rag') {
+      nextStep = 6; // Skip to Review & Create for RAG mode
     }
 
     setActiveStep(nextStep);
@@ -476,9 +466,9 @@ export function ConversationCreateWizard() {
   const handlePreviousStep = () => {
     if (activeStep > 0) {
       let prevStep = activeStep - 1;
-      // Skip Step 6 (Tools & Instructions) when going back in RAG mode
-      if (activeStep === 7 && form.values.agentType === 'rag') {
-        prevStep = 5; // Skip from Review & Create back to Generative Answer for RAG
+      // Skip Step 5 (Tools & Instructions) when going back in RAG mode
+      if (activeStep === 6 && form.values.agentType === 'rag') {
+        prevStep = 4; // Skip from Review & Create back to Generative Answer for RAG
       }
       setActiveStep(prevStep);
     }
@@ -636,16 +626,16 @@ export function ConversationCreateWizard() {
   // ========================================================================
 
   // Filter steps based on agent type
-  // RAG mode: exclude Step 6 (Tools) and Step 7 (Tool Instructions)
+  // RAG mode: exclude Step 5 (Tools & Instructions)
   // Assistant mode: include all steps
   const visibleSteps = form.values.agentType === 'rag'
-    ? STEP_CONFIGS.filter((_, index) => index !== 6) // Remove Tools & Instructions step for RAG mode
+    ? STEP_CONFIGS.filter((_, index) => index !== 5) // Remove Tools & Instructions step for RAG mode
     : STEP_CONFIGS;
 
   // Adjust activeStep display for stepper component based on filtered steps
-  // For RAG mode: steps 0-5 stay the same, step 7 (Review & Create) becomes visual step 6
+  // For RAG mode: steps 0-4 stay the same, step 6 (Review & Create) becomes visual step 5
   // For Assistant mode: no adjustment needed
-  const displayActiveStep = form.values.agentType === 'rag' && activeStep === 7 ? 6 : activeStep;
+  const displayActiveStep = form.values.agentType === 'rag' && activeStep === 6 ? 5 : activeStep;
 
   const pageTitle = isEditMode ? 'Edit Conversation Agent' : 'Create New Conversation Agent';
 
@@ -660,18 +650,11 @@ export function ConversationCreateWizard() {
         onStepClick={handleStepClick}
         isEditMode={isEditMode}
       >
-        {/* STEP 0: AGENT TYPE SELECTION */}
-        {activeStep === 0 && <StepAgentType form={form} />}
+        {/* STEP 0: AGENT TYPE & SETTINGS */}
+        {activeStep === 0 && <StepAgentTypeAndSettings form={form} />}
 
-        {/* STEP 1: CONVERSATION SETTINGS */}
+        {/* STEP 1: ENHANCEMENT STRATEGY */}
         {activeStep === 1 && (
-          <StepConversationSettings
-            form={form}
-          />
-        )}
-
-        {/* STEP 2: ENHANCEMENT STRATEGY */}
-        {activeStep === 2 && (
           <StepEnhancementStrategy
             form={form}
             onLearnClick={() => setStrategiesInfoModalOpen(true)}
@@ -680,8 +663,8 @@ export function ConversationCreateWizard() {
           />
         )}
 
-        {/* STEP 3: VECTOR DATABASE */}
-        {activeStep === 3 && (
+        {/* STEP 2: VECTOR DATABASE */}
+        {activeStep === 2 && (
           <StepVectorDatabase
             form={form}
             collections={collections}
@@ -689,8 +672,8 @@ export function ConversationCreateWizard() {
           />
         )}
 
-        {/* STEP 4: JUDGE RANKER */}
-        {activeStep === 4 && (
+        {/* STEP 3: JUDGE RANKER */}
+        {activeStep === 3 && (
           <StepReranker
             form={form}
             providers={providers}
@@ -698,8 +681,8 @@ export function ConversationCreateWizard() {
           />
         )}
 
-        {/* STEP 5: ADVANCED SETTINGS */}
-        {activeStep === 5 && (
+        {/* STEP 4: GENERATIVE ANSWER */}
+        {activeStep === 4 && (
           <StepAdvancedSettings
             form={form}
             providers={providers}
@@ -707,8 +690,8 @@ export function ConversationCreateWizard() {
           />
         )}
 
-        {/* STEP 6: TOOLS & INSTRUCTIONS (Assistant mode only) */}
-        {form.values.agentType === 'assistant' && activeStep === 6 && (
+        {/* STEP 5: TOOLS & INSTRUCTIONS (Assistant mode only) */}
+        {form.values.agentType === 'assistant' && activeStep === 5 && (
           <Stack gap="lg">
             {/* Tools Selection Section */}
             <Card withBorder shadow="sm">
@@ -805,8 +788,8 @@ export function ConversationCreateWizard() {
           </Stack>
         )}
 
-        {/* STEP 7: REVIEW & CREATE (depends on agent type) */}
-        {displayActiveStep === (form.values.agentType === 'assistant' ? 7 : 6) && (
+        {/* STEP 6: REVIEW & CREATE (depends on agent type) */}
+        {displayActiveStep === (form.values.agentType === 'assistant' ? 6 : 5) && (
           <StepReviewAndCreate
             form={form}
             providers={providers}
@@ -836,7 +819,7 @@ export function ConversationCreateWizard() {
               Cancel
             </Button>
 
-            {activeStep < 6 ? (
+            {activeStep < 5 ? (
               <Button
                 onClick={handleNextStep}
                 disabled={isCreating}
@@ -1055,163 +1038,165 @@ interface StepProps {
   selectedSystemPrompt?: any;
 }
 
-function StepAgentType({ form }: StepProps) {
+function StepAgentTypeAndSettings({ form }: StepProps) {
   return (
-    <Stack gap="md">
-      <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
-        <Text size="sm">
-          Choose how you want to use this conversation. <strong>RAG Mode</strong> searches your knowledge base.
-          <strong>Assistant Mode</strong> performs tasks using knowledge base information.
-        </Text>
-      </Alert>
-
-      <Grid>
-        <Grid.Col span={{ base: 12, sm: 6 }}>
-          <Card
-            p="lg"
-            withBorder
-            style={{
-              cursor: 'pointer',
-              border:
-                form.values.agentType === 'rag'
-                  ? `2px solid ${LOGO_COLORS.data}`
-                  : '1px solid var(--mantine-color-gray-3)',
-              backgroundColor:
-                form.values.agentType === 'rag'
-                  ? `${LOGO_COLORS.data}15`
-                  : undefined,
-            }}
-            onClick={() => {
-              form.setFieldValue('agentType', 'rag');
-              form.setFieldValue('enableKnowledgeAssistant', false);
-              // RAG mode uses native strategy by default (or user can choose)
-              if (form.values.selectedStrategy === 'custom_variants') {
-                form.setFieldValue('selectedStrategy', 'native');
-              }
-              // Clear assistant-only fields when switching to RAG mode
-              form.setFieldValue('selectedTools', []);
-            }}
-          >
-            <Group gap="sm" mb="md">
-              <ThemeIcon size="lg" variant="light" radius="md" style={{ backgroundColor: `${LOGO_COLORS.data}20`, color: LOGO_COLORS.data }}>
-                <IconDatabase size={20} />
-              </ThemeIcon>
-              <div>
-                <Text fw={600} size="md" style={{ color: LOGO_COLORS.data }}>
-                  RAG Mode
-                </Text>
-              </div>
-              {form.values.agentType === 'rag' && (
-                <Badge ml="auto" size="lg" style={{ backgroundColor: LOGO_COLORS.data, color: 'white' }}>
-                  Selected
-                </Badge>
-              )}
-            </Group>
-            <Text size="sm" c="dimmed">
-              Search and retrieve information from your knowledge base. Best for Q&A and information lookup.
-            </Text>
-            <List size="sm" mt="md" withPadding>
-              <List.Item>Search knowledge base with queries</List.Item>
-              <List.Item>Retrieve relevant documents</List.Item>
-              <List.Item>Generate answers from results</List.Item>
-              <List.Item>High accuracy, factual responses</List.Item>
-            </List>
-          </Card>
-        </Grid.Col>
-
-        <Grid.Col span={{ base: 12, sm: 6 }}>
-          <Card
-            p="lg"
-            withBorder
-            style={{
-              cursor: 'pointer',
-              border:
-                form.values.agentType === 'assistant'
-                  ? `2px solid ${LOGO_COLORS.pilot}`
-                  : '1px solid var(--mantine-color-gray-3)',
-              backgroundColor:
-                form.values.agentType === 'assistant'
-                  ? `${LOGO_COLORS.pilot}15`
-                  : undefined,
-            }}
-            onClick={() => {
-              form.setFieldValue('agentType', 'assistant');
-              form.setFieldValue('enableKnowledgeAssistant', true);
-              // Assistant mode always uses custom_variants strategy
-              form.setFieldValue('selectedStrategy', 'custom_variants');
-              // Ensure assistant-only fields are initialized
-              if (!form.values.selectedTools) {
-                form.setFieldValue('selectedTools', []);
-              }
-            }}
-          >
-            <Group gap="sm" mb="md">
-              <ThemeIcon size="lg" variant="light" radius="md" style={{ backgroundColor: `${LOGO_COLORS.pilot}20`, color: LOGO_COLORS.pilot }}>
-                <IconRobot size={20} />
-              </ThemeIcon>
-              <div>
-                <Text fw={600} size="md" style={{ color: LOGO_COLORS.pilot }}>
-                  Assistant Mode
-                </Text>
-              </div>
-              {form.values.agentType === 'assistant' && (
-                <Badge ml="auto" size="lg" style={{ backgroundColor: LOGO_COLORS.pilot, color: 'white' }}>
-                  Selected
-                </Badge>
-              )}
-            </Group>
-            <Text size="sm" c="dimmed">
-              Perform tasks (writing, coding, analysis) using knowledge base as context.
-            </Text>
-            <List size="sm" mt="md" withPadding>
-              <List.Item>Execute complex tasks</List.Item>
-              <List.Item>Use custom system prompts</List.Item>
-              <List.Item>Create/write content</List.Item>
-              <List.Item>Generate code or documentation</List.Item>
-            </List>
-          </Card>
-        </Grid.Col>
-      </Grid>
-
-      {form.values.agentType === 'assistant' && (
-        <Alert
-          icon={<IconAlertCircle size={16} />}
-          color="yellow"
-          variant="light"
-        >
+    <Stack gap="xl">
+      {/* Agent Type Selection */}
+      <div>
+        <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
           <Text size="sm">
-            Assistant Mode requires a system prompt. You can create or customize one in the Advanced Settings step.
+            Choose how you want to use this conversation. <strong>RAG Mode</strong> searches your knowledge base.
+            <strong>Assistant Mode</strong> performs tasks using knowledge base information.
           </Text>
         </Alert>
-      )}
-    </Stack>
-  );
-}
 
-function StepConversationSettings({
-  form,
-}: StepProps) {
-  return (
-    <Stack gap="md">
-      <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
-        <Text size="sm">
-          Set up basic information about your conversation. These details help you organize and identify different conversations.
-        </Text>
-      </Alert>
+        <Grid mt="md">
+          <Grid.Col span={{ base: 12, sm: 6 }}>
+            <Card
+              p="lg"
+              withBorder
+              style={{
+                cursor: 'pointer',
+                border:
+                  form.values.agentType === 'rag'
+                    ? `2px solid ${LOGO_COLORS.data}`
+                    : '1px solid var(--mantine-color-gray-3)',
+                backgroundColor:
+                  form.values.agentType === 'rag'
+                    ? `${LOGO_COLORS.data}15`
+                    : undefined,
+              }}
+              onClick={() => {
+                form.setFieldValue('agentType', 'rag');
+                form.setFieldValue('enableKnowledgeAssistant', false);
+                // RAG mode uses native strategy by default (or user can choose)
+                if (form.values.selectedStrategy === 'custom_variants') {
+                  form.setFieldValue('selectedStrategy', 'native');
+                }
+                // Clear assistant-only fields when switching to RAG mode
+                form.setFieldValue('selectedTools', []);
+              }}
+            >
+              <Group gap="sm" mb="md">
+                <ThemeIcon size="lg" variant="light" radius="md" style={{ backgroundColor: `${LOGO_COLORS.data}20`, color: LOGO_COLORS.data }}>
+                  <IconDatabase size={20} />
+                </ThemeIcon>
+                <div>
+                  <Text fw={600} size="md" style={{ color: LOGO_COLORS.data }}>
+                    RAG Mode
+                  </Text>
+                </div>
+                {form.values.agentType === 'rag' && (
+                  <Badge ml="auto" size="lg" style={{ backgroundColor: LOGO_COLORS.data, color: 'white' }}>
+                    Selected
+                  </Badge>
+                )}
+              </Group>
+              <Text size="sm" c="dimmed">
+                Search and retrieve information from your knowledge base. Best for Q&A and information lookup.
+              </Text>
+              <List size="sm" mt="md" withPadding>
+                <List.Item>Search knowledge base with queries</List.Item>
+                <List.Item>Retrieve relevant documents</List.Item>
+                <List.Item>Generate answers from results</List.Item>
+                <List.Item>High accuracy, factual responses</List.Item>
+              </List>
+            </Card>
+          </Grid.Col>
 
-      <TextInput
-        label="Conversation Name"
-        placeholder="e.g., Customer Support Bot"
-        {...form.getInputProps('conversationName')}
-        required
-      />
+          <Grid.Col span={{ base: 12, sm: 6 }}>
+            <Card
+              p="lg"
+              withBorder
+              style={{
+                cursor: 'pointer',
+                border:
+                  form.values.agentType === 'assistant'
+                    ? `2px solid ${LOGO_COLORS.pilot}`
+                    : '1px solid var(--mantine-color-gray-3)',
+                backgroundColor:
+                  form.values.agentType === 'assistant'
+                    ? `${LOGO_COLORS.pilot}15`
+                    : undefined,
+              }}
+              onClick={() => {
+                form.setFieldValue('agentType', 'assistant');
+                form.setFieldValue('enableKnowledgeAssistant', true);
+                // Assistant mode always uses custom_variants strategy
+                form.setFieldValue('selectedStrategy', 'custom_variants');
+                // Ensure assistant-only fields are initialized
+                if (!form.values.selectedTools) {
+                  form.setFieldValue('selectedTools', []);
+                }
+              }}
+            >
+              <Group gap="sm" mb="md">
+                <ThemeIcon size="lg" variant="light" radius="md" style={{ backgroundColor: `${LOGO_COLORS.pilot}20`, color: LOGO_COLORS.pilot }}>
+                  <IconRobot size={20} />
+                </ThemeIcon>
+                <div>
+                  <Text fw={600} size="md" style={{ color: LOGO_COLORS.pilot }}>
+                    Assistant Mode
+                  </Text>
+                </div>
+                {form.values.agentType === 'assistant' && (
+                  <Badge ml="auto" size="lg" style={{ backgroundColor: LOGO_COLORS.pilot, color: 'white' }}>
+                    Selected
+                  </Badge>
+                )}
+              </Group>
+              <Text size="sm" c="dimmed">
+                Perform tasks (writing, coding, analysis) using knowledge base as context.
+              </Text>
+              <List size="sm" mt="md" withPadding>
+                <List.Item>Execute complex tasks</List.Item>
+                <List.Item>Use custom system prompts</List.Item>
+                <List.Item>Create/write content</List.Item>
+                <List.Item>Generate code or documentation</List.Item>
+              </List>
+            </Card>
+          </Grid.Col>
+        </Grid>
 
-      <Textarea
-        label="Description (Optional)"
-        placeholder="Brief description of what this conversation is for..."
-        {...form.getInputProps('conversationDescription')}
-        rows={4}
-      />
+        {form.values.agentType === 'assistant' && (
+          <Alert
+            icon={<IconAlertCircle size={16} />}
+            color="yellow"
+            variant="light"
+            mt="md"
+          >
+            <Text size="sm">
+              Assistant Mode requires a system prompt. You can create or customize one in the Advanced Settings step.
+            </Text>
+          </Alert>
+        )}
+      </div>
+
+      {/* Conversation Settings */}
+      <Divider label="Conversation Details" labelPosition="center" />
+      
+      <div>
+        <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light" mb="md">
+          <Text size="sm">
+            Set up basic information about your conversation. These details help you organize and identify different conversations.
+          </Text>
+        </Alert>
+
+        <TextInput
+          label="Conversation Name"
+          placeholder="e.g., Customer Support Bot"
+          {...form.getInputProps('conversationName')}
+          required
+          mb="md"
+        />
+
+        <Textarea
+          label="Description (Optional)"
+          placeholder="Brief description of what this conversation is for..."
+          {...form.getInputProps('conversationDescription')}
+          rows={4}
+        />
+      </div>
     </Stack>
   );
 }
@@ -1846,27 +1831,21 @@ function StepReviewAndCreate({ form, providers, collections, tools }: StepProps)
         </Text>
       </Alert>
 
-      {/* STEP 0: AGENT TYPE */}
+      {/* STEP 0: AGENT TYPE & SETTINGS */}
       <Card withBorder p="md" bg="blue.0">
-        <Stack gap="xs">
+        <Stack gap="sm">
           <Group justify="space-between">
-            <Text fw={600}>Step 0: Agent Type</Text>
+            <Text fw={600}>Step 0: Agent Type & Settings</Text>
             <Badge size="lg" color={form.values.agentType === 'rag' ? 'blue' : 'grape'}>
               {form.values.agentType === 'rag' ? 'RAG Mode' : 'Assistant Mode'}
             </Badge>
           </Group>
-          <Text size="xs" c="dark">
+          <Text size="xs" c="dark" mb="xs">
             {form.values.agentType === 'rag'
               ? 'Standard RAG pipeline: retrieval + optional reranking + optional answer generation'
               : 'Supervisor mode: intelligent task routing + RAG context + dynamic tool execution'}
           </Text>
-        </Stack>
-      </Card>
-
-      {/* STEP 1: CONVERSATION SETTINGS */}
-      <Card withBorder p="md" bg="blue.0">
-        <Stack gap="sm">
-          <Text fw={600}>Step 1: Conversation Settings</Text>
+          <Divider />
           <Text fw={500} size="lg" c="dark">
             {form.values.conversationName}
           </Text>
@@ -1878,10 +1857,10 @@ function StepReviewAndCreate({ form, providers, collections, tools }: StepProps)
         </Stack>
       </Card>
 
-      {/* STEP 2: ENHANCEMENT STRATEGY */}
+      {/* STEP 1: ENHANCEMENT STRATEGY */}
       <Card withBorder p="md" bg="cyan.0">
         <Stack gap="sm">
-          <Text fw={600}>Step 2: Enhancement Strategy</Text>
+          <Text fw={600}>Step 1: Enhancement Strategy</Text>
           <Group gap="md">
             <div>
               <Text size="sm" fw={500} mb="xs">
@@ -1910,10 +1889,10 @@ function StepReviewAndCreate({ form, providers, collections, tools }: StepProps)
         </Stack>
       </Card>
 
-      {/* STEP 3: VECTOR DATABASE */}
+      {/* STEP 2: VECTOR DATABASE */}
       <Card withBorder p="md" bg="teal.0">
         <Stack gap="sm">
-          <Text fw={600}>Step 3: Vector Database</Text>
+          <Text fw={600}>Step 2: Vector Database</Text>
           <Grid gutter="md">
             <Grid.Col span={{ base: 12, sm: 6 }}>
               <Stack gap="xs">
@@ -1939,11 +1918,11 @@ function StepReviewAndCreate({ form, providers, collections, tools }: StepProps)
         </Stack>
       </Card>
 
-      {/* STEP 4: RERANKER (OPTIONAL) */}
+      {/* STEP 3: RERANKER (OPTIONAL) */}
       {form.values.enableReranking && (
         <Card withBorder p="md" bg="yellow.0">
           <Stack gap="sm">
-            <Text fw={600}>Step 4: Judge Ranker (Document Re-ranking)</Text>
+            <Text fw={600}>Step 3: Judge Ranker (Document Re-ranking)</Text>
             <Grid gutter="md">
               <Grid.Col span={{ base: 12, sm: 6 }}>
                 <Stack gap="xs">
@@ -1973,11 +1952,11 @@ function StepReviewAndCreate({ form, providers, collections, tools }: StepProps)
         </Card>
       )}
 
-      {/* STEP 5: ANSWER GENERATION */}
+      {/* STEP 4: ANSWER GENERATION */}
       <Card withBorder p="md" bg="lime.0">
         <Stack gap="sm">
           <Text fw={600}>
-            Step 5: Answer Generation
+            Step 4: Answer Generation
           </Text>
           <Group gap="md">
             <div>
@@ -2007,12 +1986,12 @@ function StepReviewAndCreate({ form, providers, collections, tools }: StepProps)
         </Stack>
       </Card>
 
-      {/* STEP 6: TOOLS BINDING (Assistant mode only) */}
+      {/* STEP 5: TOOLS BINDING (Assistant mode only) */}
       {form.values.agentType === 'assistant' && (
         <Card withBorder p="md" bg="violet.1" style={{ borderColor: '#a78bfa' }}>
           <Stack gap="sm">
             <Group justify="space-between">
-              <Text fw={600}>Step 6: Tools Binding</Text>
+              <Text fw={600}>Step 5: Tools Binding</Text>
               <Badge size="lg" color="violet">
                 {form.values.selectedTools?.length || 0} Tool{form.values.selectedTools?.length !== 1 ? 's' : ''}
               </Badge>

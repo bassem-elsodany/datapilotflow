@@ -41,7 +41,6 @@ from src.api.routers import (
     model_provider_router,
     notification_router,
     notification_websocket_router,
-    pipeline_router,
     rag_router,
     supervisor_router,
     tools_router,
@@ -223,11 +222,6 @@ app.include_router(
     llm_content_filter_router,
     prefix=f"{API_PREFIX}/knowledge/content-filters",
     tags=["LLM Content Filter Management"],
-)
-app.include_router(
-    pipeline_router,
-    prefix=f"{API_PREFIX}/pipelines",
-    tags=["Pipeline Management"],
 )
 app.include_router(
     model_provider_router,
