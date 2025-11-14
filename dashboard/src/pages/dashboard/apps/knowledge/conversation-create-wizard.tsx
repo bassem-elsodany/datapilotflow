@@ -724,7 +724,7 @@ export function ConversationCreateWizard() {
 
                 {toolsLoading ? (
                   <Text size="sm" c="dimmed">Loading tools...</Text>
-                ) : !tools || tools.length === 0 ? (
+                ) : !tools || !Array.isArray(tools) || tools.length === 0 ? (
                   <Alert icon={<IconAlertCircle size={16} />} color="yellow" variant="light">
                     <Text size="sm">No tools available. Create tools in the Tools Management section first.</Text>
                   </Alert>
@@ -797,7 +797,7 @@ export function ConversationCreateWizard() {
               <Card withBorder shadow="sm">
                 <ToolInstructionsStep
                   form={form}
-                  tools={tools || []}
+                  tools={tools && Array.isArray(tools) ? tools : []}
                   providers={providers}
                 />
               </Card>
