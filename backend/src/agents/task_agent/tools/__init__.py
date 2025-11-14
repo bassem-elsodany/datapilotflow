@@ -9,7 +9,6 @@ from typing import List
 from langchain_core.tools import tool
 from loguru import logger
 
-
 # Lazy import for LLM client to avoid circular imports
 _llm_client = None
 
@@ -19,7 +18,10 @@ def get_llm_client():
     global _llm_client
     if _llm_client is None:
         try:
-            from src.agents.assistant_agent.services.get_llm_client import get_llm_client as get_client
+            from src.agents.assistant_agent.services.get_llm_client import (
+                get_llm_client as get_client,
+            )
+
             _llm_client = get_client()
         except Exception as e:
             logger.warning(f"Could not import LLM client for tools: {e}")
@@ -218,7 +220,7 @@ Generate a production-ready MuleSoft integration flow based on the requirements 
 **Your Task:**
 Using ONLY the retrieved documentation above, generate:
 1. A complete, production-ready MuleSoft flow XML configuration
-2. Explanations of key architectural decisions
+2. Brief explanations of key components
 3. Configuration instructions
 4. Testing guidance
 
@@ -229,6 +231,21 @@ Using ONLY the retrieved documentation above, generate:
 - Follow MuleSoft 4.x standards and best practices
 - Include comprehensive error handling
 - Generate complete XML, not templates or stubs
+
+**🎯 OUTPUT FORMAT (CRITICAL - USE MARKDOWN):**
+❌ DO NOT output:
+- Internal analysis sections like "Document Analysis", "Architectural Decisions"
+- Raw XML without markdown code blocks
+- Plain text notes without markdown formatting
+
+✅ DO output (Use MARKDOWN):
+- Wrap ALL XML code in markdown code blocks: ```xml ... ```
+- Use ## for section headers
+- Use - for bullet point lists
+- Use `backticks` for inline code
+- Present clean, formatted result ready for end-user
+
+**Remember:** Output must be valid MARKDOWN format, NOT plain text.
 
 ---
 
@@ -243,7 +260,9 @@ Generate the complete MuleSoft configuration now:"""
             else:
                 result = str(response)
 
-            logger.info(f"MuleSoft flow generation completed | Response: {len(result)} chars")
+            logger.info(
+                f"MuleSoft flow generation completed | Response: {len(result)} chars"
+            )
             return result
         except Exception as e:
             logger.error(f"Error invoking LLM for flow generation: {e}")

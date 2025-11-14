@@ -21,7 +21,6 @@ if TYPE_CHECKING:
     from src.domain.tool import MCPServerConfig
 
 
-
 class ToolFactory:
     """Factory for creating LangChain tools from Tool domain model configurations."""
 
@@ -103,7 +102,9 @@ class ToolFactory:
         system_prompt = prompt_config.system_prompt
 
         # Create the tool function dynamically
-        def dynamic_prompt_tool(user_input: str, rag_documents: str = "", retrieved_context: str = "") -> str:
+        def dynamic_prompt_tool(
+            user_input: str, rag_documents: str = "", retrieved_context: str = ""
+        ) -> str:
             """Execute prompt-based tool using LLM with RAG documents injected as parameter.
 
             Args:
@@ -119,13 +120,8 @@ class ToolFactory:
             final_context = rag_documents or retrieved_context
 
             logger.info(
-                f"[PROMPT TOOL] Executing '{tool_name}' | Input: {len(user_input)} chars | RAG Documents: {len(final_context)} chars"
+                f"Tool '{tool_name}' executing | Input: {len(user_input)} chars | Context: {len(final_context)} chars"
             )
-
-            # DEBUG: Log RAG context preview to see what's available
-            if final_context and len(final_context) > 100:
-                context_preview = final_context[:800]
-                logger.debug(f"[RAG CONTEXT PREVIEW] {tool_name}:\n{context_preview}\n---END PREVIEW---")
 
             # Build full prompt with RAG context injected at the END as "ONLY SOURCE OF TRUTH"
             # This ensures the LLM knows to use ONLY the retrieved documents for knowledge
@@ -164,9 +160,83 @@ information is not in these documents, you MUST say so explicitly.
 ================================================================================
 """
 
+            # CRITICAL: Add output formatting instructions to ensure user-friendly responses
+            # This OVERRIDES any internal analysis instructions in the user's system prompt
+            full_prompt += """
+
+================================================================================
+🎯 OUTPUT FORMATTING INSTRUCTIONS (HIGHEST PRIORITY - OVERRIDE ALL PREVIOUS)
+================================================================================
+
+**CRITICAL: Your response MUST be formatted in MARKDOWN for END-USER consumption.**
+
+❌ **DO NOT OUTPUT:**
+- Internal LLM thinking or reasoning steps
+- "Document Analysis" sections
+- "Architectural Decisions" sections  
+- "Implementation Notes" sections
+- "Coverage Analysis" sections
+- Step-by-step planning sections
+- Meta-commentary about what you're doing
+- Structured internal analysis (numbered sections about your process)
+- Raw code without markdown code blocks
+
+✅ **DO OUTPUT (Use proper markdown formatting):**
+- **Code blocks**: Wrap ALL code in markdown code blocks with language tags
+  ```xml
+  <your-code-here/>
+  ```
+- **Headers**: Use ## for section headers (e.g., ## Configuration, ## Usage)
+- **Lists**: Use - or * for bullet points
+- **Inline code**: Use `backticks` for inline code/commands
+- **Bold/emphasis**: Use **bold** for important terms
+- Brief contextual explanations in plain text
+- Source citations naturally integrated
+
+**Example of WRONG output format:**
+```
+1. Document Analysis:
+   - Document 1 covers X
+2. Architectural Decisions:
+   - Use component X
+3. Generated Code:
+   <code>without markdown blocks</code>
+
+Notes:
+Some plain text notes...
+```
+
+**Example of CORRECT output format (MARKDOWN):**
+````markdown
+```xml
+<mule xmlns="...">
+  <http:listener-config name="HTTP_Listener_config">
+    <http:listener-connection host="0.0.0.0" port="8081"/>
+  </http:listener-config>
+</mule>
+```
+
+## Configuration Notes
+- HTTP listener configured on port 8081
+- APIKit router integrated with the main flow
+- Error handling configured per documentation
+
+Based on the retrieved documentation, this configuration follows the patterns described in [source].
+````
+
+**Remember:** 
+1. ALWAYS use markdown code blocks (```language) for code
+2. ALWAYS use ## headers for sections
+3. ALWAYS use bullet points (-) for lists
+4. The user should see ONLY the final, polished markdown result
+================================================================================
+"""
+
             try:
                 if llm_client:
-                    logger.debug(f"[PROMPT TOOL] '{tool_name}': Full prompt size: {len(full_prompt)} chars")
+                    logger.debug(
+                        f"Tool '{tool_name}': Prompt size {len(full_prompt)} chars"
+                    )
                     response = llm_client.invoke(full_prompt)
 
                     if hasattr(response, "content"):
@@ -175,15 +245,15 @@ information is not in these documents, you MUST say so explicitly.
                         result = str(response)
 
                     logger.info(
-                        f"[PROMPT TOOL] '{tool_name}' completed | Response: {len(result)} chars"
+                        f"Tool '{tool_name}' completed | Response: {len(result)} chars"
                     )
                     return result
                 else:
-                    result = f"[Prompt Tool '{tool_name}'] No LLM client available. Would process: {user_input[:100]}"
+                    result = f"Tool '{tool_name}': No LLM client available"
                     logger.warning(result)
                     return result
             except Exception as e:
-                error_msg = f"Error executing prompt tool '{tool_name}': {str(e)}"
+                error_msg = f"Tool '{tool_name}' error: {str(e)}"
                 logger.error(error_msg)
                 logger.error(f"Traceback: {traceback.format_exc()}")
                 return error_msg

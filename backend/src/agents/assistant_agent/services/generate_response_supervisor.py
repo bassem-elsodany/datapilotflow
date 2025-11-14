@@ -591,8 +591,8 @@ async def get_response_stream_supervisor(
                         if tool_name == rag_agent_name:
                             # Extract RAG documents from tool output
                             tool_output = event_data.get("output", "")
-                            logger.info(
-                                f"🔍 RAG tool end event: output type={type(tool_output).__name__}, length={len(str(tool_output)) if tool_output else 0}, has_output={bool(tool_output)}"
+                            logger.debug(
+                                f"Processing RAG tool output: {type(tool_output).__name__}"
                             )
 
                             if tool_output:
@@ -600,34 +600,18 @@ async def get_response_stream_supervisor(
                                 # ToolMessage has a 'content' attribute
                                 if hasattr(tool_output, "content"):
                                     tool_output_content = tool_output.content
-                                    logger.debug(
-                                        f"Extracted ToolMessage.content: type={type(tool_output_content).__name__}, length={len(str(tool_output_content)) if tool_output_content else 0}"
-                                    )
                                 else:
                                     tool_output_content = tool_output
 
                                 if tool_output_content:
-                                    logger.info(
-                                        f"🔍 Processing tool_output_content, type={type(tool_output_content).__name__}"
-                                    )
                                     try:
                                         # Handle both string and dict outputs
                                         if isinstance(tool_output_content, str):
-                                            logger.info(
-                                                f"🔍 Parsing JSON from string: {tool_output_content[:200]}..."
-                                            )
                                             rag_response = json.loads(
                                                 tool_output_content
                                             )
                                         else:
-                                            logger.info(
-                                                f"🔍 Using dict output directly"
-                                            )
                                             rag_response = tool_output_content
-
-                                        logger.info(
-                                            f"🔍 rag_response type={type(rag_response).__name__}, has_documents={'documents' in rag_response if isinstance(rag_response, dict) else False}"
-                                        )
 
                                         if (
                                             isinstance(rag_response, dict)
@@ -636,9 +620,6 @@ async def get_response_stream_supervisor(
                                             retrieved_rag_documents = rag_response.get(
                                                 "documents", []
                                             )
-                                            logger.info(
-                                                f"✅ RAG tool execution completed: Extracted {len(retrieved_rag_documents)} documents from {len(str(tool_output_content))} chars"
-                                            )
 
                                             # Format RAG documents as context string
                                             rag_context_str = (
@@ -646,16 +627,10 @@ async def get_response_stream_supervisor(
                                                     retrieved_rag_documents
                                                 )
                                             )
-                                            logger.info(
-                                                f"✅ Formatted RAG context: {len(rag_context_str)} chars"
-                                            )
 
                                             # Store RAG context in agent state using LangGraph method
                                             agent_state.set_rag_context(
                                                 retrieved_rag_documents, rag_context_str
-                                            )
-                                            logger.info(
-                                                f"✅ RAG context stored in agent_state: {len(retrieved_rag_documents)} documents ({len(rag_context_str)} chars)"
                                             )
 
                                             # CRITICAL: Store documents in rag_execution_state for metadata
@@ -668,8 +643,9 @@ async def get_response_stream_supervisor(
                                             rag_execution_state["relevant_docs"] = len(
                                                 retrieved_rag_documents
                                             )
+
                                             logger.info(
-                                                f"✅ Stored {len(retrieved_rag_documents)} documents in rag_execution_state for metadata"
+                                                f"✅ RAG retrieval complete: {len(retrieved_rag_documents)} documents ({len(rag_context_str)} chars)"
                                             )
 
                                             # Emit RAG documents extracted COMPLETE event
@@ -782,27 +758,15 @@ async def get_response_stream_supervisor(
                     if event_type == "on_chat_model_stream":
                         chunk = event_data.get("chunk", {})
 
-                        # Debug: Log ALL chunk events to see what we're getting
-                        logger.info(
-                            f"[STREAM EVENT] chunk type={type(chunk).__name__}, has_content={hasattr(chunk, 'content')}, chunk_keys={chunk.keys() if isinstance(chunk, dict) else 'N/A'}"
-                        )
-
                         # Try multiple ways to extract content
                         content_chunk = ""
                         if hasattr(chunk, "content"):
                             content_chunk = (
                                 chunk.content if isinstance(chunk.content, str) else ""
                             )
-                            if content_chunk:
-                                logger.info(
-                                    f"[STREAM] Got content from chunk.content: {content_chunk[:50]}..."
-                                )
+
                         elif isinstance(chunk, dict) and "content" in chunk:
                             content_chunk = chunk.get("content", "")
-                            if content_chunk:
-                                logger.info(
-                                    f"[STREAM] Got content from chunk['content']: {content_chunk[:50]}..."
-                                )
 
                         # Stream content chunks to frontend in real-time (WHILE generating)
                         if (
@@ -815,9 +779,7 @@ async def get_response_stream_supervisor(
                                 "response_generation_started"
                                 not in rag_execution_state.get("stages_emitted", set())
                             ):
-                                logger.info(
-                                    "[FIRST CHUNK] Emitting response_generation START event"
-                                )
+                                logger.info("Response streaming started")
                                 rag_execution_state.setdefault(
                                     "stages_emitted", set()
                                 ).add("response_generation_started")
@@ -841,10 +803,6 @@ async def get_response_stream_supervisor(
                                 }
 
                             # Stream this chunk immediately to the frontend
-                            # This allows users to see response building up behind the modal
-                            logger.info(
-                                f"[STREAMING NOW] Yielding chunk: {content_chunk[:50]}..."
-                            )
                             yield {
                                 "type": "streaming_response",
                                 "chunk": content_chunk,
@@ -883,9 +841,7 @@ async def get_response_stream_supervisor(
                                     elif tool_name in [t.name for t in task_tools]:
                                         # Track task tool execution in agent state using LangGraph method
                                         agent_state.add_task_tool_executed(tool_name)
-                                        logger.info(
-                                            f"[TASK TOOL] Detected tool call: {tool_name} - task_agent_executing stage already active"
-                                        )
+                                        logger.debug(f"Task tool called: {tool_name}")
 
                                         # RAG context already in agent_state, no need to set again
                                         # Task tools will read from agent_state["rag_context"]
@@ -999,25 +955,9 @@ async def get_response_stream_supervisor(
         final_response = ""
         try:
             if final_messages:
-                # DEBUG: Log all message types to identify the issue
-                logger.info(
-                    f"📋 [FINAL MESSAGES] Total messages: {len(final_messages)}"
+                logger.debug(
+                    f"Extracting final response from {len(final_messages)} messages"
                 )
-                for i, msg in enumerate(reversed(final_messages)):
-                    if isinstance(msg, AIMessage):
-                        logger.info(
-                            f"📋 [MSG {i}] AIMessage - content_length={len(msg.content)}, preview={msg.content[:100]}..."
-                        )
-                    elif isinstance(msg, ToolMessage):
-                        logger.info(
-                            f"📋 [MSG {i}] ToolMessage - name={msg.name}, content_length={len(str(msg.content))}, preview={str(msg.content)[:100]}..."
-                        )
-                    elif isinstance(msg, dict):
-                        logger.info(
-                            f"📋 [MSG {i}] Dict - role={msg.get('role')}, content_length={len(str(msg.get('content', '')))}, preview={str(msg.get('content', ''))[:100]}..."
-                        )
-                    else:
-                        logger.info(f"📋 [MSG {i}] Unknown type: {type(msg)}")
 
                 # CRITICAL: Extract from ToolMessage (task tool output), NOT AIMessage (agent thinking)
                 # The agent's AIMessage contains reasoning/analysis, the ToolMessage contains the actual generated content
@@ -1032,7 +972,7 @@ async def get_response_stream_supervisor(
                             final_response = str(msg.content)
                             task_tool_output_found = True
                             logger.info(
-                                f"✅ [EXTRACTED] Using ToolMessage from '{msg.name}': {final_response[:200]}..."
+                                f"✅ Final response extracted from task tool: '{msg.name}' ({len(final_response)} chars)"
                             )
                             break
                     elif isinstance(msg, dict) and msg.get("role") == "tool":
@@ -1044,30 +984,29 @@ async def get_response_stream_supervisor(
                             final_response = str(msg.get("content", ""))
                             task_tool_output_found = True
                             logger.info(
-                                f"✅ [EXTRACTED] Using dict tool message from '{tool_name}': {final_response[:200]}..."
+                                f"✅ Final response extracted from task tool: '{tool_name}' ({len(final_response)} chars)"
                             )
                             break
 
                 # Fallback to AIMessage if no task tool output found (for pure Q&A without generation)
                 if not task_tool_output_found:
-                    logger.warning(
-                        "⚠️ No task tool output found, falling back to AIMessage (might be agent reasoning or pure Q&A)"
+                    logger.debug(
+                        "No task tool output found, checking for AIMessage (Q&A mode)"
                     )
                     for msg in reversed(final_messages):
                         if isinstance(msg, AIMessage):
                             final_response = msg.content
                             logger.info(
-                                f"⚠️ [FALLBACK] Using AIMessage content: {final_response[:200]}..."
+                                f"✅ Final response extracted from AIMessage (Q&A mode, {len(final_response)} chars)"
                             )
                             break
                         elif isinstance(msg, dict) and msg.get("role") == "assistant":
                             final_response = msg.get("content", "")
                             logger.info(
-                                f"⚠️ [FALLBACK] Using dict assistant content: {final_response[:200]}..."
+                                f"✅ Final response extracted from assistant message (Q&A mode, {len(final_response)} chars)"
                             )
                             break
 
-            logger.info(f"Final response length: {len(final_response)}")
             response_state["final_response"] = final_response
         except Exception as e:
             error_msg = f"Error extracting final response: {str(e)}"

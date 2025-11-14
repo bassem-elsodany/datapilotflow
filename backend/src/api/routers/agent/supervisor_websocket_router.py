@@ -357,11 +357,6 @@ async def agent_query_supervisor_websocket(
                 try:
                     async for chunk in stream:
                         chunk_type = chunk.get("type")
-                        logger.debug(
-                            f"Forwarding Supervisor event: type={chunk_type}, stage={chunk.get('stage')}"
-                        )
-                        logger.debug(f"Full event payload: {json.dumps(chunk)}")
-
                         # Track if we've started sending response content
                         if chunk_type in ["streaming_response", "supervisor_error"]:
                             response_started = True
@@ -377,9 +372,6 @@ async def agent_query_supervisor_websocket(
                         ]:
                             try:
                                 await websocket.send_text(json.dumps(chunk))
-                                logger.debug(
-                                    f"Supervisor event sent to client successfully"
-                                )
                             except Exception as send_error:
                                 # Client connection lost while sending response
                                 if response_started:

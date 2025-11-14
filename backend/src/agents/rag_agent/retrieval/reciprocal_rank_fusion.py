@@ -137,14 +137,10 @@ def reciprocal_rank_fusion(
         doc["fusion_rank"] = len(fused_results) + 1
         doc["appeared_in_n_results"] = doc_appearances[doc_id]
         fused_results.append(doc)
-
-        logger.info(f"🏆 FUSED RANK #{doc['fusion_rank']}:")
-        logger.info(f"   chunk_id: {doc_id}")
-        logger.info(f"   RRF score: {score:.6f}")
-        logger.info(f"   Appeared in: {doc_appearances[doc_id]} result set(s)")
-        logger.info(f"   Source: {doc.get('source_url', 'N/A')}")
         text_preview = doc.get("text", "")[:150] if doc.get("text") else "NO TEXT"
-        logger.info(f"   Preview: '{text_preview}...'")
+        logger.info(
+            f"🏆 FUSED RANK #{doc['fusion_rank']}: chunk_id: {doc_id} RRF score: {score:.6f} Appeared in: {doc_appearances[doc_id]} result set(s) Source: {doc.get('source_url', 'N/A')} Preview: '{text_preview}...'"
+        )
         logger.info("")
 
     logger.info("=" * 100)

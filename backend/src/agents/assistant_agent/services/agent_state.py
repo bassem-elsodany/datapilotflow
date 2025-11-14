@@ -32,6 +32,12 @@ class SupervisorAgentState(BaseModel):
     - task_tools_executed: List of task tools specifically executed
     - error_messages: List of errors encountered
     - execution_metadata: Additional execution tracking data
+
+    NEW - Iterative RAG Evaluation:
+    - rag_iteration_count: Current iteration number (1-3)
+    - rag_iterations_history: History of all iterations with gap analysis
+    - rag_descoped_documents: Documents filtered out as weak/irrelevant
+    - coverage_verification_results: Results of each coverage check
     """
 
     # Message handling
@@ -46,6 +52,12 @@ class SupervisorAgentState(BaseModel):
     tools_used: Annotated[List[str], add] = Field(default_factory=list)
     task_tools_executed: Annotated[List[str], add] = Field(default_factory=list)
     error_messages: Annotated[List[str], add] = Field(default_factory=list)
+
+    # NEW - Iterative RAG Evaluation Fields
+    rag_iteration_count: int = 0  # Track current iteration (0=not started, 1-3=iterations)
+    rag_iterations_history: List[Dict[str, Any]] = Field(default_factory=list)  # History of each iteration
+    rag_descoped_documents: List[Dict[str, Any]] = Field(default_factory=list)  # Documents filtered out as weak
+    coverage_verification_results: List[Dict[str, Any]] = Field(default_factory=list)  # Coverage check results
 
     # Execution metadata
     execution_metadata: Dict[str, Any] = Field(default_factory=dict)
@@ -176,6 +188,138 @@ class SupervisorAgentState(BaseModel):
         """
         return len(self.rag_context) > 0
 
+    def start_rag_iteration(self) -> None:
+        """
+        Start a new RAG iteration cycle.
+        Increments iteration counter (max 3).
+        """
+        if self.rag_iteration_count < 3:
+            self.rag_iteration_count += 1
+
+        from loguru import logger
+        logger.info(f"[RAG ITERATION] Starting iteration {self.rag_iteration_count}/3")
+
+    def is_max_iterations_reached(self) -> bool:
+        """Check if max iterations (3) has been reached"""
+        return self.rag_iteration_count >= 3
+
+    def record_coverage_verification(
+        self,
+        iteration: int,
+        requirements: List[str],
+        coverage_status: Dict[str, str],  # {"requirement": "covered|gap|partial"}
+        gaps_found: List[str],
+        action: str,  # "proceed", "iterate", "max_reached"
+    ) -> None:
+        """
+        Record the result of a coverage verification check.
+
+        Args:
+            iteration: Current iteration number
+            requirements: List of requirements to verify
+            coverage_status: Dict mapping requirement to coverage status
+            gaps_found: List of gaps identified
+            action: Action to take (proceed, iterate, max_reached)
+        """
+        verification_result = {
+            "iteration": iteration,
+            "requirements": requirements,
+            "coverage_status": coverage_status,
+            "gaps_found": gaps_found,
+            "action": action,
+            "timestamp": str(__import__("datetime").datetime.utcnow()),
+        }
+        self.coverage_verification_results.append(verification_result)
+
+        from loguru import logger
+        logger.info(
+            f"[COVERAGE VERIFICATION] Iteration {iteration}: "
+            f"Coverage={coverage_status}, Gaps={gaps_found}, Action={action}"
+        )
+
+    def record_iteration_knowledge(
+        self,
+        iteration: int,
+        retrieved_docs: List[Dict[str, Any]],
+        quality_scores: Dict[str, str],  # {"doc_id": "high|medium|low"}
+        targeted_variants: List[str],
+    ) -> None:
+        """
+        Record knowledge retrieved in this iteration with quality assessment.
+
+        Args:
+            iteration: Iteration number
+            retrieved_docs: Documents retrieved in this iteration
+            quality_scores: Quality scores for each document
+            targeted_variants: Query variants used in this iteration
+        """
+        iteration_record = {
+            "iteration": iteration,
+            "doc_count": len(retrieved_docs),
+            "quality_scores": quality_scores,
+            "targeted_variants": targeted_variants,
+            "timestamp": str(__import__("datetime").datetime.utcnow()),
+        }
+        self.rag_iterations_history.append(iteration_record)
+
+        from loguru import logger
+        logger.info(
+            f"[RAG ITERATION {iteration}] Retrieved {len(retrieved_docs)} docs, "
+            f"Quality distribution: {quality_scores}"
+        )
+
+    def descope_weak_documents(self, weak_doc_ids: List[str]) -> int:
+        """
+        Mark documents as weak/irrelevant and remove from main context.
+        Stores them in rag_descoped_documents for reference.
+
+        Args:
+            weak_doc_ids: List of document IDs to descope
+
+        Returns:
+            Count of documents actually descoped
+        """
+        if not self.rag_documents:
+            return 0
+
+        descoped_count = 0
+        remaining_docs = []
+
+        for doc in self.rag_documents:
+            doc_id = doc.get("id") or doc.get("chunk_id")
+            if doc_id in weak_doc_ids:
+                self.rag_descoped_documents.append(doc)
+                descoped_count += 1
+            else:
+                remaining_docs.append(doc)
+
+        self.rag_documents = remaining_docs
+
+        from loguru import logger
+        logger.info(
+            f"[DESCOPING] Removed {descoped_count} weak documents. "
+            f"Active docs: {len(self.rag_documents)}, Descoped: {len(self.rag_descoped_documents)}"
+        )
+
+        return descoped_count
+
+    def get_iteration_summary(self) -> Dict[str, Any]:
+        """
+        Get summary of RAG iterations and coverage.
+
+        Returns:
+            Dictionary with iteration summary
+        """
+        return {
+            "current_iteration": self.rag_iteration_count,
+            "max_iterations": 3,
+            "is_max_reached": self.is_max_iterations_reached(),
+            "iterations_history": self.rag_iterations_history,
+            "coverage_verifications": self.coverage_verification_results,
+            "active_documents": len(self.rag_documents) if self.rag_documents else 0,
+            "descoped_documents": len(self.rag_descoped_documents),
+        }
+
     def get_execution_summary(self) -> Dict[str, Any]:
         """
         Get summary of execution state.
@@ -183,7 +327,7 @@ class SupervisorAgentState(BaseModel):
         Returns:
             Dictionary with execution summary
         """
-        return {
+        summary = {
             "messages_count": len(self.messages),
             "tools_used": self.tools_used,
             "task_tools_executed": self.task_tools_executed,
@@ -192,6 +336,12 @@ class SupervisorAgentState(BaseModel):
             "rag_documents_count": len(self.rag_documents) if self.rag_documents else 0,
             "execution_metadata": self.execution_metadata,
         }
+
+        # Include iteration summary if iterations were used
+        if self.rag_iteration_count > 0:
+            summary["rag_iterations"] = self.get_iteration_summary()
+
+        return summary
 
 
 class RAGContextPayload(BaseModel):
