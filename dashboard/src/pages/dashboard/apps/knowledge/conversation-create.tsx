@@ -750,6 +750,54 @@ function ConversationWizard() {
                   disabled={enableKnowledgeAssistant}
                 />
 
+                {/* LLM Provider and Model selection for Assistant Mode */}
+                {enableKnowledgeAssistant && (
+                  <Grid gutter="md">
+                    <Grid.Col span={6}>
+                      <Select
+                        label="LLM Provider (Required for Assistant)"
+                        placeholder={providersLoading ? 'Loading providers...' : 'Select a provider'}
+                        data={providers?.map((p) => ({
+                          value: p.id,
+                          label: `${p.name} (${p.provider_type})`,
+                        })) || []}
+                        value={selectedProviderId}
+                        onChange={(value) => {
+                          setSelectedProviderId(value);
+                          setSelectedModel(null);
+                        }}
+                        searchable
+                        required
+                        disabled={providersLoading || !providers || providers.length === 0}
+                        description="Required for Assistant to understand queries and execute tasks"
+                      />
+                    </Grid.Col>
+
+                    <Grid.Col span={6}>
+                      <Select
+                        label="LLM Model (Required for Assistant)"
+                        placeholder="Select a model"
+                        data={
+                          selectedProviderId && providers
+                            ? providers
+                              .find((p) => p.id === selectedProviderId)
+                              ?.generative?.models.map((model) => ({
+                                value: model,
+                                label: model,
+                              })) || []
+                            : []
+                        }
+                        value={selectedModel}
+                        onChange={setSelectedModel}
+                        searchable
+                        disabled={!selectedProviderId}
+                        required
+                        description="Required for Assistant to understand queries and execute tasks"
+                      />
+                    </Grid.Col>
+                  </Grid>
+                )}
+
                 {/* RRF Info Alert for multi-variant strategies */}
                 {selectedStrategy !== 'native' && selectedStrategy !== 'hyde' && (
                   <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
