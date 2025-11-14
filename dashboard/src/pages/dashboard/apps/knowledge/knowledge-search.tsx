@@ -128,11 +128,8 @@ export default function KnowledgeSearch() {
   };
 
   const editConversationInPipeline = (sessionId: string) => {
-    navigate(paths.dashboard.apps.conversationCreate, {
-      state: {
-        editingConversationId: sessionId,
-        mode: 'pipeline'
-      }
+    navigate(`${paths.dashboard.apps.conversationCreate}?mode=pipeline`, {
+      state: { editingConversationId: sessionId }
     });
   };
 
