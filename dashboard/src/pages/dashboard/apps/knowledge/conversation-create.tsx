@@ -1153,6 +1153,56 @@ function ConversationWizard() {
                     </Box>
                   )}
 
+                  {/* LLM Provider and Model for Strategy */}
+                  {selectedStrategy !== 'native' && (
+                    <>
+                      <Divider />
+                      <Grid gutter="sm">
+                        <Grid.Col span={12}>
+                          <Select
+                            size="sm"
+                            label="LLM Provider"
+                            placeholder="Select provider"
+                            data={providers?.map((p) => ({
+                              value: p.id,
+                              label: `${p.name} (${p.provider_type})`,
+                            })) || []}
+                            value={selectedProviderId}
+                            onChange={(value) => {
+                              setSelectedProviderId(value);
+                              setSelectedModel(null);
+                            }}
+                            searchable
+                            disabled={providersLoading || !providers || providers.length === 0}
+                            description="Required for query enhancement"
+                          />
+                        </Grid.Col>
+                        <Grid.Col span={12}>
+                          <Select
+                            size="sm"
+                            label="LLM Model"
+                            placeholder="Select model"
+                            data={
+                              selectedProviderId && providers
+                                ? providers
+                                  .find((p) => p.id === selectedProviderId)
+                                  ?.generative?.models.map((model) => ({
+                                    value: model,
+                                    label: model,
+                                  })) || []
+                                : []
+                            }
+                            value={selectedModel}
+                            onChange={setSelectedModel}
+                            searchable
+                            disabled={!selectedProviderId}
+                            description="Required for query enhancement"
+                          />
+                        </Grid.Col>
+                      </Grid>
+                    </>
+                  )}
+
                   <Grid gutter="sm">
                     <Grid.Col span={6}>
                       <Text size="xs" fw={500} mb="xs" c="dimmed">Best For:</Text>
