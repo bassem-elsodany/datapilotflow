@@ -147,6 +147,12 @@ export function ToolInstructionsStep({ form, tools, providers }: ToolInstruction
         pattern: data.pattern,
         reasoning: data.reasoning,
       });
+
+      // Show success message in console
+      console.log('✨ Tool instructions generated successfully!', {
+        pattern: data.pattern,
+        reasoning: data.reasoning,
+      });
     } catch (error) {
       console.error('Error generating instructions:', error);
       setGenerationError(error instanceof Error ? error.message : 'Failed to generate instructions');

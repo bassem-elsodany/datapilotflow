@@ -513,14 +513,16 @@ async def generate_tool_instructions(
         # Get tool service and fetch tool details
         tool_service = get_tool_service()
         tools_info = []
+        skipped_tools = []
 
         for tool_id in request.tool_ids:
             tool = tool_service.get_tool_by_id(tool_id, current_user.id or "")
             if not tool:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Tool {tool_id} not found or not accessible",
+                logger.warning(
+                    f"Tool {tool_id} not found or not accessible for user {current_user.id}, skipping for instruction generation"
                 )
+                skipped_tools.append(tool_id)
+                continue
             tools_info.append(
                 {
                     "name": tool.name,
@@ -528,6 +530,18 @@ async def generate_tool_instructions(
                     "description": tool.description,
                     "type": tool.tool_type,
                 }
+            )
+
+        # Check if we have any valid tools left
+        if not tools_info:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"None of the provided tools were found or accessible. Skipped: {', '.join(skipped_tools)}",
+            )
+
+        if skipped_tools:
+            logger.info(
+                f"Skipped {len(skipped_tools)} inaccessible tools during instruction generation"
             )
 
         # Get LLM provider
