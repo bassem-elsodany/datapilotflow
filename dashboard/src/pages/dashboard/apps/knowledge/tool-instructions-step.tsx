@@ -101,7 +101,7 @@ export function ToolInstructionsStep({ form, tools = [], providers }: ToolInstru
   };
 
   return (
-    <Stack spacing="lg">
+    <Stack gap="lg">
       {/* Header */}
       <div>
         <Text size="lg" fw={600} mb="xs">
@@ -115,7 +115,7 @@ export function ToolInstructionsStep({ form, tools = [], providers }: ToolInstru
       {/* Selected Tools Summary */}
       {selectedTools.length > 0 && (
         <Card withBorder p="md" radius="md" bg="blue.0">
-          <Stack spacing="xs">
+          <Stack gap="xs">
             <Text size="sm" fw={600}>
               Selected Tools ({selectedTools.length})
             </Text>
@@ -210,7 +210,7 @@ export function ToolInstructionsStep({ form, tools = [], providers }: ToolInstru
 
         {/* Expanded Content */}
         {isExpanded && (
-          <Stack spacing="sm" p="md" pt={0}>
+          <Stack gap="sm" p="md" pt={0}>
             {generationError && (
               <Alert icon={<IconAlertCircle size={16} />} color="red" variant="light">
                 <Text size="sm">{generationError}</Text>
@@ -242,7 +242,7 @@ export function ToolInstructionsStep({ form, tools = [], providers }: ToolInstru
       <Group grow align="flex-start" gap="md">
         {/* Guidelines - Left */}
         <Card withBorder p="md" radius="md" bg="yellow.0">
-          <Stack spacing="sm">
+          <Stack gap="sm">
             <Group gap="xs">
               <IconDots size={18} />
               <Text size="sm" fw={600}>
@@ -271,7 +271,7 @@ export function ToolInstructionsStep({ form, tools = [], providers }: ToolInstru
 
         {/* Example - Right */}
         <Card withBorder p="md" radius="md">
-          <Stack spacing="sm">
+          <Stack gap="sm">
             <Text size="sm" fw={600}>
               Example Instructions
             </Text>
