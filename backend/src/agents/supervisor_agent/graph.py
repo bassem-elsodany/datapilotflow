@@ -1,40 +1,46 @@
-"""Define a custom Reasoning and Action agent.
+"""Define a custom Reasoning and Action agent with tool registry.
 
 Works with a chat model with tool calling support.
 Based on langchain-ai/react-agent with RAG + task tools integration.
+Uses tool registry for ID-based tool management (no semantic search).
 """
 
 from datetime import UTC, datetime
 from typing import Dict, List, Literal, cast
 
 from langchain_core.messages import AIMessage
-from langchain_core.tools import BaseTool
 from langgraph.graph import StateGraph
 from langgraph.prebuilt import ToolNode
 from langgraph.runtime import Runtime
 
 from src.agents.supervisor_agent.context import Context
 from src.agents.supervisor_agent.state import InputState, State
+from src.agents.supervisor_agent.tools import ToolRegistry
 from src.agents.supervisor_agent.utils import load_chat_model
 
 
 async def call_model(
-    state: State, runtime: Runtime[Context], tools: List[BaseTool]
+    state: State,
+    runtime: Runtime[Context],
+    tool_registry: ToolRegistry,
 ) -> Dict[str, List[AIMessage]]:
     """Call the LLM powering our "agent".
 
     This function prepares the prompt, initializes the model, and processes the response.
 
     Args:
-        state (State): The current state of the conversation.
-        runtime (Runtime[Context]): Configuration for the model run.
-        tools (List[BaseTool]): Available tools (RAG + task tools).
+        state: The current state of the conversation.
+        runtime: Configuration for the model run.
+        tool_registry: Registry of available tools.
 
     Returns:
         dict: A dictionary containing the model's response message.
     """
+    # Get all tools from registry
+    all_tools = tool_registry.get_all()
+
     # Initialize the model with tool binding
-    model = load_chat_model(runtime.context.model).bind_tools(tools)
+    model = load_chat_model(runtime.context.model).bind_tools(all_tools)
 
     # Format the system prompt. Customize this to change the agent's behavior.
     system_message = runtime.context.system_prompt.format(
@@ -70,7 +76,7 @@ def route_model_output(state: State) -> Literal["__end__", "tools"]:
     This function checks if the model's last message contains tool calls.
 
     Args:
-        state (State): The current state of the conversation.
+        state: The current state of the conversation.
 
     Returns:
         str: The name of the next node to call ("__end__" or "tools").
@@ -87,11 +93,11 @@ def route_model_output(state: State) -> Literal["__end__", "tools"]:
     return "tools"
 
 
-def create_graph(tools: List[BaseTool]) -> StateGraph:
-    """Create a supervisor ReAct agent graph.
+def create_graph(tool_registry: ToolRegistry) -> StateGraph:
+    """Create a supervisor ReAct agent graph with tool registry.
 
     Args:
-        tools (List[BaseTool]): Available tools (RAG + task tools).
+        tool_registry: Registry of available tools (RAG + task tools).
 
     Returns:
         StateGraph: Compiled LangGraph StateGraph.
@@ -100,11 +106,16 @@ def create_graph(tools: List[BaseTool]) -> StateGraph:
     builder = StateGraph(State, input_schema=InputState, context_schema=Context)
 
     # Define the two nodes we will cycle between
-    async def call_model_node(state: State, runtime: Runtime[Context]) -> Dict[str, List[AIMessage]]:
-        return await call_model(state, runtime, tools)
+    async def call_model_node(
+        state: State, runtime: Runtime[Context]
+    ) -> Dict[str, List[AIMessage]]:
+        return await call_model(state, runtime, tool_registry)
 
     builder.add_node(call_model_node)
-    builder.add_node("tools", ToolNode(tools))
+
+    # ToolNode uses tools from registry
+    all_tools = tool_registry.get_all()
+    builder.add_node("tools", ToolNode(all_tools))
 
     # Set the entrypoint as `call_model`
     # This means that this node is the first one called
