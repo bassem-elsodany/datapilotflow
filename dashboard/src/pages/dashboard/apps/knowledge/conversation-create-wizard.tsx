@@ -786,6 +786,7 @@ export function ConversationCreateWizard() {
                 <ToolInstructionsStep
                   form={form}
                   tools={tools || []}
+                  providers={providers}
                 />
               </Card>
             )}

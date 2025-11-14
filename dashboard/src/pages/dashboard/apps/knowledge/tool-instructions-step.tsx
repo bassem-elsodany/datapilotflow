@@ -5,13 +5,16 @@
  * This step appears after tool selection and before review.
  */
 
-import { Card, Stack, Text, Textarea, Button, Badge, Accordion, Paper, Group, CopyButton, ActionIcon } from '@mantine/core';
-import { IconCopy, IconCheck, IconDots } from '@tabler/icons-react';
+import { Card, Stack, Text, Textarea, Button, Badge, Accordion, Paper, Group, CopyButton, ActionIcon, Loader, Alert } from '@mantine/core';
+import { IconCopy, IconCheck, IconDots, IconSparkles, IconAlertCircle } from '@tabler/icons-react';
 import { UseFormReturnType } from '@mantine/form';
+import { useState } from 'react';
+import { apiUtils } from '@/utils/api-utils';
 
 interface ToolInstructionsStepProps {
   form: UseFormReturnType<any>;
   tools: any[];
+  providers?: any[];
 }
 
 // Template examples for tool orchestration
@@ -81,9 +84,11 @@ Include:
   },
 };
 
-export function ToolInstructionsStep({ form, tools }: ToolInstructionsStepProps) {
+export function ToolInstructionsStep({ form, tools, providers }: ToolInstructionsStepProps) {
   const selectedToolIds = form.values.selectedTools || [];
   const selectedTools = tools?.filter((t) => selectedToolIds.includes(t.id)) || [];
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
 
   const insertTemplate = (template: string) => {
     const currentValue = form.values.tool_instructions || '';
@@ -91,6 +96,63 @@ export function ToolInstructionsStep({ form, tools }: ToolInstructionsStepProps)
       'tool_instructions',
       currentValue ? `${currentValue}\n\n${template}` : template
     );
+  };
+
+  const generateInstructions = async () => {
+    setIsGenerating(true);
+    setGenerationError(null);
+
+    try {
+      // Check if we have selected LLM provider and model
+      const selectedProviderId = form.values.selectedProviderId;
+      const selectedModel = form.values.selectedModel;
+
+      if (!selectedProviderId || !selectedModel) {
+        setGenerationError('Please select an LLM provider and model in the Enhancement Strategy step');
+        setIsGenerating(false);
+        return;
+      }
+
+      const token = localStorage.getItem('jwt_token');
+      const response = await fetch(
+        apiUtils.buildApiUrl('/tools/instructions/generate'),
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            tool_ids: selectedToolIds,
+            llm_provider_id: selectedProviderId,
+            llm_model_name: selectedModel,
+            user_context: undefined,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        setGenerationError(error.detail || 'Failed to generate instructions');
+        setIsGenerating(false);
+        return;
+      }
+
+      const data = await response.json();
+
+      // Set the generated instructions
+      form.setFieldValue('tool_instructions', data.instructions);
+
+      console.log('Generated instructions:', {
+        pattern: data.pattern,
+        reasoning: data.reasoning,
+      });
+    } catch (error) {
+      console.error('Error generating instructions:', error);
+      setGenerationError(error instanceof Error ? error.message : 'Failed to generate instructions');
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   return (
@@ -130,26 +192,46 @@ export function ToolInstructionsStep({ form, tools }: ToolInstructionsStepProps)
 
       {/* Instructions Input */}
       <Stack spacing="sm">
-        <div>
-          <Text size="sm" fw={600} mb="xs">
-            Instructions
-          </Text>
-          <Textarea
-            {...form.getInputProps('tool_instructions')}
-            placeholder="Describe how these tools should work together. Be specific about execution order and conditions."
-            minRows={6}
-            maxRows={12}
-            styles={{
-              input: {
-                fontFamily: 'monospace',
-                fontSize: '12px',
-              },
-            }}
-          />
-          <Text size="xs" c="dimmed" mt="xs">
-            Include details about: when to call each tool, which tools work together, how to accumulate knowledge from multiple tools
-          </Text>
-        </div>
+        <Group justify="space-between" align="flex-end">
+          <div style={{ flex: 1 }}>
+            <Text size="sm" fw={600} mb="xs">
+              Instructions
+            </Text>
+          </div>
+          <Button
+            size="sm"
+            variant="gradient"
+            gradient={{ from: 'cyan', to: 'blue', deg: 135 }}
+            leftSection={isGenerating ? <Loader size={14} /> : <IconSparkles size={14} />}
+            onClick={generateInstructions}
+            disabled={isGenerating || selectedToolIds.length === 0}
+            loading={isGenerating}
+          >
+            {isGenerating ? 'Generating...' : 'Generate with AI'}
+          </Button>
+        </Group>
+
+        {generationError && (
+          <Alert icon={<IconAlertCircle size={16} />} color="red" variant="light">
+            <Text size="sm">{generationError}</Text>
+          </Alert>
+        )}
+
+        <Textarea
+          {...form.getInputProps('tool_instructions')}
+          placeholder="Describe how these tools should work together. Be specific about execution order and conditions."
+          minRows={6}
+          maxRows={12}
+          styles={{
+            input: {
+              fontFamily: 'monospace',
+              fontSize: '12px',
+            },
+          }}
+        />
+        <Text size="xs" c="dimmed">
+          Include details about: when to call each tool, which tools work together, how to accumulate knowledge from multiple tools
+        </Text>
       </Stack>
 
       {/* Templates Accordion */}
