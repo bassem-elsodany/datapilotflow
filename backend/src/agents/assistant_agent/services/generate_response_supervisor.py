@@ -411,6 +411,19 @@ async def get_response_stream_supervisor(
                 f"\n\n**Knowledge Base Context:**\n{conversation_description}"
             )
 
+        # Add user-configured tool instructions if available
+        if (
+            assistant_config
+            and assistant_config.tool_instructions
+            and assistant_config.tool_instructions.strip()
+        ):
+            logger.info(
+                "✅ User-configured tool instructions found - appending to prompt"
+            )
+            system_prompt_parts.append(
+                f"\n\n**User-Configured Tool Usage Instructions:**\n\n{assistant_config.tool_instructions}"
+            )
+
         system_prompt = "\n".join(system_prompt_parts)
 
         # Create main ReAct agent with Tool Calling pattern (LangChain recommended)

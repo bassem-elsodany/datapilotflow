@@ -91,6 +91,7 @@ class AssistantConfig:
 
     enabled: bool  # Whether Assistant mode is enabled (true) or RAG mode (false)
     tools: Optional[List[str]] = None  # List of tool IDs bound to this conversation agent
+    tool_instructions: Optional[str] = None  # User's custom instructions for how tools should work together
 
 
 @dataclass
