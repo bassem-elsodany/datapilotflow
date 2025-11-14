@@ -8,7 +8,7 @@
 import { Card, Stack, Text, Textarea, Button, Badge, Paper, Group, ActionIcon, Loader, Alert } from '@mantine/core';
 import { IconDots, IconSparkles, IconAlertCircle, IconChevronDown, IconChevronUp } from '@tabler/icons-react';
 import { UseFormReturnType } from '@mantine/form';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { apiUtils } from '@/config';
 
 interface ToolInstructionsStepProps {
@@ -24,6 +24,13 @@ export function ToolInstructionsStep({ form, tools, providers }: ToolInstruction
   const [generationError, setGenerationError] = useState<string | null>(null);
   // Auto-expand if there are existing instructions (edit mode)
   const [isExpanded, setIsExpanded] = useState(!!form.values.tool_instructions);
+
+  // Update isExpanded whenever tool_instructions change (e.g., when loading existing conversation)
+  useEffect(() => {
+    if (form.values.tool_instructions) {
+      setIsExpanded(true);
+    }
+  }, [form.values.tool_instructions]);
 
   const generateInstructions = async () => {
     setIsGenerating(true);
