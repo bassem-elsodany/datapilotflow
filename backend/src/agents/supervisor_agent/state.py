@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Sequence
+from typing import Sequence, Dict, Any, Optional, List, Annotated
 
 from langchain_core.messages import AnyMessage
 from langgraph.graph import add_messages
 from langgraph.managed import IsLastStep
-from typing_extensions import Annotated
+from operator import add
 
 
 @dataclass
@@ -43,6 +43,7 @@ class State(InputState):
     """Represents the complete state of the agent, extending InputState with additional attributes.
 
     This class can be used to store any information needed throughout the agent's lifecycle.
+    Includes RAG context, tool tracking, and iterative RAG evaluation fields.
     """
 
     is_last_step: IsLastStep = field(default=False)
@@ -52,3 +53,40 @@ class State(InputState):
     This is a 'managed' variable, controlled by the state machine rather than user code.
     It is set to 'True' when the step count reaches recursion_limit - 1.
     """
+
+    # RAG context fields
+    rag_documents: Optional[List[Dict[str, Any]]] = field(default=None)
+    """Raw documents retrieved from RAG."""
+
+    rag_context: str = field(default="")
+    """Formatted context string from RAG documents (22k+ chars)."""
+
+    rag_context_size: int = field(default=0)
+    """Size of RAG context in characters."""
+
+    # Tool tracking - use Annotated with 'add' operator for list reduction
+    tools_used: Annotated[List[str], add] = field(default_factory=list)
+    """List of all tools called during execution."""
+
+    task_tools_executed: Annotated[List[str], add] = field(default_factory=list)
+    """List of task tools specifically executed."""
+
+    error_messages: Annotated[List[str], add] = field(default_factory=list)
+    """List of errors encountered."""
+
+    # Iterative RAG Evaluation Fields
+    rag_iteration_count: int = field(default=0)
+    """Track current iteration number (1-3)."""
+
+    rag_iterations_history: List[Dict[str, Any]] = field(default_factory=list)
+    """History of each iteration with gap analysis."""
+
+    rag_descoped_documents: List[Dict[str, Any]] = field(default_factory=list)
+    """Documents filtered out as weak/irrelevant."""
+
+    coverage_verification_results: List[Dict[str, Any]] = field(default_factory=list)
+    """Results of each coverage check."""
+
+    # Execution metadata
+    execution_metadata: Dict[str, Any] = field(default_factory=dict)
+    """Additional execution tracking data."""
