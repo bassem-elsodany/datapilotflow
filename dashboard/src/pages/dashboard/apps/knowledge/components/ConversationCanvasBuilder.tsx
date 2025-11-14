@@ -173,12 +173,11 @@ function ConversationCanvasContent() {
             const isSupervisor = session.agent_mode === 'assistant';
 
             // Load conversation configuration from backend
-            setConfig(prev => ({
-              ...prev,
+            const newConfig: ConversationConfig = {
               conversationName: session.name || '',
               conversationDescription: session.description || '',
-              collectionName: session.collection_name || '',
               selectedStrategy: session.assistant_config?.selected_strategy || 'custom_variants',
+              collectionName: session.collection_name || '',
               selectedProviderId: session.assistant_config?.selected_provider_id || null,
               selectedModel: session.assistant_config?.selected_model || null,
               enableReranking: session.enable_reranking || false,
@@ -189,7 +188,6 @@ function ConversationCanvasContent() {
               topK: session.top_k || 5,
               selectedTools: session.assistant_config?.tools || [],
               tool_instructions: session.assistant_config?.tool_instructions || '',
-              // Set selectedTemplate to supervisor if in assistant mode
               selectedTemplate: isSupervisor ? {
                 id: 'supervisor',
                 type: 'supervisor',
@@ -201,7 +199,6 @@ function ConversationCanvasContent() {
                   enableLLMGeneration: true,
                 }
               } : undefined,
-              // Mark all configured nodes
               configuredNodes: {
                 enhancement: !!session.assistant_config?.selected_provider_id && !!session.assistant_config?.selected_model,
                 retrieval: !!session.collection_name,
@@ -210,12 +207,12 @@ function ConversationCanvasContent() {
                 assistant: !!session.assistant_config?.tools?.length,
                 taskEngine: isSupervisor,
               },
-              // Expand subflows to show all configuration
               expandedSubflows: {
                 retrieval: true,
                 taskEngine: true,
               },
-            }));
+            };
+            setConfig(newConfig);
 
             console.log('[ConversationCanvasBuilder] Loaded conversation data:', session);
             setTemplateSelected(true); // Skip template selection, go straight to canvas
