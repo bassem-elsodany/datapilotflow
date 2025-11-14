@@ -89,7 +89,8 @@ export function ToolInstructionsStep({ form, tools, providers }: ToolInstruction
   const selectedTools = tools?.filter((t) => selectedToolIds.includes(t.id)) || [];
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
-  const [isExpanded, setIsExpanded] = useState(false);
+  // Auto-expand if there are existing instructions (edit mode)
+  const [isExpanded, setIsExpanded] = useState(!!form.values.tool_instructions);
 
   const insertTemplate = (template: string) => {
     const currentValue = form.values.tool_instructions || '';
