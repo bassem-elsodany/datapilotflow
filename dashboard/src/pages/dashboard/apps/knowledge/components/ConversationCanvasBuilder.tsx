@@ -125,7 +125,7 @@ function ConversationCanvasContent() {
   const [config, setConfig] = useState<ConversationConfig>({
     conversationName: '',
     conversationDescription: '',
-    selectedStrategy: 'native',
+    selectedStrategy: 'custom_variants', // Assistant mode uses custom_variants by default
     collectionName: '', // User MUST select collection
     selectedProviderId: null,
     selectedModel: null,
