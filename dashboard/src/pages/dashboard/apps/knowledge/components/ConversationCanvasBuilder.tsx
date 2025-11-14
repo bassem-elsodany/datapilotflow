@@ -188,7 +188,7 @@ function ConversationCanvasContent() {
               topK: session.top_k || 5,
               selectedTools: session.assistant_config?.tools || [],
               tool_instructions: session.assistant_config?.tool_instructions || '',
-              selectedTemplate: isSupervisor ? {
+              selectedTemplate: isSupervisor ? ({
                 id: 'supervisor',
                 type: 'supervisor',
                 name: 'Assistant Agent',
@@ -198,7 +198,7 @@ function ConversationCanvasContent() {
                   enableReranking: false,
                   enableLLMGeneration: true,
                 }
-              } : undefined,
+              } as any) : undefined,
               configuredNodes: {
                 enhancement: !!session.assistant_config?.selected_provider_id && !!session.assistant_config?.selected_model,
                 retrieval: !!session.collection_name,
