@@ -485,6 +485,13 @@ export function ConversationCreateWizard() {
   };
 
   const handleStepClick = (step: number) => {
+    // In edit mode, allow free navigation between any steps
+    if (isEditMode) {
+      setActiveStep(step);
+      return;
+    }
+
+    // In create mode, enforce sequential validation
     if (step < activeStep) {
       setActiveStep(step);
       return;
