@@ -7,7 +7,7 @@
  * Step 2: Enhancement Strategy (Query enhancement options - requires LLM provider if non-native strategy selected)
  * Step 3: Vector Database Selection
  * Step 4: Judge Ranker (Document ranking - optional)
- * Step 5: Generative Answer (LLM configuration, System Prompt)
+ * Step 5: Generative Answer (LLM configuration)
  * Step 6: Tools & Instructions (Assistant mode - select tools and configure orchestration)
  * Step 7: Review & Create
  */
@@ -1858,7 +1858,7 @@ function StepReviewAndCreate({ form, providers, collections, tools }: StepProps)
           <Text size="xs" c="dark">
             {form.values.agentType === 'rag'
               ? 'Standard RAG pipeline: retrieval + optional reranking + optional answer generation'
-              : 'Supervisor mode: intelligent task routing + RAG context + system prompt execution'}
+              : 'Supervisor mode: intelligent task routing + RAG context + dynamic tool execution'}
           </Text>
         </Stack>
       </Card>
@@ -1973,11 +1973,11 @@ function StepReviewAndCreate({ form, providers, collections, tools }: StepProps)
         </Card>
       )}
 
-      {/* STEP 5: ANSWER GENERATION & SYSTEM PROMPT */}
+      {/* STEP 5: ANSWER GENERATION */}
       <Card withBorder p="md" bg="lime.0">
         <Stack gap="sm">
           <Text fw={600}>
-            Step 5: Answer Generation {form.values.agentType === 'assistant' && '& System Prompt'}
+            Step 5: Answer Generation
           </Text>
           <Group gap="md">
             <div>
@@ -2004,18 +2004,10 @@ function StepReviewAndCreate({ form, providers, collections, tools }: StepProps)
               </div>
             )}
           </Group>
-          {form.values.agentType === 'assistant' && (
-            <div style={{ borderTop: '1px solid #dee2e6', paddingTop: '12px', marginTop: '12px' }}>
-              <Text size="sm" fw={500} mb="xs" c="dark">System Prompt</Text>
-              <Badge color={form.values.selectedSystemPromptId ? 'blue' : 'gray'}>
-                {form.values.selectedSystemPromptId ? 'Configured' : 'Not configured'}
-              </Badge>
-            </div>
-          )}
         </Stack>
       </Card>
 
-      {/* STEP 6: SYSTEM PROMPT CONFIGURATION (Assistant mode only) */}
+      {/* STEP 6: TOOLS BINDING (Assistant mode only) */}
       {form.values.agentType === 'assistant' && (
         <Card withBorder p="md" bg="violet.1" style={{ borderColor: '#a78bfa' }}>
           <Stack gap="sm">
