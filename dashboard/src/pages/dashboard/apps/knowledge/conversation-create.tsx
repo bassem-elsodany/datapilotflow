@@ -750,12 +750,12 @@ function ConversationWizard() {
                   disabled={enableKnowledgeAssistant}
                 />
 
-                {/* LLM Provider and Model selection for Assistant Mode */}
-                {enableKnowledgeAssistant && (
+                {/* LLM Provider and Model selection for Enhancement Strategy OR Assistant Mode */}
+                {(selectedStrategy !== 'native' || enableKnowledgeAssistant) && (
                   <Grid gutter="md">
                     <Grid.Col span={6}>
                       <Select
-                        label="LLM Provider (Required for Assistant)"
+                        label={enableKnowledgeAssistant ? "LLM Provider (Required for Assistant)" : "Enhancement Provider"}
                         placeholder={providersLoading ? 'Loading providers...' : 'Select a provider'}
                         data={providers?.map((p) => ({
                           value: p.id,
@@ -769,13 +769,13 @@ function ConversationWizard() {
                         searchable
                         required
                         disabled={providersLoading || !providers || providers.length === 0}
-                        description="Required for Assistant to understand queries and execute tasks"
+                        description={enableKnowledgeAssistant ? "Required for Assistant to understand queries and execute tasks" : "Choose the LLM provider for query enhancement"}
                       />
                     </Grid.Col>
 
                     <Grid.Col span={6}>
                       <Select
-                        label="LLM Model (Required for Assistant)"
+                        label={enableKnowledgeAssistant ? "LLM Model (Required for Assistant)" : "Enhancement Model"}
                         placeholder="Select a model"
                         data={
                           selectedProviderId && providers
@@ -792,7 +792,7 @@ function ConversationWizard() {
                         searchable
                         disabled={!selectedProviderId}
                         required
-                        description="Required for Assistant to understand queries and execute tasks"
+                        description={enableKnowledgeAssistant ? "Required for Assistant to understand queries and execute tasks" : "Choose the model for query enhancement"}
                       />
                     </Grid.Col>
                   </Grid>
