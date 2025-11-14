@@ -32,7 +32,7 @@ import {
   IconRefresh
 } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -112,6 +112,7 @@ interface ConversationConfig {
 
 function ConversationCanvasContent() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { data: providers } = useGetActiveModelProviders();
   const { data: collections } = useGetCollections();
 
@@ -120,6 +121,10 @@ function ConversationCanvasContent() {
 
   // Basic info modal state
   const [basicInfoModalOpen, setBasicInfoModalOpen] = useState(false);
+
+  // Check if editing an existing conversation
+  const editingConversationId = (location.state as any)?.editingConversationId;
+  const [isLoadingExisting, setIsLoadingExisting] = useState(!!editingConversationId);
 
   // Configuration state
   const [config, setConfig] = useState<ConversationConfig>({
@@ -146,6 +151,67 @@ function ConversationCanvasContent() {
       taskEngine: false,
     },
   });
+
+  // Load existing conversation data when editing
+  useEffect(() => {
+    if (editingConversationId && isLoadingExisting) {
+      const loadConversationData = async () => {
+        try {
+          const token = localStorage.getItem('jwt_token');
+          const response = await fetch(
+            apiUtils.buildApiUrl(`/conversations/${editingConversationId}`),
+            {
+              headers: { 'Authorization': `Bearer ${token}` },
+            }
+          );
+
+          if (response.ok) {
+            const data = await response.json();
+            const session = data.session;
+
+            // Load conversation configuration from backend
+            setConfig(prev => ({
+              ...prev,
+              conversationName: session.name || '',
+              conversationDescription: session.description || '',
+              collectionName: session.collection_name || '',
+              selectedStrategy: session.assistant_config?.selected_strategy || 'custom_variants',
+              selectedProviderId: session.assistant_config?.selected_provider_id || null,
+              selectedModel: session.assistant_config?.selected_model || null,
+              enableReranking: session.enable_reranking || false,
+              selectedRerankerId: session.reranker_config?.selected_reranker_id || null,
+              selectedRerankerModel: session.reranker_config?.selected_model || null,
+              enableLLMGeneration: session.enable_llm_generation !== false,
+              enableKnowledgeAssistant: session.agent_mode === 'assistant',
+              topK: session.top_k || 5,
+              selectedTools: session.assistant_config?.tools || [],
+              tool_instructions: session.assistant_config?.tool_instructions || '',
+            }));
+
+            console.log('[ConversationCanvasBuilder] Loaded conversation data:', session);
+            setTemplateSelected(true); // Skip template selection, go straight to canvas
+          } else {
+            notifications.show({
+              title: 'Error',
+              message: 'Failed to load conversation',
+              color: 'red',
+            });
+          }
+        } catch (error) {
+          console.error('Error loading conversation:', error);
+          notifications.show({
+            title: 'Error',
+            message: 'Failed to load conversation data',
+            color: 'red',
+          });
+        } finally {
+          setIsLoadingExisting(false);
+        }
+      };
+
+      loadConversationData();
+    }
+  }, [editingConversationId]);
 
   // Debug: Log config changes
   useEffect(() => {
