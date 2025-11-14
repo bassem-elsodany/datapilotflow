@@ -144,6 +144,9 @@ export function ToolInstructionsStep({ form, tools, providers }: ToolInstruction
       // Set the generated instructions
       form.setFieldValue('tool_instructions', data.instructions);
 
+      // Auto-expand to show generated content
+      setIsExpanded(true);
+
       console.log('Generated instructions:', {
         pattern: data.pattern,
         reasoning: data.reasoning,
