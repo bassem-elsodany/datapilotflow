@@ -803,77 +803,8 @@ export function ConversationNodeConfigPanel({
         );
 
       case 'assistant':
-        // Tool instructions related state (hooks already declared at component level)
         const selectedToolIds = localConfig.selectedTools || [];
         const selectedTools = tools ? tools.filter((t: any) => selectedToolIds.includes(t.id) && t.is_active) : [];
-
-        // Generate tool instructions using LLM
-        const generateToolInstructions = async () => {
-          setIsGeneratingInstructions(true);
-          setGenerationError(null);
-
-          try {
-            // Check if we have tools selected
-            if (!selectedToolIds || selectedToolIds.length === 0) {
-              setGenerationError('Please select at least one tool first');
-              setIsGeneratingInstructions(false);
-              return;
-            }
-
-            // Check if we have selected LLM provider and model from enhancement strategy
-            const selectedProviderId = config.selectedProviderId;
-            const selectedModel = config.selectedModel;
-
-            if (!selectedProviderId || !selectedModel) {
-              setGenerationError('Please configure LLM Provider and Model in the Query Strategy step first');
-              setIsGeneratingInstructions(false);
-              return;
-            }
-
-            const token = localStorage.getItem('jwt_token');
-            const response = await fetch(
-              apiUtils.buildApiUrl('/tools/instructions/generate'),
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                  tool_ids: selectedToolIds,
-                  llm_provider_id: selectedProviderId,
-                  llm_model_name: selectedModel,
-                  user_context: undefined,
-                }),
-              }
-            );
-
-            if (!response.ok) {
-              const error = await response.json();
-              setGenerationError(error.detail || 'Failed to generate instructions');
-              setIsGeneratingInstructions(false);
-              return;
-            }
-
-            const data = await response.json();
-
-            // Set the generated instructions
-            setLocalConfig({ ...localConfig, tool_instructions: data.instructions });
-            setIsInstructionsExpanded(true);
-
-            notifications.show({
-              title: 'Instructions Generated',
-              message: 'Tool orchestration instructions have been generated successfully',
-              color: 'green',
-              icon: <IconCheck size={16} />,
-            });
-          } catch (error) {
-            console.error('Error generating instructions:', error);
-            setGenerationError(error instanceof Error ? error.message : 'Failed to generate instructions');
-          } finally {
-            setIsGeneratingInstructions(false);
-          }
-        };
 
         return (
           <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -1014,120 +945,88 @@ export function ConversationNodeConfigPanel({
                 </Box>
               )}
             </Stack>
-
-            {/* Tool Instructions Section - Only show if tools are selected */}
-            {selectedToolIds.length > 0 && (
-              <Divider my="md" />
-            )}
-
-            {selectedToolIds.length > 0 && (
-              <Stack gap="sm" style={{ marginTop: 'auto' }}>
-                {/* Tool Instructions Card */}
-                <Card withBorder p={0} style={{ overflow: 'hidden' }}>
-                  {/* Header - Always visible */}
-                  <Group
-                    justify="space-between"
-                    align="center"
-                    p="sm"
-                    style={{
-                      cursor: 'pointer',
-                      backgroundColor: isInstructionsExpanded ? 'var(--mantine-color-gray-0)' : 'transparent',
-                      borderBottom: isInstructionsExpanded ? '1px solid var(--mantine-color-gray-2)' : 'none',
-                    }}
-                    onClick={() => setIsInstructionsExpanded(!isInstructionsExpanded)}
-                  >
-                    <div style={{ flex: 1 }}>
-                      <Group justify="space-between" align="center" mb="xs">
-                        <Text size="xs" fw={600}>
-                          Tool Orchestration Instructions
-                        </Text>
-                        {!isInstructionsExpanded && localConfig.tool_instructions && (
-                          <Text size="xs" c="dimmed">
-                            {localConfig.tool_instructions.split('\n').length} line{localConfig.tool_instructions.split('\n').length !== 1 ? 's' : ''}
-                          </Text>
-                        )}
-                      </Group>
-                    </div>
-                    <Group gap="xs">
-                      <Button
-                        size="xs"
-                        variant="gradient"
-                        gradient={{ from: 'cyan', to: 'blue', deg: 135 }}
-                        leftSection={isGeneratingInstructions ? <Loader size={12} /> : <IconSparkles size={12} />}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          generateToolInstructions();
-                        }}
-                        disabled={isGeneratingInstructions || selectedToolIds.length === 0}
-                        loading={isGeneratingInstructions}
-                      >
-                        {isGeneratingInstructions ? 'Generating...' : 'Generate'}
-                      </Button>
-                      <ActionIcon
-                        variant="subtle"
-                        size="xs"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setIsInstructionsExpanded(!isInstructionsExpanded);
-                        }}
-                      >
-                        {isInstructionsExpanded ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
-                      </ActionIcon>
-                    </Group>
-                  </Group>
-
-                  {/* Expanded Content */}
-                  {isInstructionsExpanded && (
-                    <Stack gap="sm" p="sm" pt={0}>
-                      {generationError && (
-                        <Alert icon={<IconAlertCircle size={14} />} color="red" variant="light">
-                          <Text size="xs">{generationError}</Text>
-                        </Alert>
-                      )}
-
-                      <Textarea
-                        placeholder="Describe how these tools should work together. Be specific about execution order and conditions."
-                        value={localConfig.tool_instructions || ''}
-                        onChange={(e) => setLocalConfig({ ...localConfig, tool_instructions: e.currentTarget.value })}
-                        minRows={10}
-                        styles={{
-                          input: {
-                            fontFamily: 'monospace',
-                            fontSize: '11px',
-                            minHeight: '150px',
-                          },
-                        }}
-                      />
-
-                      <Box p="xs" bg="yellow.0" style={{ borderRadius: '4px', border: '1px solid var(--mantine-color-yellow-2)' }}>
-                        <Group gap="xs" mb="xs">
-                          <IconDots size={14} />
-                          <Text size="xs" fw={600}>Guidelines</Text>
-                        </Group>
-                        <Stack gap="xs">
-                          <Text size="xs">✅ Be specific about tool execution order</Text>
-                          <Text size="xs">✅ Include conditions for when to call each tool</Text>
-                          <Text size="xs">✅ Describe how knowledge flows between tools</Text>
-                        </Stack>
-                      </Box>
-                    </Stack>
-                  )}
-                </Card>
-              </Stack>
-            )}
           </div>
         );
 
       case 'taskEngine':
+        // Generate tool instructions using LLM
+        const generateTaskInstructions = async () => {
+          setIsGeneratingInstructions(true);
+          setGenerationError(null);
+
+          try {
+            // Check if we have tools selected in config
+            const selectedToolIds = config.selectedTools || [];
+            if (!selectedToolIds || selectedToolIds.length === 0) {
+              setGenerationError('Please select tools in the Tools Configuration node first');
+              setIsGeneratingInstructions(false);
+              return;
+            }
+
+            // Check if we have selected LLM provider and model from enhancement strategy
+            const selectedProviderId = config.selectedProviderId;
+            const selectedModel = config.selectedModel;
+
+            if (!selectedProviderId || !selectedModel) {
+              setGenerationError('Please configure LLM Provider and Model in the Query Strategy step first');
+              setIsGeneratingInstructions(false);
+              return;
+            }
+
+            const token = localStorage.getItem('jwt_token');
+            const response = await fetch(
+              apiUtils.buildApiUrl('/tools/instructions/generate'),
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                  tool_ids: selectedToolIds,
+                  llm_provider_id: selectedProviderId,
+                  llm_model_name: selectedModel,
+                  user_context: undefined,
+                }),
+              }
+            );
+
+            if (!response.ok) {
+              const error = await response.json();
+              setGenerationError(error.detail || 'Failed to generate instructions');
+              setIsGeneratingInstructions(false);
+              return;
+            }
+
+            const data = await response.json();
+
+            // Set the generated instructions
+            setLocalConfig({ ...localConfig, tool_instructions: data.instructions });
+            setIsInstructionsExpanded(true);
+
+            notifications.show({
+              title: 'Instructions Generated',
+              message: 'Tool orchestration instructions have been generated successfully',
+              color: 'green',
+              icon: <IconCheck size={16} />,
+            });
+          } catch (error) {
+            console.error('Error generating instructions:', error);
+            setGenerationError(error instanceof Error ? error.message : 'Failed to generate instructions');
+          } finally {
+            setIsGeneratingInstructions(false);
+          }
+        };
+
         return (
           <div style={{ padding: '12px' }}>
             <Stack gap="md">
               <div>
                 <Text size="xs" fw={600} mb={4}>
-                  Task Engine Configuration
+                  Task Execution Configuration
                 </Text>
                 <Text size="xs" c="dimmed" mb="md">
-                  Multi-task orchestration engine that executes tasks using knowledge base search results and system prompts.
+                  Configure how selected tools should work together to execute tasks. Specify orchestration instructions so the AI knows how to use tools effectively.
                 </Text>
               </div>
 
@@ -1138,13 +1037,13 @@ export function ConversationNodeConfigPanel({
                     1️⃣ Receives knowledge base search results
                   </Text>
                   <Text size="xs" c="dimmed">
-                    2️⃣ Applies relevant system prompts
+                    2️⃣ Applies your tool orchestration instructions
                   </Text>
                   <Text size="xs" c="dimmed">
-                    3️⃣ Orchestrates task execution across multiple agents
+                    3️⃣ Orchestrates task execution across selected tools
                   </Text>
                   <Text size="xs" c="dimmed">
-                    4️⃣ Routes tasks to specialized handlers
+                    4️⃣ Routes tasks to appropriate tool handlers
                   </Text>
                   <Text size="xs" c="dimmed">
                     5️⃣ Synthesizes results for final response
@@ -1152,9 +1051,97 @@ export function ConversationNodeConfigPanel({
                 </Stack>
               </Box>
 
-              <Text size="xs" c="gray.6">
-                Task engine automatically configured. No manual configuration needed.
-              </Text>
+              {/* Tool Orchestration Instructions Card */}
+              <Card withBorder p={0} style={{ overflow: 'hidden' }}>
+                {/* Header - Always visible */}
+                <Group
+                  justify="space-between"
+                  align="center"
+                  p="sm"
+                  style={{
+                    cursor: 'pointer',
+                    backgroundColor: isInstructionsExpanded ? 'var(--mantine-color-gray-0)' : 'transparent',
+                    borderBottom: isInstructionsExpanded ? '1px solid var(--mantine-color-gray-2)' : 'none',
+                  }}
+                  onClick={() => setIsInstructionsExpanded(!isInstructionsExpanded)}
+                >
+                  <div style={{ flex: 1 }}>
+                    <Group justify="space-between" align="center" mb="xs">
+                      <Text size="xs" fw={600}>
+                        Tool Orchestration Instructions
+                      </Text>
+                      {!isInstructionsExpanded && localConfig.tool_instructions && (
+                        <Text size="xs" c="dimmed">
+                          {localConfig.tool_instructions.split('\n').length} line{localConfig.tool_instructions.split('\n').length !== 1 ? 's' : ''}
+                        </Text>
+                      )}
+                    </Group>
+                  </div>
+                  <Group gap="xs">
+                    <Button
+                      size="xs"
+                      variant="gradient"
+                      gradient={{ from: 'cyan', to: 'blue', deg: 135 }}
+                      leftSection={isGeneratingInstructions ? <Loader size={12} /> : <IconSparkles size={12} />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        generateTaskInstructions();
+                      }}
+                      disabled={isGeneratingInstructions || !config.selectedTools || config.selectedTools.length === 0}
+                      loading={isGeneratingInstructions}
+                    >
+                      {isGeneratingInstructions ? 'Generating...' : 'Generate'}
+                    </Button>
+                    <ActionIcon
+                      variant="subtle"
+                      size="xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsInstructionsExpanded(!isInstructionsExpanded);
+                      }}
+                    >
+                      {isInstructionsExpanded ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
+                    </ActionIcon>
+                  </Group>
+                </Group>
+
+                {/* Expanded Content */}
+                {isInstructionsExpanded && (
+                  <Stack gap="sm" p="sm" pt={0}>
+                    {generationError && (
+                      <Alert icon={<IconAlertCircle size={14} />} color="red" variant="light">
+                        <Text size="xs">{generationError}</Text>
+                      </Alert>
+                    )}
+
+                    <Textarea
+                      placeholder="Describe how your selected tools should work together. Be specific about execution order and conditions."
+                      value={localConfig.tool_instructions || ''}
+                      onChange={(e) => setLocalConfig({ ...localConfig, tool_instructions: e.currentTarget.value })}
+                      minRows={10}
+                      styles={{
+                        input: {
+                          fontFamily: 'monospace',
+                          fontSize: '11px',
+                          minHeight: '150px',
+                        },
+                      }}
+                    />
+
+                    <Box p="xs" bg="yellow.0" style={{ borderRadius: '4px', border: '1px solid var(--mantine-color-yellow-2)' }}>
+                      <Group gap="xs" mb="xs">
+                        <IconDots size={14} />
+                        <Text size="xs" fw={600}>Guidelines</Text>
+                      </Group>
+                      <Stack gap="xs">
+                        <Text size="xs">✅ Be specific about tool execution order</Text>
+                        <Text size="xs">✅ Include conditions for when to call each tool</Text>
+                        <Text size="xs">✅ Describe how knowledge flows between tools</Text>
+                      </Stack>
+                    </Box>
+                  </Stack>
+                )}
+              </Card>
             </Stack>
           </div>
         );
