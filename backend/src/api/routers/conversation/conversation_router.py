@@ -106,6 +106,9 @@ class AssistantConfigRequest(BaseModel):
     tools: Optional[List[str]] = Field(
         default_factory=list, description="List of tool IDs bound to this conversation agent"
     )
+    tool_instructions: Optional[str] = Field(
+        None, description="User's custom instructions for how tools should work together"
+    )
 
 
 class CreateSessionRequest(BaseModel):
@@ -215,6 +218,7 @@ def _serialize_conversation_to_response(session: "ConversationSession") -> dict:
         response["assistant_config"] = {
             "enabled": session.assistant_config.enabled,
             "tools": session.assistant_config.tools if session.assistant_config.tools else [],
+            "tool_instructions": session.assistant_config.tool_instructions,
         }
 
     return response
@@ -278,6 +282,9 @@ class AssistantConfigResponse(BaseModel):
     )
     tools: List[str] = Field(
         default_factory=list, description="List of tool IDs bound to this conversation agent"
+    )
+    tool_instructions: Optional[str] = Field(
+        None, description="User's custom instructions for how tools should work together"
     )
 
 
@@ -376,9 +383,10 @@ async def create_conversation_session(
             assistant_config = AssistantConfig(
                 enabled=create_request.assistant_config.enabled,
                 tools=create_request.assistant_config.tools if create_request.assistant_config.tools else [],
+                tool_instructions=create_request.assistant_config.tool_instructions,
             )
             logger.info(
-                f"Created AssistantConfig: enabled={assistant_config.enabled}, tools_count={len(assistant_config.tools)}"
+                f"Created AssistantConfig: enabled={assistant_config.enabled}, tools_count={len(assistant_config.tools)}, has_instructions={bool(create_request.assistant_config.tool_instructions)}"
             )
 
         session_id = conversation_history_service.create_conversation(
@@ -701,6 +709,12 @@ async def update_conversation_session(
                 "enabled": config_request.assistant_config.enabled,
                 "tools": config_request.assistant_config.tools if config_request.assistant_config.tools else [],
             }
+
+            # Include tool_instructions if provided
+            if hasattr(config_request.assistant_config, 'tool_instructions') and config_request.assistant_config.tool_instructions:
+                assistant_config_dict["tool_instructions"] = config_request.assistant_config.tool_instructions
+                logger.info(f"Including tool_instructions in update")
+
             logger.info(
                 f"Updating AssistantConfig: enabled={config_request.assistant_config.enabled}, tools_count={len(assistant_config_dict['tools'])}"
             )
