@@ -11,7 +11,6 @@ from typing import Dict, List, Literal, cast
 from langchain_core.messages import AIMessage
 from langgraph.graph import StateGraph
 from langgraph.prebuilt import ToolNode
-from langgraph.runtime import Runtime
 
 from src.agents.supervisor_agent.context import Context
 from src.agents.supervisor_agent.state import InputState, State
@@ -21,7 +20,7 @@ from src.agents.supervisor_agent.utils import load_chat_model
 
 async def call_model(
     state: State,
-    runtime: Runtime[Context],
+    context: Context,
     tool_registry: ToolRegistry,
 ) -> Dict[str, List[AIMessage]]:
     """Call the LLM powering our "agent".
@@ -30,20 +29,20 @@ async def call_model(
 
     Args:
         state: The current state of the conversation.
-        runtime: Configuration for the model run.
+        context: Configuration context with model and system prompt.
         tool_registry: Registry of available tools.
 
     Returns:
-        dict: A dictionary containing the model's response message.
+        Dictionary containing the model's response message.
     """
     # Get all tools from registry
     all_tools = tool_registry.get_all()
 
     # Initialize the model with tool binding
-    model = load_chat_model(runtime.context.model).bind_tools(all_tools)
+    model = load_chat_model(context.model).bind_tools(all_tools)
 
     # Format the system prompt. Customize this to change the agent's behavior.
-    system_message = runtime.context.system_prompt.format(
+    system_message = context.system_prompt.format(
         system_time=datetime.now(tz=UTC).isoformat()
     )
 
@@ -102,16 +101,16 @@ def create_graph(tool_registry: ToolRegistry) -> StateGraph:
     Returns:
         StateGraph: Compiled LangGraph StateGraph.
     """
-    # Define a new graph
-    builder = StateGraph(State, input_schema=InputState, context_schema=Context)
+    # Define a new graph (without context_schema to avoid serialization issues)
+    builder = StateGraph(State, input_schema=InputState)
 
     # Define the two nodes we will cycle between
-    async def call_model_node(
-        state: State, runtime: Runtime[Context]
-    ) -> Dict[str, List[AIMessage]]:
-        return await call_model(state, runtime, tool_registry)
+    async def call_model_node(state: State) -> Dict[str, List[AIMessage]]:
+        # Create context with model_str from state (set by generate_response_supervisor)
+        context = Context(model=state.model_str)
+        return await call_model(state, context, tool_registry)
 
-    builder.add_node(call_model_node)
+    builder.add_node("call_model", call_model_node)
 
     # ToolNode uses tools from registry
     all_tools = tool_registry.get_all()

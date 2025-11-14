@@ -13,7 +13,7 @@ import traceback
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from loguru import logger
 
-from src.agents.assistant_agent.services.generate_response_supervisor import (
+from src.agents.supervisor_agent import (
     get_response_stream_supervisor,
 )
 from src.api.routers.auth.auth_router import decode_access_token
@@ -126,12 +126,13 @@ async def agent_query_supervisor_websocket(
     ```
 
     **Architecture**:
-    - Main ReAct Agent (create_agent from langchain.agents)
-    - Tools: retrieve_knowledge (RAG), task_planner, code_explainer, calculator, text_analyzer, etc.
-    - Reference: https://docs.langchain.com/oss/python/langchain/multi-agent
+    - Custom ReAct Agent (create_graph with dynamic LangGraph StateGraph)
+    - Tools: knowledge_expert (RAG), task tools dynamically loaded from conversation config
+    - Tool Registry: ID-based tool management (no semantic search)
+    - Reference: Custom ReAct implementation with dynamic tool binding
     """
     logger.info("=" * 80)
-    logger.info("ASSISTANT AGENT ENDPOINT INVOKED | /ws/agent/query/supervisor")
+    logger.info("SUPERVISOR AGENT (CUSTOM REACT) ENDPOINT INVOKED | /ws/agent/query/supervisor")
     logger.info("=" * 80)
 
     # IMPORTANT: Accept connection FIRST before validating

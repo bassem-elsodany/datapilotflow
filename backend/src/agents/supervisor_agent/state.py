@@ -37,6 +37,14 @@ class InputState:
     updating by ID to maintain an "append-only" state unless a message with the same ID is provided.
     """
 
+    model_str: str = field(
+        default="anthropic/claude-sonnet-4-5-20250929"
+    )
+    """
+    The LLM model string in provider/model format (e.g., "anthropic/claude-sonnet-4-5-20250929").
+    This is passed through from the service layer to the graph nodes.
+    """
+
 
 @dataclass
 class State(InputState):
