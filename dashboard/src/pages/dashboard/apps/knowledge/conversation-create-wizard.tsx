@@ -1303,38 +1303,55 @@ function StepEnhancementStrategy({ form, onLearnClick, providers, providersLoadi
 
       <Group justify="space-between" align="flex-end">
         <div style={{ flex: 1 }}>
-          <Select
-            label="Enhancement Strategy"
-            placeholder="Select strategy"
-            data={ENHANCEMENT_STRATEGIES
-              .filter(s => isAssistantMode || s.value !== 'custom_variants') // Hide custom_variants in RAG mode
-              .map((s) => ({
-                value: s.value,
-                label: s.label,
-              }))}
-            {...form.getInputProps('selectedStrategy')}
-            description={
-              isAssistantMode
-                ? "🔒 Locked to 'Custom Variants' - Strategy is fixed for Assistant agents (agent generates variants automatically)"
-                : "How to enhance queries for better retrieval"
-            }
-            disabled={isAssistantMode}
-            styles={isAssistantMode ? { input: { opacity: 0.6, cursor: 'not-allowed', backgroundColor: 'var(--mantine-color-gray-1)' } } : undefined}
-          />
+          {isAssistantMode ? (
+            // Read-only display for Assistant mode
+            <div>
+              <label style={{ fontSize: '14px', fontWeight: 500, display: 'block', marginBottom: '8px' }}>
+                Enhancement Strategy
+              </label>
+              <div style={{
+                padding: '8px 12px',
+                border: '1px solid var(--mantine-color-gray-3)',
+                borderRadius: '4px',
+                backgroundColor: 'var(--mantine-color-gray-1)',
+                color: 'var(--mantine-color-gray-7)',
+                opacity: 0.7,
+              }}>
+                <strong>Custom Variants</strong> (Locked for Assistant Mode)
+              </div>
+              <Text size="xs" c="dimmed" mt="xs">
+                🔒 Locked to 'Custom Variants' - Strategy is fixed for Assistant agents (agent generates variants automatically)
+              </Text>
+            </div>
+          ) : (
+            <Select
+              label="Enhancement Strategy"
+              placeholder="Select strategy"
+              data={ENHANCEMENT_STRATEGIES
+                .filter(s => s.value !== 'custom_variants') // Hide custom_variants in RAG mode
+                .map((s) => ({
+                  value: s.value,
+                  label: s.label,
+                }))}
+              {...form.getInputProps('selectedStrategy')}
+              description="How to enhance queries for better retrieval"
+            />
+          )}
         </div>
-        <Button
-          size="xs"
-          variant="gradient"
-          gradient={{ from: 'violet', to: 'purple', deg: 135 }}
-          leftSection={<IconHelp size={16} />}
-          onClick={onLearnClick}
-          style={{
-            boxShadow: '0 2px 8px rgba(109, 40, 217, 0.3)',
-          }}
-          disabled={isAssistantMode}
-        >
-          Learn & Compare
-        </Button>
+        {!isAssistantMode && (
+          <Button
+            size="xs"
+            variant="gradient"
+            gradient={{ from: 'violet', to: 'purple', deg: 135 }}
+            leftSection={<IconHelp size={16} />}
+            onClick={onLearnClick}
+            style={{
+              boxShadow: '0 2px 8px rgba(109, 40, 217, 0.3)',
+            }}
+          >
+            Learn & Compare
+          </Button>
+        )}
       </Group>
 
       {isNonNativeStrategy && (
