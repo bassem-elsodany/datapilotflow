@@ -285,8 +285,8 @@ export function ToolInstructionsStep({ form, tools, providers }: ToolInstruction
             <Textarea
               {...form.getInputProps('tool_instructions')}
               placeholder="Describe how these tools should work together. Be specific about execution order and conditions."
-              minRows={8}
-              maxRows={16}
+              minRows={16}
+              maxRows={24}
               autoFocus
               styles={{
                 input: {
