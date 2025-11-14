@@ -9,7 +9,7 @@ import { Card, Stack, Text, Textarea, Button, Badge, Accordion, Paper, Group, Co
 import { IconCopy, IconCheck, IconDots, IconSparkles, IconAlertCircle } from '@tabler/icons-react';
 import { UseFormReturnType } from '@mantine/form';
 import { useState } from 'react';
-import { apiUtils } from '@/utils/api-utils';
+import { apiUtils } from '@/config';
 
 interface ToolInstructionsStepProps {
   form: UseFormReturnType<any>;
