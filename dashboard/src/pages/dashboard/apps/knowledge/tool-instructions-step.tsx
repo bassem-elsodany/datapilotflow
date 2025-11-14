@@ -229,43 +229,45 @@ export function ToolInstructionsStep({ form, tools, providers }: ToolInstruction
       </Card>
 
 
-      {/* Guidelines */}
-      <Card withBorder p="md" radius="md" bg="yellow.0">
-        <Stack spacing="sm">
-          <Group gap="xs">
-            <IconDots size={18} />
-            <Text size="sm" fw={600}>
-              Guidelines
-            </Text>
-          </Group>
-          <Stack gap="xs">
-            <Text size="sm">
-              ✅ <strong>Be specific:</strong> Mention tool names and describe execution order
-            </Text>
-            <Text size="sm">
-              ✅ <strong>Include conditions:</strong> When should tools be called based on user query
-            </Text>
-            <Text size="sm">
-              ✅ <strong>Describe flow:</strong> How knowledge from one tool feeds into another
-            </Text>
-            <Text size="sm">
-              ✅ <strong>Natural language:</strong> Write as if instructing a smart assistant
-            </Text>
-            <Text size="sm">
-              ❌ <strong>Avoid:</strong> Technical implementation details or code
-            </Text>
+      {/* Guidelines and Example - Side by Side */}
+      <Group grow align="flex-start" gap="md">
+        {/* Guidelines - Left */}
+        <Card withBorder p="md" radius="md" bg="yellow.0">
+          <Stack spacing="sm">
+            <Group gap="xs">
+              <IconDots size={18} />
+              <Text size="sm" fw={600}>
+                Guidelines
+              </Text>
+            </Group>
+            <Stack gap="xs">
+              <Text size="sm">
+                ✅ <strong>Be specific:</strong> Mention tool names and describe execution order
+              </Text>
+              <Text size="sm">
+                ✅ <strong>Include conditions:</strong> When should tools be called based on user query
+              </Text>
+              <Text size="sm">
+                ✅ <strong>Describe flow:</strong> How knowledge from one tool feeds into another
+              </Text>
+              <Text size="sm">
+                ✅ <strong>Natural language:</strong> Write as if instructing a smart assistant
+              </Text>
+              <Text size="sm">
+                ❌ <strong>Avoid:</strong> Technical implementation details or code
+              </Text>
+            </Stack>
           </Stack>
-        </Stack>
-      </Card>
+        </Card>
 
-      {/* Example */}
-      <Card withBorder p="md" radius="md">
-        <Stack spacing="sm">
-          <Text size="sm" fw={600}>
-            Example Instructions
-          </Text>
-          <Paper p="md" bg="gray.0" style={{ borderRadius: '4px' }}>
-            <Text size="xs" style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
+        {/* Example - Right */}
+        <Card withBorder p="md" radius="md">
+          <Stack spacing="sm">
+            <Text size="sm" fw={600}>
+              Example Instructions
+            </Text>
+            <Paper p="md" bg="gray.0" style={{ borderRadius: '4px' }}>
+              <Text size="xs" style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
 {`For MuleSoft flow generation:
 
 1. Error Handling First:
@@ -285,10 +287,11 @@ export function ToolInstructionsStep({ form, tools, providers }: ToolInstruction
    - Skip helpers, go directly to flow_generator
 
 This ensures generated flows have proper error handling and production readiness.`}
-            </Text>
-          </Paper>
-        </Stack>
-      </Card>
+              </Text>
+            </Paper>
+          </Stack>
+        </Card>
+      </Group>
     </Stack>
   );
 }
