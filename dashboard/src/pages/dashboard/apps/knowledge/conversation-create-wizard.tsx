@@ -811,6 +811,7 @@ export function ConversationCreateWizard() {
             form={form}
             providers={providers}
             collections={collections}
+            tools={tools}
           />
         )}
 
@@ -1049,6 +1050,7 @@ interface StepProps {
   providersLoading?: boolean;
   collections?: any[];
   collectionsLoading?: boolean;
+  tools?: any[];
   onPromptSelected?: (prompt: any) => void;
   selectedSystemPrompt?: any;
 }
@@ -1824,7 +1826,7 @@ function StepSystemPromptConfiguration({
   );
 }
 
-function StepReviewAndCreate({ form, providers, collections }: StepProps) {
+function StepReviewAndCreate({ form, providers, collections, tools }: StepProps) {
   const selectedProvider = providers?.find(
     (p) => p.id === form.values.selectedProviderId
   );
@@ -2027,7 +2029,7 @@ function StepReviewAndCreate({ form, providers, collections }: StepProps) {
               <Stack gap="sm">
                 <Stack gap="xs">
                   {form.values.selectedTools.map((toolId: string) => {
-                    const tool = tools?.find((t: any) => t.id === toolId);
+                    const tool = (tools && Array.isArray(tools) ? tools : [])?.find((t: any) => t.id === toolId);
                     if (!tool) return null;
                     return (
                       <Card key={toolId} withBorder p="sm" bg="white" style={{ borderColor: '#d8b4fe' }}>
