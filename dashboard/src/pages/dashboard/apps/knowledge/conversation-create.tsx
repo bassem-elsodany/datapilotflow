@@ -1055,7 +1055,12 @@ function ConversationWizard() {
                   label="Enable Knowledge Assistant"
                   description="Let AI perform tasks (like writing, coding, analysis) using information from your knowledge base as context."
                   checked={enableKnowledgeAssistant}
-                  onChange={(event) => setEnableKnowledgeAssistant(event.currentTarget.checked)}
+                  onChange={(event) => {
+                    setEnableKnowledgeAssistant(event.currentTarget.checked);
+                    if (event.currentTarget.checked) {
+                      setSelectedStrategy('custom_variants');
+                    }
+                  }}
                 />
 
                 {enableKnowledgeAssistant ? (
