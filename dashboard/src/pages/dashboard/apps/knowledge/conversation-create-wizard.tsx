@@ -1278,28 +1278,19 @@ function StepEnhancementStrategy({ form, onLearnClick, providers, providersLoadi
     <Stack gap="md">
       {isAssistantMode && (
         <Alert icon={<IconRobot size={16} />} color="grape" variant="light">
-          <Stack gap="xs">
-            <Text size="sm" fw={600}>
-              🔒 Assistant Mode: Strategy Locked to Custom Variants
-            </Text>
-            <Text size="sm">
-              In Assistant Mode, the enhancement strategy is <strong>automatically locked to Custom Variants</strong>. The supervisor agent will analyze user intent and generate query variants automatically before passing them to the RAG agent.
-            </Text>
-            <Text size="xs" c="dimmed" mt="xs">
-              💡 How it works: Agent analyzes user query → Generates 3-5 query variants → Passes all variants to RAG in one call → Parallel search with RRF fusion → Returns unified results.
-            </Text>
-            <Text size="xs" c="dimmed" mt="xs">
-              ⚠️ This strategy cannot be changed for Assistant agents as it's core to the intent analysis workflow.
-            </Text>
-          </Stack>
+          <Text size="sm">
+            🔒 <strong>Strategy Locked</strong> - Custom Variants automatically generates 3-5 query variants before passing to RAG with parallel search &amp; RRF fusion.
+          </Text>
         </Alert>
       )}
 
-      <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
-        <Text size="sm">
-          Choose how your queries will be enhanced before searching the knowledge base. Different strategies work better for different types of questions.
-        </Text>
-      </Alert>
+      {!isAssistantMode && (
+        <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+          <Text size="sm">
+            Choose how your queries will be enhanced before searching the knowledge base.
+          </Text>
+        </Alert>
+      )}
 
       <Group justify="space-between" align="flex-end">
         <div style={{ flex: 1 }}>
@@ -1317,11 +1308,8 @@ function StepEnhancementStrategy({ form, onLearnClick, providers, providersLoadi
                 color: 'var(--mantine-color-gray-7)',
                 opacity: 0.7,
               }}>
-                <strong>Custom Variants</strong> (Locked for Assistant Mode)
+                Custom Variants
               </div>
-              <Text size="xs" c="dimmed" mt="xs">
-                🔒 Locked to 'Custom Variants' - Strategy is fixed for Assistant agents (agent generates variants automatically)
-              </Text>
             </div>
           ) : (
             <Select
@@ -1357,14 +1345,9 @@ function StepEnhancementStrategy({ form, onLearnClick, providers, providersLoadi
       {isNonNativeStrategy && (
         <>
           <Alert icon={<IconInfoCircle size={16} />} color="cyan" variant="light">
-            <Stack gap="xs">
-              <Text size="sm">
-                <strong>LLM Required:</strong> Query enhancement strategies need an LLM to generate query variants. Please select an LLM provider and model below.
-              </Text>
-              <Text size="sm" c="cyan.9" fw={500}>
-                📌 Note: This LLM will also be used for answer generation if you enable it in Step 5 (Generative Answer).
-              </Text>
-            </Stack>
+            <Text size="sm">
+              <strong>LLM Required:</strong> Select an LLM provider &amp; model below (also used for answer generation if enabled in Step 5).
+            </Text>
           </Alert>
 
           <Divider my="sm" />
