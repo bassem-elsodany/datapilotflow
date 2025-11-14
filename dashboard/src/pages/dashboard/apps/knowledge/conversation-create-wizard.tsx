@@ -8,9 +8,8 @@
  * Step 3: Vector Database Selection
  * Step 4: Judge Ranker (Document ranking - optional)
  * Step 5: Generative Answer (LLM configuration, System Prompt)
- * Step 6: Tools Binding (Assistant mode - select tools)
- * Step 7: Tool Instructions (Assistant mode - configure tool orchestration)
- * Step 8: Review & Create
+ * Step 6: Tools & Instructions (Assistant mode - select tools and configure orchestration)
+ * Step 7: Review & Create
  */
 
 import { useGetActiveModelProviders } from '@/api/resources/model-providers';
@@ -233,20 +232,12 @@ const STEP_CONFIGS = [
     gradientTo: LOGO_COLORS.accent3,       // Yellow-Green
   },
   {
-    label: 'Tools Binding',
-    description: 'Select tools for agent',
+    label: 'Tools & Instructions',
+    description: 'Select tools and configure orchestration',
     icon: <IconTool size={20} />,
     color: 'grape',
     gradientFrom: '#a855f7',               // Purple
     gradientTo: LOGO_COLORS.pilot,         // Purple (Pilot)
-  },
-  {
-    label: 'Tool Instructions',
-    description: 'Configure tool orchestration',
-    icon: <IconMessageCircle size={20} />,
-    color: 'indigo',
-    gradientFrom: '#6366f1',               // Indigo
-    gradientTo: '#a855f7',                 // Purple
   },
   {
     label: 'Review & Create',
@@ -469,10 +460,10 @@ export function ConversationCreateWizard() {
     }
     setCompletedSteps((prev) => [...new Set([...prev, activeStep])]);
 
-    // Skip Steps 6 & 7 (Tools Binding & Tool Instructions) for RAG mode
+    // Skip Step 6 (Tools & Instructions) for RAG mode
     let nextStep = activeStep + 1;
     if (activeStep === 5 && form.values.agentType === 'rag') {
-      nextStep = 8; // Skip to Review & Create for RAG mode
+      nextStep = 7; // Skip to Review & Create for RAG mode
     }
 
     setActiveStep(nextStep);
@@ -481,8 +472,8 @@ export function ConversationCreateWizard() {
   const handlePreviousStep = () => {
     if (activeStep > 0) {
       let prevStep = activeStep - 1;
-      // Skip Steps 6 & 7 (Tools Binding & Tool Instructions) when going back in RAG mode
-      if (activeStep === 8 && form.values.agentType === 'rag') {
+      // Skip Step 6 (Tools & Instructions) when going back in RAG mode
+      if (activeStep === 7 && form.values.agentType === 'rag') {
         prevStep = 5; // Skip from Review & Create back to Generative Answer for RAG
       }
       setActiveStep(prevStep);
@@ -637,13 +628,13 @@ export function ConversationCreateWizard() {
   // RAG mode: exclude Step 6 (Tools) and Step 7 (Tool Instructions)
   // Assistant mode: include all steps
   const visibleSteps = form.values.agentType === 'rag'
-    ? STEP_CONFIGS.filter((_, index) => index !== 6 && index !== 7) // Remove Tools and Tool Instructions steps
+    ? STEP_CONFIGS.filter((_, index) => index !== 6) // Remove Tools & Instructions step for RAG mode
     : STEP_CONFIGS;
 
   // Adjust activeStep display for stepper component based on filtered steps
-  // For RAG mode: steps 0-5 stay the same, step 8 becomes visual step 6
+  // For RAG mode: steps 0-5 stay the same, step 7 (Review & Create) becomes visual step 6
   // For Assistant mode: no adjustment needed
-  const displayActiveStep = form.values.agentType === 'rag' && activeStep === 8 ? 6 : activeStep;
+  const displayActiveStep = form.values.agentType === 'rag' && activeStep === 7 ? 6 : activeStep;
 
   const pageTitle = isEditMode ? 'Edit Conversation Agent' : 'Create New Conversation Agent';
 
@@ -704,100 +695,105 @@ export function ConversationCreateWizard() {
           />
         )}
 
-        {/* STEP 6: TOOLS BINDING (Assistant mode only) */}
+        {/* STEP 6: TOOLS & INSTRUCTIONS (Assistant mode only) */}
         {form.values.agentType === 'assistant' && activeStep === 6 && (
-          <Card withBorder shadow="sm">
-            <Stack gap="lg">
-              <div>
-                <Text size="lg" fw={600} mb="xs">
-                  Select Tools for Agent
-                </Text>
-                <Text size="sm" c="dimmed">
-                  Choose which tools the assistant agent can use. Tools extend the agent's capabilities by allowing it to perform specialized tasks.
-                </Text>
-              </div>
+          <Stack gap="lg">
+            {/* Tools Selection Section */}
+            <Card withBorder shadow="sm">
+              <Stack gap="lg">
+                <div>
+                  <Text size="lg" fw={600} mb="xs">
+                    Select Tools for Agent
+                  </Text>
+                  <Text size="sm" c="dimmed">
+                    Choose which tools the assistant agent can use. Tools extend the agent's capabilities by allowing it to perform specialized tasks.
+                  </Text>
+                </div>
 
-              {toolsLoading ? (
-                <Text size="sm" c="dimmed">Loading tools...</Text>
-              ) : !tools || tools.length === 0 ? (
-                <Alert icon={<IconAlertCircle size={16} />} color="yellow" variant="light">
-                  <Text size="sm">No tools available. Create tools in the Tools Management section first.</Text>
-                </Alert>
-              ) : (
-                <Stack gap="md">
-                  <Text size="sm" fw={500}>Available Tools ({tools.filter((t: any) => t.is_active).length} active)</Text>
-                  <div style={{ maxHeight: '400px', overflowY: 'auto', paddingRight: '8px' }}>
-                    <Stack gap="md">
-                      {tools.filter((t: any) => t.is_active).map((tool: any) => (
-                        <Card key={tool.id} withBorder p="sm" style={{ cursor: 'pointer' }} onClick={() => {
-                          const currentTools = form.values.selectedTools || [];
-                          const isSelected = currentTools.includes(tool.id);
-                          form.setFieldValue(
-                            'selectedTools',
-                            isSelected
-                              ? currentTools.filter((id: string) => id !== tool.id)
-                              : [...currentTools, tool.id]
-                          );
-                        }}>
-                          <Group justify="space-between" align="flex-start">
-                            <Group align="flex-start" gap="md" style={{ flex: 1 }}>
-                              <input
-                                type="checkbox"
-                                checked={form.values.selectedTools?.includes(tool.id) || false}
-                                onChange={() => {}} // Handled by card onClick
-                                style={{ marginTop: '4px', cursor: 'pointer' }}
-                              />
-                              <Stack gap="xs" style={{ flex: 1 }}>
-                                <div>
-                                  <Group gap="xs">
-                                    <Text fw={600} size="sm">{tool.display_name || tool.name}</Text>
-                                    <Badge size="sm" color={tool.tool_type === 'prompt_based' ? 'blue' : 'green'}>
-                                      {tool.tool_type === 'prompt_based' ? 'Prompt-Based' : 'MCP Remote'}
-                                    </Badge>
-                                  </Group>
-                                  <Text size="xs" c="dimmed">ID: {tool.name}</Text>
-                                </div>
-                                <Text size="sm" c="dark" lineClamp={2}>
-                                  {tool.description || 'No description'}
-                                </Text>
-                                {tool.tags && tool.tags.length > 0 && (
-                                  <Group gap="xs">
-                                    {tool.tags.map((tag: string) => (
-                                      <Badge key={tag} size="xs" variant="dot" color="gray">
-                                        {tag}
+                {toolsLoading ? (
+                  <Text size="sm" c="dimmed">Loading tools...</Text>
+                ) : !tools || tools.length === 0 ? (
+                  <Alert icon={<IconAlertCircle size={16} />} color="yellow" variant="light">
+                    <Text size="sm">No tools available. Create tools in the Tools Management section first.</Text>
+                  </Alert>
+                ) : (
+                  <Stack gap="md">
+                    <Text size="sm" fw={500}>Available Tools ({tools.filter((t: any) => t.is_active).length} active)</Text>
+                    <div style={{ maxHeight: '400px', overflowY: 'auto', paddingRight: '8px' }}>
+                      <Stack gap="md">
+                        {tools.filter((t: any) => t.is_active).map((tool: any) => (
+                          <Card key={tool.id} withBorder p="sm" style={{ cursor: 'pointer' }} onClick={() => {
+                            const currentTools = form.values.selectedTools || [];
+                            const isSelected = currentTools.includes(tool.id);
+                            form.setFieldValue(
+                              'selectedTools',
+                              isSelected
+                                ? currentTools.filter((id: string) => id !== tool.id)
+                                : [...currentTools, tool.id]
+                            );
+                          }}>
+                            <Group justify="space-between" align="flex-start">
+                              <Group align="flex-start" gap="md" style={{ flex: 1 }}>
+                                <input
+                                  type="checkbox"
+                                  checked={form.values.selectedTools?.includes(tool.id) || false}
+                                  onChange={() => {}} // Handled by card onClick
+                                  style={{ marginTop: '4px', cursor: 'pointer' }}
+                                />
+                                <Stack gap="xs" style={{ flex: 1 }}>
+                                  <div>
+                                    <Group gap="xs">
+                                      <Text fw={600} size="sm">{tool.display_name || tool.name}</Text>
+                                      <Badge size="sm" color={tool.tool_type === 'prompt_based' ? 'blue' : 'green'}>
+                                        {tool.tool_type === 'prompt_based' ? 'Prompt-Based' : 'MCP Remote'}
                                       </Badge>
-                                    ))}
-                                  </Group>
-                                )}
-                              </Stack>
+                                    </Group>
+                                    <Text size="xs" c="dimmed">ID: {tool.name}</Text>
+                                  </div>
+                                  <Text size="sm" c="dark" lineClamp={2}>
+                                    {tool.description || 'No description'}
+                                  </Text>
+                                  {tool.tags && tool.tags.length > 0 && (
+                                    <Group gap="xs">
+                                      {tool.tags.map((tag: string) => (
+                                        <Badge key={tag} size="xs" variant="dot" color="gray">
+                                          {tag}
+                                        </Badge>
+                                      ))}
+                                    </Group>
+                                  )}
+                                </Stack>
+                              </Group>
                             </Group>
-                          </Group>
-                        </Card>
-                      ))}
-                    </Stack>
-                  </div>
-                </Stack>
-              )}
+                          </Card>
+                        ))}
+                      </Stack>
+                    </div>
+                  </Stack>
+                )}
 
-              {form.values.selectedTools && form.values.selectedTools.length > 0 && (
-                <Alert icon={<IconCheck size={16} />} color="blue" variant="light">
-                  <Text size="sm">{form.values.selectedTools.length} tool(s) selected</Text>
-                </Alert>
-              )}
-            </Stack>
-          </Card>
+                {form.values.selectedTools && form.values.selectedTools.length > 0 && (
+                  <Alert icon={<IconCheck size={16} />} color="blue" variant="light">
+                    <Text size="sm">{form.values.selectedTools.length} tool(s) selected</Text>
+                  </Alert>
+                )}
+              </Stack>
+            </Card>
+
+            {/* Tool Instructions Section - Only shown after tools are selected */}
+            {form.values.selectedTools && form.values.selectedTools.length > 0 && (
+              <Card withBorder shadow="sm">
+                <ToolInstructionsStep
+                  form={form}
+                  tools={tools || []}
+                />
+              </Card>
+            )}
+          </Stack>
         )}
 
-        {/* STEP 7: TOOL INSTRUCTIONS (Assistant mode only) */}
-        {form.values.agentType === 'assistant' && activeStep === 7 && (
-          <ToolInstructionsStep
-            form={form}
-            tools={tools || []}
-          />
-        )}
-
-        {/* STEP 8 or 6: REVIEW & CREATE (depends on agent type) */}
-        {displayActiveStep === (form.values.agentType === 'assistant' ? 8 : 6) && (
+        {/* STEP 7: REVIEW & CREATE (depends on agent type) */}
+        {displayActiveStep === (form.values.agentType === 'assistant' ? 7 : 6) && (
           <StepReviewAndCreate
             form={form}
             providers={providers}
