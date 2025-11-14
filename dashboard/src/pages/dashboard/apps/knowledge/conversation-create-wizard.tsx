@@ -730,10 +730,10 @@ export function ConversationCreateWizard() {
                   </Alert>
                 ) : (
                   <Stack gap="md">
-                    <Text size="sm" fw={500}>Available Tools ({tools.filter((t: any) => t.is_active).length} active)</Text>
+                    <Text size="sm" fw={500}>Available Tools ({tools?.filter((t: any) => t.is_active).length || 0} active)</Text>
                     <div style={{ maxHeight: '400px', overflowY: 'auto', paddingRight: '8px' }}>
                       <Stack gap="md">
-                        {tools.filter((t: any) => t.is_active).map((tool: any) => (
+                        {tools?.filter((t: any) => t.is_active).map((tool: any) => (
                           <Card key={tool.id} withBorder p="sm" style={{ cursor: 'pointer' }} onClick={() => {
                             const currentTools = form.values.selectedTools || [];
                             const isSelected = currentTools.includes(tool.id);
