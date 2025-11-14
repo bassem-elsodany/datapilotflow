@@ -66,9 +66,11 @@ async def milvus_knowledge_graph_search(
         if entities or relationships:
             filter_parts = []
             if entities:
-            # Note: Entity filtering removed as keywords field is no longer available
+                # Note: Entity filtering removed as keywords field is no longer available
+                pass
             if relationships:
                 # Note: Relationship filtering removed as keywords field is no longer available
+                pass
             if filter_parts:
                 filter_expr = " or ".join(filter_parts)
         
