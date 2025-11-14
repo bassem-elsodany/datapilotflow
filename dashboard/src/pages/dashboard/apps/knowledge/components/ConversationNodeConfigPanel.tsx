@@ -135,6 +135,11 @@ export function ConversationNodeConfigPanel({
   const [localConfig, setLocalConfig] = useState(config);
   const { data: tools, isLoading: toolsLoading } = useGetTools();
 
+  // Hooks for tool instructions in assistant node
+  const [isInstructionsExpanded, setIsInstructionsExpanded] = useState(!!config.tool_instructions);
+  const [isGeneratingInstructions, setIsGeneratingInstructions] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+
   useEffect(() => {
     if (opened && node) {
       setIsExpanded(true);
@@ -798,11 +803,7 @@ export function ConversationNodeConfigPanel({
         );
 
       case 'assistant':
-        // Tool instructions related state
-        const [isInstructionsExpanded, setIsInstructionsExpanded] = useState(!!localConfig.tool_instructions);
-        const [isGeneratingInstructions, setIsGeneratingInstructions] = useState(false);
-        const [generationError, setGenerationError] = useState<string | null>(null);
-
+        // Tool instructions related state (hooks already declared at component level)
         const selectedToolIds = localConfig.selectedTools || [];
         const selectedTools = tools ? tools.filter((t: any) => selectedToolIds.includes(t.id) && t.is_active) : [];
 
