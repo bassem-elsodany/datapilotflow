@@ -215,13 +215,35 @@ export function ToolInstructionsStep({ form, tools, providers }: ToolInstruction
           onClick={() => setIsExpanded(!isExpanded)}
         >
           <div style={{ flex: 1 }}>
-            <Text size="sm" fw={600}>
-              Instructions
-            </Text>
-            {!isExpanded && form.values.tool_instructions && (
-              <Text size="xs" c="dimmed" mt={4} lineClamp={1}>
-                {form.values.tool_instructions}
+            <Group justify="space-between" align="center" mb="xs">
+              <Text size="sm" fw={600}>
+                Instructions
               </Text>
+              {!isExpanded && form.values.tool_instructions && (
+                <Text size="xs" c="dimmed">
+                  {form.values.tool_instructions.split('\n').length} line{form.values.tool_instructions.split('\n').length !== 1 ? 's' : ''}
+                </Text>
+              )}
+            </Group>
+            {!isExpanded && form.values.tool_instructions && (
+              <Paper
+                p="xs"
+                bg="gray.1"
+                style={{
+                  borderRadius: '4px',
+                  border: '1px solid var(--mantine-color-gray-2)',
+                  maxHeight: '80px',
+                  overflowY: 'auto',
+                  fontSize: '11px',
+                  fontFamily: 'monospace',
+                  lineHeight: '1.4',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  color: 'var(--mantine-color-gray-7)',
+                }}
+              >
+                {form.values.tool_instructions}
+              </Paper>
             )}
           </div>
           <Group gap="xs">
