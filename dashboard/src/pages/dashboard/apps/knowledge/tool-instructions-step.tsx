@@ -6,7 +6,7 @@
  */
 
 import { Card, Stack, Text, Textarea, Button, Badge, Accordion, Paper, Group, CopyButton, ActionIcon, Loader, Alert } from '@mantine/core';
-import { IconCopy, IconCheck, IconDots, IconSparkles, IconAlertCircle } from '@tabler/icons-react';
+import { IconCopy, IconCheck, IconDots, IconSparkles, IconAlertCircle, IconChevronDown, IconChevronUp } from '@tabler/icons-react';
 import { UseFormReturnType } from '@mantine/form';
 import { useState } from 'react';
 import { apiUtils } from '@/config';
@@ -89,6 +89,7 @@ export function ToolInstructionsStep({ form, tools, providers }: ToolInstruction
   const selectedTools = tools?.filter((t) => selectedToolIds.includes(t.id)) || [];
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const insertTemplate = (template: string) => {
     const currentValue = form.values.tool_instructions || '';
@@ -196,49 +197,85 @@ export function ToolInstructionsStep({ form, tools, providers }: ToolInstruction
         </Card>
       )}
 
-      {/* Instructions Input */}
-      <Stack spacing="sm">
-        <Group justify="space-between" align="flex-end">
+      {/* Instructions Input - Expandable */}
+      <Card withBorder p={0} style={{ overflow: 'hidden' }}>
+        {/* Header - Always visible */}
+        <Group
+          justify="space-between"
+          align="center"
+          p="md"
+          style={{
+            cursor: 'pointer',
+            backgroundColor: isExpanded ? 'var(--mantine-color-gray-0)' : 'transparent',
+            borderBottom: isExpanded ? '1px solid var(--mantine-color-gray-2)' : 'none',
+          }}
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
           <div style={{ flex: 1 }}>
-            <Text size="sm" fw={600} mb="xs">
+            <Text size="sm" fw={600}>
               Instructions
             </Text>
+            {!isExpanded && form.values.tool_instructions && (
+              <Text size="xs" c="dimmed" mt={4} lineClamp={1}>
+                {form.values.tool_instructions}
+              </Text>
+            )}
           </div>
-          <Button
-            size="sm"
-            variant="gradient"
-            gradient={{ from: 'cyan', to: 'blue', deg: 135 }}
-            leftSection={isGenerating ? <Loader size={14} /> : <IconSparkles size={14} />}
-            onClick={generateInstructions}
-            disabled={isGenerating || selectedToolIds.length === 0}
-            loading={isGenerating}
-          >
-            {isGenerating ? 'Generating...' : 'Generate with AI'}
-          </Button>
+          <Group gap="xs">
+            <Button
+              size="sm"
+              variant="gradient"
+              gradient={{ from: 'cyan', to: 'blue', deg: 135 }}
+              leftSection={isGenerating ? <Loader size={14} /> : <IconSparkles size={14} />}
+              onClick={(e) => {
+                e.stopPropagation();
+                generateInstructions();
+              }}
+              disabled={isGenerating || selectedToolIds.length === 0}
+              loading={isGenerating}
+            >
+              {isGenerating ? 'Generating...' : 'Generate with AI'}
+            </Button>
+            <ActionIcon
+              variant="subtle"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsExpanded(!isExpanded);
+              }}
+            >
+              {isExpanded ? <IconChevronUp size={18} /> : <IconChevronDown size={18} />}
+            </ActionIcon>
+          </Group>
         </Group>
 
-        {generationError && (
-          <Alert icon={<IconAlertCircle size={16} />} color="red" variant="light">
-            <Text size="sm">{generationError}</Text>
-          </Alert>
-        )}
+        {/* Expanded Content */}
+        {isExpanded && (
+          <Stack spacing="sm" p="md" pt={0}>
+            {generationError && (
+              <Alert icon={<IconAlertCircle size={16} />} color="red" variant="light">
+                <Text size="sm">{generationError}</Text>
+              </Alert>
+            )}
 
-        <Textarea
-          {...form.getInputProps('tool_instructions')}
-          placeholder="Describe how these tools should work together. Be specific about execution order and conditions."
-          minRows={6}
-          maxRows={12}
-          styles={{
-            input: {
-              fontFamily: 'monospace',
-              fontSize: '12px',
-            },
-          }}
-        />
-        <Text size="xs" c="dimmed">
-          Include details about: when to call each tool, which tools work together, how to accumulate knowledge from multiple tools
-        </Text>
-      </Stack>
+            <Textarea
+              {...form.getInputProps('tool_instructions')}
+              placeholder="Describe how these tools should work together. Be specific about execution order and conditions."
+              minRows={8}
+              maxRows={16}
+              autoFocus
+              styles={{
+                input: {
+                  fontFamily: 'monospace',
+                  fontSize: '12px',
+                },
+              }}
+            />
+            <Text size="xs" c="dimmed">
+              Include details about: when to call each tool, which tools work together, how to accumulate knowledge from multiple tools
+            </Text>
+          </Stack>
+        )}
+      </Card>
 
       {/* Templates Accordion */}
       <Accordion
