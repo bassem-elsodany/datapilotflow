@@ -1,45 +1,43 @@
-"""Define a custom Reasoning and Action agent with RAG + task tools.
+"""Define a custom Reasoning and Action agent.
 
-Based on: https://github.com/langchain-ai/react-agent
-Extended with: RAG tool + dynamic task tools + custom system prompt
+Works with a chat model with tool calling support.
+Based on langchain-ai/react-agent with RAG + task tools integration.
 """
 
 from datetime import UTC, datetime
 from typing import Dict, List, Literal, cast
 
 from langchain_core.messages import AIMessage
-from langchain_core.language_models import BaseChatModel
 from langchain_core.tools import BaseTool
 from langgraph.graph import StateGraph
 from langgraph.prebuilt import ToolNode
+from langgraph.runtime import Runtime
 
-from .state import SupervisorReActState
+from src.agents.supervisor_agent.context import Context
+from src.agents.supervisor_agent.state import InputState, State
+from src.agents.supervisor_agent.utils import load_chat_model
 
 
 async def call_model(
-    state: SupervisorReActState,
-    llm: BaseChatModel,
-    tools: List[BaseTool],
-    system_prompt: str,
+    state: State, runtime: Runtime[Context], tools: List[BaseTool]
 ) -> Dict[str, List[AIMessage]]:
-    """Call the LLM powering our agent.
+    """Call the LLM powering our "agent".
 
     This function prepares the prompt, initializes the model, and processes the response.
 
     Args:
-        state: The current state of the conversation.
-        llm: The language model to use.
-        tools: All available tools (RAG + task tools).
-        system_prompt: Custom system prompt.
+        state (State): The current state of the conversation.
+        runtime (Runtime[Context]): Configuration for the model run.
+        tools (List[BaseTool]): Available tools (RAG + task tools).
 
     Returns:
         dict: A dictionary containing the model's response message.
     """
     # Initialize the model with tool binding
-    model = llm.bind_tools(tools)
+    model = load_chat_model(runtime.context.model).bind_tools(tools)
 
-    # Format the system prompt
-    system_message = system_prompt.format(
+    # Format the system prompt. Customize this to change the agent's behavior.
+    system_message = runtime.context.system_prompt.format(
         system_time=datetime.now(tz=UTC).isoformat()
     )
 
@@ -66,13 +64,13 @@ async def call_model(
     return {"messages": [response]}
 
 
-def route_model_output(state: SupervisorReActState) -> Literal["__end__", "tools"]:
+def route_model_output(state: State) -> Literal["__end__", "tools"]:
     """Determine the next node based on the model's output.
 
     This function checks if the model's last message contains tool calls.
 
     Args:
-        state: The current state of the conversation.
+        state (State): The current state of the conversation.
 
     Returns:
         str: The name of the next node to call ("__end__" or "tools").
@@ -89,38 +87,27 @@ def route_model_output(state: SupervisorReActState) -> Literal["__end__", "tools
     return "tools"
 
 
-def create_supervisor_graph(
-    llm: BaseChatModel,
-    rag_tool: BaseTool,
-    task_tools: List[BaseTool],
-    system_prompt: str,
-) -> StateGraph:
+def create_graph(tools: List[BaseTool]) -> StateGraph:
     """Create a supervisor ReAct agent graph.
 
-    Based on react-agent pattern with RAG tool + dynamic task tools.
-
     Args:
-        llm: Language model instance.
-        rag_tool: RAG knowledge retrieval tool.
-        task_tools: List of user-configured task tools.
-        system_prompt: Custom system prompt.
+        tools (List[BaseTool]): Available tools (RAG + task tools).
 
     Returns:
-        Compiled LangGraph StateGraph.
+        StateGraph: Compiled LangGraph StateGraph.
     """
-    all_tools = [rag_tool] + task_tools
-
     # Define a new graph
-    builder = StateGraph(SupervisorReActState)
+    builder = StateGraph(State, input_schema=InputState, context_schema=Context)
 
-    # Define the nodes we will cycle between
-    async def call_model_node(state: SupervisorReActState) -> Dict[str, List[AIMessage]]:
-        return await call_model(state, llm, all_tools, system_prompt)
+    # Define the two nodes we will cycle between
+    async def call_model_node(state: State, runtime: Runtime[Context]) -> Dict[str, List[AIMessage]]:
+        return await call_model(state, runtime, tools)
 
     builder.add_node(call_model_node)
-    builder.add_node("tools", ToolNode(all_tools))
+    builder.add_node("tools", ToolNode(tools))
 
     # Set the entrypoint as `call_model`
+    # This means that this node is the first one called
     builder.add_edge("__start__", "call_model")
 
     # Add a conditional edge to determine the next step after `call_model`
@@ -130,9 +117,14 @@ def create_supervisor_graph(
     )
 
     # Add a normal edge from `tools` to `call_model`
+    # This creates a cycle: after using tools, we always return to the model
     builder.add_edge("tools", "call_model")
 
     # Compile the builder into an executable graph
     graph = builder.compile(name="Supervisor ReAct Agent")
 
     return graph
+
+
+# Create graph - will be initialized with actual tools at runtime
+graph = None
