@@ -1140,10 +1140,16 @@ function ConversationCanvasContent() {
                 }
 
                 // Validate all required nodes are configured
-                if (!config.configuredNodes?.enhancement) {
+                // For custom_variants (Assistant mode), enhancement is configured if LLM provider/model are set
+                // For other strategies, it must be explicitly marked as configured
+                const enhancementConfigured = config.selectedStrategy === 'custom_variants'
+                  ? (!!config.selectedProviderId && !!config.selectedModel)
+                  : config.configuredNodes?.enhancement;
+
+                if (!enhancementConfigured) {
                   notifications.show({
                     title: 'Error',
-                    message: 'Query Strategy must be configured',
+                    message: 'Query Strategy must be configured. Please click on the Query Strategy node and save your settings.',
                     color: 'red',
                     icon: <IconAlertCircle size={16} />,
                   });
