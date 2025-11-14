@@ -52,6 +52,8 @@ export default function KnowledgeSearch() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<Conversation | null>(null);
   const [creationModalOpen, setCreationModalOpen] = useState(false);
+  const [editModeModalOpen, setEditModeModalOpen] = useState(false);
+  const [sessionToEdit, setSessionToEdit] = useState<string | null>(null);
 
   // API functions using centralized config
   const buildApiUrl = (endpoint: string) => {
@@ -122,10 +124,30 @@ export default function KnowledgeSearch() {
   };
 
   const editConversation = (sessionId: string) => {
-    // Navigate to the wizard in edit mode with conversation ID
-    navigate(paths.dashboard.apps.conversationCreate, {
-      state: { editingConversationId: sessionId }
-    });
+    // Open modal to let user choose edit mode
+    setSessionToEdit(sessionId);
+    setEditModeModalOpen(true);
+  };
+
+  const handleEditModeSelection = (mode: 'wizard' | 'pipeline') => {
+    if (!sessionToEdit) return;
+
+    setEditModeModalOpen(false);
+
+    if (mode === 'wizard') {
+      // Navigate to the wizard in edit mode
+      navigate(paths.dashboard.apps.conversationCreate, {
+        state: { editingConversationId: sessionToEdit }
+      });
+    } else {
+      // Navigate to the pipeline canvas in edit mode
+      navigate(paths.dashboard.apps.conversationCreate, {
+        state: {
+          editingConversationId: sessionToEdit,
+          mode: 'pipeline'
+        }
+      });
+    }
   };
 
   const deleteSession = async (sessionId: string) => {
@@ -466,6 +488,83 @@ export default function KnowledgeSearch() {
         onSelectWizard={handleSelectWizard}
         onSelectPipeline={handleSelectPipeline}
       />
+
+      {/* Edit Mode Selection Modal */}
+      <Modal
+        opened={editModeModalOpen}
+        onClose={() => {
+          setEditModeModalOpen(false);
+          setSessionToEdit(null);
+        }}
+        title="Edit Conversation"
+        size="md"
+        centered
+      >
+        <Stack gap="md">
+          <Text size="sm" c="dimmed">
+            Choose how you'd like to edit this conversation:
+          </Text>
+
+          <Grid gutter="md">
+            {/* Wizard Mode Option */}
+            <Grid.Col span={6}>
+              <Button
+                variant="light"
+                color="blue"
+                fullWidth
+                size="lg"
+                onClick={() => handleEditModeSelection('wizard')}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '12px',
+                  height: '140px',
+                  justifyContent: 'center',
+                }}
+              >
+                <IconMessages size={32} />
+                <Stack gap={0} align="center">
+                  <Text fw={600} size="sm">Wizard Mode</Text>
+                  <Text size="xs" c="dimmed">Step-by-step guide</Text>
+                </Stack>
+              </Button>
+            </Grid.Col>
+
+            {/* Pipeline Canvas Mode Option */}
+            <Grid.Col span={6}>
+              <Button
+                variant="light"
+                color="cyan"
+                fullWidth
+                size="lg"
+                onClick={() => handleEditModeSelection('pipeline')}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '12px',
+                  height: '140px',
+                  justifyContent: 'center',
+                }}
+              >
+                <IconRobot size={32} />
+                <Stack gap={0} align="center">
+                  <Text fw={600} size="sm">Pipeline Canvas</Text>
+                  <Text size="xs" c="dimmed">Visual workflow</Text>
+                </Stack>
+              </Button>
+            </Grid.Col>
+          </Grid>
+
+          <Text size="xs" c="dimmed">
+            💡 Wizard Mode: Better for simple changes and step-by-step configuration
+          </Text>
+          <Text size="xs" c="dimmed">
+            💡 Pipeline Canvas: Better for complex workflows and visual orchestration
+          </Text>
+        </Stack>
+      </Modal>
     </Page>
   );
 }
