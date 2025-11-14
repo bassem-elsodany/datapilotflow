@@ -169,6 +169,9 @@ function ConversationCanvasContent() {
             const data = await response.json();
             const session = data.session;
 
+            // Determine if this is supervisor (assistant) mode
+            const isSupervisor = session.agent_mode === 'assistant';
+
             // Load conversation configuration from backend
             setConfig(prev => ({
               ...prev,
@@ -182,10 +185,36 @@ function ConversationCanvasContent() {
               selectedRerankerId: session.reranker_config?.selected_reranker_id || null,
               selectedRerankerModel: session.reranker_config?.selected_model || null,
               enableLLMGeneration: session.enable_llm_generation !== false,
-              enableKnowledgeAssistant: session.agent_mode === 'assistant',
+              enableKnowledgeAssistant: isSupervisor,
               topK: session.top_k || 5,
               selectedTools: session.assistant_config?.tools || [],
               tool_instructions: session.assistant_config?.tool_instructions || '',
+              // Set selectedTemplate to supervisor if in assistant mode
+              selectedTemplate: isSupervisor ? {
+                id: 'supervisor',
+                type: 'supervisor',
+                name: 'Assistant Agent',
+                description: 'RAG + Task execution with supervisor agent',
+                defaultConfig: {
+                  selectedStrategy: 'custom_variants',
+                  enableReranking: false,
+                  enableLLMGeneration: true,
+                }
+              } : undefined,
+              // Mark all configured nodes
+              configuredNodes: {
+                enhancement: !!session.assistant_config?.selected_provider_id && !!session.assistant_config?.selected_model,
+                retrieval: !!session.collection_name,
+                reranking: session.enable_reranking || false,
+                llm: session.enable_llm_generation || false,
+                assistant: !!session.assistant_config?.tools?.length,
+                taskEngine: isSupervisor,
+              },
+              // Expand subflows to show all configuration
+              expandedSubflows: {
+                retrieval: true,
+                taskEngine: true,
+              },
             }));
 
             console.log('[ConversationCanvasBuilder] Loaded conversation data:', session);
