@@ -136,7 +136,7 @@ class ConversationSession:
     # Tags for organization
     tags: Optional[List[str]] = None
     # Assistant mode configuration (complex nested structure)
-    # Contains enable_knowledge_assistant boolean and system_prompt_tasks list
+    # Contains enabled boolean, tools list, and tool_instructions
     # This is the ONLY place mode is stored - no redundant flat fields
     assistant_config: Optional[AssistantConfig] = None
 
@@ -183,14 +183,10 @@ class ConversationSession:
 
     @property
     def has_system_prompt(self) -> bool:
-        """Check if system prompt is configured."""
-        if not self.assistant_config or not self.assistant_config.system_prompt_tasks:
-            return False
-        # Check if any system prompt task is active
-        return any(
-            task.is_active and not task.is_empty
-            for task in self.assistant_config.system_prompt_tasks
-        )
+        """Check if system prompt is configured (deprecated - kept for backward compatibility)."""
+        # System prompts are no longer stored in assistant_config
+        # This property always returns False now
+        return False
 
     @property
     def has_reranker(self) -> bool:
