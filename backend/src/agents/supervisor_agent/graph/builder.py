@@ -1,24 +1,17 @@
-"""
-Custom ReAct Graph Builder for Supervisor Agent.
-
-Implements the ReAct (Reasoning + Acting) pattern with:
-- LLM with bound tools (RAG + task tools)
-- Tool execution nodes
-- Conditional routing based on tool calls
-- Progress event emission for UI streaming
+"""Define a custom Reasoning and Action agent with RAG + task tools.
 
 Based on: https://github.com/langchain-ai/react-agent
+Extended with: RAG tool + dynamic task tools + custom system prompt
 """
 
-from typing import Dict, List, Literal, Any, cast
-import json
+from datetime import UTC, datetime
+from typing import Dict, List, Literal, cast
 
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import AIMessage
 from langchain_core.language_models import BaseChatModel
 from langchain_core.tools import BaseTool
-from langgraph.graph import StateGraph, END
+from langgraph.graph import StateGraph
 from langgraph.prebuilt import ToolNode
-from loguru import logger
 
 from .state import SupervisorReActState
 
@@ -28,190 +21,72 @@ async def call_model(
     llm: BaseChatModel,
     tools: List[BaseTool],
     system_prompt: str,
-) -> Dict[str, Any]:
-    """
-    Call the LLM with available tools bound.
+) -> Dict[str, List[AIMessage]]:
+    """Call the LLM powering our agent.
 
-    This is the main reasoning step where the model decides:
-    1. Which tools to use
-    2. What arguments to pass
-    3. When to stop and return answer
+    This function prepares the prompt, initializes the model, and processes the response.
 
     Args:
-        state: Current graph state (messages + RAG context)
-        llm: Language model instance
-        tools: All available tools (RAG + task tools)
-        system_prompt: Custom system prompt
+        state: The current state of the conversation.
+        llm: The language model to use.
+        tools: All available tools (RAG + task tools).
+        system_prompt: Custom system prompt.
 
     Returns:
-        Dict with updated messages containing LLM response
+        dict: A dictionary containing the model's response message.
     """
-    logger.info(f"[ReAct] call_model: Binding {len(tools)} tools to LLM")
-    logger.debug(f"[ReAct] Available tools: {[t.name for t in tools]}")
+    # Initialize the model with tool binding
+    model = llm.bind_tools(tools)
 
-    # Bind all tools to the model
-    llm_with_tools = llm.bind_tools(tools)
-
-    # Prepare messages: system prompt + conversation history
-    messages = [
-        {"role": "system", "content": system_prompt},
-        *state.messages
-    ]
-
-    logger.debug(f"[ReAct] Invoking LLM with {len(messages)} messages (including system)")
-
-    # Call LLM
-    response = cast(
-        AIMessage,
-        await llm_with_tools.ainvoke(messages)
+    # Format the system prompt
+    system_message = system_prompt.format(
+        system_time=datetime.now(tz=UTC).isoformat()
     )
 
-    logger.info(f"[ReAct] LLM response received")
-    if response.tool_calls:
-        tool_names = [call["name"] for call in response.tool_calls]
-        logger.info(f"[ReAct] Tools requested: {tool_names}")
+    # Get the model's response
+    response = cast(
+        AIMessage,
+        await model.ainvoke(
+            [{"role": "system", "content": system_message}, *state.messages]
+        ),
+    )
 
-    return {"messages": [response]}
-
-
-def route_tools(state: SupervisorReActState) -> Literal["rag_tool", "task_tools", END]:
-    """
-    Route to appropriate tool execution node based on LLM's tool calls.
-
-    Decision logic:
-    - No tool_calls → END (return answer)
-    - knowledge_expert → "rag_tool" node
-    - Other tools → "task_tools" node (ToolNode handles all of them)
-
-    Args:
-        state: Current graph state
-
-    Returns:
-        Next node name: "rag_tool", "task_tools", or END
-    """
-    last_message = state.messages[-1]
-
-    # No tool calls = we're done
-    if not isinstance(last_message, AIMessage) or not last_message.tool_calls:
-        logger.info("[ReAct] No tool calls in LLM response, routing to END")
-        return END
-
-    # Check which tool is being called (first tool_call)
-    tool_name = last_message.tool_calls[0]["name"]
-    logger.debug(f"[ReAct] Routing to tool: {tool_name}")
-
-    if tool_name == "knowledge_expert":
-        logger.info("[ReAct] Routing to rag_tool node")
-        return "rag_tool"
-    else:
-        logger.info(f"[ReAct] Routing to task_tools node ({tool_name})")
-        return "task_tools"
-
-
-async def execute_rag_tool(
-    state: SupervisorReActState,
-    rag_tool: BaseTool,
-) -> Dict[str, Any]:
-    """
-    Execute the RAG/knowledge_expert tool.
-
-    Extracts documents and stores in state for task tools to access.
-    Task tools can read RAG context from state["rag_context"].
-
-    Args:
-        state: Current graph state (includes messages)
-        rag_tool: The RAG knowledge retrieval tool instance
-
-    Returns:
-        Dict with: messages (ToolMessage), rag_documents, rag_context, tools_used
-    """
-    last_message = state.messages[-1]
-
-    # Find the knowledge_expert tool call in last message
-    rag_call = None
-    for call in last_message.tool_calls:
-        if call["name"] == "knowledge_expert":
-            rag_call = call
-            break
-
-    if not rag_call:
-        logger.warning("[ReAct] RAG tool routed but no knowledge_expert call found")
-        return {}
-
-    logger.info("[ReAct] Executing RAG tool (knowledge_expert)")
-    logger.debug(f"[ReAct] RAG call args: {rag_call['args']}")
-
-    try:
-        # Execute RAG tool
-        result = await rag_tool.ainvoke(rag_call["args"])
-
-        # Parse result (could be JSON string or dict)
-        if isinstance(result, str):
-            result = json.loads(result)
-
-        documents = result.get("documents", [])
-        logger.info(f"[ReAct] RAG tool returned {len(documents)} documents")
-
-        # Format documents as context string for task tools
-        rag_context = _format_rag_documents(documents)
-        logger.debug(f"[ReAct] RAG context size: {len(rag_context)} chars")
-
-        # Track tool usage
-        tools_used = state.tools_used.copy() if state.tools_used else []
-        tools_used.append("knowledge_expert")
-
-        # Return tool message + state updates
+    # Handle the case when it's the last step and the model still wants to use a tool
+    if state.is_last_step and response.tool_calls:
         return {
             "messages": [
-                ToolMessage(
-                    content=json.dumps(result),
-                    tool_call_id=rag_call["id"],
-                    name="knowledge_expert"
-                )
-            ],
-            "rag_documents": {"documents": documents},
-            "rag_context": rag_context,
-            "rag_context_size": len(rag_context),
-            "tools_used": tools_used,
-        }
-
-    except Exception as e:
-        logger.error(f"[ReAct] RAG tool execution failed: {e}", exc_info=True)
-        return {
-            "messages": [
-                ToolMessage(
-                    content=f"Error retrieving knowledge: {str(e)}",
-                    tool_call_id=rag_call["id"],
-                    name="knowledge_expert",
-                    is_error=True
+                AIMessage(
+                    id=response.id,
+                    content="Sorry, I could not find an answer to your question in the specified number of steps.",
                 )
             ]
         }
 
+    # Return the model's response as a list to be added to existing messages
+    return {"messages": [response]}
 
-def _format_rag_documents(documents: List[Dict[str, Any]]) -> str:
-    """
-    Format RAG documents into a context string.
 
-    Used by task tools to access retrieved knowledge.
+def route_model_output(state: SupervisorReActState) -> Literal["__end__", "tools"]:
+    """Determine the next node based on the model's output.
+
+    This function checks if the model's last message contains tool calls.
 
     Args:
-        documents: List of document dicts from RAG
+        state: The current state of the conversation.
 
     Returns:
-        Formatted context string with document content
+        str: The name of the next node to call ("__end__" or "tools").
     """
-    if not documents:
-        return ""
-
-    context_parts = []
-    for idx, doc in enumerate(documents, 1):
-        # Support multiple content field names
-        text = doc.get("content") or doc.get("text") or ""
-        if text.strip():
-            context_parts.append(f"## Document {idx}\n{text}\n")
-
-    return "".join(context_parts)
+    last_message = state.messages[-1]
+    if not isinstance(last_message, AIMessage):
+        raise ValueError(
+            f"Expected AIMessage in output edges, but got {type(last_message).__name__}"
+        )
+    # If there is no tool call, then we finish
+    if not last_message.tool_calls:
+        return "__end__"
+    # Otherwise we execute the requested actions
+    return "tools"
 
 
 def create_supervisor_graph(
@@ -220,68 +95,44 @@ def create_supervisor_graph(
     task_tools: List[BaseTool],
     system_prompt: str,
 ) -> StateGraph:
-    """
-    Create the supervisor ReAct graph.
+    """Create a supervisor ReAct agent graph.
 
-    Implements the ReAct pattern with explicit nodes:
-    1. call_model: LLM reasoning with bound tools
-    2. rag_tool: RAG knowledge retrieval
-    3. task_tools: User-configured task execution
-
-    Similar to langchain-ai/react-agent but with RAG + dynamic tools support.
+    Based on react-agent pattern with RAG tool + dynamic task tools.
 
     Args:
-        llm: Language model instance (with tool calling support)
-        rag_tool: RAG knowledge retrieval tool instance
-        task_tools: List of user-configured task tools
-        system_prompt: Custom system prompt for the agent
+        llm: Language model instance.
+        rag_tool: RAG knowledge retrieval tool.
+        task_tools: List of user-configured task tools.
+        system_prompt: Custom system prompt.
 
     Returns:
-        Compiled LangGraph StateGraph ready for execution
+        Compiled LangGraph StateGraph.
     """
     all_tools = [rag_tool] + task_tools
 
-    logger.info(f"[Graph] Creating supervisor ReAct graph")
-    logger.info(f"[Graph] Tools: 1 RAG + {len(task_tools)} task tools = {len(all_tools)} total")
-    logger.debug(f"[Graph] Tool names: {[t.name for t in all_tools]}")
-
-    # Create graph
+    # Define a new graph
     builder = StateGraph(SupervisorReActState)
 
-    # Node 1: LLM reasoning with bound tools
-    async def call_model_node(state: SupervisorReActState) -> Dict[str, Any]:
+    # Define the nodes we will cycle between
+    async def call_model_node(state: SupervisorReActState) -> Dict[str, List[AIMessage]]:
         return await call_model(state, llm, all_tools, system_prompt)
 
-    builder.add_node("call_model", call_model_node)
+    builder.add_node(call_model_node)
+    builder.add_node("tools", ToolNode(all_tools))
 
-    # Node 2: RAG tool execution (custom node, not ToolNode)
-    async def rag_node(state: SupervisorReActState) -> Dict[str, Any]:
-        return await execute_rag_tool(state, rag_tool)
+    # Set the entrypoint as `call_model`
+    builder.add_edge("__start__", "call_model")
 
-    builder.add_node("rag_tool", rag_node)
-
-    # Node 3: Task tools execution (LangGraph ToolNode)
-    # ToolNode automatically executes tools and returns ToolMessage results
-    task_tools_node = ToolNode(task_tools)
-    builder.add_node("task_tools", task_tools_node)
-
-    # Set entry point
-    builder.set_entry_point("call_model")
-
-    # Conditional edge based on tool calls
-    # Routes to: "rag_tool", "task_tools", or END
+    # Add a conditional edge to determine the next step after `call_model`
     builder.add_conditional_edges(
         "call_model",
-        route_tools,
+        route_model_output,
     )
 
-    # Loop back to reasoning after tool execution
-    builder.add_edge("rag_tool", "call_model")
-    builder.add_edge("task_tools", "call_model")
+    # Add a normal edge from `tools` to `call_model`
+    builder.add_edge("tools", "call_model")
 
-    # Compile graph
+    # Compile the builder into an executable graph
     graph = builder.compile(name="Supervisor ReAct Agent")
-
-    logger.info("[Graph] Supervisor ReAct graph created successfully")
 
     return graph

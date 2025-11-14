@@ -1,49 +1,56 @@
-"""State definitions for Supervisor ReAct agent.
+"""Define the state structures for the supervisor agent.
 
-Based on react-agent pattern with extensions for RAG context and tool tracking.
+Based on react-agent pattern with extensions for RAG integration.
 """
 
-from typing import Any, Dict, List, Optional, Annotated
+from __future__ import annotations
+
 from dataclasses import dataclass, field
+from typing import Sequence
 
 from langchain_core.messages import AnyMessage
 from langgraph.graph import add_messages
+from langgraph.managed import IsLastStep
+from typing_extensions import Annotated
 
 
 @dataclass
-class SupervisorReActState:
-    """
-    Extended ReAct state for supervisor agent.
+class InputState:
+    """Defines the input state for the agent.
 
-    Inherits message handling pattern from MessagesState but as dataclass.
-    Adds RAG context and tool tracking for custom supervision logic.
-
-    Fields:
-        messages: Conversation history. New messages are merged using add_messages reducer.
-        rag_documents: Retrieved documents from RAG tool
-        rag_context: Formatted context string from RAG documents
-        rag_context_size: Size of RAG context in characters
-        tools_used: List of tool names used during execution
+    This class is used to define the initial state and structure of incoming data.
     """
 
-    # Messages with add_messages reducer (like MessagesState)
-    messages: Annotated[List[AnyMessage], add_messages] = field(default_factory=list)
+    messages: Annotated[Sequence[AnyMessage], add_messages] = field(
+        default_factory=list
+    )
+    """
+    Messages tracking the primary execution state of the agent.
 
-    # RAG context - accumulated during execution
-    rag_documents: Dict[str, Any] = field(default_factory=dict)
-    rag_context: str = ""
-    rag_context_size: int = 0
+    Typically accumulates a pattern of:
+    1. HumanMessage - user input
+    2. AIMessage with .tool_calls - agent picking tool(s) to use
+    3. ToolMessage(s) - the responses (or errors) from executed tools
+    4. AIMessage without .tool_calls - agent responding to user
+    5. HumanMessage - user's next conversational turn
 
-    # Tool tracking for observability
-    tools_used: List[str] = field(default_factory=list)
+    Steps 2-5 may repeat as needed.
 
-    def add_tool_used(self, tool_name: str) -> None:
-        """Record a tool being used."""
-        if tool_name not in self.tools_used:
-            self.tools_used.append(tool_name)
+    The `add_messages` annotation ensures that new messages are merged with existing ones.
+    """
 
-    def set_rag_context(self, documents: List[Dict[str, Any]], context_str: str) -> None:
-        """Store RAG documents and formatted context."""
-        self.rag_documents = {"documents": documents}
-        self.rag_context = context_str
-        self.rag_context_size = len(context_str)
+
+@dataclass
+class SupervisorReActState(InputState):
+    """Represents the complete state of the supervisor agent.
+
+    Extends InputState with additional attributes for RAG context tracking.
+    """
+
+    is_last_step: IsLastStep = field(default=False)
+    """
+    Indicates whether the current step is the last one before the graph raises an error.
+
+    This is a 'managed' variable, controlled by the state machine rather than user code.
+    It is set to 'True' when the step count reaches recursion_limit - 1.
+    """
