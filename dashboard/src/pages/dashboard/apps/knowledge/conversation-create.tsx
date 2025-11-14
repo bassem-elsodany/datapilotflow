@@ -2,7 +2,6 @@ import { useGetActiveModelProviders } from '@/api/resources/model-providers';
 import { useGetCollections } from '@/api/resources/vectordb';
 import { Page } from '@/components/page';
 import { PageHeader } from '@/components/page-header';
-import { SystemPromptManager } from '@/components/system-prompt-manager';
 import { apiUtils } from '@/config';
 import { paths } from '@/routes/paths';
 import {
@@ -458,20 +457,22 @@ function ConversationWizard() {
         return;
       }
 
-      if (enableLLMGeneration && !selectedProviderId) {
+      if ((enableLLMGeneration || enableKnowledgeAssistant) && !selectedProviderId) {
+        const reason = enableKnowledgeAssistant ? 'Knowledge Assistant Mode' : 'Generative Answer';
         notifications.show({
           title: 'Error',
-          message: 'Please select an LLM provider when Generative Answer is enabled',
+          message: `Please select an LLM provider when ${reason} is enabled`,
           color: 'red',
           icon: <IconAlertCircle size={16} />,
         });
         return;
       }
 
-      if (enableLLMGeneration && !selectedModel) {
+      if ((enableLLMGeneration || enableKnowledgeAssistant) && !selectedModel) {
+        const reason = enableKnowledgeAssistant ? 'Knowledge Assistant Mode' : 'Generative Answer';
         notifications.show({
           title: 'Error',
-          message: 'Please select an LLM model when Generative Answer is enabled',
+          message: `Please select an LLM model when ${reason} is enabled`,
           color: 'red',
           icon: <IconAlertCircle size={16} />,
         });
@@ -733,17 +734,20 @@ function ConversationWizard() {
                 </Group>
 
                 <Select
-                  label="Enhancement Strategy"
+                  label={enableKnowledgeAssistant ? "Enhancement Strategy (Auto-selected for Assistant Mode)" : "Enhancement Strategy"}
                   placeholder="Select strategy"
-                  data={ENHANCEMENT_STRATEGIES
-                    .filter(s => s.value !== 'custom_variants') // Hide custom_variants (only for Assistant mode)
-                    .map((s) => ({
-                      value: s.value,
-                      label: s.label,
-                    }))}
-                  value={selectedStrategy}
+                  data={enableKnowledgeAssistant
+                    ? [{value: 'custom_variants', label: 'Custom Variants (Required for Assistant Mode)'}]
+                    : ENHANCEMENT_STRATEGIES
+                      .filter(s => s.value !== 'custom_variants') // Hide custom_variants (only for Assistant mode)
+                      .map((s) => ({
+                        value: s.value,
+                        label: s.label,
+                      }))}
+                  value={enableKnowledgeAssistant ? 'custom_variants' : selectedStrategy}
                   onChange={(value) => setSelectedStrategy(value || 'none')}
-                  description="Select how your queries will be enhanced for better retrieval"
+                  description={enableKnowledgeAssistant ? "Custom variants required for Assistant to analyze queries comprehensively" : "Select how your queries will be enhanced for better retrieval"}
+                  disabled={enableKnowledgeAssistant}
                 />
 
                 {/* RRF Info Alert for multi-variant strategies */}
@@ -928,12 +932,12 @@ function ConversationWizard() {
                   onChange={(event) => setEnableLLMGeneration(event.currentTarget.checked)}
                 />
 
-                {enableLLMGeneration ? (
+                {(enableLLMGeneration || enableKnowledgeAssistant) ? (
                   <>
                     <Grid gutter="md">
                       <Grid.Col span={6}>
                         <Select
-                          label="LLM Provider"
+                          label={enableKnowledgeAssistant ? "LLM Provider (Required for Assistant)" : "LLM Provider"}
                           placeholder={providersLoading ? 'Loading providers...' : 'Select a provider'}
                           data={providers?.map((p) => ({
                             value: p.id,
@@ -947,13 +951,13 @@ function ConversationWizard() {
                           searchable
                           required
                           disabled={providersLoading || !providers || providers.length === 0}
-                          description="Choose the LLM provider for this conversation"
+                          description={enableKnowledgeAssistant ? "Required for Assistant to understand queries and execute tasks" : "Choose the LLM provider for this conversation"}
                         />
                       </Grid.Col>
 
                       <Grid.Col span={6}>
                         <Select
-                          label="LLM Provider Model"
+                          label={enableKnowledgeAssistant ? "LLM Model (Required for Assistant)" : "LLM Provider Model"}
                           placeholder="Select a model"
                           data={
                             selectedProviderId && providers
@@ -970,7 +974,7 @@ function ConversationWizard() {
                           searchable
                           disabled={!selectedProviderId}
                           required
-                          description="Choose the LLM provider model for this conversation"
+                          description={enableKnowledgeAssistant ? "Required for Assistant to understand queries and execute tasks" : "Choose the LLM provider model for this conversation"}
                         />
                       </Grid.Col>
                     </Grid>
@@ -1007,27 +1011,15 @@ function ConversationWizard() {
                 />
 
                 {enableKnowledgeAssistant ? (
-                  <>
-                    <Alert icon={<IconInfoCircle size={16} />} color="grape" variant="light">
-                      <Text size="sm">
-                        <strong>Knowledge Assistant Mode:</strong> AI searches your knowledge base AND performs tasks using what it finds.
-                        <br />
-                        <strong>How it works:</strong> Finds relevant info from your docs → Uses it to complete your task
-                        <br />
-                        <strong>Best for:</strong> "Write a summary based on...", "Generate code using our docs", "Create a plan from..."
-                      </Text>
-                    </Alert>
-
-                    <SystemPromptManager
-                      conversationId=""
-                      selectedPromptId={selectedSystemPromptId}
-                      selectedPromptData={selectedSystemPrompt}
-                      onPromptSelected={(prompt) => {
-                        setSelectedSystemPromptId(prompt.id);
-                        setSelectedSystemPrompt(prompt);
-                      }}
-                    />
-                  </>
+                  <Alert icon={<IconInfoCircle size={16} />} color="grape" variant="light">
+                    <Text size="sm">
+                      <strong>Knowledge Assistant Mode:</strong> AI searches your knowledge base AND performs tasks using what it finds.
+                      <br />
+                      <strong>How it works:</strong> Finds relevant info from your docs → Uses it to complete your task
+                      <br />
+                      <strong>Best for:</strong> "Write a summary based on...", "Generate code using our docs", "Create a plan from..."
+                    </Text>
+                  </Alert>
                 ) : (
                   <Alert icon={<IconInfoCircle size={16} />} color="yellow" variant="light">
                     <Text size="sm">
