@@ -30,6 +30,7 @@ interface ConversationNodeConfigPanelProps {
   providers?: any[];
   collections?: any[];
   config?: any;
+  nodeConfig?: any;
 }
 
 // Enhanced strategy definitions with detailed information
@@ -130,13 +131,14 @@ export function ConversationNodeConfigPanel({
   providers = [],
   collections = [],
   config = {},
+  nodeConfig,
 }: ConversationNodeConfigPanelProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [localConfig, setLocalConfig] = useState(config);
   const { data: tools, isLoading: toolsLoading } = useGetTools();
 
   // Hooks for tool instructions in assistant node
-  const [isInstructionsExpanded, setIsInstructionsExpanded] = useState(!!config.tool_instructions);
+  const [isInstructionsExpanded, setIsInstructionsExpanded] = useState(!!(nodeConfig?.tool_instructions || config.tool_instructions));
   const [isGeneratingInstructions, setIsGeneratingInstructions] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
 
@@ -145,12 +147,21 @@ export function ConversationNodeConfigPanel({
       setIsExpanded(true);
       // In supervisor mode, force selectedStrategy to custom_variants
       const isSupervisor = node.data.type === 'enhancement' && config.selectedTemplate?.type === 'supervisor';
-      const configToSet = isSupervisor
+
+      // Merge nodeConfig (edit mode data) with global config
+      // nodeConfig contains node-specific data from the saved conversation
+      let configToSet = isSupervisor
         ? { ...config, selectedStrategy: 'custom_variants' }
         : config;
+
+      // If nodeConfig is provided (in edit mode), merge it into localConfig
+      if (nodeConfig) {
+        configToSet = { ...configToSet, ...nodeConfig };
+      }
+
       setLocalConfig(configToSet);
     }
-  }, [node, opened, config]);
+  }, [node, opened, config, nodeConfig]);
 
   if (!opened || !node) return null;
 

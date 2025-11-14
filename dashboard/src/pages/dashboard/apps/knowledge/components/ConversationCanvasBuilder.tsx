@@ -152,6 +152,9 @@ function ConversationCanvasContent() {
     },
   });
 
+  // Store individual node configurations so they can be displayed in the panel
+  const [nodeConfigs, setNodeConfigs] = useState<Map<string, any>>(new Map());
+
   // Load existing conversation data when editing
   useEffect(() => {
     if (editingConversationId && isLoadingExisting) {
@@ -215,6 +218,52 @@ function ConversationCanvasContent() {
             setConfig(newConfig);
 
             console.log('[ConversationCanvasBuilder] Loaded conversation data:', session);
+
+            // Build node-specific configurations from the loaded data
+            const nodeConfigsMap = new Map<string, any>();
+
+            // Enhancement/Query Strategy node config
+            nodeConfigsMap.set('enhancement', {
+              selectedStrategy: session.assistant_config?.selected_strategy || 'custom_variants',
+              selectedProviderId: session.assistant_config?.selected_provider_id || null,
+              selectedModel: session.assistant_config?.selected_model || null,
+            });
+
+            // Retrieval/Knowledge Search node config
+            nodeConfigsMap.set('retrieval', {
+              collectionName: session.collection_name || '',
+              topK: session.top_k || 5,
+            });
+
+            // Reranking node config
+            nodeConfigsMap.set('reranking', {
+              enableReranking: session.enable_reranking || false,
+              selectedRerankerId: session.reranker_config?.selected_reranker_id || null,
+              selectedRerankerModel: session.reranker_config?.selected_model || null,
+            });
+
+            // LLM/Generate Answer node config
+            nodeConfigsMap.set('llm', {
+              enableLLMGeneration: session.enable_llm_generation !== false,
+              selectedProviderId: session.assistant_config?.selected_provider_id || null,
+              selectedModel: session.assistant_config?.selected_model || null,
+            });
+
+            // Assistant/Tools Configuration node config
+            nodeConfigsMap.set('assistant', {
+              selectedTools: session.assistant_config?.tools || [],
+            });
+
+            // Task Execution node config
+            nodeConfigsMap.set('taskEngine-prompts', {
+              selectedTools: session.assistant_config?.tools || [],
+            });
+
+            nodeConfigsMap.set('taskEngine-execution', {
+              tool_instructions: session.assistant_config?.tool_instructions || '',
+            });
+
+            setNodeConfigs(nodeConfigsMap);
             setTemplateSelected(true); // Skip template selection, go straight to canvas
           } else {
             notifications.show({
@@ -1086,6 +1135,7 @@ function ConversationCanvasContent() {
               providers={providers}
               collections={collections}
               config={config}
+              nodeConfig={nodeConfigs.get(selectedNodeId || '')}
             />
           </Paper>
 
