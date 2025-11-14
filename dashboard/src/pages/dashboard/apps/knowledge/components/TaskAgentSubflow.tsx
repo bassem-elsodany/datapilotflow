@@ -11,6 +11,7 @@ export interface TaskAgentSubflowConfig {
   enableKnowledgeAssistant: boolean;
   selectedSystemPromptId?: string;
   selectedTools?: string[]; // Array of tool IDs
+  tool_instructions?: string; // Tool orchestration instructions
 }
 
 /**

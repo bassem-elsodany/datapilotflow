@@ -286,6 +286,7 @@ function ConversationCanvasContent() {
           enableKnowledgeAssistant: config.enableKnowledgeAssistant,
           selectedSystemPromptId: config.selectedSystemPromptId || undefined,
           selectedTools: config.selectedTools || [],
+          tool_instructions: config.tool_instructions || undefined,
         };
         const taskSubflowNodes = generateTaskAgentSubflowNodes('taskEngine', startX + horizontalSpacing * 2 - 30, startY + 80, taskConfig);
         nodeList.push(...taskSubflowNodes);
