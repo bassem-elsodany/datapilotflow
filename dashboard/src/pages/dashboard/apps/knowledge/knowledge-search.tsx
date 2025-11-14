@@ -17,7 +17,6 @@ import {
 import { DataTableColumn } from 'mantine-datatable';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ConversationCreationModal } from './components/ConversationCreationModal';
 
 interface Conversation {
   id: string; // MongoDB _id
@@ -51,7 +50,6 @@ export default function KnowledgeSearch() {
   const [isLoading, setIsLoading] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<Conversation | null>(null);
-  const [creationModalOpen, setCreationModalOpen] = useState(false);
 
   // API functions using centralized config
   const buildApiUrl = (endpoint: string) => {
@@ -102,18 +100,8 @@ export default function KnowledgeSearch() {
   };
 
   const navigateToCreateConversation = () => {
-    setCreationModalOpen(true);
-  };
-
-  const handleSelectWizard = () => {
-    setCreationModalOpen(false);
+    // Navigate directly to the wizard (visual pipeline mode removed)
     navigate(paths.dashboard.apps.conversationCreate);
-  };
-
-  const handleSelectPipeline = () => {
-    setCreationModalOpen(false);
-    // Navigate to pipeline builder for conversations
-    navigate(`${paths.dashboard.apps.conversationCreate}?mode=pipeline`);
   };
 
   const selectConversation = async (sessionId: string) => {
@@ -121,14 +109,8 @@ export default function KnowledgeSearch() {
     navigate(paths.dashboard.apps.conversation(sessionId));
   };
 
-  const editConversationInWizard = (sessionId: string) => {
+  const editConversation = (sessionId: string) => {
     navigate(paths.dashboard.apps.conversationCreate, {
-      state: { editingConversationId: sessionId }
-    });
-  };
-
-  const editConversationInPipeline = (sessionId: string) => {
-    navigate(`${paths.dashboard.apps.conversationCreate}?mode=pipeline`, {
       state: { editingConversationId: sessionId }
     });
   };
@@ -328,34 +310,16 @@ export default function KnowledgeSearch() {
         width: 180,
         render: (session) => (
           <Group gap="xs" wrap="nowrap">
-            <Menu shadow="md" position="bottom-end">
-              <Menu.Target>
-                <Tooltip label="Edit Conversation">
-                  <ActionIcon
-                    variant="light"
-                    color="gray"
-                    size="md"
-                  >
-                    <IconEdit size={18} />
-                  </ActionIcon>
-                </Tooltip>
-              </Menu.Target>
-
-              <Menu.Dropdown>
-                <Menu.Item
-                  leftSection={<IconMessages size={14} />}
-                  onClick={() => editConversationInWizard(session.id)}
-                >
-                  Edit in Wizard Mode
-                </Menu.Item>
-                <Menu.Item
-                  leftSection={<IconRobot size={14} />}
-                  onClick={() => editConversationInPipeline(session.id)}
-                >
-                  Edit in Pipeline Canvas
-                </Menu.Item>
-              </Menu.Dropdown>
-            </Menu>
+            <Tooltip label="Edit Conversation">
+              <ActionIcon
+                variant="light"
+                color="gray"
+                size="md"
+                onClick={() => editConversation(session.id)}
+              >
+                <IconEdit size={18} />
+              </ActionIcon>
+            </Tooltip>
             <Tooltip label="Delete">
               <ActionIcon
                 variant="light"
@@ -481,14 +445,6 @@ export default function KnowledgeSearch() {
           </Group>
         </Stack>
       </Modal>
-
-      {/* Conversation Creation Choice Modal */}
-      <ConversationCreationModal
-        opened={creationModalOpen}
-        onClose={() => setCreationModalOpen(false)}
-        onSelectWizard={handleSelectWizard}
-        onSelectPipeline={handleSelectPipeline}
-      />
     </Page>
   );
 }
