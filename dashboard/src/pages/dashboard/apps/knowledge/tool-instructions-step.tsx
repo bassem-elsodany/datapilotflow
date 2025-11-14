@@ -5,8 +5,8 @@
  * This step appears after tool selection and before review.
  */
 
-import { Card, Stack, Text, Textarea, Button, Badge, Accordion, Paper, Group, CopyButton, ActionIcon, Loader, Alert } from '@mantine/core';
-import { IconCopy, IconCheck, IconDots, IconSparkles, IconAlertCircle, IconChevronDown, IconChevronUp } from '@tabler/icons-react';
+import { Card, Stack, Text, Textarea, Button, Badge, Paper, Group, ActionIcon, Loader, Alert } from '@mantine/core';
+import { IconDots, IconSparkles, IconAlertCircle, IconChevronDown, IconChevronUp } from '@tabler/icons-react';
 import { UseFormReturnType } from '@mantine/form';
 import { useState } from 'react';
 import { apiUtils } from '@/config';
@@ -17,73 +17,6 @@ interface ToolInstructionsStepProps {
   providers?: any[];
 }
 
-// Template examples for tool orchestration
-const INSTRUCTION_TEMPLATES = {
-  sequential: {
-    name: 'Sequential Execution',
-    description: 'Call helper tools first, then main execution tool',
-    template: `For each user query:
-1. First call any relevant helper tools that provide context or examples
-2. Then call the main execution tool with accumulated knowledge
-3. Verify the result meets all user requirements
-
-Tool order:
-- Helper tools (examples, patterns, analysis): called first
-- Main execution tool: called last with complete context`,
-  },
-
-  conditional: {
-    name: 'Conditional Based on Query Type',
-    description: 'Different tool sequences for different query types',
-    template: `Based on query characteristics, use different tool sequences:
-
-For simple queries:
-- Only call the main execution tool directly
-
-For complex queries:
-- Call all available helper tools first
-- Accumulate knowledge
-- Call main execution tool with complete context
-
-For queries mentioning specific features:
-- If "error handling" mentioned: call error handling tool first
-- If "configuration" mentioned: call configuration tool first
-- If "performance" mentioned: call performance tool first
-- Then call main execution tool`,
-  },
-
-  parallel: {
-    name: 'Parallel Execution',
-    description: 'Call multiple helper tools in parallel, then main tool',
-    template: `Execute tools in parallel where possible:
-
-Phase 1 (Parallel - all helper tools):
-- Call error handling tool
-- Call configuration tool
-- Call analysis tool
-(Wait for all to complete)
-
-Phase 2 (Sequential - main tool):
-- Call main execution tool with all accumulated context`,
-  },
-
-  custom: {
-    name: 'Custom Workflow',
-    description: 'Define your own tool orchestration pattern',
-    template: `Describe your custom tool workflow:
-
-Example:
-1. [First step]: [which tools to call]
-2. [Second step]: [which tools to call]
-3. [Final step]: [which tools to call]
-
-Include:
-- When each tool should be called
-- What tools should be called together
-- How results should be accumulated`,
-  },
-};
-
 export function ToolInstructionsStep({ form, tools, providers }: ToolInstructionsStepProps) {
   const selectedToolIds = form.values.selectedTools || [];
   const selectedTools = tools?.filter((t) => selectedToolIds.includes(t.id)) || [];
@@ -91,14 +24,6 @@ export function ToolInstructionsStep({ form, tools, providers }: ToolInstruction
   const [generationError, setGenerationError] = useState<string | null>(null);
   // Auto-expand if there are existing instructions (edit mode)
   const [isExpanded, setIsExpanded] = useState(!!form.values.tool_instructions);
-
-  const insertTemplate = (template: string) => {
-    const currentValue = form.values.tool_instructions || '';
-    form.setFieldValue(
-      'tool_instructions',
-      currentValue ? `${currentValue}\n\n${template}` : template
-    );
-  };
 
   const generateInstructions = async () => {
     setIsGenerating(true);
@@ -303,57 +228,6 @@ export function ToolInstructionsStep({ form, tools, providers }: ToolInstruction
         )}
       </Card>
 
-      {/* Templates Accordion */}
-      <Accordion
-        variant="contained"
-        defaultValue={null}
-        multiple={false}
-      >
-        {Object.entries(INSTRUCTION_TEMPLATES).map(([key, template]) => (
-          <Accordion.Item key={key} value={key}>
-            <Accordion.Control>
-              <Stack gap={0}>
-                <Text size="sm" fw={600}>
-                  {template.name}
-                </Text>
-                <Text size="xs" c="dimmed">
-                  {template.description}
-                </Text>
-              </Stack>
-            </Accordion.Control>
-            <Accordion.Panel>
-              <Stack spacing="sm">
-                <Paper p="md" bg="gray.0" style={{ borderRadius: '4px' }}>
-                  <Text size="sm" style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
-                    {template.template}
-                  </Text>
-                </Paper>
-                <Group justify="flex-end">
-                  <Button
-                    size="sm"
-                    variant="light"
-                    onClick={() => insertTemplate(template.template)}
-                  >
-                    Use This Template
-                  </Button>
-                  <CopyButton value={template.template} timeout={2000}>
-                    {({ copied, copy }) => (
-                      <ActionIcon
-                        size="sm"
-                        variant="light"
-                        onClick={copy}
-                        title={copied ? 'Copied' : 'Copy'}
-                      >
-                        {copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
-                      </ActionIcon>
-                    )}
-                  </CopyButton>
-                </Group>
-              </Stack>
-            </Accordion.Panel>
-          </Accordion.Item>
-        ))}
-      </Accordion>
 
       {/* Guidelines */}
       <Card withBorder p="md" radius="md" bg="yellow.0">
