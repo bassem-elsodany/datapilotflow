@@ -383,20 +383,22 @@ export function ConversationNodeConfigPanel({
                 size="sm"
               />
 
-              {/* LLM Configuration - Show when non-native strategy is selected (except custom_variants which doesn't need LLM) */}
-              {localConfig.selectedStrategy && localConfig.selectedStrategy !== 'native' && localConfig.selectedStrategy !== 'custom_variants' && (
+              {/* LLM Configuration - Show when non-native strategy is selected (except custom_variants in RAG mode which doesn't need LLM) */}
+              {localConfig.selectedStrategy && localConfig.selectedStrategy !== 'native' && (localConfig.selectedStrategy !== 'custom_variants' || isSupervisorMode) && (
                 <>
                   <Box p="xs" bg="cyan.0" style={{ borderRadius: '6px', border: '1px solid var(--mantine-color-cyan-2)' }}>
                     <Stack gap={2}>
                       <Text size="xs" fw={600} c="cyan.7">⚠️ LLM Required</Text>
                       <Text size="xs" c="dimmed">
-                        This enhancement strategy requires an LLM to generate query variants. Select a provider and model below.
+                        {isSupervisorMode
+                          ? 'The Assistant Agent requires an LLM to understand queries and execute tasks using your knowledge base as context.'
+                          : 'This enhancement strategy requires an LLM to generate query variants. Select a provider and model below.'}
                       </Text>
                     </Stack>
                   </Box>
 
                   <Select
-                    label="LLM Provider for Query Enhancement"
+                    label={isSupervisorMode ? "LLM Provider (Required for Assistant)" : "LLM Provider for Query Enhancement"}
                     placeholder="Select a provider"
                     data={providers?.map((p: any) => ({
                       value: p.id,
@@ -411,7 +413,7 @@ export function ConversationNodeConfigPanel({
 
                   {localConfig.selectedProviderId && providers ? (
                     <Select
-                      label="Model for Query Enhancement"
+                      label={isSupervisorMode ? "LLM Model (Required for Assistant)" : "Model for Query Enhancement"}
                       placeholder="Select a model"
                       data={
                         providers
@@ -428,7 +430,7 @@ export function ConversationNodeConfigPanel({
                     />
                   ) : (
                     <Select
-                      label="Model for Query Enhancement"
+                      label={isSupervisorMode ? "LLM Model (Required for Assistant)" : "Model for Query Enhancement"}
                       placeholder="Select provider first"
                       disabled
                       size="sm"
@@ -437,8 +439,8 @@ export function ConversationNodeConfigPanel({
                 </>
               )}
 
-              {/* Custom Variants Info - Show when custom_variants is selected */}
-              {localConfig.selectedStrategy === 'custom_variants' && (
+              {/* Custom Variants Info - Show when custom_variants is selected (in RAG mode only) */}
+              {localConfig.selectedStrategy === 'custom_variants' && !isSupervisorMode && (
                 <Box p="xs" bg="cyan.0" style={{ borderRadius: '6px', border: '1px solid var(--mantine-color-cyan-2)' }}>
                   <Stack gap={2}>
                     <Text size="xs" fw={600} c="cyan.7">ℹ️ Custom Variants Strategy</Text>
