@@ -351,7 +351,9 @@ export function ConversationCreateWizard() {
         const data = await response.json();
         const session = data.session;
 
+        console.log('[DEBUG loadExistingConversation] Full session object:', JSON.stringify(session, null, 2));
         console.log('[DEBUG loadExistingConversation] session.assistant_config:', session.assistant_config);
+        console.log('[DEBUG loadExistingConversation] tool_instructions value:', session.assistant_config?.tool_instructions);
 
         // Populate form with existing conversation data
         form.setValues({
@@ -374,6 +376,8 @@ export function ConversationCreateWizard() {
           tool_instructions: session.assistant_config?.tool_instructions || '',
         });
 
+        console.log('[DEBUG loadExistingConversation] form.values after setValues:', form.values);
+        console.log('[DEBUG loadExistingConversation] form.values.tool_instructions after setValues:', form.values.tool_instructions);
         console.log('[DEBUG loadExistingConversation] form.values.selectedTools after setValues:', form.values.selectedTools);
 
         // No need to set selectedSystemPrompt as tools are now standalone
@@ -780,8 +784,8 @@ export function ConversationCreateWizard() {
               </Stack>
             </Card>
 
-            {/* Tool Instructions Section - Only shown after tools are selected */}
-            {form.values.selectedTools && form.values.selectedTools.length > 0 && (
+            {/* Tool Instructions Section - Shown if tools are selected OR if there are existing instructions to edit */}
+            {(form.values.selectedTools?.length > 0 || form.values.tool_instructions) && (
               <Card withBorder shadow="sm">
                 <ToolInstructionsStep
                   form={form}
