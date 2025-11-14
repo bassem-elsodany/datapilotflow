@@ -624,6 +624,18 @@ Remember: Be practical, concise, and actionable. The supervisor agent will follo
                 ):
                     raise ValueError("Missing required fields in LLM response")
 
+                # Convert instructions to string if it's a list (LLM sometimes returns as array)
+                if isinstance(parsed_response["instructions"], list):
+                    parsed_response["instructions"] = "\n".join(
+                        str(item) for item in parsed_response["instructions"]
+                    )
+
+                # Convert reasoning to string if it's a list
+                if isinstance(parsed_response["reasoning"], list):
+                    parsed_response["reasoning"] = "\n".join(
+                        str(item) for item in parsed_response["reasoning"]
+                    )
+
                 # Validate pattern
                 if parsed_response["pattern"] not in [
                     "sequential",
