@@ -1078,9 +1078,9 @@ export function ConversationNodeConfigPanel({
 
                   {/* Expanded Content */}
                   {isInstructionsExpanded && (
-                    <Stack spacing="sm" p="sm" pt={0}>
+                    <Stack gap="sm" p="sm" pt={0}>
                       {generationError && (
-                        <Alert icon={<IconAlertCircle size={14} />} color="red" variant="light" size="sm">
+                        <Alert icon={<IconAlertCircle size={14} />} color="red" variant="light">
                           <Text size="xs">{generationError}</Text>
                         </Alert>
                       )}

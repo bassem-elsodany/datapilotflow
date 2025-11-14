@@ -89,6 +89,8 @@ interface ConversationConfig {
   selectedSystemPromptId?: string | null;
   selectedSystemPrompt?: any;
   systemPromptTasks?: any[];
+  selectedTools?: string[]; // Array of tool IDs
+  tool_instructions?: string; // Tool orchestration instructions
   // Template information
   selectedTemplate?: ConversationTemplate;
   // Track which nodes user has configured
