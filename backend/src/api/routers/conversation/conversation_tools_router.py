@@ -5,7 +5,7 @@ This module provides endpoints for managing assistant agent tools dynamically.
 Users can create, update, delete, and query tools configured for conversations.
 """
 
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from loguru import logger
@@ -342,18 +342,13 @@ async def create_tool(
             conversation.assistant_config.tools.append(new_tool)
 
         # Update conversation in database
-        from dataclasses import asdict
-
-        assistant_config_dict = {"enabled": conversation.assistant_config.enabled}
-        if conversation.assistant_config.system_prompt_tasks:
-            assistant_config_dict["system_prompt_tasks"] = [
-                asdict(task)
-                for task in conversation.assistant_config.system_prompt_tasks
-            ]
+        assistant_config_dict: Dict[str, Any] = {
+            "enabled": conversation.assistant_config.enabled,
+        }
         if conversation.assistant_config.tools:
-            assistant_config_dict["tools"] = [
-                asdict(tool) for tool in conversation.assistant_config.tools
-            ]
+            assistant_config_dict["tools"] = conversation.assistant_config.tools
+        if conversation.assistant_config.tool_instructions:
+            assistant_config_dict["tool_instructions"] = conversation.assistant_config.tool_instructions
 
         conversation_history_service.collection.update_one(
             {"_id": conversation._id},
@@ -553,23 +548,19 @@ async def update_tool(
             )
 
         # Update conversation in database
-        from dataclasses import asdict
+        if conversation.assistant_config:
+            assistant_config_dict: Dict[str, Any] = {
+                "enabled": conversation.assistant_config.enabled,
+            }
+            if conversation.assistant_config.tools:
+                assistant_config_dict["tools"] = conversation.assistant_config.tools
+            if conversation.assistant_config.tool_instructions:
+                assistant_config_dict["tool_instructions"] = conversation.assistant_config.tool_instructions
 
-        assistant_config_dict = {"enabled": conversation.assistant_config.enabled}
-        if conversation.assistant_config.system_prompt_tasks:
-            assistant_config_dict["system_prompt_tasks"] = [
-                asdict(task)
-                for task in conversation.assistant_config.system_prompt_tasks
-            ]
-        if conversation.assistant_config.tools:
-            assistant_config_dict["tools"] = [
-                asdict(tool) for tool in conversation.assistant_config.tools
-            ]
-
-        conversation_history_service.collection.update_one(
-            {"_id": conversation._id},
-            {"$set": {"assistant_config": assistant_config_dict}},
-        )
+            conversation_history_service.collection.update_one(
+                {"_id": conversation._id},
+                {"$set": {"assistant_config": assistant_config_dict}},
+            )
 
         logger.info(f"Successfully updated tool {tool_id}")
 
@@ -647,25 +638,21 @@ async def delete_tool(
             )
 
         # Update conversation in database
-        from dataclasses import asdict
+        if conversation.assistant_config:
+            assistant_config_dict: Dict[str, Any] = {
+                "enabled": conversation.assistant_config.enabled,
+            }
+            if conversation.assistant_config.tools:
+                assistant_config_dict["tools"] = conversation.assistant_config.tools
+            else:
+                assistant_config_dict["tools"] = None
+            if conversation.assistant_config.tool_instructions:
+                assistant_config_dict["tool_instructions"] = conversation.assistant_config.tool_instructions
 
-        assistant_config_dict = {"enabled": conversation.assistant_config.enabled}
-        if conversation.assistant_config.system_prompt_tasks:
-            assistant_config_dict["system_prompt_tasks"] = [
-                asdict(task)
-                for task in conversation.assistant_config.system_prompt_tasks
-            ]
-        if conversation.assistant_config.tools:
-            assistant_config_dict["tools"] = [
-                asdict(tool) for tool in conversation.assistant_config.tools
-            ]
-        else:
-            assistant_config_dict["tools"] = None
-
-        conversation_history_service.collection.update_one(
-            {"_id": conversation._id},
-            {"$set": {"assistant_config": assistant_config_dict}},
-        )
+            conversation_history_service.collection.update_one(
+                {"_id": conversation._id},
+                {"$set": {"assistant_config": assistant_config_dict}},
+            )
 
         logger.info(f"Successfully deleted tool {tool_id}")
 
