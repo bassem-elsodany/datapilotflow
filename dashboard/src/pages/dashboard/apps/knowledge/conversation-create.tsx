@@ -1154,7 +1154,7 @@ function ConversationWizard() {
                   )}
 
                   {/* LLM Provider and Model for Strategy */}
-                  {selectedStrategy !== 'native' && (
+                  {((selectedStrategy !== 'native' && selectedStrategy !== 'none') || enableKnowledgeAssistant) && (
                     <>
                       <Divider />
                       <Grid gutter="sm">
