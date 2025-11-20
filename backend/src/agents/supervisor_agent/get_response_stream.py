@@ -1,7 +1,7 @@
 """Generate Response Stream using Supervisor Agent.
 
 Streaming async generator that yields progress events as the supervisor agent executes.
-Matches the assistant_agent pattern for compatibility.
+Provides real-time updates for UI progress tracking and response streaming.
 """
 
 import asyncio

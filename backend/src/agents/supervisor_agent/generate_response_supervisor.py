@@ -1,15 +1,15 @@
 """
 Generate Response Service using Custom ReAct Graph Pattern
 
-This module is an adaptation of the assistant_agent's generate_response_supervisor.py
-with the ONLY difference being:
-- Assistant Agent: Uses LangChain's built-in create_agent()
-- Supervisor Agent: Uses our custom create_graph() for the ReAct pattern
+This module implements the supervisor agent's response generation using a custom
+LangGraph ReAct pattern with tool calling capabilities.
 
-All other functionality (provider setup, LLM client, tool loading, streaming events,
-error handling) remains identical.
-
-Reference: src/agents/assistant_agent/services/generate_response_supervisor.py
+Key Features:
+- Custom create_graph() implementation for the ReAct agent pattern
+- RAG-first knowledge retrieval with knowledge_expert tool
+- Dynamic tool binding from conversation configuration
+- Streaming response events for real-time UI updates
+- Provider setup, LLM client management, and error handling
 """
 
 import asyncio
@@ -74,9 +74,8 @@ async def get_response_stream_supervisor(
     """
     Generate AI response using Custom ReAct Graph Pattern.
 
-    Uses our custom ReAct graph instead of LangChain's create_agent().
-    All other functionality (provider setup, tools, streaming, error handling)
-    is identical to the assistant_agent version.
+    Uses our custom ReAct graph with RAG-first tool calling pattern.
+    Handles provider setup, dynamic tool loading, streaming, and error handling.
 
     Args:
         query: User's question/request
@@ -250,8 +249,8 @@ async def get_response_stream_supervisor(
         else:
             final_rag_description = rag_agent_description or default_rag_description
 
-        # Create RAG tool using factory (matching assistant agent)
-        from src.agents.assistant_agent.tools.rag_knowledge_tool import (
+        # Create RAG tool using factory
+        from src.agents.supervisor_agent.tools.rag_knowledge_tool import (
             create_rag_knowledge_tool,
         )
 
@@ -267,7 +266,7 @@ async def get_response_stream_supervisor(
 
         if conversation.assistant_config and conversation.assistant_config.tools:
             # Use dynamic tools from conversation configuration
-            from src.agents.assistant_agent.tools import get_dynamic_task_tools
+            from src.agents.supervisor_agent.tools import get_dynamic_task_tools
 
             try:
                 task_tools = await get_dynamic_task_tools(

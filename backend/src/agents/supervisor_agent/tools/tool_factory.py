@@ -35,7 +35,7 @@ class ToolFactory:
         Returns:
             Dictionary of HTTP headers for authentication
         """
-        from src.agents.assistant_agent.tools.mcp_auth import build_mcp_auth
+        from src.agents.supervisor_agent.tools.mcp_auth import build_mcp_auth
 
         auth = build_mcp_auth(
             mcp_server_config.auth_type, mcp_server_config.auth_credentials

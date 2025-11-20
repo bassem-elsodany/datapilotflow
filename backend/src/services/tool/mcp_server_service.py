@@ -148,7 +148,7 @@ class MCPServerService:
             Exception: If discovery fails
         """
         try:
-            from src.agents.assistant_agent.tools.tool_factory import ToolFactory
+            from src.agents.supervisor_agent.tools.tool_factory import ToolFactory
 
             logger.info(
                 f"Discovering tools from MCP server '{server.name}' ({server.server_url})"

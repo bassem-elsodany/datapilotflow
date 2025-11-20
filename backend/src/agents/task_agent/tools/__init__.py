@@ -18,13 +18,12 @@ def get_llm_client():
     global _llm_client
     if _llm_client is None:
         try:
-            from src.agents.assistant_agent.services.get_llm_client import (
-                get_llm_client as get_client,
-            )
-
-            _llm_client = get_client()
+            # TODO: Implement LLM client getter if needed
+            # For now, tools work without LLM fallback
+            logger.warning("LLM client not configured for task_agent tools")
+            _llm_client = None
         except Exception as e:
-            logger.warning(f"Could not import LLM client for tools: {e}")
+            logger.warning(f"Could not get LLM client for tools: {e}")
             _llm_client = None
     return _llm_client
 
