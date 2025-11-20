@@ -38,8 +38,11 @@ export function ColorfulVerticalStepper({
     if (isEditMode) {
       return true;
     }
-    // In create mode, only allow clicking previous steps or completed steps
-    return step < activeStep || completedSteps.includes(step);
+    // In create mode, allow clicking:
+    // - Previous steps (go back)
+    // - Completed steps (revisit)
+    // - Immediate next step (advance forward)
+    return step < activeStep || completedSteps.includes(step) || step === activeStep + 1;
   };
 
   return (
