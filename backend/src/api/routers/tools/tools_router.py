@@ -99,9 +99,7 @@ class GenerateInstructionsRequest(BaseModel):
     llm_provider_id: str = Field(
         ..., description="LLM provider ID to use for generation"
     )
-    llm_model_name: str = Field(
-        ..., description="LLM model name to use for generation"
-    )
+    llm_model_name: str = Field(..., description="LLM model name to use for generation")
     user_context: Optional[str] = Field(
         None,
         description="Optional context about what the user wants to achieve",
@@ -111,12 +109,18 @@ class GenerateInstructionsRequest(BaseModel):
 class AssistantInstructionsContext(BaseModel):
     """Context for generating assistant instructions."""
 
-    persona: str = Field(..., description="Who is this assistant? What role does it play?")
-    personality: str = Field(..., description="Communication style (professional, friendly, etc.)")
-    response_style: Optional[str] = Field(None, description="How should responses be formatted?")
-    task_approach: Optional[str] = Field(None, description="How should the assistant handle user requests?")
-    tool_strategy: Optional[str] = Field(None, description="How should tools be used together?")
-    selected_tools: Optional[List[dict]] = Field(None, description="Information about selected tools")
+    persona: str = Field(
+        ..., description="Who is this assistant? What role does it play?"
+    )
+    personality: str = Field(
+        ..., description="Communication style (professional, friendly, etc.)"
+    )
+    agent_type: str = Field(
+        ..., description="Type of agent (conversation, support, booking, etc.)"
+    )
+    selected_tools: Optional[List[dict]] = Field(
+        None, description="Information about selected tools"
+    )
 
 
 class GenerateAssistantInstructionsRequest(BaseModel):
@@ -128,9 +132,7 @@ class GenerateAssistantInstructionsRequest(BaseModel):
     llm_provider_id: str = Field(
         ..., description="LLM provider ID to use for generation"
     )
-    model_name: str = Field(
-        ..., description="LLM model name to use for generation"
-    )
+    model_name: str = Field(..., description="LLM model name to use for generation")
     context: AssistantInstructionsContext = Field(
         ..., description="Context about assistant persona, personality, and behavior"
     )
@@ -408,16 +410,18 @@ async def update_tool(
 
         # Build updates dictionary
         updates = {}
-        
+
         # For MCP_REMOTE tools, only allow updating is_active and tags
         if existing_tool.tool_type == ToolType.MCP_REMOTE:
             if request.is_active is not None:
                 updates["is_active"] = request.is_active
             if request.tags is not None:
                 updates["tags"] = request.tags
-            
-            logger.info(f"User {user_id} updating MCP remote tool {tool_id} (is_active={request.is_active}, tags={request.tags})")
-        
+
+            logger.info(
+                f"User {user_id} updating MCP remote tool {tool_id} (is_active={request.is_active}, tags={request.tags})"
+            )
+
         # For PROMPT_BASED tools, allow full updates
         elif existing_tool.tool_type == ToolType.PROMPT_BASED:
             if request.name is not None:
@@ -430,7 +434,7 @@ async def update_tool(
                 updates["is_active"] = request.is_active
             if request.tags is not None:
                 updates["tags"] = request.tags
-            
+
             if request.prompt_config:
                 updates["prompt_config"] = {
                     "system_prompt": request.prompt_config.system_prompt,
@@ -639,7 +643,11 @@ Remember: Be practical, concise, and actionable. The supervisor agent will follo
 
         # Call LLM
         response = llm_client.invoke(prompt)
-        response_text = response.content if isinstance(response.content, str) else str(response.content)
+        response_text = (
+            response.content
+            if isinstance(response.content, str)
+            else str(response.content)
+        )
 
         # Parse JSON response
         import json
@@ -749,17 +757,16 @@ async def generate_assistant_instructions(
         # Build comprehensive prompt for instruction generation
         tools_section = ""
         if request.context.selected_tools and len(request.context.selected_tools) > 0:
-            tools_list = "\n".join([
-                f"- {tool.get('name')}: {tool.get('description', 'No description')} (Type: {tool.get('type')})"
-                for tool in request.context.selected_tools
-            ])
+            tools_list = "\n".join(
+                [
+                    f"- {tool.get('name')}: {tool.get('description', 'No description')} (Type: {tool.get('type')})"
+                    for tool in request.context.selected_tools
+                ]
+            )
             tools_section = f"""
 
 **Available Tools:**
-{tools_list}
-
-**Tool Usage Strategy:**
-{request.context.tool_strategy or 'Use tools effectively to provide comprehensive responses.'}"""
+{tools_list}"""
 
         generation_prompt = f"""You are an expert at creating detailed, effective instructions for AI assistants.
 
@@ -771,29 +778,28 @@ Generate comprehensive instructions for an AI assistant based on the following r
 **Personality:**
 {request.context.personality}
 
-**Response Style:**
-{request.context.response_style or 'Clear and helpful'}
-
-**Approach to Tasks:**
-{request.context.task_approach or 'Methodical and thorough'}{tools_section}
+**Agent Type:**
+{request.context.agent_type}{tools_section}
 
 ---
 
 **Generate detailed instructions that:**
-1. Define the assistant's identity and role clearly
-2. Specify the communication style and tone
-3. Explain how to handle different types of user requests
-4. Include guidelines for response formatting
-5. {"Explain how to use the available tools effectively" if tools_section else "Provide general best practices"}
-6. Cover error handling and edge cases
+1. Define the assistant's identity and role clearly based on the persona
+2. Specify the communication style and tone matching the personality
+3. Explain how to handle different types of user requests appropriate for this agent type
+4. Include guidelines for response formatting suitable for this agent type
+5. {"Explain how to use the available tools effectively for this type of agent" if tools_section else "Provide general best practices for this agent type"}
+6. Cover common scenarios and edge cases for this agent type
 7. Emphasize the RAG-first principle (use knowledge_expert tool for all information)
+8. Include specific examples relevant to this agent type
 
 **Important Guidelines:**
 - Be specific and actionable
 - Use clear, direct language
-- Include concrete examples where helpful
+- Include concrete examples for the {request.context.agent_type} agent type
 - Structure instructions logically
 - Make them easy to follow
+- Tailor all guidance to the specific agent type
 
 **Output the complete instructions in a clear, structured format suitable for an AI assistant to follow.**"""
 
@@ -805,7 +811,10 @@ Generate comprehensive instructions for an AI assistant based on the following r
         response = await acompletion(
             model=f"{request.llm_provider_id}/{request.model_name}",
             messages=[
-                {"role": "system", "content": "You are an expert at creating AI assistant instructions."},
+                {
+                    "role": "system",
+                    "content": "You are an expert at creating AI assistant instructions.",
+                },
                 {"role": "user", "content": generation_prompt},
             ],
             temperature=0.7,
@@ -822,7 +831,12 @@ Generate comprehensive instructions for an AI assistant based on the following r
             metadata={
                 "persona": request.context.persona,
                 "personality": request.context.personality,
-                "tools_count": len(request.context.selected_tools) if request.context.selected_tools else 0,
+                "agent_type": request.context.agent_type,
+                "tools_count": (
+                    len(request.context.selected_tools)
+                    if request.context.selected_tools
+                    else 0
+                ),
                 "generated_by": f"{request.llm_provider_id}/{request.model_name}",
             },
         )

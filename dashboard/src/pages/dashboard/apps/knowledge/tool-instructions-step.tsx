@@ -5,12 +5,12 @@
  * This step appears in Assistant mode only.
  */
 
+import { apiUtils } from '@/config';
 import { Alert, Badge, Button, Card, Group, Loader, Modal, Select, Stack, Text, Textarea } from '@mantine/core';
 import { useForm, UseFormReturnType } from '@mantine/form';
+import { notifications } from '@mantine/notifications';
 import { IconSparkles, IconWand } from '@tabler/icons-react';
 import { useState } from 'react';
-import { apiUtils } from '@/config';
-import { notifications } from '@mantine/notifications';
 
 interface ToolInstructionsStepProps {
   form: UseFormReturnType<any>;
@@ -21,22 +21,21 @@ interface ToolInstructionsStepProps {
 export function ToolInstructionsStep({ form, tools = [], providers = [] }: ToolInstructionsStepProps) {
   const selectedToolIds = form.values.selectedTools || [];
   const selectedTools = (tools || [])?.filter((t) => selectedToolIds.includes(t.id)) || [];
-  
+
   const [generatorModalOpen, setGeneratorModalOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  
+
   const generatorForm = useForm({
     initialValues: {
       persona: '',
       personality: '',
-      responseStyle: '',
-      taskApproach: '',
-      toolStrategy: '',
+      agentType: '',
       providerId: '',
     },
     validate: {
       persona: (value) => (!value?.trim() ? 'Persona is required' : null),
       personality: (value) => (!value?.trim() ? 'Personality is required' : null),
+      agentType: (value) => (!value?.trim() ? 'Agent Type is required' : null),
       providerId: (value) => (!value?.trim() ? 'LLM Provider is required' : null),
     },
   });
@@ -46,7 +45,7 @@ export function ToolInstructionsStep({ form, tools = [], providers = [] }: ToolI
       setIsGenerating(true);
       try {
         const selectedProvider = providers.find((p: any) => p.id === generatorForm.values.providerId);
-        
+
         const response = await fetch(`${apiUtils.baseUrl}/api/v1/tools/generate-instructions`, {
           method: 'POST',
           headers: {
@@ -60,9 +59,7 @@ export function ToolInstructionsStep({ form, tools = [], providers = [] }: ToolI
             context: {
               persona: generatorForm.values.persona,
               personality: generatorForm.values.personality,
-              response_style: generatorForm.values.responseStyle,
-              task_approach: generatorForm.values.taskApproach,
-              tool_strategy: generatorForm.values.toolStrategy,
+              agent_type: generatorForm.values.agentType,
               selected_tools: selectedTools.map((t: any) => ({
                 name: t.display_name || t.name,
                 description: t.description,
@@ -77,16 +74,16 @@ export function ToolInstructionsStep({ form, tools = [], providers = [] }: ToolI
         }
 
         const data = await response.json();
-        
+
         // Set generated instructions in the main form
         form.setFieldValue('instructions', data.instructions);
-        
+
         notifications.show({
           title: 'Success!',
           message: 'Instructions generated successfully',
           color: 'green',
         });
-        
+
         setGeneratorModalOpen(false);
         generatorForm.reset();
       } catch (error) {
@@ -208,9 +205,9 @@ You are a helpful assistant specialized in customer support.
           <Textarea
             label="Persona"
             description="Who is this assistant? What role does it play?"
-            placeholder="E.g., A helpful customer support agent for a SaaS product"
+            placeholder="E.g., A helpful customer support specialist for a SaaS company"
             required
-            minRows={2}
+            minRows={3}
             {...generatorForm.getInputProps('persona')}
           />
 
@@ -229,31 +226,25 @@ You are a helpful assistant specialized in customer support.
             {...generatorForm.getInputProps('personality')}
           />
 
-          <Textarea
-            label="Response Style"
-            description="How should responses be formatted? (Optional)"
-            placeholder="E.g., Use bullet points, include code examples, add emojis"
-            minRows={2}
-            {...generatorForm.getInputProps('responseStyle')}
+          <Select
+            label="Agent Type"
+            description="What type of agent is this?"
+            placeholder="Select agent type"
+            required
+            data={[
+              { value: 'conversation', label: 'Conversation Agent - General Q&A' },
+              { value: 'support', label: 'Support Agent - Customer assistance' },
+              { value: 'booking', label: 'Booking Agent - Reservations & scheduling' },
+              { value: 'sales', label: 'Sales Agent - Product recommendations' },
+              { value: 'research', label: 'Research Agent - Information gathering' },
+              { value: 'analysis', label: 'Analysis Agent - Data insights' },
+              { value: 'documentation', label: 'Documentation Agent - Technical docs' },
+              { value: 'legal', label: 'Legal Agent - Legal research' },
+              { value: 'medical', label: 'Medical Agent - Healthcare information' },
+              { value: 'education', label: 'Education Agent - Teaching & tutoring' },
+            ]}
+            {...generatorForm.getInputProps('agentType')}
           />
-
-          <Textarea
-            label="Approach to Tasks"
-            description="How should the assistant handle user requests? (Optional)"
-            placeholder="E.g., Break down complex problems, ask clarifying questions first"
-            minRows={2}
-            {...generatorForm.getInputProps('taskApproach')}
-          />
-
-          {selectedTools.length > 0 && (
-            <Textarea
-              label="Tool Usage Strategy"
-              description="How should tools be used together? (Optional)"
-              placeholder="E.g., Always check documentation tool before answering, use multiple tools for comprehensive responses"
-              minRows={2}
-              {...generatorForm.getInputProps('toolStrategy')}
-            />
-          )}
 
           <Select
             label="LLM Provider"
