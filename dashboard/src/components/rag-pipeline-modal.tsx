@@ -74,11 +74,11 @@ export function RAGPipelineModal({
   enableLLMGeneration,
   metadata
 }: RAGPipelineModalProps) {
-  console.log(`🎬 [RAG MODAL COMPONENT] Render - opened=${opened}, currentStage='${currentStage}', completed=[${completedStages.join(',')}]`);
+  // console.log(`🎬 [RAG MODAL COMPONENT] Render - opened=${opened}, currentStage='${currentStage}', completed=[${completedStages.join(',')}]`);
   const theme = useMantineTheme();
 
   const stages: WorkflowStage[] = useMemo(() => {
-    console.log(`🔧 [RAG MODAL] Building stages with currentStage='${currentStage}', completedStages=[${completedStages.join(',')}]`);
+    // console.log(`🔧 [RAG MODAL] Building stages with currentStage='${currentStage}', completedStages=[${completedStages.join(',')}]`);
 
     // Define getStageStatus inside useMemo to ensure fresh closure
     const getLocalStageStatus = (stageId: string): 'pending' | 'active' | 'completed' | 'skipped' => {
@@ -226,7 +226,7 @@ export function RAGPipelineModal({
       ]
     });
 
-    console.log(`✅ [RAG MODAL] Built ${allStages.length} stages:`, allStages.map(s => `${s.id}(${s.status})`).join(' → '));
+    // console.log(`✅ [RAG MODAL] Built ${allStages.length} stages:`, allStages.map(s => `${s.id}(${s.status})`).join(' → '));
     return allStages;
   }, [metadata, currentStage, completedStages, rerankingEnabled, enableLLMGeneration]);
 
@@ -274,12 +274,12 @@ export function RAGPipelineModal({
   }
 
   const activeStages = stages.filter(s => s.status !== 'skipped');
-  console.log(`🎨 [RAG MODAL] activeStages (${activeStages.length}):`, activeStages.map(s => `${s.id}(${s.status})`).join(' → '));
+  // console.log(`🎨 [RAG MODAL] activeStages (${activeStages.length}):`, activeStages.map(s => `${s.id}(${s.status})`).join(' → '));
   const completedCount = activeStages.filter(s => s.status === 'completed').length;
   const totalStages = activeStages.length;
   const progress = totalStages > 0 ? (completedCount / totalStages) * 100 : 0;
 
-  console.log(`📱 [RAG MODAL RENDER] opened=${opened}, currentStage=${currentStage}, completedCount=${completedCount}/${totalStages}`);
+  // console.log(`📱 [RAG MODAL RENDER] opened=${opened}, currentStage=${currentStage}, completedCount=${completedCount}/${totalStages}`);
 
   return (
     <Modal
@@ -368,7 +368,7 @@ export function RAGPipelineModal({
 
         {/* Circular Node Flow */}
         {(() => {
-          console.log(`🔄 [CIRCULAR NODES] Rendering ${activeStages.length} stages:`, activeStages.map(s => `${s.id}=${s.status}`).join(', '));
+          // console.log(`🔄 [CIRCULAR NODES] Rendering ${activeStages.length} stages:`, activeStages.map(s => `${s.id}=${s.status}`).join(', '));
           return null;
         })()}
         <Box style={{ overflowX: 'auto', padding: '12px 0' }}>
@@ -377,11 +377,11 @@ export function RAGPipelineModal({
               const shouldShowLoader = stage.status === 'active';
               const stageOrder = ['query_enhancement', 'document_retrieval', 'document_judging', 'response_generation'];
               const stageNumber = stageOrder.indexOf(stage.id) + 1;
-              console.log(`🎯 [STAGE #${stageNumber}] ${stage.id}: status='${stage.status}', shouldShowLoader=${shouldShowLoader}`);
+              // console.log(`🎯 [STAGE #${stageNumber}] ${stage.id}: status='${stage.status}', shouldShowLoader=${shouldShowLoader}`);
               if (shouldShowLoader) {
-                console.log(`  ✅✅✅ STAGE #${stageNumber} SHOULD SHOW LOADER! ✅✅✅`);
+                // console.log(`  ✅✅✅ STAGE #${stageNumber} SHOULD SHOW LOADER! ✅✅✅`);
               } else {
-                console.log(`  ❌ Stage #${stageNumber} will NOT show loader (status is '${stage.status}')`);
+                // console.log(`  ❌ Stage #${stageNumber} will NOT show loader (status is '${stage.status}')`);
               }
               return (
                 <React.Fragment key={stage.id}>
@@ -413,12 +413,11 @@ export function RAGPipelineModal({
                         transition: 'all 0.3s ease',
                       }}
                     >
-                      {(() => { console.log(`🔵 [DIV RENDER] ${stage.id} - bg=${stage.status === 'active' ? 'blue' : 'gray'}, will render children...`); return null; })()}
                       {(() => {
                         const isActive = stage.status === 'active';
-                        console.log(`  ↳ [${stage.id}] isActive=${isActive}, stage.icon=`, stage.icon, `type=${typeof stage.icon}`);
+                        // console.log(`  ↳ [${stage.id}] isActive=${isActive}, stage.icon=`, stage.icon, `type=${typeof stage.icon}`);
                         if (isActive) {
-                          console.log(`    🌀 Rendering IconLoader for ${stage.id}`);
+                          // console.log(`    🌀 Rendering IconLoader for ${stage.id}`);
                           return (
                             <IconLoader
                               size={20}
@@ -437,7 +436,7 @@ export function RAGPipelineModal({
                             />
                           );
                         }
-                        console.log(`    🖼️ Rendering cloned icon for ${stage.id}, color will be ${stage.status === 'completed' ? '#51cf66' : '#868e96'}`);
+                        // console.log(`    🖼️ Rendering cloned icon for ${stage.id}, color will be ${stage.status === 'completed' ? '#51cf66' : '#868e96'}`);
                         return React.cloneElement(stage.icon as React.ReactElement, {
                           size: 20,
                           style: { color: stage.status === 'completed' ? '#51cf66' : '#868e96' }

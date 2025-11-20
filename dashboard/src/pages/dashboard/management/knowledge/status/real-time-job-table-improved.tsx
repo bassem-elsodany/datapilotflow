@@ -1,5 +1,6 @@
 import { useCancelKnowledgeJob, useExecuteKnowledgeJob } from '@/api/resources/knowledge-jobs';
 import { JobWithStatus, useGetJobsWithStatus, useGetJobTimeline } from '@/hooks/api/job-status';
+import { paths } from '@/routes/paths';
 import { formatDate } from '@/utilities/date';
 import {
   ActionIcon,
@@ -28,6 +29,7 @@ import {
 import { notifications } from '@mantine/notifications';
 import {
   IconAlertCircle,
+  IconBriefcase,
   IconCheck,
   IconChecks,
   IconClock,
@@ -35,6 +37,7 @@ import {
   IconCpu,
   IconDatabase,
   IconEye,
+  IconExternalLink,
   IconFileText,
   IconPlayerPause,
   IconPlayerPlay,
@@ -45,6 +48,7 @@ import {
 } from '@tabler/icons-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 // Pipeline step configuration for the new architecture
 interface PipelineStep {
@@ -255,6 +259,7 @@ function JobControlActions({
   onViewTimeline: (job: JobWithStatus) => void;
   isExecuting?: boolean;
 }) {
+  const navigate = useNavigate();
   const cancelJobMutation = useCancelKnowledgeJob();
   const queryClient = useQueryClient();
 
@@ -285,6 +290,19 @@ function JobControlActions({
 
   return (
     <Group gap="xs">
+      {/* View Job Details button - always visible */}
+      <Tooltip label="View Job Details" withArrow>
+        <ActionIcon
+          variant="light"
+          color="indigo"
+          size="lg"
+          radius="xl"
+          onClick={() => navigate(paths.dashboard.management.knowledgeSources.job(job.id))}
+        >
+          <IconBriefcase size={18} />
+        </ActionIcon>
+      </Tooltip>
+
       {/* Timeline view button - always visible */}
       <Tooltip label="View Timeline" withArrow>
         <ActionIcon

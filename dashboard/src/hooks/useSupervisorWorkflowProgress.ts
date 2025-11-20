@@ -25,16 +25,16 @@ export function useSupervisorWorkflowProgress() {
     const supervisorStage = data?.stage || '';
     const isCompleteEvent = supervisorStage.endsWith('_complete');
 
-    console.log(`🤖 [SUPERVISOR WORKFLOW] EVENT RECEIVED:`, {
-      stage: supervisorStage,
-      type: isCompleteEvent ? '✅ COMPLETE' : '▶️ START',
-      message: data?.message,
-      hasData: !!data?.data,
-      dataKeys: data?.data ? Object.keys(data.data) : [],
-      enhanced_queries: data?.data?.enhanced_queries,
-      currentStage: currentWorkflowState?.currentStage,
-      completedStages: currentWorkflowState?.completedStages
-    });
+    // console.log(`🤖 [SUPERVISOR WORKFLOW] EVENT RECEIVED:`, {
+    //   stage: supervisorStage,
+    //   type: isCompleteEvent ? '✅ COMPLETE' : '▶️ START',
+    //   message: data?.message,
+    //   hasData: !!data?.data,
+    //   dataKeys: data?.data ? Object.keys(data.data) : [],
+    //   enhanced_queries: data?.data?.enhanced_queries,
+    //   currentStage: currentWorkflowState?.currentStage,
+    //   completedStages: currentWorkflowState?.completedStages
+    // });
 
     if (isCompleteEvent) {
       // COMPLETE EVENT: Store data and schedule delayed completion
@@ -56,16 +56,16 @@ export function useSupervisorWorkflowProgress() {
       // If this is not a known workflow stage, it's a task tool completion
       // Map it to task_agent_executing
       if (!knownWorkflowStages.includes(completedStage)) {
-        console.log(`🔧 [SUPERVISOR] Mapping tool completion "${completedStage}" to "task_agent_executing"`);
+        // console.log(`🔧 [SUPERVISOR] Mapping tool completion "${completedStage}" to "task_agent_executing"`);
         completedStage = 'task_agent_executing';
       }
 
-      console.log(`✅ [SUPERVISOR COMPLETE] ${completedStage} - scheduling completion after ${MINIMUM_LOADER_DISPLAY_MS}ms`);
+      // console.log(`✅ [SUPERVISOR COMPLETE] ${completedStage} - scheduling completion after ${MINIMUM_LOADER_DISPLAY_MS}ms`);
 
       const elapsedSinceActive = Date.now() - (stageTimingsRef.current[completedStage]?.activeTime || 0);
       const delayNeeded = Math.max(0, MINIMUM_LOADER_DISPLAY_MS - elapsedSinceActive);
 
-      console.log(`⏱️  Supervisor Stage ${completedStage} was active for ${elapsedSinceActive}ms, delaying by ${delayNeeded}ms`);
+      // console.log(`⏱️  Supervisor Stage ${completedStage} was active for ${elapsedSinceActive}ms, delaying by ${delayNeeded}ms`);
 
       // Store completion data
       if (stageTimingsRef.current[completedStage]) {
@@ -79,7 +79,7 @@ export function useSupervisorWorkflowProgress() {
 
       // Schedule the completion
       pendingCompletionTimeoutsRef.current[completedStage] = setTimeout(() => {
-        console.log(`🎯 [SUPERVISOR APPLY COMPLETION] ${completedStage} - marking as completed`);
+        // console.log(`🎯 [SUPERVISOR APPLY COMPLETION] ${completedStage} - marking as completed`);
 
         setWorkflowState((prev: any) => {
           const newCompleted = [...prev.completedStages];
@@ -159,12 +159,12 @@ export function useSupervisorWorkflowProgress() {
               [];
 
             if (Array.isArray(enhancedQueries) && enhancedQueries.length > 0) {
-              console.log(`📋 [SUPERVISOR] Extracting ${enhancedQueries.length} enhanced queries from rag_documents_extracted`, enhancedQueries);
+              // console.log(`📋 [SUPERVISOR] Extracting ${enhancedQueries.length} enhanced queries from rag_documents_extracted`, enhancedQueries);
               newState.enhancedQueries = enhancedQueries;
             }
           }
 
-          console.log(`✅ Supervisor ${completedStage} COMPLETED, next stage: ${nextActiveStage}`);
+          // console.log(`✅ Supervisor ${completedStage} COMPLETED, next stage: ${nextActiveStage}`);
 
           return newState;
         });
@@ -176,7 +176,7 @@ export function useSupervisorWorkflowProgress() {
 
     } else {
       // START EVENT: Mark stage as active immediately
-      console.log(`▶️ [SUPERVISOR START] ${supervisorStage} - marking as active immediately`);
+      // console.log(`▶️ [SUPERVISOR START] ${supervisorStage} - marking as active immediately`);
 
       stageTimingsRef.current[supervisorStage] = {
         activeTime: Date.now(),
@@ -200,20 +200,20 @@ export function useSupervisorWorkflowProgress() {
             data.data.tools_used?.enhanced_queries ||
             [];
 
-          console.log(`📋 [SUPERVISOR START EVENT] Checking for enhanced_queries in rag_documents_extracted:`, {
-            hasEnhancedQueries: !!data.data.enhanced_queries,
-            enhancedQueriesLength: enhancedQueries.length,
-            enhancedQueries: enhancedQueries
-          });
+          // console.log(`📋 [SUPERVISOR START EVENT] Checking for enhanced_queries in rag_documents_extracted:`, {
+          //   hasEnhancedQueries: !!data.data.enhanced_queries,
+          //   enhancedQueriesLength: enhancedQueries.length,
+          //   enhancedQueries: enhancedQueries
+          // });
 
           if (Array.isArray(enhancedQueries) && enhancedQueries.length > 0) {
-            console.log(`📋 [SUPERVISOR] Extracting ${enhancedQueries.length} enhanced queries from rag_documents_extracted START event`, enhancedQueries);
+            // console.log(`📋 [SUPERVISOR] Extracting ${enhancedQueries.length} enhanced queries from rag_documents_extracted START event`, enhancedQueries);
             newState.enhancedQueries = enhancedQueries;
           }
         }
 
         if (prev.currentStage !== supervisorStage || newState.enhancedQueries !== prev.enhancedQueries) {
-          console.log(`✅ [SUPERVISOR START] State update - completedStages preserved:`, newState.completedStages);
+          // console.log(`✅ [SUPERVISOR START] State update - completedStages preserved:`, newState.completedStages);
           return newState;
         }
         return prev;

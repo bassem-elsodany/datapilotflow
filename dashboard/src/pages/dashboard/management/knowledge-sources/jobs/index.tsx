@@ -44,8 +44,8 @@ import {
   IconWorld,
   IconX
 } from '@tabler/icons-react';
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 // CSS animations for the pipeline
 const pipelineStyles = `
@@ -333,15 +333,33 @@ export default function KnowledgeSourceJobs() {
   }, []);
 
   const navigate = useNavigate();
+  const location = useLocation();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [jobToDelete, setJobToDelete] = useState<{ id: string, name: string } | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
+  // Get filter from navigation state (passed from configs page)
+  const locationState = location.state as { filterConfigId?: string; filterConfigName?: string } | null;
+  const [filterConfigId, setFilterConfigId] = useState<string | null>(locationState?.filterConfigId || null);
+
   const { data: jobs, isLoading, error, refetch } = useGetKnowledgeJobs();
   const { data: configs } = useGetKnowledgeSourceConfigs();
   const deleteJobMutation = useDeleteKnowledgeJob();
   const executeJobMutation = useExecuteKnowledgeJob();
+
+  // Filter jobs by config if filter is active
+  const filteredJobs = useMemo(() => {
+    if (!jobs) return [];
+    if (!filterConfigId) return jobs;
+    return jobs.filter(job => job.knowledge_source_config_id === filterConfigId);
+  }, [jobs, filterConfigId]);
+
+  // Get filtered config name
+  const filteredConfigName = useMemo(() => {
+    if (!filterConfigId) return null;
+    return locationState?.filterConfigName || getConfigName(filterConfigId);
+  }, [filterConfigId, locationState, configs]);
 
   // Helper functions
   const getConfigName = (configId: string) => {
@@ -466,6 +484,22 @@ export default function KnowledgeSourceJobs() {
 
 
       <Stack gap="sm">
+        {/* Filter indicator */}
+        {filterConfigId && (
+          <Alert
+            icon={<IconSettings size={16} />}
+            title={`Filtered by Configuration: ${filteredConfigName}`}
+            color="blue"
+            withCloseButton
+            onClose={() => {
+              setFilterConfigId(null);
+              // Clear location state
+              navigate(location.pathname, { replace: true, state: {} });
+            }}
+          >
+            Showing {filteredJobs.length} job{filteredJobs.length !== 1 ? 's' : ''} for this configuration.
+          </Alert>
+        )}
 
         <Group justify="space-between" w="100%">
           <div />
@@ -524,7 +558,7 @@ export default function KnowledgeSourceJobs() {
                   </Stack>
                 </Group>
               </Paper>
-            ) : !jobs || jobs.length === 0 ? (
+            ) : !filteredJobs || filteredJobs.length === 0 ? (
               <Paper withBorder p="lg" radius="md" w="100%">
                 <Group gap="md" align="flex-start" w="100%">
                   <ThemeIcon size={50} radius="xl" color="green" variant="light" style={{ flexShrink: 0 }}>
@@ -593,7 +627,7 @@ export default function KnowledgeSourceJobs() {
                     </Table.Tr>
                   </Table.Thead>
                   <Table.Tbody>
-                    {jobs.map((job: KnowledgeJob) => (
+                    {filteredJobs.map((job: KnowledgeJob) => (
                       <Table.Tr key={job.id}>
                         <Table.Td>
                           <Stack gap={4}>

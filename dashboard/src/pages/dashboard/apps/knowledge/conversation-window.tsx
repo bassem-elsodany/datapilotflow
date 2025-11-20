@@ -9,6 +9,7 @@ import { apiEndpoints, apiUtils } from '@/config';
 import { useRAGWorkflowProgress } from '@/hooks/useRAGWorkflowProgress';
 import { useSupervisorWorkflowProgress } from '@/hooks/useSupervisorWorkflowProgress';
 import { paths } from '@/routes/paths';
+import { detectTextDirection } from '@/utilities/text-direction';
 import {
   Accordion,
   ActionIcon,
@@ -401,7 +402,7 @@ export default function ConversationWindow() {
   // When user enables/disables Agent Mode in settings, update the message mode
   useEffect(() => {
     setMessageMode(enableKnowledgeAssistant ? 'agent' : 'rag');
-    console.log(`🔄 [MESSAGE MODE SYNC] Set messageMode to: ${enableKnowledgeAssistant ? 'agent' : 'rag'}`);
+    // console.log(`🔄 [MESSAGE MODE SYNC] Set messageMode to: ${enableKnowledgeAssistant ? 'agent' : 'rag'}`);
   }, [enableKnowledgeAssistant]);
 
   // Cleanup WebSocket on unmount and pending timeouts
@@ -1111,9 +1112,8 @@ export default function ConversationWindow() {
 
           // Extract metadata from workflow_complete event (supervisor uses this structure)
           const workflowMetadata = data.metadata ? {
-            source_urls: data.metadata.source_urls || sourceUrls,
+            source_links: data.metadata.source_links || [],  // Structured links with URL, title, and chunk_id
             correlation_ids: data.metadata.correlation_ids || [],
-            chunk_ids: data.metadata.chunk_ids || chunkIds,
             document_count: data.metadata.document_count || data.documents?.length || 0,
             enhancement_strategy: data.metadata.enhancement_strategy || data.metadata.rag_strategy,
             enhanced_queries: data.metadata.enhanced_queries || data.metadata.search_variants || [],
@@ -1122,8 +1122,6 @@ export default function ConversationWindow() {
             search_variants: data.metadata.search_variants || data.metadata.enhanced_queries || [],
             rag_strategy: data.metadata.rag_strategy || data.metadata.enhancement_strategy,
           } : undefined;
-
-          console.log('📦 [WORKFLOW COMPLETE] Extracted metadata:', workflowMetadata);
 
           // Stop loading indicator
           setIsLoading(false);
@@ -1134,23 +1132,25 @@ export default function ConversationWindow() {
           setMessages(prev => {
             const lastMessage = prev[prev.length - 1];
             if (lastMessage && lastMessage.role === 'assistant' && lastMessage.isStreaming) {
-              console.log('📝 [WORKFLOW COMPLETE] Replacing accumulated chunks with full response');
-              console.log('📝 [WORKFLOW COMPLETE] Response length:', response?.length || 0);
+              // DEBUG: Log metadata being set
+              console.log('[METADATA] Setting on message:', {
+                source_links_count: workflowMetadata?.source_links?.length,
+                source_links: workflowMetadata?.source_links
+              });
               return [
                 ...prev.slice(0, -1),
                 {
                   ...lastMessage,
                   content: response || lastMessage.content, // Use full response from backend
                   isStreaming: false,
-                  metadata: workflowMetadata,
+                  metadata: workflowMetadata,  // This includes source_links!
                 }
               ];
             }
             return prev;
           });
 
-          // Finalize the streaming message to apply markdown formatting
-          finalizeStreamingMessages();
+          // NOTE: finalizeStreamingMessages() removed - already set isStreaming: false above with metadata
 
           // Close the modal and update workflow state
           setWorkflowState(prev => ({
@@ -1253,10 +1253,15 @@ export default function ConversationWindow() {
             enhanced_queries_length: data.data?.enhanced_queries?.length,
           });
 
+          console.log('🔍 [COMPLETED] Raw data from backend:', {
+            hasData: !!data.data,
+            dataKeys: data.data ? Object.keys(data.data) : [],
+            source_links: data.data?.source_links,
+          });
+
           const metadata = data.data ? {
-            source_urls: data.data.source_urls || [],
+            source_links: data.data.source_links || [],  // Structured links with URL, title, and chunk_id
             correlation_ids: data.data.correlation_ids || [],
-            chunk_ids: data.data.chunk_ids || [],
             document_count: data.data.document_count || 0,
             enhancement_strategy: data.data.enhancement_strategy,
             enhanced_queries: data.data.enhanced_queries || [],  // ALWAYS array
@@ -1266,8 +1271,9 @@ export default function ConversationWindow() {
             rag_strategy: data.data.rag_strategy || data.metadata?.rag_strategy || data.data.enhancement_strategy,
           } : undefined;
 
-          console.log('📦 Final metadata being stored:', metadata);
-          console.log('📦 enhanced_queries:', metadata?.enhanced_queries);
+          console.log('📦 [COMPLETED] Final metadata being stored:', metadata);
+          console.log('📦 [COMPLETED] source_links in metadata:', metadata?.source_links);
+          console.log('📦 [COMPLETED] enhanced_queries:', metadata?.enhanced_queries);
 
           // Consolidate ALL state updates into a single batch
           setIsLoading(false);
@@ -2002,6 +2008,8 @@ export default function ConversationWindow() {
                         borderRadius: '18px 18px 4px 18px',
                         maxWidth: '100%',
                         wordWrap: 'break-word',
+                        direction: detectTextDirection(message.content),
+                        textAlign: detectTextDirection(message.content) === 'rtl' ? 'right' : 'left',
                       }}
                     >
                       <Text size="xs" c="white" style={{ lineHeight: '1.5' }}>
