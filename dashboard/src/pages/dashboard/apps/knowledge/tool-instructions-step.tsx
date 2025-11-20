@@ -177,8 +177,6 @@ You are a helpful assistant specialized in customer support.
                 fontFamily: 'monospace',
                 fontSize: '13px',
                 lineHeight: '1.6',
-                maxHeight: '600px',
-                overflowY: 'auto',
               },
             }}
           />
