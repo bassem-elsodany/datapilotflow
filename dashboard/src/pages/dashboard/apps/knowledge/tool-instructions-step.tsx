@@ -50,7 +50,7 @@ export function ToolInstructionsStep({ form, tools = [], providers = [] }: ToolI
     if (!generatorForm.validate().hasErrors) {
       setIsGenerating(true);
       try {
-        const response = await fetch(apiUtils.buildApiUrl('/api/v1/tools/generate-instructions'), {
+        const response = await fetch(apiUtils.buildApiUrl('/tools/generate-instructions'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
