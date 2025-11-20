@@ -222,7 +222,7 @@ const STEP_CONFIGS = [
   },
   {
     label: 'Tools & Instructions',
-    description: 'Select tools and configure orchestration',
+    description: 'Define assistant behavior and select tools',
     icon: <IconTool size={20} />,
     color: 'grape',
     gradientFrom: '#a855f7',               // Purple
