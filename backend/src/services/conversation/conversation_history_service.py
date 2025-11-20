@@ -225,7 +225,9 @@ class ConversationHistoryService:
             logger.debug("No tools configured for this conversation")
 
         if assistant_config.tool_instructions:
-            logger.info(f"Saving tool_instructions: {len(assistant_config.tool_instructions)} chars")
+            logger.info(
+                f"Saving tool_instructions: {len(assistant_config.tool_instructions)} chars"
+            )
 
         conversation_data["assistant_config"] = assistant_config_dict
 
@@ -264,10 +266,7 @@ class ConversationHistoryService:
                         role=msg_doc["role"],
                         content=msg_doc["content"],
                         timestamp=msg_doc["timestamp"],
-                        search_query=msg_doc.get("search_query"),
-                        search_results=msg_doc.get("search_results"),
-                        source_urls=msg_doc.get("source_urls"),
-                        chunk_ids=msg_doc.get("chunk_ids"),
+                        source_links=msg_doc.get("source_links"),
                         enhancement_strategy_used=msg_doc.get(
                             "enhancement_strategy_used"
                         ),
@@ -389,10 +388,8 @@ class ConversationHistoryService:
                 "content": msg.content,
                 "timestamp": msg.timestamp.isoformat(),
             }
-            if msg.search_query:
-                message_dict["search_query"] = msg.search_query
-            if msg.source_urls:
-                message_dict["source_urls"] = msg.source_urls
+            if msg.source_links:
+                message_dict["source_links"] = msg.source_links
             messages.append(message_dict)
 
         return messages
@@ -416,10 +413,7 @@ class ConversationHistoryService:
                     role=msg_doc["role"],
                     content=msg_doc["content"],
                     timestamp=msg_doc["timestamp"],
-                    search_query=msg_doc.get("search_query"),
-                    search_results=msg_doc.get("search_results"),
-                    source_urls=msg_doc.get("source_urls"),
-                    chunk_ids=msg_doc.get("chunk_ids"),
+                    source_links=msg_doc.get("source_links"),
                     enhancement_strategy_used=msg_doc.get("enhancement_strategy_used"),
                     enhanced_queries=msg_doc.get("enhanced_queries"),
                     processing_time_ms=msg_doc.get("processing_time_ms"),
@@ -537,12 +531,8 @@ class ConversationHistoryService:
 
             # Build metadata object with all available fields
             metadata = {}
-            if msg.search_query:
-                metadata["search_query"] = msg.search_query
-            if msg.source_urls:
-                metadata["source_urls"] = msg.source_urls
-            if msg.chunk_ids:
-                metadata["chunk_ids"] = msg.chunk_ids
+            if msg.source_links:
+                metadata["source_links"] = msg.source_links
             if msg.document_count is not None:
                 metadata["document_count"] = msg.document_count
             if msg.enhancement_strategy_used:
@@ -604,11 +594,11 @@ class ConversationHistoryService:
             timestamp = msg.timestamp.strftime("%H:%M")
             context_parts.append(f"[{timestamp}] {role}: {msg.content}")
 
-            # Add search context if available
-            if msg.search_query and msg.source_urls:
-                context_parts.append(f"  Search Query: {msg.search_query}")
+            # Add source links if available
+            if msg.source_links:
+                source_urls = [link["url"] for link in msg.source_links[:3]]
                 context_parts.append(
-                    f"  Sources: {', '.join(msg.source_urls[:3])}"
+                    f"  Sources: {', '.join(source_urls)}"
                 )  # Limit to 3 sources
 
         context_parts.append("=" * 50)
@@ -850,7 +840,9 @@ class ConversationHistoryService:
                 update_data["$set"]["assistant_config"] = assistant_config_dict
 
                 if assistant_config.tool_instructions:
-                    logger.info(f"Updating tool_instructions: {len(assistant_config.tool_instructions)} chars")
+                    logger.info(
+                        f"Updating tool_instructions: {len(assistant_config.tool_instructions)} chars"
+                    )
 
             result = self.collection.update_one(
                 {"_id": ObjectId(conversation_id), "user_id": user_id}, update_data
@@ -884,7 +876,6 @@ class ConversationHistoryService:
         result = {"session": session, "llm_provider": None}
         # Provider details are embedded in answer_generation config
         return result
-
 
 
 # Global instance

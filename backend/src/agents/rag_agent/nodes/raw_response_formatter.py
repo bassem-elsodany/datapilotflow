@@ -64,7 +64,9 @@ def raw_response_formatter(state: WorkflowState) -> WorkflowState:
         response_parts.append(disclaimer)
 
         # Add summary
-        response_parts.append(f"\n**Found {len(relevant_docs)} relevant document(s):**\n")
+        response_parts.append(
+            f"\n**Found {len(relevant_docs)} relevant document(s):**\n"
+        )
 
         # Store structured documents for task tools
         structured_docs = []
@@ -118,10 +120,16 @@ def raw_response_formatter(state: WorkflowState) -> WorkflowState:
             if doc_source:
                 metadata_parts.append(f"**Source:** `{doc_source}`")
             if relevance_score is not None:
-                relevance_pct = int(relevance_score * 100) if isinstance(relevance_score, float) else relevance_score
+                relevance_pct = (
+                    int(relevance_score * 100)
+                    if isinstance(relevance_score, float)
+                    else relevance_score
+                )
                 metadata_parts.append(f"**Relevance Score:** {relevance_pct}%")
             if relevance_label is not None:
-                relevance_status = "✓ Relevant" if relevance_label == 1 else "✗ Not Relevant"
+                relevance_status = (
+                    "✓ Relevant" if relevance_label == 1 else "✗ Not Relevant"
+                )
                 metadata_parts.append(f"**Label:** {relevance_status}")
 
             if metadata_parts:
@@ -138,7 +146,9 @@ def raw_response_formatter(state: WorkflowState) -> WorkflowState:
 
         # Store structured documents in state for task tools to access
         state["structured_documents"] = structured_docs
-        logger.info(f"✅ Created {len(structured_docs)} structured documents for task tools")
+        logger.info(
+            f"✅ Created {len(structured_docs)} structured documents for task tools"
+        )
 
         # Build context (same as documents, for compatibility)
         context_parts = []
@@ -174,23 +184,24 @@ def raw_response_formatter(state: WorkflowState) -> WorkflowState:
         if enhanced_query_data:
             # Get all enhanced queries that were actually used for search
             if enhanced_query_data.get("augmented_queries"):
-                # For augmented strategy, show all variants (including original)
+                # Use LLM variants directly (nodes no longer prepend original query)
                 augmented = enhanced_query_data["augmented_queries"]
                 query_info["enhanced_queries"] = augmented
-                # For backward compatibility, keep single enhanced_query (first variant after original)
-                query_info["enhanced_query"] = (
-                    augmented[1] if len(augmented) > 1 else augmented[0]
-                )
+                query_info["enhanced_query"] = augmented[0] if augmented else None
                 query_info["strategy_used"] = "Augmented"
                 logger.info(
-                    f"📝 Raw Response Formatter: Extracted {len(augmented)} augmented queries for query_info"
+                    f"📝 Raw Response Formatter: Extracted {len(augmented)} enhanced queries from LLM"
                 )
-                logger.info(f"📝 Augmented queries: {augmented}")
+                logger.info(f"📝 Enhanced queries: {augmented}")
             elif enhanced_query_data.get("multi_query_variants"):
+                # Use LLM variants directly (nodes no longer prepend original query)
                 variants = enhanced_query_data["multi_query_variants"]
                 query_info["enhanced_queries"] = variants
-                query_info["enhanced_query"] = variants[0]
+                query_info["enhanced_query"] = variants[0] if variants else None
                 query_info["strategy_used"] = "Multi-Query"
+                logger.info(
+                    f"📝 Raw Response Formatter: Extracted {len(variants)} enhanced queries from LLM"
+                )
             elif enhanced_query_data.get("sub_queries"):
                 sub_queries = enhanced_query_data["sub_queries"]
                 query_info["enhanced_queries"] = sub_queries

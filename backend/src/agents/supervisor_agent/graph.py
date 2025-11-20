@@ -6,16 +6,72 @@ Uses tool registry for ID-based tool management (no semantic search).
 """
 
 from datetime import UTC, datetime
-from typing import Dict, List, Literal, cast
+from typing import Any, Dict, List, Literal, Optional, cast
 
 from langchain_core.messages import AIMessage
 from langgraph.graph import StateGraph
+from langgraph.graph.state import CompiledStateGraph
 from langgraph.prebuilt import ToolNode
 
 from src.agents.supervisor_agent.context import Context
 from src.agents.supervisor_agent.state import InputState, State
 from src.agents.supervisor_agent.tools import ToolRegistry
-from src.agents.supervisor_agent.utils import load_chat_model
+
+
+async def call_model_with_client(
+    state: State,
+    llm_client: Any,
+    tool_registry: ToolRegistry,
+    system_prompt: Optional[str] = None,
+) -> Dict[str, List[AIMessage]]:
+    """Call the LLM with a pre-initialized client (from service layer).
+
+    This function is used when the service layer provides a ChatLiteLLM client.
+
+    Args:
+        state: The current state of the conversation.
+        llm_client: Pre-initialized LLM client (ChatLiteLLM instance).
+        tool_registry: Registry of available tools.
+        system_prompt: Optional system prompt for the agent.
+
+    Returns:
+        Dictionary containing the model's response message.
+    """
+    # Get all tools from registry
+    all_tools = tool_registry.get_all()
+
+    # Bind tools to the LLM client
+    model = llm_client.bind_tools(all_tools)
+
+    # Use provided system prompt or get default from context
+    if system_prompt is None:
+        context = Context()
+        system_prompt = context.system_prompt
+
+    # Format the system prompt
+    system_message = system_prompt.format(system_time=datetime.now(tz=UTC).isoformat())
+
+    # Get the model's response
+    response = cast(
+        AIMessage,
+        await model.ainvoke(
+            [{"role": "system", "content": system_message}, *state.messages]
+        ),
+    )
+
+    # Handle the case when it's the last step and the model still wants to use a tool
+    if state.is_last_step and response.tool_calls:
+        return {
+            "messages": [
+                AIMessage(
+                    id=response.id,
+                    content="Sorry, I could not find an answer to your question in the specified number of steps.",
+                )
+            ]
+        }
+
+    # Return the model's response as a list to be added to existing messages
+    return {"messages": [response]}
 
 
 async def call_model(
@@ -35,6 +91,9 @@ async def call_model(
     Returns:
         Dictionary containing the model's response message.
     """
+    # Lazy import to avoid dependency issues with LangGraph CLI
+    from src.agents.supervisor_agent.utils import load_chat_model
+
     # Get all tools from registry
     all_tools = tool_registry.get_all()
 
@@ -92,11 +151,17 @@ def route_model_output(state: State) -> Literal["__end__", "tools"]:
     return "tools"
 
 
-def create_graph(tool_registry: ToolRegistry) -> StateGraph:
+def create_graph(
+    tool_registry: ToolRegistry,
+    llm_client: Optional[Any] = None,
+    system_prompt: Optional[str] = None,
+) -> CompiledStateGraph:
     """Create a supervisor ReAct agent graph with tool registry.
 
     Args:
         tool_registry: Registry of available tools (RAG + task tools).
+        llm_client: Optional pre-initialized LLM client (from service layer).
+        system_prompt: Optional system prompt for the agent.
 
     Returns:
         StateGraph: Compiled LangGraph StateGraph.
@@ -106,9 +171,16 @@ def create_graph(tool_registry: ToolRegistry) -> StateGraph:
 
     # Define the two nodes we will cycle between
     async def call_model_node(state: State) -> Dict[str, List[AIMessage]]:
-        # Create context with model_str from state (set by generate_response_supervisor)
-        context = Context(model=state.model_str)
-        return await call_model(state, context, tool_registry)
+        # Use provided llm_client if available, otherwise create context from model_str
+        if llm_client is not None:
+            # Use the pre-initialized LLM client from service layer
+            return await call_model_with_client(
+                state, llm_client, tool_registry, system_prompt
+            )
+        else:
+            # Fallback: create context with model_str from state
+            context = Context(model=state.model_str)
+            return await call_model(state, context, tool_registry)
 
     builder.add_node("call_model", call_model_node)
 
@@ -136,5 +208,27 @@ def create_graph(tool_registry: ToolRegistry) -> StateGraph:
     return graph
 
 
-# Create graph - will be initialized with actual tools at runtime
-graph = None
+def graph_builder(config: Optional[Any] = None) -> CompiledStateGraph:
+    """Factory function for LangGraph CLI/Studio.
+
+    This function follows the LangGraph CLI signature requirement:
+    takes a RunnableConfig and returns a compiled graph.
+
+    For LangGraph CLI usage only - the service layer uses create_graph() directly.
+
+    Args:
+        config: RunnableConfig (not used, graph is created without pre-initialized tools)
+
+    Returns:
+        CompiledStateGraph: Compiled LangGraph StateGraph ready for execution
+    """
+    # For LangGraph CLI/Studio, create a basic graph without tools
+    # Tools will be provided at runtime via configuration
+    empty_registry = ToolRegistry()
+
+    # Create graph without llm_client (will use state.model_str fallback)
+    return create_graph(
+        tool_registry=empty_registry,
+        llm_client=None,
+        system_prompt=None,
+    )

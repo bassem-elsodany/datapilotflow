@@ -112,7 +112,7 @@ export function SupervisorModePipelineModal({
 
   // Define workflow stages based on actual LangGraph flow - memoized to prevent infinite re-renders
   const stages: WorkflowStage[] = useMemo(() => {
-    console.log('🔧 [SUPERVISOR MODAL] Building supervisor stages with ragSubstages:', metadata.ragSubstages);
+  // console.log('🔧 [SUPERVISOR MODAL] Building supervisor stages with ragSubstages:', metadata.ragSubstages);
     const allStages: WorkflowStage[] = [];
 
     // Add supervisor stages (always enabled in this component)

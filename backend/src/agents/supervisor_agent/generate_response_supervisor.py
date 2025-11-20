@@ -25,9 +25,7 @@ from loguru import logger
 
 # Import supervisor agent components
 from src.agents.supervisor_agent.graph import create_graph
-from src.agents.supervisor_agent.tool_initialization import (
-    initialize_tools_from_config_async,
-)
+from src.agents.supervisor_agent.tools import ToolRegistry
 
 # Import shared services and utilities
 from src.config import settings
@@ -184,7 +182,9 @@ async def get_response_stream_supervisor(
 
         # Load conversation
         try:
-            conversation = conversation_history_service.get_conversation(conversation_id)
+            conversation = conversation_history_service.get_conversation(
+                conversation_id
+            )
             if not conversation:
                 raise ValueError(f"Conversation not found: {conversation_id}")
         except Exception as e:
@@ -195,20 +195,180 @@ async def get_response_stream_supervisor(
 
         logger.info(f"Supervisor initialized with model: {model_string}")
 
+        # ========================================================================
+        # TOOL INITIALIZATION - Use assistant agent pattern
+        # ========================================================================
+
+        # Initialize workflow config for RAG (matching assistant agent)
+        top_k_per_query = max(5, int(top_k * 1.5))
+
+        workflow_config = {
+            "collection_name": collection_name,
+            "user_id": user_id,
+            "llm_provider_id": llm_provider_id,
+            "llm_model_name": llm_model_name,
+            "llm_client": llm_client,
+            "enhancement_config": {},
+            "conversation_id": conversation_id,
+            "conversation_description": conversation_description,
+            "selected_strategy": "custom_variants",
+            "enable_reranking": enable_reranking,
+            "reranking_config": {
+                "relevance_threshold": relevance_threshold,
+                "use_score_based": True,
+            },
+            "enable_llm_generation": enable_llm_generation,
+            "top_k": top_k,
+            "retrieval_config": {
+                "top_k_per_query": top_k_per_query,
+                "rrf_k": 60,
+            },
+        }
+
+        # Track RAG execution state (shared across tool invocations)
+        rag_execution_state = {
+            "stages_emitted": set(),
+            "total_docs": 0,
+            "relevant_docs": 0,
+            "documents": [],
+            "enhanced_queries": [],
+            "enhancement_strategy": "custom_variants",
+            "final_answer": "",
+        }
+
+        # Build RAG tool description
+        default_rag_description = (
+            "Retrieves and ranks relevant documents from the knowledge base. "
+            "This is the PRIMARY SOURCE OF TRUTH for accurate information."
+        )
+
+        if conversation_description and not rag_agent_description:
+            final_rag_description = (
+                "Retrieves and ranks relevant documents from the knowledge base. "
+                f"Knowledge base domain: {conversation_description}"
+            )
+        else:
+            final_rag_description = rag_agent_description or default_rag_description
+
+        # Create RAG tool using factory (matching assistant agent)
+        from src.agents.assistant_agent.tools.rag_knowledge_tool import (
+            create_rag_knowledge_tool,
+        )
+
+        retrieve_knowledge_tool = create_rag_knowledge_tool(
+            rag_agent_name=rag_agent_name,
+            rag_agent_description=final_rag_description,
+            workflow_config=workflow_config,
+            rag_execution_state=rag_execution_state,
+        )
+
+        # Get task tools (matching assistant agent)
+        task_tools = []
+
+        if conversation.assistant_config and conversation.assistant_config.tools:
+            # Use dynamic tools from conversation configuration
+            from src.agents.assistant_agent.tools import get_dynamic_task_tools
+
+            try:
+                task_tools = await get_dynamic_task_tools(
+                    conversation.assistant_config, llm_client, conversation.user_id
+                )
+                logger.info(
+                    f"Loaded {len(task_tools)} dynamic tools from conversation config"
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to load dynamic tools, falling back to defaults: {e}"
+                )
+                from src.agents.task_agent.tools import get_task_agent_tools
+
+                task_tools = get_task_agent_tools()
+        else:
+            # Fallback to hardcoded default tools
+            from src.agents.task_agent.tools import get_task_agent_tools
+
+            task_tools = get_task_agent_tools()
+            logger.info(
+                f"No dynamic tools configured, using {len(task_tools)} default tools"
+            )
+
+        # Create tool registry and register all tools
+        logger.info("Creating tool registry with RAG + task tools")
+        tool_registry = ToolRegistry()
+
+        # Register RAG tool
+        tool_registry.register(rag_agent_name, retrieve_knowledge_tool)
+        logger.info(f"Registered RAG tool: {rag_agent_name}")
+
+        # Register task tools
+        for task_tool in task_tools:
+            tool_registry.register(task_tool.name, task_tool)
+            logger.info(f"Registered task tool: {task_tool.name}")
+
+        logger.info(
+            f"Tool registry created with {len(tool_registry)} tools: {tool_registry.list_ids()}"
+        )
+
+        # Build system prompt (matching assistant agent)
+        system_prompt_parts = []
+
+        # Use default prompt from prompts.py
+        from src.agents.supervisor_agent.prompts import SYSTEM_PROMPT
+
+        base_prompt = SYSTEM_PROMPT
+
+        # Inject tool instructions if available
+        if (
+            conversation.assistant_config
+            and conversation.assistant_config.tool_instructions
+            and conversation.assistant_config.tool_instructions.strip()
+        ):
+            logger.info("Injecting user-configured tool instructions")
+
+            # Find STEP 5 in the prompt
+            step_5_marker = "**STEP 5️⃣: EXECUTE TOOLS WITH COMPLETE CONTEXT**"
+            if step_5_marker in base_prompt:
+                injection_point = base_prompt.find(step_5_marker) + len(step_5_marker)
+
+                user_instructions_section = f"""
+
+🎯 **USER-SPECIFIC TOOL ORCHESTRATION (HIGHEST PRIORITY):**
+
+{conversation.assistant_config.tool_instructions}
+
+**NOTE:** The above instructions are user-configured and take PRECEDENCE over default tool usage patterns below.
+
+---
+"""
+                base_prompt = (
+                    base_prompt[:injection_point]
+                    + user_instructions_section
+                    + base_prompt[injection_point:]
+                )
+
+        system_prompt_parts.append(base_prompt)
+
+        # Add knowledge base context
+        if conversation_description:
+            system_prompt_parts.append(
+                f"\n\n**Knowledge Base Context:**\n{conversation_description}"
+            )
+
+        system_prompt = "\n".join(system_prompt_parts)
+
+        logger.info(f"System prompt configured: {len(system_prompt)} chars")
+
         # Initialize supervisor service and create custom ReAct graph
         logger.info("Creating custom ReAct graph with ToolRegistry")
 
         try:
-            # Initialize tools from conversation configuration
-            tool_registry = await initialize_tools_from_config_async(
-                assistant_config=conversation.assistant_config,
-                llm_client=llm_client,
-                rag_context="",
-                tool_instances={},  # Tools will be loaded from config
-            )
-
             # *** KEY DIFFERENCE: Create our custom ReAct graph instead of create_agent() ***
-            main_agent = create_graph(tool_registry)
+            # Pass llm_client and system_prompt to the graph
+            main_agent = create_graph(
+                tool_registry=tool_registry,
+                llm_client=llm_client,
+                system_prompt=system_prompt,
+            )
 
             logger.info(
                 f"✅ Custom ReAct graph created with {len(tool_registry)} tools"
@@ -253,11 +413,13 @@ async def get_response_stream_supervisor(
             "execution_time_ms": (time.time() - start_time) * 1000,
         }
 
-        # Prepare conversation messages
-        messages = [{"role": "user", "content": query}]
+        # Prepare conversation messages - history FIRST, then new query
+        messages = []
         if conversation.messages:
             for msg in conversation.messages[-10:]:  # Last 10 messages
                 messages.append({"role": msg.role, "content": msg.content})
+        # Add new user query at the END
+        messages.append({"role": "user", "content": query})
 
         # Configure graph execution
         config_for_stream = {
@@ -266,45 +428,353 @@ async def get_response_stream_supervisor(
 
         final_response = ""
         tools_used = []
+        rag_tool_called = False
+        agent_execution_complete_emitted = False
+        retrieved_rag_documents = None
+        final_messages = []  # Capture all messages for final response extraction
 
         try:
-            # Stream events from custom ReAct graph
-            # Pass model_str from enhancement strategy (or answer_generation) to graph via state
-            async for event in main_agent.astream(
+            # CRITICAL FIX: Use astream_events() for proper event tracking
+            # astream() only returns state updates, not detailed events
+            from langchain_core.messages import AIMessage, ToolMessage
+            from langchain_core.runnables import RunnableConfig
+
+            # Track content for streaming (for real-time display only)
+            content_buffer = ""
+            has_started_streaming = False
+
+            async for event in main_agent.astream_events(
                 {
                     "messages": messages,
-                    "model_str": model_string,
                 },
                 config=config_for_stream,
+                version="v2",  # Use v2 for better event structure
             ):
-                # Process graph events
-                if isinstance(event, dict) and "messages" in event:
-                    messages_list = event.get("messages", [])
-                    if messages_list:
-                        last_msg = messages_list[-1]
+                event_type = event.get("event", "")
+                event_name = event.get("name", "")
+                event_data = event.get("data", {})
 
-                        # Track tool calls
-                        if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
-                            for tool_call in last_msg.tool_calls:
-                                tool_name = tool_call.get("name", "")
-                                if tool_name and tool_name not in tools_used:
-                                    tools_used.append(tool_name)
-                                    logger.info(f"Tool called: {tool_name}")
+                # EARLY: Extract RAG documents from on_tool_end (before processing streaming)
+                if event_type == "on_tool_end":
+                    tool_name = event.get("name", "")
+                    if tool_name and tool_name not in tools_used:
+                        tools_used.append(tool_name)
 
-                        # Stream content chunks
-                        if hasattr(last_msg, "content") and last_msg.content:
-                            final_response = last_msg.content
+                    logger.info(f"Tool execution completed: {tool_name}")
+
+                    # Handle RAG tool completion - extract documents
+                    if tool_name == rag_agent_name:
+                        try:
+                            tool_output = event_data.get("output", "")
+                            logger.debug(
+                                f"Processing RAG tool output: {type(tool_output).__name__}"
+                            )
+
+                            if tool_output:
+                                # Handle ToolMessage objects from LangChain
+                                if hasattr(tool_output, "content"):
+                                    tool_output_content = tool_output.content
+                                else:
+                                    tool_output_content = tool_output
+
+                                if tool_output_content:
+                                    try:
+                                        # Parse RAG response as JSON
+                                        if isinstance(tool_output_content, str):
+                                            rag_response = json.loads(
+                                                tool_output_content
+                                            )
+                                        else:
+                                            rag_response = tool_output_content
+
+                                        if (
+                                            isinstance(rag_response, dict)
+                                            and "documents" in rag_response
+                                        ):
+                                            retrieved_rag_documents = rag_response.get(
+                                                "documents", []
+                                            )
+
+                                            # Format RAG documents as context string
+                                            rag_context_str = (
+                                                _format_rag_documents_as_context(
+                                                    retrieved_rag_documents
+                                                )
+                                            )
+
+                                            # CRITICAL: Store documents in rag_execution_state
+                                            rag_execution_state["documents"] = (
+                                                retrieved_rag_documents
+                                            )
+                                            rag_execution_state["total_docs"] = len(
+                                                retrieved_rag_documents
+                                            )
+                                            rag_execution_state["relevant_docs"] = len(
+                                                retrieved_rag_documents
+                                            )
+
+                                            logger.info(
+                                                f"✅ RAG retrieval complete: {len(retrieved_rag_documents)} documents ({len(rag_context_str)} chars)"
+                                            )
+
+                                            # Emit RAG documents extracted COMPLETE event
+                                            yield {
+                                                "type": "workflow_progress",
+                                                "stage": "rag_documents_extracted",
+                                                "message": f"RAG Complete: Extracted {len(retrieved_rag_documents)} documents",
+                                                "data": {
+                                                    "rag_documents_count": len(
+                                                        retrieved_rag_documents
+                                                    ),
+                                                    "rag_context_size": len(
+                                                        rag_context_str
+                                                    ),
+                                                    "tools_used": tools_used,
+                                                    "enhanced_queries": rag_execution_state.get(
+                                                        "enhanced_queries", []
+                                                    ),
+                                                },
+                                                "execution_time_ms": (
+                                                    time.time() - start_time
+                                                )
+                                                * 1000,
+                                            }
+
+                                            # Emit agent execution COMPLETE event (after RAG retrieval)
+                                            if not agent_execution_complete_emitted:
+                                                agent_execution_complete_emitted = True
+                                                yield {
+                                                    "type": "workflow_progress",
+                                                    "stage": "agent_execution_starting_complete",
+                                                    "message": "Agent execution planning completed",
+                                                    "data": {
+                                                        "rag_documents_count": len(
+                                                            retrieved_rag_documents
+                                                        ),
+                                                        "tools_used": tools_used,
+                                                    },
+                                                    "execution_time_ms": (
+                                                        time.time() - start_time
+                                                    )
+                                                    * 1000,
+                                                }
+
+                                            # Emit RAG agent execution COMPLETE event
+                                            yield {
+                                                "type": "workflow_progress",
+                                                "stage": "rag_agent_executing_complete",
+                                                "message": f"RAG agent execution completed with {len(retrieved_rag_documents)} documents",
+                                                "data": {
+                                                    "document_count": len(
+                                                        retrieved_rag_documents
+                                                    ),
+                                                    "context_size": len(
+                                                        rag_context_str
+                                                    ),
+                                                    "strategy": rag_execution_state.get(
+                                                        "enhancement_strategy",
+                                                        "unknown",
+                                                    ),
+                                                    "tools_used": tools_used,
+                                                },
+                                                "execution_time_ms": (
+                                                    time.time() - start_time
+                                                )
+                                                * 1000,
+                                            }
+
+                                            # Emit task agent execution START event
+                                            # This marks the beginning of task tool execution phase
+                                            yield {
+                                                "type": "workflow_progress",
+                                                "stage": "task_agent_executing",
+                                                "message": "Starting task tool execution with RAG context",
+                                                "data": {
+                                                    "available_tools": [
+                                                        t.name for t in task_tools
+                                                    ],
+                                                    "rag_context_available": True,
+                                                },
+                                                "execution_time_ms": (
+                                                    time.time() - start_time
+                                                )
+                                                * 1000,
+                                            }
+                                    except (
+                                        json.JSONDecodeError,
+                                        TypeError,
+                                    ) as parse_error:
+                                        logger.warning(
+                                            f"RAG tool output not valid JSON: {parse_error}"
+                                        )
+                        except Exception as e:
+                            logger.warning(f"Error processing RAG tool end event: {e}")
+
+                    # Emit standard tool completion event for all tools
+                    yield {
+                        "type": "workflow_progress",
+                        "stage": f"{tool_name}_complete",
+                        "message": f"Tool execution completed: {tool_name}",
+                        "execution_time_ms": (time.time() - start_time) * 1000,
+                    }
+
+                # Track tool calls from chat model
+                if event_type == "on_chat_model_stream":
+                    chunk = event_data.get("chunk", {})
+
+                    # Extract content for streaming
+                    content_chunk = ""
+                    if hasattr(chunk, "content"):
+                        content_chunk = (
+                            chunk.content if isinstance(chunk.content, str) else ""
+                        )
+                    elif isinstance(chunk, dict) and "content" in chunk:
+                        content_chunk = chunk.get("content", "")
+
+                    # Stream content chunks in real-time
+                    if (
+                        content_chunk
+                        and isinstance(content_chunk, str)
+                        and content_chunk.strip()
+                    ):
+                        if not has_started_streaming:
+                            has_started_streaming = True
+
+                            # Emit response generation START event (before streaming)
                             yield {
-                                "type": "streaming_response",
-                                "chunk": final_response,
-                                "metadata": {
+                                "type": "workflow_progress",
+                                "stage": "response_generation",
+                                "message": "Generating final response",
+                                "data": {
                                     "tools_used": tools_used,
-                                    "orchestrator_type": "custom_react_pattern",
                                 },
-                                "execution_time_ms": (
-                                    time.time() - start_time
-                                ) * 1000,
+                                "execution_time_ms": (time.time() - start_time) * 1000,
                             }
+
+                            # Also emit streaming started
+                            yield {
+                                "type": "workflow_progress",
+                                "stage": "response_streaming_started",
+                                "message": "Streaming response to client",
+                                "execution_time_ms": (time.time() - start_time) * 1000,
+                            }
+
+                        content_buffer += content_chunk
+                        yield {
+                            "type": "streaming_response",
+                            "chunk": content_chunk,
+                            "metadata": {
+                                "tools_used": tools_used,
+                                "orchestrator_type": "custom_react_pattern",
+                            },
+                            "execution_time_ms": (time.time() - start_time) * 1000,
+                        }
+
+                    # Track tool calls
+                    if hasattr(chunk, "tool_calls") and chunk.tool_calls:
+                        for tool_call in chunk.tool_calls:
+                            tool_name = tool_call.get("name", "")
+                            if tool_name and tool_name not in tools_used:
+                                tools_used.append(tool_name)
+                                logger.info(f"Tool call detected: {tool_name}")
+
+                                # Emit RAG agent execution START event
+                                if tool_name == rag_agent_name:
+                                    rag_tool_called = True
+                                    yield {
+                                        "type": "workflow_progress",
+                                        "stage": "rag_agent_executing",
+                                        "message": f"{rag_agent_name.replace('_', ' ').title()}: Retrieving and ranking documents",
+                                        "execution_time_ms": (time.time() - start_time)
+                                        * 1000,
+                                    }
+
+                                # For task tools, just track (no duplicate START event)
+                                # task_agent_executing was already emitted after RAG completion
+
+                # Capture final output (messages from the graph)
+                if event_type == "on_chain_end" and event_name == "LangGraph":
+                    try:
+                        if hasattr(event_data, "output"):
+                            final_output = event_data.output
+                        elif isinstance(event_data, dict) and "output" in event_data:
+                            final_output = event_data["output"]
+                        else:
+                            final_output = event_data
+
+                        if (
+                            isinstance(final_output, dict)
+                            and "messages" in final_output
+                        ):
+                            final_messages = final_output["messages"]
+                            logger.info(
+                                f"Captured {len(final_messages)} messages from graph completion"
+                            )
+                    except Exception as e:
+                        logger.warning(f"Error capturing final output: {e}")
+
+            # CRITICAL: Extract final response from ToolMessage (task tool output), NOT from streaming buffer
+            # The streaming buffer contains agent's thoughts, ToolMessage contains the actual generated content
+            logger.info("Extracting final response from messages...")
+
+            if final_messages:
+                logger.debug(
+                    f"Extracting final response from {len(final_messages)} messages"
+                )
+
+                # CRITICAL: Extract from ToolMessage (task tool output), NOT AIMessage (agent thinking)
+                # The agent's AIMessage contains reasoning/analysis, the ToolMessage contains the actual generated content
+                task_tool_output_found = False
+                for msg in reversed(final_messages):
+                    # Check for ToolMessage from task tools (mulesoft_flow_generator, etc.)
+                    if isinstance(msg, ToolMessage):
+                        # Check if it's from a task tool (not RAG)
+                        if msg.name != rag_agent_name and msg.name in [
+                            t.name for t in task_tools
+                        ]:
+                            final_response = str(msg.content)
+                            task_tool_output_found = True
+                            logger.info(
+                                f"✅ Final response extracted from task tool: '{msg.name}' ({len(final_response)} chars)"
+                            )
+                            break
+                    elif isinstance(msg, dict) and msg.get("role") == "tool":
+                        # Dict-based tool message
+                        tool_name = msg.get("name", "")
+                        if tool_name != rag_agent_name and tool_name in [
+                            t.name for t in task_tools
+                        ]:
+                            final_response = str(msg.get("content", ""))
+                            task_tool_output_found = True
+                            logger.info(
+                                f"✅ Final response extracted from task tool: '{tool_name}' ({len(final_response)} chars)"
+                            )
+                            break
+
+                # Fallback to AIMessage if no task tool output found (for pure Q&A without generation)
+                if not task_tool_output_found:
+                    logger.debug(
+                        "No task tool output found, checking for AIMessage (Q&A mode)"
+                    )
+                    for msg in reversed(final_messages):
+                        if isinstance(msg, AIMessage):
+                            final_response = msg.content
+                            logger.info(
+                                f"✅ Final response extracted from AIMessage (Q&A mode, {len(final_response)} chars)"
+                            )
+                            break
+                        elif isinstance(msg, dict) and msg.get("role") == "assistant":
+                            final_response = msg.get("content", "")
+                            logger.info(
+                                f"✅ Final response extracted from assistant message (Q&A mode, {len(final_response)} chars)"
+                            )
+                            break
+            else:
+                # Fallback to content_buffer only if no messages captured
+                logger.warning(
+                    "No final messages captured, falling back to content_buffer (may contain agent thoughts!)"
+                )
+                final_response = content_buffer
 
             logger.info(
                 f"Custom ReAct agent execution completed: {len(final_response)} chars response"
@@ -332,11 +802,76 @@ async def get_response_stream_supervisor(
             "data": {
                 "response_length": len(final_response),
                 "tools_used": tools_used,
+                "rag_tool_called": rag_tool_called,
             },
             "execution_time_ms": execution_time_ms,
         }
 
-        # Save to conversation history
+        # Emit response streaming COMPLETE event (matching assistant agent)
+        if final_response:
+            yield {
+                "type": "workflow_progress",
+                "stage": "response_streaming_started_complete",
+                "message": "Response streaming completed",
+                "data": {
+                    "total_chunks": len(final_response) // 10,  # Approximate
+                    "response_length": len(final_response),
+                },
+                "execution_time_ms": (time.time() - start_time) * 1000,
+            }
+
+        # Extract RAG metadata if available
+        has_rag_documents = (
+            rag_execution_state.get("documents")
+            and len(rag_execution_state.get("documents", [])) > 0
+        )
+
+        source_links = []  # Structured list with URL, title, and chunk_id
+        enhanced_queries = []
+        enhancement_strategy = rag_execution_state.get(
+            "enhancement_strategy", "unknown"
+        )
+        document_count = 0
+
+        if has_rag_documents:
+            document_count = len(rag_execution_state["documents"])
+            enhanced_queries = rag_execution_state.get("enhanced_queries", [])
+
+            # Extract source links with URL, title, and chunk_id from each document
+            for doc in rag_execution_state["documents"]:
+                source_url = doc.get("source_url") or doc.get("source")
+                if not source_url and doc.get("metadata", {}).get("metadata"):
+                    source_url = doc["metadata"]["metadata"].get("source_url")
+
+                # Extract title from multiple possible locations
+                title = doc.get("title")
+                if not title and doc.get("metadata", {}).get("metadata"):
+                    title = doc["metadata"]["metadata"].get("title")
+                if not title and doc.get("metadata"):
+                    title = doc["metadata"].get("title")
+
+                # Extract chunk_id
+                chunk_id = doc.get("chunk_id")
+                if not chunk_id and doc.get("metadata", {}).get("metadata"):
+                    chunk_id = doc["metadata"]["metadata"].get("chunk_id")
+
+                # Extract query variant info (which variant retrieved this document)
+                query_variant_index = doc.get("query_variant_index")
+                query_variant = doc.get("query_variant")
+
+                if source_url:
+                    # Add structured link with URL, title, chunk_id, and variant info
+                    source_links.append(
+                        {
+                            "url": source_url,
+                            "title": title or "Untitled Document",
+                            "chunk_id": chunk_id or "",
+                            "query_variant_index": query_variant_index,
+                            "query_variant": query_variant,
+                        }
+                    )
+
+        # Save to conversation history with metadata
         try:
             user_message = ConversationMessage(
                 role="user",
@@ -349,18 +884,24 @@ async def get_response_stream_supervisor(
                 role="assistant",
                 content=final_response,
                 timestamp=datetime.now(timezone.utc),
+                source_links=source_links,  # Structured links with URL, title, and chunk_id
+                enhancement_strategy_used=enhancement_strategy,
+                enhanced_queries=enhanced_queries,
+                document_count=document_count,
                 processing_time_ms=int(execution_time_ms),
             )
             conversation_history_service.add_message(conversation_id, assistant_message)
 
             logger.info(
-                f"✅ Saved conversation messages to {conversation_id}"
+                f"✅ Saved conversation with metadata to {conversation_id} "
+                f"(sources={len(source_links)}, docs={document_count})"
             )
         except Exception as e:
             logger.error(f"Failed to save conversation: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
             # Continue - don't fail the entire operation
 
-        # Final result
+        # Final result with RAG documents if available
         final_result = {
             "type": "workflow_complete",
             "execution_time_ms": execution_time_ms,
@@ -371,14 +912,23 @@ async def get_response_stream_supervisor(
                 "orchestrator_type": "custom_react_pattern",
                 "tools_used": tools_used,
                 "model": model_string,
+                "enhancement_strategy": enhancement_strategy,
             },
         }
 
+        if has_rag_documents:
+            final_result["documents"] = rag_execution_state["documents"]
+            final_result["metadata"]["document_count"] = document_count
+            final_result["metadata"]["enhanced_queries"] = enhanced_queries
+            final_result["metadata"][
+                "source_links"
+            ] = source_links  # Structured links with URL, title, and chunk_id
+        else:
+            final_result["documents"] = []
+
         yield final_result
 
-        logger.info(
-            f"Custom ReAct Pattern completed in {execution_time_ms:.2f}ms"
-        )
+        logger.info(f"Custom ReAct Pattern completed in {execution_time_ms:.2f}ms")
 
     except Exception as e:
         execution_time_ms = (time.time() - start_time) * 1000
@@ -405,7 +955,9 @@ async def get_response_stream_supervisor(
 
         if initialization_failed:
             error_category = "initialization_error"
-            user_message = f"Failed to initialize supervisor agent. Error: {str(e)[:100]}"
+            user_message = (
+                f"Failed to initialize supervisor agent. Error: {str(e)[:100]}"
+            )
         elif has_partial_response:
             error_category = "partial_response_error"
             user_message = "Response was incomplete due to an error."

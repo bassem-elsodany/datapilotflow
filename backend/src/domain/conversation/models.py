@@ -90,8 +90,12 @@ class AssistantConfig:
     """Configuration for Assistant mode (supervisor agent with tools)."""
 
     enabled: bool  # Whether Assistant mode is enabled (true) or RAG mode (false)
-    tools: Optional[List[str]] = None  # List of tool IDs bound to this conversation agent
-    tool_instructions: Optional[str] = None  # User's custom instructions for how tools should work together
+    tools: Optional[List[str]] = (
+        None  # List of tool IDs bound to this conversation agent
+    )
+    instructions: Optional[str] = (
+        None  # User's custom instructions for how the assistant should behave and respond
+    )
 
 
 @dataclass
@@ -101,10 +105,9 @@ class ConversationMessage:
     role: str  # "user" or "assistant"
     content: str
     timestamp: datetime
-    search_query: Optional[str] = None
-    search_results: Optional[List[Dict[str, Any]]] = None
-    source_urls: Optional[List[str]] = None
-    chunk_ids: Optional[List[str]] = None
+    source_links: Optional[List[Dict[str, str]]] = (
+        None  # List of dicts with 'url', 'title', 'chunk_id', 'query_variant_index', 'query_variant'
+    )
     # Enhancement metadata
     enhancement_strategy_used: Optional[str] = None
     enhanced_queries: Optional[List[str]] = None

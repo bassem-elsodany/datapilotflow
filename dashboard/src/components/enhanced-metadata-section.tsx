@@ -4,7 +4,9 @@ import { IconBrain, IconChevronDown, IconDatabase, IconExternalLink, IconHash, I
 
 interface Source {
   url: string;
+  title?: string;  // Optional title for the source
   chunkIds: string[];
+  queryVariants?: Array<{ index: number; text: string }>;  // Which variants retrieved this source
 }
 
 interface EnhancedMetadataSectionProps {
@@ -189,20 +191,49 @@ export function EnhancedMetadataSection({
                         <Text size="xs" fw={500} c="dimmed" style={{ minWidth: '20px' }}>
                           {index + 1}.
                         </Text>
-                        <Anchor
-                          href={source.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          size="xs"
-                          c="blue.7"
-                          style={{
-                            flex: 1,
-                            wordBreak: 'break-all',
-                            textDecoration: 'none',
-                          }}
-                        >
-                          {source.url}
-                        </Anchor>
+                        <Box style={{ flex: 1 }}>
+                          {source.title ? (
+                            <Stack gap={2}>
+                              <Anchor
+                                href={source.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                size="xs"
+                                c="blue.7"
+                                fw={500}
+                                style={{
+                                  textDecoration: 'none',
+                                }}
+                              >
+                                {source.title}
+                              </Anchor>
+                              <Text
+                                size="xs"
+                                c="dimmed"
+                                style={{
+                                  wordBreak: 'break-all',
+                                  fontSize: '10px',
+                                }}
+                              >
+                                {source.url}
+                              </Text>
+                            </Stack>
+                          ) : (
+                            <Anchor
+                              href={source.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              size="xs"
+                              c="blue.7"
+                              style={{
+                                wordBreak: 'break-all',
+                                textDecoration: 'none',
+                              }}
+                            >
+                              {source.url}
+                            </Anchor>
+                          )}
+                        </Box>
                         <ActionIcon
                           variant="subtle"
                           color="blue"
@@ -229,6 +260,26 @@ export function EnhancedMetadataSection({
                           >
                             {source.chunkIds.join(', ')}
                           </Text>
+                        </Group>
+                      )}
+                      
+                      {source.queryVariants && source.queryVariants.length > 0 && (
+                        <Group gap={4} ml="xl" wrap="wrap">
+                          <Text size="xs" c="dimmed" fw={500}>
+                            Retrieved by:
+                          </Text>
+                          {source.queryVariants.map((variant, vIdx) => (
+                            <Badge
+                              key={vIdx}
+                              size="xs"
+                              variant="light"
+                              color="grape"
+                              style={{ cursor: 'help' }}
+                              title={variant.text}
+                            >
+                              Variant {variant.index}
+                            </Badge>
+                          ))}
                         </Group>
                       )}
                     </Stack>

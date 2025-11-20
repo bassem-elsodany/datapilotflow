@@ -4,14 +4,14 @@ This module defines a custom reasoning and action agent graph with RAG + task to
 It invokes tools in a simple loop based on langchain-ai/react-agent.
 
 Key exports:
-- graph: The compiled LangGraph StateGraph (requires ToolRegistry initialization)
+- create_graph(): Factory function to create the compiled LangGraph StateGraph with ToolRegistry
 - SupervisorAgentService: Service layer for conversation execution
 - ToolRegistry: Tool registry for ID-based tool management
 - Context: Configuration context for the agent
 - State: Agent state structure with RAG and tool tracking
 """
 
-from src.agents.supervisor_agent.graph import graph, create_graph
+from src.agents.supervisor_agent.graph import create_graph
 from src.agents.supervisor_agent.service import SupervisorAgentService
 from src.agents.supervisor_agent.tools import ToolRegistry
 from src.agents.supervisor_agent.context import Context
@@ -27,7 +27,6 @@ from src.agents.supervisor_agent.generate_response_supervisor import (
 )
 
 __all__ = [
-    "graph",
     "create_graph",
     "SupervisorAgentService",
     "ToolRegistry",

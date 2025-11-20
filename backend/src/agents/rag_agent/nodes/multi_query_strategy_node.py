@@ -79,11 +79,8 @@ async def multi_query_strategy_node(state: WorkflowState) -> WorkflowState:
                 f"expected at least {config['min_variants']}"
             )
 
-        # Optionally include original
-        if config.get("include_original", True) and query not in variants:
-            variants.insert(0, query)
-
-        logger.info(f"✅ Multi-Query: Generated {len(variants)} variants")
+        # Use LLM variants as-is (no original query added by node)
+        logger.info(f"✅ Multi-Query: Generated {len(variants)} variants from LLM")
 
         # Update state
         state["enhanced_query"] = {"multi_query_variants": variants}

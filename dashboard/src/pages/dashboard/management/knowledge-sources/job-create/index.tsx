@@ -43,7 +43,7 @@ import {
   IconWand
 } from '@tabler/icons-react';
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 interface KnowledgeJobFormProps {
   jobId?: string; // Optional jobId for edit mode
@@ -51,6 +51,7 @@ interface KnowledgeJobFormProps {
 
 export default function KnowledgeJobFormPage({ jobId }: KnowledgeJobFormProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeStep, setActiveStep] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [isExplicitSubmit, setIsExplicitSubmit] = useState(false);
@@ -60,6 +61,9 @@ export default function KnowledgeJobFormPage({ jobId }: KnowledgeJobFormProps) {
   const [isCreatingSplitter, setIsCreatingSplitter] = useState(false);
 
   const isEditMode = !!jobId;
+
+  // Get configId from navigation state (passed from configs page)
+  const locationState = location.state as { configId?: string; configName?: string } | null;
 
   // API hooks
   const { data: configs, isLoading: configsLoading } = useGetKnowledgeSourceConfigs();
@@ -336,6 +340,34 @@ export default function KnowledgeJobFormPage({ jobId }: KnowledgeJobFormProps) {
       console.log('Form values in edit mode:', form.values);
     }
   }, [form.values, isEditMode]);
+
+  // Pre-select config from navigation state (create mode only)
+  useEffect(() => {
+    if (!isEditMode && locationState?.configId && configs && configs.length > 0) {
+      // Check if the config exists in the loaded configs
+      const selectedConfig = configs.find(c => c.id === locationState.configId);
+      if (selectedConfig && !form.values.config_id) {
+        console.log('Pre-selecting config from navigation state:', locationState.configId);
+        form.setFieldValue('config_id', locationState.configId);
+        
+        // Also populate job name with default: "{Config Name} Job"
+        if (!form.values.name) {
+          const defaultJobName = `${selectedConfig.name} Job`;
+          console.log('Setting default job name:', defaultJobName);
+          form.setFieldValue('name', defaultJobName);
+        }
+        
+        // Populate description with config description or default message
+        if (!form.values.description) {
+          const defaultDescription = selectedConfig.description 
+            ? `Processing job for ${selectedConfig.name}: ${selectedConfig.description}`
+            : `Processing job for ${selectedConfig.name}`;
+          console.log('Setting default job description:', defaultDescription);
+          form.setFieldValue('description', defaultDescription);
+        }
+      }
+    }
+  }, [isEditMode, locationState, configs, form]);
 
   // Helper function to render inactive provider warning
   const renderInactiveProviderWarning = () => {

@@ -1,3 +1,4 @@
+import { useGetKnowledgeJobs } from '@/api/resources/knowledge-jobs';
 import { KnowledgeSourceConfig, useDeleteKnowledgeSourceConfig, useGetKnowledgeSourceConfigs } from '@/api/resources/knowledge-sources';
 import { Page } from '@/components/page';
 import { PageHeader } from '@/components/page-header';
@@ -9,21 +10,27 @@ import {
   Button,
   Card,
   Center,
+  Divider,
   Group,
   Loader,
+  Menu,
   Modal,
   Stack,
   Text,
   ThemeIcon,
-  Title
+  Title,
+  Tooltip
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import {
   IconAlertTriangle,
+  IconBriefcase,
+  IconChevronDown,
   IconEdit,
-  IconEye,
+  IconExternalLink,
   IconFileText,
   IconLink,
+  IconList,
   IconPlus,
   IconRefresh,
   IconSettings,
@@ -35,7 +42,7 @@ import {
 import sortBy from 'lodash/sortBy';
 import { DataTable, DataTableSortStatus, useDataTableColumns } from 'mantine-datatable';
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 // CSS animations for the pipeline
 const pipelineStyles = `
@@ -83,7 +90,7 @@ const breadcrumbs = [
 ];
 
 
-const scrapingModeIcons = {
+const scrapingModeIcons: Record<string, typeof IconFileText> = {
   single_page: IconFileText,
   multiple_pages: IconUpload,
   website: IconLink,
@@ -94,7 +101,7 @@ const scrapingModeIcons = {
   txt_files: IconFileText,
 };
 
-const scrapingModeColors = {
+const scrapingModeColors: Record<string, string> = {
   single_page: 'blue',
   multiple_pages: 'green',
   website: 'orange',
@@ -333,6 +340,7 @@ export default function KnowledgeSourceConfigs() {
     };
   }, []);
 
+  const navigate = useNavigate();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [configToDelete, setConfigToDelete] = useState<{ id: string; name: string } | null>(null);
@@ -343,9 +351,21 @@ export default function KnowledgeSourceConfigs() {
   const [page, setPage] = useState(1);
 
   const { data: configsData, isLoading, error, refetch } = useGetKnowledgeSourceConfigs();
+  const { data: jobs } = useGetKnowledgeJobs();
   const deleteConfigMutation = useDeleteKnowledgeSourceConfig();
 
   const [configs, setConfigs] = useState<KnowledgeSourceConfig[]>([]);
+
+  // Helper function to get jobs for a specific config
+  const getJobsForConfig = (configId: string) => {
+    if (!jobs) return [];
+    return jobs.filter(job => job.knowledge_source_config_id === configId);
+  };
+
+  // Helper function to count jobs per config
+  const getJobCountForConfig = (configId: string) => {
+    return getJobsForConfig(configId).length;
+  };
 
   useEffect(() => {
     if (configsData) {
@@ -364,7 +384,7 @@ export default function KnowledgeSourceConfigs() {
         sortable: true,
         render: (record: Record<string, unknown>) => {
           const config = record as KnowledgeSourceConfig;
-          const ScrapingIcon = scrapingModeIcons[config.scraping_mode] || IconSettings;
+          const ScrapingIcon = (config.scraping_mode && scrapingModeIcons[config.scraping_mode]) || IconSettings;
           return (
             <Group gap="sm">
               <ScrapingIcon size={16} color="var(--mantine-color-blue-6)" />
@@ -420,7 +440,7 @@ export default function KnowledgeSourceConfigs() {
           const config = record as KnowledgeSourceConfig;
           return (
             <Badge
-              color={scrapingModeColors[config.scraping_mode] || 'gray'}
+              color={(config.scraping_mode && scrapingModeColors[config.scraping_mode]) || 'gray'}
               variant="light"
             >
               {config.scraping_mode === 'website' ? 'Website Crawler' :
@@ -454,39 +474,94 @@ export default function KnowledgeSourceConfigs() {
       {
         accessor: 'actions',
         title: 'Actions',
-        width: 100,
+        width: 180,
         textAlign: 'right',
         toggleable: false,
         render: (record: Record<string, unknown>) => {
           const config = record as KnowledgeSourceConfig;
           return (
             <Group gap="xs" justify="flex-end">
-              <ActionIcon
-                variant="subtle"
-                color="blue"
-                component={Link}
-                to={paths.dashboard.management.knowledgeSources.config(config.id)}
-                title="View Details"
-              >
-                <IconEye size={16} />
-              </ActionIcon>
-              <ActionIcon
-                variant="subtle"
-                color="green"
-                component={Link}
-                to={paths.dashboard.management.knowledgeSources.configEdit(config.id)}
-                title="Edit"
-              >
-                <IconEdit size={16} />
-              </ActionIcon>
-              <ActionIcon
-                variant="subtle"
-                color="red"
-                onClick={() => handleDeleteClick(config.id, config.name)}
-                title="Delete"
-              >
-                <IconTrash size={16} />
-              </ActionIcon>
+              <Tooltip label="Edit Configuration">
+                <ActionIcon
+                  variant="subtle"
+                  color="green"
+                  component={Link}
+                  to={paths.dashboard.management.knowledgeSources.configEdit(config.id)}
+                >
+                  <IconEdit size={16} />
+                </ActionIcon>
+              </Tooltip>
+              <Tooltip label="Create Job">
+                <ActionIcon
+                  variant="subtle"
+                  color="indigo"
+                  onClick={() => navigate(paths.dashboard.management.knowledgeSources.jobCreate, {
+                    state: { configId: config.id, configName: config.name }
+                  })}
+                >
+                  <IconBriefcase size={16} />
+                </ActionIcon>
+              </Tooltip>
+              <Tooltip label="Delete Configuration">
+                <ActionIcon
+                  variant="subtle"
+                  color="red"
+                  onClick={() => handleDeleteClick(config.id, config.name)}
+                >
+                  <IconTrash size={16} />
+                </ActionIcon>
+              </Tooltip>
+              {(() => {
+                const configJobs = getJobsForConfig(config.id);
+                const jobCount = configJobs.length;
+                return jobCount > 0 ? (
+                  <Menu shadow="md" width={250} position="bottom-end">
+                    <Menu.Target>
+                      <Badge
+                        variant="light"
+                        color="violet"
+                        style={{ cursor: 'pointer', paddingLeft: 8, paddingRight: 8 }}
+                      >
+                        <Group gap={4}>
+                          <IconList size={14} />
+                          <Text size="xs">{jobCount}</Text>
+                          <IconChevronDown size={12} />
+                        </Group>
+                      </Badge>
+                    </Menu.Target>
+                    <Menu.Dropdown>
+                      <Menu.Label>Related Jobs ({jobCount})</Menu.Label>
+                      {configJobs.map((job) => (
+                        <Menu.Item
+                          key={job.id}
+                          leftSection={<IconBriefcase size={16} />}
+                          onClick={() => navigate(paths.dashboard.management.knowledgeSources.job(job.id))}
+                        >
+                          <Stack gap={2}>
+                            <Text size="sm" fw={500} lineClamp={1}>
+                              {job.name}
+                            </Text>
+                            {job.description && (
+                              <Text size="xs" c="dimmed" lineClamp={1}>
+                                {job.description}
+                              </Text>
+                            )}
+                          </Stack>
+                        </Menu.Item>
+                      ))}
+                      <Divider />
+                      <Menu.Item
+                        leftSection={<IconExternalLink size={16} />}
+                        onClick={() => navigate(paths.dashboard.management.knowledgeSources.jobs, {
+                          state: { filterConfigId: config.id, filterConfigName: config.name }
+                        })}
+                      >
+                        View All Jobs
+                      </Menu.Item>
+                    </Menu.Dropdown>
+                  </Menu>
+                ) : null;
+              })()}
             </Group>
           );
         },

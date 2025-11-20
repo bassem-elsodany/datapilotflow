@@ -13,9 +13,7 @@ import traceback
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from loguru import logger
 
-from src.agents.supervisor_agent import (
-    get_response_stream_supervisor,
-)
+from src.agents.supervisor_agent import get_response_stream_supervisor
 from src.api.routers.auth.auth_router import decode_access_token
 from src.config import settings
 from src.services.conversation.conversation_history_service import (
@@ -53,10 +51,18 @@ def extract_conversation_config(conversation) -> dict:
         return config
 
     # Load answer generation settings (LLM provider and model)
-    if conversation.answer_generation and conversation.answer_generation.provider:
+    # CRITICAL: Only enable LLM generation if user has explicitly enabled it
+    if (
+        conversation.answer_generation
+        and conversation.answer_generation.enabled
+        and conversation.answer_generation.provider
+    ):
         config["llm_provider_id"] = conversation.answer_generation.provider.id
         config["llm_model_name"] = conversation.answer_generation.provider.model_name
         config["enable_llm_generation"] = True
+        logger.info("✅ LLM generation ENABLED by user")
+    else:
+        logger.info("❌ LLM generation DISABLED by user - will return raw documents")
 
     # Load vector database settings
     if conversation.vector_database:
@@ -81,10 +87,18 @@ def extract_conversation_config(conversation) -> dict:
             )
 
     # Load reranking settings
-    if conversation.reranker and conversation.reranker.provider:
+    # CRITICAL: Only enable reranking if user has explicitly enabled it
+    if (
+        conversation.reranker
+        and conversation.reranker.enabled
+        and conversation.reranker.provider
+    ):
         config["enable_reranking"] = True
         config["relevance_threshold"] = conversation.reranker.relevance_threshold
         config["reranker_model_name"] = conversation.reranker.provider.model_name
+        logger.info("✅ Reranking ENABLED by user")
+    else:
+        logger.info("❌ Reranking DISABLED by user")
 
     # Load conversation description for query enhancement context
     if conversation.description:
@@ -132,7 +146,9 @@ async def agent_query_supervisor_websocket(
     - Reference: Custom ReAct implementation with dynamic tool binding
     """
     logger.info("=" * 80)
-    logger.info("SUPERVISOR AGENT (CUSTOM REACT) ENDPOINT INVOKED | /ws/agent/query/supervisor")
+    logger.info(
+        "SUPERVISOR AGENT (CUSTOM REACT) ENDPOINT INVOKED | /ws/agent/query/supervisor"
+    )
     logger.info("=" * 80)
 
     # IMPORTANT: Accept connection FIRST before validating

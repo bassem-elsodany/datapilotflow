@@ -40,16 +40,16 @@ export function useRAGWorkflowProgress() {
       mappedStage = nodeToStageMap[currentNode] || currentNode;
     }
 
-    console.log(`🎭 [RAG WORKFLOW] ${isCompleteEvent ? '✅ COMPLETE' : '▶️ START'} - ${mappedStage}`);
+    // console.log(`🎭 [RAG WORKFLOW] ${isCompleteEvent ? '✅ COMPLETE' : '▶️ START'} - ${mappedStage}`);
 
     if (isCompleteEvent) {
       // COMPLETE EVENT: Store data and schedule delayed completion
-      console.log(`✅ [RAG COMPLETE] ${mappedStage} - scheduling completion after ${MINIMUM_LOADER_DISPLAY_MS}ms`);
+      // console.log(`✅ [RAG COMPLETE] ${mappedStage} - scheduling completion after ${MINIMUM_LOADER_DISPLAY_MS}ms`);
 
       const elapsedSinceActive = Date.now() - (stageTimingsRef.current[mappedStage]?.activeTime || 0);
       const delayNeeded = Math.max(0, MINIMUM_LOADER_DISPLAY_MS - elapsedSinceActive);
 
-      console.log(`⏱️  RAG Stage ${mappedStage} was active for ${elapsedSinceActive}ms, delaying by ${delayNeeded}ms`);
+      // console.log(`⏱️  RAG Stage ${mappedStage} was active for ${elapsedSinceActive}ms, delaying by ${delayNeeded}ms`);
 
       // Store completion data
       if (stageTimingsRef.current[mappedStage]) {
@@ -63,7 +63,7 @@ export function useRAGWorkflowProgress() {
 
       // Schedule the completion
       pendingCompletionTimeoutsRef.current[mappedStage] = setTimeout(() => {
-        console.log(`🎯 [RAG APPLY COMPLETION] ${mappedStage} - marking as completed`);
+        // console.log(`🎯 [RAG APPLY COMPLETION] ${mappedStage} - marking as completed`);
 
         setWorkflowState((prev: any) => {
           const newCompleted = [...prev.completedStages];
@@ -104,13 +104,13 @@ export function useRAGWorkflowProgress() {
           if (mappedStage === 'query_enhancement' && queryVariants.length > 0) {
             newState.enhancedQueries = queryVariants;
             newState.strategy = strategyFromData || prev.strategy;
-            console.log(`✨ RAG Enhanced queries:`, queryVariants);
+            // console.log(`✨ RAG Enhanced queries:`, queryVariants);
           } else if (mappedStage === 'document_retrieval' && documentCount > 0) {
             newState.documentCount = documentCount;
-            console.log(`📚 RAG Document count:`, documentCount);
+            // console.log(`📚 RAG Document count:`, documentCount);
           } else if (mappedStage === 'document_judging' && relevantCount >= 0) {
             newState.relevantCount = relevantCount;
-            console.log(`⚖️ RAG Relevant count:`, relevantCount);
+            // console.log(`⚖️ RAG Relevant count:`, relevantCount);
           }
 
           return newState;
@@ -123,7 +123,7 @@ export function useRAGWorkflowProgress() {
 
     } else {
       // START EVENT: Mark stage as active immediately
-      console.log(`▶️ [RAG START] ${mappedStage} - marking as active immediately`);
+      // console.log(`▶️ [RAG START] ${mappedStage} - marking as active immediately`);
 
       stageTimingsRef.current[mappedStage] = {
         activeTime: Date.now(),

@@ -4,13 +4,19 @@ import { IconAlertTriangle, IconCheck, IconCopy, IconRobot, IconSparkles } from 
 import { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { detectTextDirection } from '../utilities/text-direction';
 import { DocumentCard } from './document-card';
 import { EnhancedCodeBlock } from './enhanced-code-block';
 import { EnhancedMetadataSection } from './enhanced-metadata-section';
 
 interface MessageMetadata {
-  source_urls?: string[];
-  chunk_ids?: string[];
+  source_links?: Array<{
+    url: string;
+    title: string;
+    chunk_id?: string;
+    query_variant_index?: number;
+    query_variant?: string;
+  }>;  // Structured links with URL, title, chunk_id, and variant info
   document_count?: number;
   enhancement_strategy?: string;
   enhanced_query?: string;
@@ -29,6 +35,9 @@ export function EnhancedMessageRenderer({
   isRawMode = false,
 }: EnhancedMessageRendererProps) {
   const clipboard = useClipboard({ timeout: 2000 });
+
+  // Detect text direction based on content
+  const textDirection = useMemo(() => detectTextDirection(content), [content]);
 
   // Memoize markdown components to prevent infinite re-renders
   const markdownComponents = useMemo(() => ({
@@ -195,29 +204,42 @@ export function EnhancedMessageRenderer({
 
   // Prepare sources data - memoized to prevent infinite re-renders
   const sources = useMemo(() => {
-    // Handle case where we have source_urls (with or without chunk_ids)
-    if (!metadata?.source_urls || metadata.source_urls.length === 0) {
+    if (!metadata?.source_links || metadata.source_links.length === 0) {
       return [];
     }
 
-    const urlGroups: { [url: string]: string[] } = {};
-    const chunkIdsArray = metadata.chunk_ids || [];
+    // Group by URL (since same URL might appear multiple times with different chunk_ids and variants)
+    const urlGroups: { [url: string]: { title: string; chunkIds: string[]; queryVariants: Array<{ index: number; text: string }> } } = {};
 
-    metadata.source_urls.forEach((url, urlIndex) => {
-      const chunkId = chunkIdsArray[urlIndex];
-      if (!urlGroups[url]) {
-        urlGroups[url] = [];
+    metadata.source_links.forEach((link) => {
+      if (!urlGroups[link.url]) {
+        urlGroups[link.url] = { title: link.title, chunkIds: [], queryVariants: [] };
       }
-      if (chunkId) {
-        urlGroups[url].push(chunkId);
+      if (link.chunk_id) {
+        urlGroups[link.url].chunkIds.push(link.chunk_id);
+      }
+      // Track which variant retrieved this document
+      if (link.query_variant_index && link.query_variant) {
+        // Avoid duplicate variants
+        const variantExists = urlGroups[link.url].queryVariants.some(v => v.index === link.query_variant_index);
+        if (!variantExists) {
+          urlGroups[link.url].queryVariants.push({
+            index: link.query_variant_index,
+            text: link.query_variant
+          });
+        }
       }
     });
 
-    return Object.entries(urlGroups).map(([url, chunkIds]) => ({
+    const result = Object.entries(urlGroups).map(([url, data]) => ({
       url,
-      chunkIds: chunkIds || [],  // Ensure never null
+      title: data.title,
+      chunkIds: data.chunkIds || [],
+      queryVariants: data.queryVariants.length > 0 ? data.queryVariants : undefined,
     }));
-  }, [metadata?.source_urls, metadata?.chunk_ids]);
+
+    return result;
+  }, [metadata?.source_links]);
 
   // Check if this is raw results mode by examining content
   const isActualRawMode = isRawMode || content.includes('**Raw Results Mode**');
@@ -382,6 +404,8 @@ export function EnhancedMessageRenderer({
             fontSize: '14px',
             lineHeight: '1.6',
             color: 'var(--mantine-color-gray-9)',
+            direction: textDirection,
+            textAlign: textDirection === 'rtl' ? 'right' : 'left',
           }}
         >
           <ReactMarkdown

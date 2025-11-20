@@ -13,7 +13,6 @@
 
 import { useGetActiveModelProviders } from '@/api/resources/model-providers';
 import { useGetTools } from '@/api/resources/tools';
-import { ToolInstructionsStep } from './tool-instructions-step';
 import { useGetCollections } from '@/api/resources/vectordb';
 import { ColorfulVerticalStepper } from '@/components/colorful-vertical-stepper';
 import { Page } from '@/components/page';
@@ -52,15 +51,14 @@ import {
   IconDatabase,
   IconHelp,
   IconInfoCircle,
-  IconMessageCircle,
   IconRobot,
   IconScale,
-  IconSettings,
   IconTool,
   IconWand
 } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { ToolInstructionsStep } from './tool-instructions-step';
 
 // ============================================================================
 // TYPES & CONSTANTS
@@ -93,7 +91,7 @@ interface ConversationFormData {
 
   // Step 5 - Tools Binding (Assistant mode only)
   selectedTools: string[]; // Array of tool IDs
-  tool_instructions: string; // User's custom tool orchestration instructions
+  instructions: string; // User's custom instructions for assistant behavior
 }
 
 const ENHANCEMENT_STRATEGIES = [
@@ -282,7 +280,7 @@ export function ConversationCreateWizard() {
       enableLLMGeneration: true,
       enableKnowledgeAssistant: false, // RAG mode (default) - false, switched to true when Assistant selected
       selectedTools: [], // Initialize as empty array - will be populated when user selects tools
-      tool_instructions: '', // Initialize as empty string - optional user-provided tool orchestration instructions
+      instructions: '', // Initialize as empty string - optional user-provided assistant behavior instructions
     },
     validate: {
       conversationName: (value) =>
@@ -300,11 +298,35 @@ export function ConversationCreateWizard() {
 
   // Detect edit mode and load existing conversation
   useEffect(() => {
-    const state = location.state as { editingConversationId?: string } | null;
+    const state = location.state as {
+      editingConversationId?: string;
+      fromJob?: boolean;
+      jobId?: string;
+      jobName?: string;
+      jobDescription?: string;
+      vectordbCollectionId?: string;
+    } | null;
+
     if (state?.editingConversationId) {
       setIsEditMode(true);
       setEditingConversationId(state.editingConversationId);
       loadExistingConversation(state.editingConversationId);
+    } else if (state?.fromJob && state.jobId) {
+      // Pre-populate from job data
+      console.log('[DEBUG] Pre-populating conversation from job:', state);
+
+      // Set conversation name and description from job
+      if (state.jobName) {
+        form.setFieldValue('conversationName', `${state.jobName} Agent`);
+      }
+      if (state.jobDescription) {
+        form.setFieldValue('conversationDescription', `Conversation agent for ${state.jobDescription}`);
+      }
+
+      // Fetch and set vectordb collection name
+      if (state.vectordbCollectionId) {
+        fetchCollectionName(state.vectordbCollectionId);
+      }
     }
   }, []);
 
@@ -327,6 +349,30 @@ export function ConversationCreateWizard() {
     }
   }, [form.values.agentType]);
 
+  // Fetch collection name by ID
+  const fetchCollectionName = async (collectionId: string) => {
+    try {
+      const token = localStorage.getItem('jwt_token');
+      const response = await fetch(apiUtils.buildApiUrl(`/knowledge/vectordb-collections/${collectionId}`), {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const collection = await response.json();
+        console.log('[DEBUG] Fetched collection:', collection);
+        if (collection.collection_name) {
+          form.setFieldValue('collectionName', collection.collection_name);
+        }
+      } else {
+        console.error('[ERROR] Failed to fetch collection:', response.status);
+      }
+    } catch (error) {
+      console.error('[ERROR] Error fetching collection:', error);
+    }
+  };
+
   // Load existing conversation data for edit mode
   const loadExistingConversation = async (conversationId: string) => {
     try {
@@ -344,7 +390,6 @@ export function ConversationCreateWizard() {
 
         console.log('[DEBUG loadExistingConversation] Full session object:', JSON.stringify(session, null, 2));
         console.log('[DEBUG loadExistingConversation] session.assistant_config:', session.assistant_config);
-        console.log('[DEBUG loadExistingConversation] tool_instructions value:', session.assistant_config?.tool_instructions);
 
         // Populate form with existing conversation data
         form.setValues({
@@ -364,23 +409,14 @@ export function ConversationCreateWizard() {
           enableLLMGeneration: session.answer_generation?.enabled || false,
           enableKnowledgeAssistant: session.assistant_config?.enabled || false,
           selectedTools: session.assistant_config?.tools || [],
-          tool_instructions: session.assistant_config?.tool_instructions || '',
+          instructions: session.assistant_config?.instructions || '',
         });
 
         console.log('[DEBUG loadExistingConversation] form.values after setValues:', form.values);
-        console.log('[DEBUG loadExistingConversation] form.values.tool_instructions after setValues:', form.values.tool_instructions);
         console.log('[DEBUG loadExistingConversation] form.values.selectedTools after setValues:', form.values.selectedTools);
 
         // No need to set selectedSystemPrompt as tools are now standalone
         if (false) { // Removed old system prompt logic
-          const promptData = {
-            id: session.assistant_config.system_prompt_tasks[0].id,
-            title: session.assistant_config.system_prompt_tasks[0].title,
-            content: session.assistant_config.system_prompt_tasks[0].content,
-            is_active: session.assistant_config.system_prompt_tasks[0].is_active,
-          };
-          console.log('[DEBUG loadExistingConversation] Setting selectedSystemPrompt:', promptData);
-          setSelectedSystemPrompt(promptData);
         } else {
           console.log('[DEBUG loadExistingConversation] No system_prompt_tasks found in session');
         }
@@ -557,11 +593,11 @@ export function ConversationCreateWizard() {
         },
         // Complex nested assistant configuration
         // RAG mode: assistant_config = { enabled: false, tools: [] }
-        // Assistant mode: assistant_config = { enabled: true, tools: [...tool_ids], tool_instructions: "..." }
+        // Assistant mode: assistant_config = { enabled: true, tools: [...tool_ids], instructions: "..." }
         assistant_config: {
           enabled: form.values.agentType === 'assistant',
           tools: form.values.agentType === 'assistant' ? form.values.selectedTools : [],
-          tool_instructions: form.values.agentType === 'assistant' ? form.values.tool_instructions : null,
+          instructions: form.values.agentType === 'assistant' ? form.values.instructions : null,
         },
       };
 
@@ -732,7 +768,7 @@ export function ConversationCreateWizard() {
                                 <input
                                   type="checkbox"
                                   checked={form.values.selectedTools?.includes(tool.id) || false}
-                                  onChange={() => {}} // Handled by card onClick
+                                  onChange={() => { }} // Handled by card onClick
                                   style={{ marginTop: '4px', cursor: 'pointer' }}
                                 />
                                 <Stack gap="xs" style={{ flex: 1 }}>
@@ -775,16 +811,14 @@ export function ConversationCreateWizard() {
               </Stack>
             </Card>
 
-            {/* Tool Instructions Section - Shown if tools are selected OR if there are existing instructions to edit */}
-            {(form.values.selectedTools?.length > 0 || form.values.tool_instructions) && (
-              <Card withBorder shadow="sm">
-                <ToolInstructionsStep
-                  form={form}
-                  tools={tools && Array.isArray(tools) ? tools : []}
-                  providers={providers}
-                />
-              </Card>
-            )}
+            {/* Instructions & Tool Orchestration - ALWAYS visible (instructions control overall agent behavior) */}
+            <Card withBorder shadow="sm">
+              <ToolInstructionsStep
+                form={form}
+                tools={tools && Array.isArray(tools) ? tools : []}
+                providers={providers}
+              />
+            </Card>
           </Stack>
         )}
 
@@ -893,66 +927,66 @@ export function ConversationCreateWizard() {
               {ENHANCEMENT_STRATEGIES
                 .filter(strategy => form.values.agentType === 'assistant' || strategy.value !== 'custom_variants') // Hide custom_variants in RAG mode
                 .map((strategy) => (
-                <Accordion.Item key={strategy.value} value={strategy.value}>
-                  <Accordion.Control>
-                    <Group gap="sm">
-                      <Badge color={strategy.color}>{strategy.label}</Badge>
-                      <Text size="sm" c="dimmed">{strategy.description}</Text>
-                    </Group>
-                  </Accordion.Control>
-                  <Accordion.Panel>
-                    <Stack gap="md">
-                      <div>
-                        <Text fw={600} size="sm" mb="xs">Details</Text>
-                        <Text size="sm">{strategy.details}</Text>
-                      </div>
+                  <Accordion.Item key={strategy.value} value={strategy.value}>
+                    <Accordion.Control>
+                      <Group gap="sm">
+                        <Badge color={strategy.color}>{strategy.label}</Badge>
+                        <Text size="sm" c="dimmed">{strategy.description}</Text>
+                      </Group>
+                    </Accordion.Control>
+                    <Accordion.Panel>
+                      <Stack gap="md">
+                        <div>
+                          <Text fw={600} size="sm" mb="xs">Details</Text>
+                          <Text size="sm">{strategy.details}</Text>
+                        </div>
 
-                      <div>
-                        <Text fw={600} size="sm" mb="xs">Use Cases</Text>
-                        <List size="sm">
-                          {strategy.useCases.map((useCase) => (
-                            <List.Item key={useCase}>{useCase}</List.Item>
-                          ))}
-                        </List>
-                      </div>
+                        <div>
+                          <Text fw={600} size="sm" mb="xs">Use Cases</Text>
+                          <List size="sm">
+                            {strategy.useCases.map((useCase) => (
+                              <List.Item key={useCase}>{useCase}</List.Item>
+                            ))}
+                          </List>
+                        </div>
 
-                      <Grid>
-                        <Grid.Col span={{ base: 12, sm: 6 }}>
-                          <div>
-                            <Text fw={600} size="sm" mb="xs" c="green">Pros</Text>
-                            <List size="sm">
-                              {strategy.pros.map((pro) => (
-                                <List.Item key={pro}>{pro}</List.Item>
-                              ))}
-                            </List>
-                          </div>
-                        </Grid.Col>
-                        <Grid.Col span={{ base: 12, sm: 6 }}>
-                          <div>
-                            <Text fw={600} size="sm" mb="xs" c="red">Cons</Text>
-                            <List size="sm">
-                              {strategy.cons.map((con) => (
-                                <List.Item key={con}>{con}</List.Item>
-                              ))}
-                            </List>
-                          </div>
-                        </Grid.Col>
-                      </Grid>
+                        <Grid>
+                          <Grid.Col span={{ base: 12, sm: 6 }}>
+                            <div>
+                              <Text fw={600} size="sm" mb="xs" c="green">Pros</Text>
+                              <List size="sm">
+                                {strategy.pros.map((pro) => (
+                                  <List.Item key={pro}>{pro}</List.Item>
+                                ))}
+                              </List>
+                            </div>
+                          </Grid.Col>
+                          <Grid.Col span={{ base: 12, sm: 6 }}>
+                            <div>
+                              <Text fw={600} size="sm" mb="xs" c="red">Cons</Text>
+                              <List size="sm">
+                                {strategy.cons.map((con) => (
+                                  <List.Item key={con}>{con}</List.Item>
+                                ))}
+                              </List>
+                            </div>
+                          </Grid.Col>
+                        </Grid>
 
-                      <Button
-                        size="xs"
-                        variant="light"
-                        onClick={() => {
-                          form.setFieldValue('selectedStrategy', strategy.value);
-                          setStrategiesInfoModalOpen(false);
-                        }}
-                      >
-                        Select This Strategy
-                      </Button>
-                    </Stack>
-                  </Accordion.Panel>
-                </Accordion.Item>
-              ))}
+                        <Button
+                          size="xs"
+                          variant="light"
+                          onClick={() => {
+                            form.setFieldValue('selectedStrategy', strategy.value);
+                            setStrategiesInfoModalOpen(false);
+                          }}
+                        >
+                          Select This Strategy
+                        </Button>
+                      </Stack>
+                    </Accordion.Panel>
+                  </Accordion.Item>
+                ))}
             </Accordion>
           ) : (
             // Comparison Mode
@@ -968,23 +1002,23 @@ export function ConversationCreateWizard() {
                 {ENHANCEMENT_STRATEGIES
                   .filter(strategy => form.values.agentType === 'assistant' || strategy.value !== 'custom_variants') // Hide custom_variants in RAG mode
                   .map((strategy) => (
-                  <Button
-                    key={strategy.value}
-                    variant={selectedForComparison.includes(strategy.value) ? 'filled' : 'light'}
-                    color={selectedForComparison.includes(strategy.value) ? 'blue' : 'gray'}
-                    size="sm"
-                    disabled={selectedForComparison.length === 2 && !selectedForComparison.includes(strategy.value)}
-                    onClick={() => {
-                      setSelectedForComparison((prev) =>
-                        prev.includes(strategy.value)
-                          ? prev.filter((v) => v !== strategy.value)
-                          : [...prev, strategy.value]
-                      );
-                    }}
-                  >
-                    {strategy.label}
-                  </Button>
-                ))}
+                    <Button
+                      key={strategy.value}
+                      variant={selectedForComparison.includes(strategy.value) ? 'filled' : 'light'}
+                      color={selectedForComparison.includes(strategy.value) ? 'blue' : 'gray'}
+                      size="sm"
+                      disabled={selectedForComparison.length === 2 && !selectedForComparison.includes(strategy.value)}
+                      onClick={() => {
+                        setSelectedForComparison((prev) =>
+                          prev.includes(strategy.value)
+                            ? prev.filter((v) => v !== strategy.value)
+                            : [...prev, strategy.value]
+                        );
+                      }}
+                    >
+                      {strategy.label}
+                    </Button>
+                  ))}
               </Group>
 
               {selectedForComparison.length === 2 && (
@@ -1174,7 +1208,7 @@ function StepAgentTypeAndSettings({ form }: StepProps) {
 
       {/* Conversation Settings */}
       <Divider label="Conversation Details" labelPosition="center" />
-      
+
       <div>
         <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light" mb="md">
           <Text size="sm">
@@ -1996,8 +2030,26 @@ function StepReviewAndCreate({ form, providers, collections, tools }: StepProps)
                 {form.values.selectedTools?.length || 0} Tool{form.values.selectedTools?.length !== 1 ? 's' : ''}
               </Badge>
             </Group>
+            {/* Assistant Instructions */}
+            {form.values.instructions && (
+              <Stack gap="xs">
+                <Text fw={500} size="sm" c="grape">
+                  Assistant Instructions
+                </Text>
+                <Paper p="sm" bg="white" style={{ border: '1px solid #d8b4fe', borderRadius: '4px' }}>
+                  <Text size="xs" style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace' }} c="dark">
+                    {form.values.instructions}
+                  </Text>
+                </Paper>
+              </Stack>
+            )}
+
+            {/* Selected Tools */}
             {form.values.selectedTools && form.values.selectedTools.length > 0 ? (
               <Stack gap="sm">
+                <Text fw={500} size="sm" c="grape">
+                  Selected Tools
+                </Text>
                 <Stack gap="xs">
                   {form.values.selectedTools.map((toolId: string) => {
                     const tool = (tools && Array.isArray(tools) ? tools : [])?.find((t: any) => t.id === toolId);

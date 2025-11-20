@@ -110,38 +110,34 @@ async def augmented_strategy_node(state: WorkflowState) -> WorkflowState:
                 if line.strip() and not line.strip().startswith(("[", "]", "{", "}"))
             ]
 
-        # Ensure we have at least one variant
+        # Ensure we have at least one variant (fallback to original if LLM fails)
         if not enhanced_variants:
             logger.warning(
-                "⚠️ Augmented Strategy: No variants generated, using original query"
+                "⚠️ Augmented Strategy: No variants generated, using original query as fallback"
             )
             enhanced_variants = [query]
 
-        # Combine original query with enhanced variants
-        # Original query ALWAYS comes first to preserve context
-        augmented_queries = [query] + enhanced_variants
-
+        # Log all variants returned by LLM (no modification)
         logger.info(
-            f"✅ Augmented Strategy: Generated {len(enhanced_variants)} variants + original query"
+            f"✅ Augmented Strategy: Generated {len(enhanced_variants)} variants from LLM"
         )
-        logger.debug(f"   Original: {query}")
         for i, variant in enumerate(enhanced_variants, 1):
             transform_label = (
                 f" ({transformation_types_used[i-1]})"
                 if i - 1 < len(transformation_types_used)
                 else ""
             )
-            logger.debug(f"   Variant {i}{transform_label}: {variant}")
+            logger.info(f"🔍 [VARIANT {i}]{transform_label}: '{variant}'")
 
-        # Update state
-        state["enhanced_query"] = {"augmented_queries": augmented_queries}
-        state["augmented_queries"] = augmented_queries  # Original + variants
+        # Update state with LLM-generated variants only (no original added)
+        state["enhanced_query"] = {"augmented_queries": enhanced_variants}
+        state["augmented_queries"] = enhanced_variants
         state["enhancement_strategies_applied"] = ["augmented"]
 
         logger.info(
-            f"✅ [NODE FINISH] augmented_strategy_node - Stored {len(augmented_queries)} queries in state"
+            f"✅ [NODE FINISH] augmented_strategy_node - Stored {len(enhanced_variants)} queries in state"
         )
-        logger.info(f"📝 Augmented queries stored: {augmented_queries}")
+        logger.info(f"📝 Augmented queries stored: {enhanced_variants}")
         return state
 
     except Exception as e:

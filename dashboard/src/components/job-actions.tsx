@@ -195,7 +195,15 @@ export function JobActions({
           <ActionIcon
             variant="subtle"
             color="violet"
-            onClick={() => navigate('/dashboard/apps/conversation/create')}
+            onClick={() => navigate(paths.dashboard.apps.conversationCreate, {
+              state: {
+                fromJob: true,
+                jobId: job.id,
+                jobName: job.name,
+                jobDescription: job.description,
+                vectordbCollectionId: job.vectordb_collection_id
+              }
+            })}
           >
             <IconMessagePlus size={16} />
           </ActionIcon>

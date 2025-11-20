@@ -1,7 +1,6 @@
-import { Box, Code, Paper, Text } from '@mantine/core';
-import { useEffect, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { Box, Paper, Text } from '@mantine/core';
+import { useEffect, useMemo, useState } from 'react';
+import { detectTextDirection } from '../utilities/text-direction';
 import { EnhancedMessageRenderer } from './enhanced-message-renderer';
 
 // CSS keyframes for animations
@@ -49,6 +48,9 @@ export function StreamingMessage({
 }: StreamingMessageProps) {
   const [displayContent, setDisplayContent] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+
+  // Detect text direction based on content
+  const textDirection = useMemo(() => detectTextDirection(displayContent), [displayContent]);
 
   useEffect(() => {
     if (isStreaming) {
@@ -113,6 +115,8 @@ export function StreamingMessage({
                 lineHeight: '1.6',
                 whiteSpace: 'pre-wrap',
                 color: 'var(--mantine-color-gray-8)',
+                direction: textDirection,
+                textAlign: textDirection === 'rtl' ? 'right' : 'left',
               }}
             >
               {displayContent}
@@ -123,7 +127,8 @@ export function StreamingMessage({
                   width: '8px',
                   height: '16px',
                   backgroundColor: 'var(--mantine-color-blue-6)',
-                  marginLeft: '2px',
+                  marginLeft: textDirection === 'rtl' ? '0' : '2px',
+                  marginRight: textDirection === 'rtl' ? '2px' : '0',
                   animation: 'blink 1s infinite',
                 }}
               />

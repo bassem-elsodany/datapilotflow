@@ -74,7 +74,7 @@ from src.agents.assistant_agent.tools.tool_middleware import (
     inject_rag_context_to_task_tool,
     set_current_agent_state,
 )
-from src.agents.common.prompts import MAIN_AGENT_SYSTEM_PROMPT
+from src.agents.supervisor_agent.prompts import MAIN_AGENT_SYSTEM_PROMPT
 from src.agents.task_agent.tools import get_task_agent_tools
 from src.config import settings
 from src.domain.conversation import ConversationMessage
@@ -1108,8 +1108,7 @@ async def get_response_stream_supervisor(
         )
 
         # Initialize metadata variables
-        source_urls = []
-        chunk_ids = []
+        source_links = []  # Structured list with URL, title, and chunk_id
         enhanced_queries = []
         enhancement_strategy = rag_execution_state.get(
             "enhancement_strategy", "unknown"
@@ -1120,26 +1119,43 @@ async def get_response_stream_supervisor(
             document_count = len(rag_execution_state["documents"])
             enhanced_queries = rag_execution_state.get("enhanced_queries", [])
 
-            # Extract source URLs and chunk IDs from documents
+            # Extract source links with URL, title, and chunk_id from each document
             for doc in rag_execution_state["documents"]:
                 # Try multiple paths for source_url (top-level, nested in metadata, or 'source' field)
                 source_url = doc.get("source_url") or doc.get("source")
                 if not source_url and doc.get("metadata", {}).get("metadata"):
                     source_url = doc["metadata"]["metadata"].get("source_url")
 
-                if source_url and source_url not in source_urls:
-                    source_urls.append(source_url)
+                # Extract title from multiple possible locations
+                title = doc.get("title")
+                if not title and doc.get("metadata", {}).get("metadata"):
+                    title = doc["metadata"]["metadata"].get("title")
+                if not title and doc.get("metadata"):
+                    title = doc["metadata"].get("title")
 
                 # Try multiple paths for chunk_id (top-level or nested in metadata)
                 chunk_id = doc.get("chunk_id")
                 if not chunk_id and doc.get("metadata", {}).get("metadata"):
                     chunk_id = doc["metadata"]["metadata"].get("chunk_id")
 
-                if chunk_id and chunk_id not in chunk_ids:
-                    chunk_ids.append(chunk_id)
+                # Extract query variant info (which variant retrieved this document)
+                query_variant_index = doc.get("query_variant_index")
+                query_variant = doc.get("query_variant")
+
+                if source_url:
+                    # Add structured link with URL, title, chunk_id, and variant info
+                    source_links.append(
+                        {
+                            "url": source_url,
+                            "title": title or "Untitled Document",
+                            "chunk_id": chunk_id or "",
+                            "query_variant_index": query_variant_index,
+                            "query_variant": query_variant,
+                        }
+                    )
 
             logger.info(
-                f"📦 Extracted {len(source_urls)} source URLs and {len(chunk_ids)} chunk IDs from {document_count} documents"
+                f"📦 Extracted {len(source_links)} source links from {document_count} documents"
             )
 
         # Save to conversation history with metadata (non-fatal failure)
@@ -1148,7 +1164,6 @@ async def get_response_stream_supervisor(
                 role="user",
                 content=query,
                 timestamp=datetime.now(timezone.utc),
-                search_query=query,
             )
             conversation_history_service.add_message(conversation_id, user_message)
 
@@ -1157,8 +1172,7 @@ async def get_response_stream_supervisor(
                 role="assistant",
                 content=final_response,
                 timestamp=datetime.now(timezone.utc),
-                source_urls=source_urls,
-                chunk_ids=chunk_ids,
+                source_links=source_links,  # Structured links with URL, title, and chunk_id
                 enhancement_strategy_used=enhancement_strategy,
                 enhanced_queries=enhanced_queries,
                 document_count=document_count,
@@ -1168,7 +1182,7 @@ async def get_response_stream_supervisor(
 
             logger.info(
                 f"✅ [CONVERSATION] Saved assistant response with metadata to conversation {conversation_id} "
-                f"(sources={len(source_urls)}, chunks={len(chunk_ids)}, queries={len(enhanced_queries)}, docs={document_count})"
+                f"(sources={len(source_links)}, queries={len(enhanced_queries)}, docs={document_count})"
             )
         except Exception as e:
             # Conversation save failure is logged but NOT fatal
@@ -1200,8 +1214,9 @@ async def get_response_stream_supervisor(
                 "relevant_docs"
             ]
             final_result["metadata"]["enhanced_queries"] = enhanced_queries
-            final_result["metadata"]["source_urls"] = source_urls
-            final_result["metadata"]["chunk_ids"] = chunk_ids
+            final_result["metadata"][
+                "source_links"
+            ] = source_links  # Structured links with URL, title, and chunk_id
 
             # Add source details for each document
             final_result["metadata"]["document_sources"] = [

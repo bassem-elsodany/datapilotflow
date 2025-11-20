@@ -293,30 +293,12 @@ async def get_response_stream_rag(
                     content = str(chunk_data) if chunk_data else ""
 
                 if content:
-                    logger.info(
-                        f"[RAG STREAMING NOW] Yielding chunk: {content[:50]}..."
-                    )
                     # Emit metadata ONLY on the first chunk
                     if not first_llm_chunk_emitted:
                         first_llm_chunk_emitted = True
 
                         # Build metadata from retrieved documents (may be empty if not yet populated)
                         retrieved_docs = last_state.get("retrieved_documents") or []
-                        source_urls = []
-                        chunk_ids = []
-
-                        if retrieved_docs:
-                            for doc in retrieved_docs:
-                                if (
-                                    doc.get("source_url")
-                                    and doc["source_url"] not in source_urls
-                                ):
-                                    source_urls.append(doc["source_url"])
-                                if (
-                                    doc.get("chunk_id")
-                                    and doc["chunk_id"] not in chunk_ids
-                                ):
-                                    chunk_ids.append(doc["chunk_id"])
 
                         # Extract enhanced queries from query_info
                         query_info = last_state.get("query_info") or {}
@@ -327,8 +309,6 @@ async def get_response_stream_rag(
                             "type": "streaming_response",
                             "chunk": content,
                             "metadata": {
-                                "source_urls": source_urls,
-                                "chunk_ids": chunk_ids,
                                 "document_count": len(retrieved_docs),
                                 "enhancement_strategy": strategy_used,
                                 "enhanced_queries": enhanced_queries,
@@ -642,17 +622,7 @@ async def get_response_stream_rag(
 
         # Calculate final execution time
         execution_time_ms = (time.time() - start_time) * 1000
-
-        logger.critical(
-            f"🔴 [RAG STREAM ENDED] Stream finished after {chunk_count} chunks"
-        )
-        logger.critical(
-            f"🔴 [RAG STREAM ENDED] answer_generation_emitted={answer_generation_emitted}, has_final_answer={bool(last_state.get('final_answer'))}"
-        )
         final_answer_text = last_state.get("final_answer") or ""
-        logger.critical(
-            f"🔴 [RAG STREAM ENDED] final_answer length={len(final_answer_text)}"
-        )
 
         # CRITICAL FIX 3: If response_generation wasn't emitted but we have final_answer, emit it now
         if not answer_generation_emitted and last_state.get("final_answer"):
@@ -665,13 +635,6 @@ async def get_response_stream_rag(
                 "raw_response_formatter"
                 if is_raw_response
                 else "answer_generator/unknown"
-            )
-
-            logger.critical(
-                f"🔴 [RAG END STATE] Detected final_answer from {response_source} at end of stream!"
-            )
-            logger.critical(
-                f"🔴 [RAG END STATE] Emitting response_generation START and COMPLETE events now"
             )
 
             # Emit START event
@@ -699,27 +662,32 @@ async def get_response_stream_rag(
                 "execution_time_ms": execution_time_ms,
             }
             yield complete_event
-            logger.critical(
-                f"✅ [RAG END STATE] EMITTED response_generation_complete with {len(final_answer)} chars (mode: {generation_mode})"
-            )
 
         # Emit the final_answer as streaming_response so frontend can display it
         # NOTE: This is a FALLBACK for when real-time streaming didn't work
         # If first_llm_chunk_emitted is True, chunks were already streamed in real-time
         final_answer = last_state.get("final_answer", "") if last_state else ""
         if final_answer and not first_llm_chunk_emitted:
-            logger.warning(
-                f"⚠️ [RAG FALLBACK] Real-time streaming didn't work - emitting final_answer as post-generation chunks ({len(final_answer)} chars)"
-            )
-
             # Emit metadata on first chunk only
             retrieved_docs = last_state.get("retrieved_documents", []) or []
-            source_urls = [
-                doc.get("source_url") for doc in retrieved_docs if doc.get("source_url")
-            ]
-            chunk_ids = [
-                doc.get("chunk_id") for doc in retrieved_docs if doc.get("chunk_id")
-            ]
+            # Structured links with URL, title, chunk_id, and variant info
+            source_links = []
+            for doc in retrieved_docs:
+                source_url = doc.get("source_url")
+                if source_url:
+                    title = doc.get("title") or doc.get("metadata", {}).get("title")
+                    chunk_id = doc.get("chunk_id")
+                    query_variant_index = doc.get("query_variant_index")
+                    query_variant = doc.get("query_variant")
+                    source_links.append(
+                        {
+                            "url": source_url,
+                            "title": title or "Untitled Document",
+                            "chunk_id": chunk_id or "",
+                            "query_variant_index": query_variant_index,
+                            "query_variant": query_variant,
+                        }
+                    )
 
             # Extract enhanced queries from query_info
             query_info = last_state.get("query_info") or {}
@@ -740,20 +708,51 @@ async def get_response_stream_rag(
                 # Add metadata only on first chunk
                 if i == 0:
                     response_event["metadata"] = {
-                        "source_urls": source_urls,
-                        "chunk_ids": chunk_ids,
+                        "source_links": source_links,  # Structured links with URL, title, and chunk_id
                         "document_count": len(retrieved_docs),
                         "enhancement_strategy": strategy_used,
                         "enhanced_queries": enhanced_queries,
                     }
 
-                logger.debug(
-                    f"📤 [RAG RESPONSE CHUNK] Emitting chunk {i//chunk_size + 1} ({len(chunk)} chars)"
-                )
                 yield response_event
 
         # Yield final result with complete state
         if last_state:
+            # FIRST: Extract metadata for the response message
+            query_info = last_state.get("query_info", {})
+
+            source_links = (
+                []
+            )  # Structured links with URL, title, chunk_id, and variant info
+            retrieved_docs = last_state.get("retrieved_documents", [])
+            for doc in retrieved_docs:
+                source_url = doc.get("source_url")
+                if source_url:
+                    # Extract title, chunk_id, and variant info from document
+                    title = doc.get("title") or doc.get("metadata", {}).get("title")
+                    chunk_id = doc.get("chunk_id")
+                    query_variant_index = doc.get("query_variant_index")
+                    query_variant = doc.get("query_variant")
+                    source_links.append(
+                        {
+                            "url": source_url,
+                            "title": title or "Untitled Document",
+                            "chunk_id": chunk_id or "",
+                            "query_variant_index": query_variant_index,
+                            "query_variant": query_variant,
+                        }
+                    )
+
+            enhanced_queries = (
+                query_info.get("enhanced_queries", []) if query_info else []
+            )
+            enhancement_strategy = (
+                query_info.get("strategy_used", "augmented")
+                if query_info
+                else "augmented"
+            )
+
+            # Build final result with metadata included
             final_result = {
                 "type": "workflow_complete",
                 "execution_time_ms": execution_time_ms,
@@ -766,71 +765,35 @@ async def get_response_stream_rag(
                     "query_info"
                 ),  # Contains enhanced_queries array
                 "total_chunks": chunk_count,
+                "metadata": {
+                    "source_links": source_links,
+                    "enhancement_strategy": enhancement_strategy,
+                    "enhanced_queries": enhanced_queries,
+                    "document_count": len(retrieved_docs),
+                    "processing_time_ms": int(execution_time_ms),
+                },
             }
-
-            logger.info(
-                f"✅ LangGraph workflow completed in {execution_time_ms:.2f}ms "
-                f"({chunk_count} chunks) for query: '{query[:50]}...'"
-            )
 
             # Log workflow results summary
             if final_result.get("enhanced_query"):
                 enhanced_query = final_result["enhanced_query"]
-                logger.debug(
-                    f"Enhanced queries generated: {len(enhanced_query.get('queries', []))}"
-                )
-
-            documents = final_result.get("documents", [])
-            logger.debug(f"Documents retrieved: {len(documents)}")
-
-            response = final_result.get("response", "")
-            if response:
-                logger.debug(f"Response generated: {len(response)} characters")
-            else:
-                logger.warning("No response generated by RAG workflow")
 
             # SAVE messages to conversation history
             try:
-                query_info = last_state.get("query_info", {})
-
-                # Extract metadata for the response message
-                source_urls = []
-                chunk_ids = []
-                retrieved_docs = last_state.get("retrieved_documents", [])
-                for doc in retrieved_docs:
-                    if doc.get("source_url") and doc["source_url"] not in source_urls:
-                        source_urls.append(doc["source_url"])
-                    if doc.get("chunk_id") and doc["chunk_id"] not in chunk_ids:
-                        chunk_ids.append(doc["chunk_id"])
-
-                enhanced_queries = (
-                    query_info.get("enhanced_queries", []) if query_info else []
-                )
-                enhancement_strategy = (
-                    query_info.get("strategy_used", "augmented")
-                    if query_info
-                    else "augmented"
-                )
-
                 # Save user query message
                 user_message = ConversationMessage(
                     role="user",
                     content=query,
                     timestamp=datetime.now(timezone.utc),
-                    search_query=query,
                 )
                 conversation_history_service.add_message(conversation_id, user_message)
-                logger.info(
-                    f"✅ [CONVERSATION] Saved user query to conversation {conversation_id}"
-                )
 
                 # Save assistant response message with metadata
                 assistant_message = ConversationMessage(
                     role="assistant",
                     content=response,
                     timestamp=datetime.now(timezone.utc),
-                    source_urls=source_urls,
-                    chunk_ids=chunk_ids,
+                    source_links=source_links,  # Structured links with URL, title, and chunk_id
                     enhancement_strategy_used=enhancement_strategy,
                     enhanced_queries=enhanced_queries,
                     document_count=len(retrieved_docs),
@@ -839,18 +802,12 @@ async def get_response_stream_rag(
                 conversation_history_service.add_message(
                     conversation_id, assistant_message
                 )
-                logger.info(
-                    f"✅ [CONVERSATION] Saved assistant response to conversation {conversation_id}"
-                )
 
             except Exception as e:
-                logger.error(
-                    f"❌ [CONVERSATION] Failed to save messages to conversation: {e}"
-                )
+                pass
 
             yield final_result
         else:
-            logger.warning("Workflow completed but no state was captured")
             yield {
                 "type": "workflow_complete",
                 "execution_time_ms": execution_time_ms,
@@ -866,7 +823,7 @@ async def get_response_stream_rag(
     except Exception as e:
         execution_time_ms = (time.time() - start_time) * 1000
         logger.error(
-            f"❌ LangGraph workflow failed after {execution_time_ms:.2f}ms: {e}"
+            f"Error: LangGraph workflow failed after {execution_time_ms:.2f}ms: {e}"
         )
         logger.error(f"Traceback: {traceback.format_exc()}")
 

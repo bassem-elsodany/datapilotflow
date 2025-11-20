@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Sequence, Dict, Any, Optional, List, Annotated
+from typing import Annotated, Any, Dict, List, Optional, Sequence
 
 from langchain_core.messages import AnyMessage
 from langgraph.graph import add_messages
 from langgraph.managed import IsLastStep
-from operator import add
 
 
 @dataclass
@@ -37,9 +36,7 @@ class InputState:
     updating by ID to maintain an "append-only" state unless a message with the same ID is provided.
     """
 
-    model_str: str = field(
-        default="anthropic/claude-sonnet-4-5-20250929"
-    )
+    model_str: str = field(default="anthropic/claude-sonnet-4-5-20250929")
     """
     The LLM model string in provider/model format (e.g., "anthropic/claude-sonnet-4-5-20250929").
     This is passed through from the service layer to the graph nodes.
@@ -72,14 +69,15 @@ class State(InputState):
     rag_context_size: int = field(default=0)
     """Size of RAG context in characters."""
 
-    # Tool tracking - use Annotated with 'add' operator for list reduction
-    tools_used: Annotated[List[str], add] = field(default_factory=list)
+    # Tool tracking - DON'T use 'add' with dataclass, it concatenates not replaces
+    # Instead, manage these lists manually in graph nodes
+    tools_used: List[str] = field(default_factory=list)
     """List of all tools called during execution."""
 
-    task_tools_executed: Annotated[List[str], add] = field(default_factory=list)
+    task_tools_executed: List[str] = field(default_factory=list)
     """List of task tools specifically executed."""
 
-    error_messages: Annotated[List[str], add] = field(default_factory=list)
+    error_messages: List[str] = field(default_factory=list)
     """List of errors encountered."""
 
     # Iterative RAG Evaluation Fields
