@@ -53,8 +53,7 @@ export function ToolInstructionsStep({ form, tools = [], providers = [] }: ToolI
         const response = await fetch(apiUtils.buildApiUrl('/tools/generate-instructions'), {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+            ...apiUtils.getAuthHeaders(),
           },
           body: JSON.stringify({
             tool_ids: selectedToolIds,
