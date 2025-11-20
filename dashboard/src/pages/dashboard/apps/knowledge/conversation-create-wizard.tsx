@@ -518,19 +518,31 @@ export function ConversationCreateWizard() {
     }
 
     // In create mode, enforce sequential validation
+    // Allow going back to any previous step
     if (step < activeStep) {
       setActiveStep(step);
       return;
     }
-    if (completedSteps.includes(step) && step === activeStep + 1) {
+    
+    // Allow clicking immediate next step (like clicking Next button)
+    if (step === activeStep + 1) {
       if (validateStep(activeStep)) {
         setCompletedSteps((prev) => [...new Set([...prev, activeStep])]);
         setActiveStep(step);
+      } else {
+        notifications.show({
+          title: 'Validation Error',
+          message: 'Please fill in required fields before proceeding',
+          color: 'red',
+        });
       }
       return;
     }
+    
+    // Allow revisiting completed steps
     if (completedSteps.includes(step)) {
       setActiveStep(step);
+      return;
     }
   };
 
