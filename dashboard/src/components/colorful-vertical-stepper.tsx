@@ -31,8 +31,16 @@ export function ColorfulVerticalStepper({
 }: ColorfulVerticalStepperProps) {
   const theme = useMantineTheme();
 
+  console.log('[ColorfulVerticalStepper] Received activeStep:', activeStep, 'steps.length:', steps.length, 'completedSteps:', completedSteps);
+
   const isStepCompleted = (step: number) => completedSteps.includes(step);
-  const isStepActive = (step: number) => step === activeStep;
+  const isStepActive = (step: number) => {
+    const result = step === activeStep;
+    if (result) {
+      console.log('[ColorfulVerticalStepper] Step', step, 'is ACTIVE');
+    }
+    return result;
+  };
   const isStepClickable = (step: number) => {
     // In edit mode, all steps are clickable
     if (isEditMode) {
