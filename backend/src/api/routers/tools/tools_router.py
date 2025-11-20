@@ -116,7 +116,7 @@ class AssistantInstructionsContext(BaseModel):
         ..., description="Communication style (professional, friendly, etc.)"
     )
     agent_type: str = Field(
-        ..., description="Type of agent (conversation, support, booking, etc.)"
+        ..., description="Agent workflow description - how the agent interacts with users and what process it follows"
     )
     selected_tools: Optional[List[dict]] = Field(
         None, description="Information about selected tools"
@@ -778,7 +778,7 @@ Generate comprehensive instructions for an AI assistant based on the following r
 **Personality:**
 {request.context.personality}
 
-**Agent Type:**
+**Agent Workflow & Behavior:**
 {request.context.agent_type}{tools_section}
 
 ---
@@ -786,20 +786,20 @@ Generate comprehensive instructions for an AI assistant based on the following r
 **Generate detailed instructions that:**
 1. Define the assistant's identity and role clearly based on the persona
 2. Specify the communication style and tone matching the personality
-3. Explain how to handle different types of user requests appropriate for this agent type
-4. Include guidelines for response formatting suitable for this agent type
-5. {"Explain how to use the available tools effectively for this type of agent" if tools_section else "Provide general best practices for this agent type"}
-6. Cover common scenarios and edge cases for this agent type
-7. Emphasize the RAG-first principle (use knowledge_expert tool for all information)
-8. Include specific examples relevant to this agent type
+3. Implement the exact workflow and interaction pattern described above
+4. Include step-by-step guidance for the conversational flow (e.g., when to query knowledge base, when to ask clarifying questions, when to take action)
+5. {"Explain how to use the available tools in the context of this workflow" if tools_section else "Provide general best practices for this workflow"}
+6. Cover common scenarios and edge cases for this interaction pattern
+7. Emphasize the RAG-first principle (use knowledge_expert tool for all information retrieval)
+8. Include specific examples demonstrating the workflow in action
 
 **Important Guidelines:**
 - Be specific and actionable
 - Use clear, direct language
-- Include concrete examples for the {request.context.agent_type} agent type
-- Structure instructions logically
-- Make them easy to follow
-- Tailor all guidance to the specific agent type
+- Ensure the instructions follow the exact workflow pattern described
+- Structure instructions to mirror the conversational flow
+- Include concrete examples showing the complete interaction cycle
+- Make the workflow steps explicit and easy to follow
 
 **Output the complete instructions in a clear, structured format suitable for an AI assistant to follow.**"""
 

@@ -46,7 +46,7 @@ export function ToolInstructionsStep({ form, tools = [], providers = [] }: ToolI
       try {
         const selectedProvider = providers.find((p: any) => p.id === generatorForm.values.providerId);
 
-        const response = await fetch(`${apiUtils.baseUrl}/api/v1/tools/generate-instructions`, {
+        const response = await fetch(apiUtils.buildApiUrl('/api/v1/tools/generate-instructions'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -226,23 +226,12 @@ You are a helpful assistant specialized in customer support.
             {...generatorForm.getInputProps('personality')}
           />
 
-          <Select
-            label="Agent Type"
-            description="What type of agent is this?"
-            placeholder="Select agent type"
+          <Textarea
+            label="Agent Type & Workflow"
+            description="Describe how this agent should interact with users and what workflow it follows"
+            placeholder="E.g., A booking agent that first queries the knowledge base for available options, then asks the user clarifying questions about their preferences, and finally helps them complete the booking"
             required
-            data={[
-              { value: 'conversation', label: 'Conversation Agent - General Q&A' },
-              { value: 'support', label: 'Support Agent - Customer assistance' },
-              { value: 'booking', label: 'Booking Agent - Reservations & scheduling' },
-              { value: 'sales', label: 'Sales Agent - Product recommendations' },
-              { value: 'research', label: 'Research Agent - Information gathering' },
-              { value: 'analysis', label: 'Analysis Agent - Data insights' },
-              { value: 'documentation', label: 'Documentation Agent - Technical docs' },
-              { value: 'legal', label: 'Legal Agent - Legal research' },
-              { value: 'medical', label: 'Medical Agent - Healthcare information' },
-              { value: 'education', label: 'Education Agent - Teaching & tutoring' },
-            ]}
+            minRows={4}
             {...generatorForm.getInputProps('agentType')}
           />
 
