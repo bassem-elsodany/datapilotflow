@@ -804,13 +804,32 @@ Generate comprehensive instructions for an AI assistant based on the following r
 
 **Output the complete instructions in a clear, structured format suitable for an AI assistant to follow.**"""
 
+        # Fetch provider details from database
+        from src.services.model_provider import get_model_provider_service
+
+        if not current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID not found"
+            )
+
+        provider_service = get_model_provider_service()
+        provider = provider_service.model_provider_dao.get_model_provider(
+            request.llm_provider_id, current_user.id
+        )
+
+        if not provider:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Model provider {request.llm_provider_id} not found",
+            )
+
         # Initialize LLM client
         from litellm import acompletion
 
-        logger.info(f"Calling LLM: {request.llm_provider_id}/{request.model_name}")
+        logger.info(f"Calling LLM: {provider.provider_type}/{request.model_name}")
 
         response = await acompletion(
-            model=f"{request.llm_provider_id}/{request.model_name}",
+            model=f"{provider.provider_type}/{request.model_name}",
             messages=[
                 {
                     "role": "system",
@@ -819,6 +838,8 @@ Generate comprehensive instructions for an AI assistant based on the following r
                 {"role": "user", "content": generation_prompt},
             ],
             temperature=0.7,
+            api_base=provider.endpoint,
+            api_key=provider.api_key,
         )
 
         instructions = response.choices[0].message.content
@@ -838,7 +859,8 @@ Generate comprehensive instructions for an AI assistant based on the following r
                     if request.context.selected_tools
                     else 0
                 ),
-                "generated_by": f"{request.llm_provider_id}/{request.model_name}",
+                "generated_by": f"{provider.provider_type}/{request.model_name}",
+                "provider_name": provider.name,
             },
         )
 
