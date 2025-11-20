@@ -45,6 +45,7 @@ export function ToolInstructionsStep({ form, tools = [], providers = [] }: ToolI
       setIsGenerating(true);
       try {
         const selectedProvider = providers.find((p: any) => p.id === generatorForm.values.providerId);
+        const modelName = selectedProvider?.generative?.models?.[0] || '';
 
         const response = await fetch(apiUtils.buildApiUrl('/api/v1/tools/generate-instructions'), {
           method: 'POST',
@@ -55,7 +56,7 @@ export function ToolInstructionsStep({ form, tools = [], providers = [] }: ToolI
           body: JSON.stringify({
             tool_ids: selectedToolIds,
             llm_provider_id: generatorForm.values.providerId,
-            model_name: selectedProvider?.model_name,
+            model_name: modelName,
             context: {
               persona: generatorForm.values.persona,
               personality: generatorForm.values.personality,
@@ -240,10 +241,13 @@ You are a helpful assistant specialized in customer support.
             description="Select the LLM to generate instructions"
             placeholder="Select provider"
             required
-            data={providers?.map((p: any) => ({
-              value: p.id,
-              label: `${p.display_name || p.id} (${p.model_name})`,
-            })) || []}
+            data={providers?.map((p: any) => {
+              const modelName = p.generative?.models?.[0] || 'N/A';
+              return {
+                value: p.id,
+                label: `${p.name} (${modelName})`,
+              };
+            }) || []}
             {...generatorForm.getInputProps('providerId')}
           />
 

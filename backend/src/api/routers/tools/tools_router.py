@@ -116,7 +116,8 @@ class AssistantInstructionsContext(BaseModel):
         ..., description="Communication style (professional, friendly, etc.)"
     )
     agent_type: str = Field(
-        ..., description="Agent workflow description - how the agent interacts with users and what process it follows"
+        ...,
+        description="Agent workflow description - how the agent interacts with users and what process it follows",
     )
     selected_tools: Optional[List[dict]] = Field(
         None, description="Information about selected tools"
