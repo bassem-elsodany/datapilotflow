@@ -31,22 +31,25 @@ export function ToolInstructionsStep({ form, tools = [], providers = [] }: ToolI
       personality: '',
       agentType: '',
       providerId: '',
+      modelName: '',
     },
     validate: {
       persona: (value) => (!value?.trim() ? 'Persona is required' : null),
       personality: (value) => (!value?.trim() ? 'Personality is required' : null),
       agentType: (value) => (!value?.trim() ? 'Agent Type is required' : null),
       providerId: (value) => (!value?.trim() ? 'LLM Provider is required' : null),
+      modelName: (value) => (!value?.trim() ? 'Model is required' : null),
     },
   });
+
+  // Get available models for selected provider
+  const selectedProvider = providers?.find((p: any) => p.id === generatorForm.values.providerId);
+  const availableModels = selectedProvider?.generative?.models || [];
 
   const handleGenerateInstructions = async () => {
     if (!generatorForm.validate().hasErrors) {
       setIsGenerating(true);
       try {
-        const selectedProvider = providers.find((p: any) => p.id === generatorForm.values.providerId);
-        const modelName = selectedProvider?.generative?.models?.[0] || '';
-
         const response = await fetch(apiUtils.buildApiUrl('/api/v1/tools/generate-instructions'), {
           method: 'POST',
           headers: {
@@ -56,7 +59,7 @@ export function ToolInstructionsStep({ form, tools = [], providers = [] }: ToolI
           body: JSON.stringify({
             tool_ids: selectedToolIds,
             llm_provider_id: generatorForm.values.providerId,
-            model_name: modelName,
+            model_name: generatorForm.values.modelName,
             context: {
               persona: generatorForm.values.persona,
               personality: generatorForm.values.personality,
@@ -203,6 +206,32 @@ You are a helpful assistant specialized in customer support.
             </Text>
           </Alert>
 
+          {/* Show selected tools */}
+          {selectedTools.length > 0 && (
+            <Card withBorder padding="sm" bg="gray.0">
+              <Stack gap="xs">
+                <Text size="sm" fw={600} c="dimmed">
+                  Selected Tools ({selectedTools.length})
+                </Text>
+                <Stack gap={4}>
+                  {selectedTools.map((tool: any) => (
+                    <Group key={tool.id} gap="xs">
+                      <Badge size="sm" variant="light" color="violet">
+                        {tool.tool_type}
+                      </Badge>
+                      <Text size="xs" fw={500}>
+                        {tool.display_name || tool.name}
+                      </Text>
+                      <Text size="xs" c="dimmed" lineClamp={1}>
+                        - {tool.description}
+                      </Text>
+                    </Group>
+                  ))}
+                </Stack>
+              </Stack>
+            </Card>
+          )}
+
           <Textarea
             label="Persona"
             description="Who is this assistant? What role does it play?"
@@ -238,18 +267,34 @@ You are a helpful assistant specialized in customer support.
 
           <Select
             label="LLM Provider"
-            description="Select the LLM to generate instructions"
+            description="Select the LLM provider"
             placeholder="Select provider"
             required
-            data={providers?.map((p: any) => {
-              const modelName = p.generative?.models?.[0] || 'N/A';
-              return {
-                value: p.id,
-                label: `${p.name} (${modelName})`,
-              };
-            }) || []}
+            data={providers?.map((p: any) => ({
+              value: p.id,
+              label: p.name,
+            })) || []}
             {...generatorForm.getInputProps('providerId')}
+            onChange={(value) => {
+              generatorForm.setFieldValue('providerId', value || '');
+              generatorForm.setFieldValue('modelName', ''); // Reset model when provider changes
+            }}
           />
+
+          {/* Model selection - only show when provider is selected */}
+          {generatorForm.values.providerId && availableModels.length > 0 && (
+            <Select
+              label="Model"
+              description="Select which model to use for generation"
+              placeholder="Select model"
+              required
+              data={availableModels.map((model: string) => ({
+                value: model,
+                label: model,
+              }))}
+              {...generatorForm.getInputProps('modelName')}
+            />
+          )}
 
           <Group justify="flex-end" mt="md">
             <Button
