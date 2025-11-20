@@ -25,7 +25,7 @@ from loguru import logger
 
 # Import supervisor agent components
 from src.agents.supervisor_agent.graph import create_graph
-from src.agents.supervisor_agent.tools import ToolRegistry
+from src.agents.supervisor_agent.tool_registry import ToolRegistry
 
 # Import shared services and utilities
 from src.config import settings

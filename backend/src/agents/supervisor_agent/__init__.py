@@ -13,7 +13,7 @@ Key exports:
 
 from src.agents.supervisor_agent.graph import create_graph
 from src.agents.supervisor_agent.service import SupervisorAgentService
-from src.agents.supervisor_agent.tools import ToolRegistry
+from src.agents.supervisor_agent.tool_registry import ToolRegistry
 from src.agents.supervisor_agent.context import Context
 from src.agents.supervisor_agent.state import State
 from src.agents.supervisor_agent.tool_initialization import (

@@ -10,7 +10,7 @@ from langchain_core.tools import StructuredTool
 from loguru import logger
 
 from src.agents.supervisor_agent.tool_factory import SupervisorToolFactory
-from src.agents.supervisor_agent.tools import ToolRegistry
+from src.agents.supervisor_agent.tool_registry import ToolRegistry
 from src.domain.conversation.models import AssistantConfig
 from src.domain.tool.models import Tool
 

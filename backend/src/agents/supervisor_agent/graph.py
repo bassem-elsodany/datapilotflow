@@ -15,7 +15,7 @@ from langgraph.prebuilt import ToolNode
 
 from src.agents.supervisor_agent.context import Context
 from src.agents.supervisor_agent.state import InputState, State
-from src.agents.supervisor_agent.tools import ToolRegistry
+from src.agents.supervisor_agent.tool_registry import ToolRegistry
 
 
 async def call_model_with_client(

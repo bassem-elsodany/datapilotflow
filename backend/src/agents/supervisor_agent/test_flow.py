@@ -11,7 +11,7 @@ import asyncio
 from datetime import datetime, UTC
 from unittest.mock import MagicMock, AsyncMock
 
-from src.agents.supervisor_agent.tools import ToolRegistry
+from src.agents.supervisor_agent.tool_registry import ToolRegistry
 from src.agents.supervisor_agent.graph import create_graph
 from src.agents.supervisor_agent.tool_initialization import (
     initialize_tools_from_config,
