@@ -31,16 +31,8 @@ export function ColorfulVerticalStepper({
 }: ColorfulVerticalStepperProps) {
   const theme = useMantineTheme();
 
-  console.log('[ColorfulVerticalStepper] Received activeStep:', activeStep, 'steps.length:', steps.length, 'completedSteps:', completedSteps);
-
   const isStepCompleted = (step: number) => completedSteps.includes(step);
-  const isStepActive = (step: number) => {
-    const result = step === activeStep;
-    if (result) {
-      console.log('[ColorfulVerticalStepper] Step', step, 'is ACTIVE');
-    }
-    return result;
-  };
+  const isStepActive = (step: number) => step === activeStep;
   const isStepClickable = (step: number) => {
     // In edit mode, all steps are clickable
     if (isEditMode) {
@@ -76,7 +68,7 @@ export function ColorfulVerticalStepper({
                       width: '2px',
                       height: '28px',
                       background: completed
-                        ? `linear-gradient(180deg, ${step.color} 0%, ${steps[index + 1].color} 100%)`
+                        ? `linear-gradient(180deg, ${step.gradientFrom} 0%, ${steps[index + 1].gradientFrom} 100%)`
                         : '#e9ecef',
                       transition: 'all 0.4s ease',
                       zIndex: 0
@@ -106,24 +98,24 @@ export function ColorfulVerticalStepper({
                           height: '38px',
                           borderRadius: '50%',
                           background: completed
-                            ? `linear-gradient(135deg, ${step.color} 0%, ${step.gradientTo || step.color} 100%)`
+                            ? `linear-gradient(135deg, ${step.gradientFrom} 0%, ${step.gradientTo} 100%)`
                             : active
-                              ? `linear-gradient(135deg, ${step.color}15 0%, ${step.gradientTo || step.color}25 100%)`
+                              ? `linear-gradient(135deg, ${step.gradientFrom}15 0%, ${step.gradientTo}25 100%)`
                               : `linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)`,
                           border: completed
-                            ? `2px solid ${step.color}`
+                            ? `2px solid ${step.gradientFrom}`
                             : active
-                              ? `2px solid ${step.color}`
+                              ? `2px solid ${step.gradientFrom}`
                               : '2px solid #dee2e6',
                           boxShadow: active
-                            ? `0 4px 12px ${step.color}25, 0 0 0 3px ${step.color}08`
+                            ? `0 4px 12px ${step.gradientFrom}25, 0 0 0 3px ${step.gradientFrom}08`
                             : completed
-                              ? `0 2px 8px ${step.color}15`
+                              ? `0 2px 8px ${step.gradientFrom}15`
                               : '0 1px 3px rgba(0,0,0,0.05)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          color: completed ? 'white' : active ? step.color : theme.colors.gray[5],
+                          color: completed ? 'white' : active ? step.gradientFrom : theme.colors.gray[5],
                           transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                           transform: active ? 'scale(1.08)' : 'scale(1)',
                           position: 'relative',
@@ -144,8 +136,8 @@ export function ColorfulVerticalStepper({
                               height: '46px',
                               borderRadius: '50%',
                               border: `2px solid transparent`,
-                              borderTopColor: step.color,
-                              borderRightColor: step.color,
+                              borderTopColor: step.gradientFrom,
+                              borderRightColor: step.gradientFrom,
                               opacity: 0.3,
                               animation: 'rotate 3s linear infinite'
                             }}
@@ -163,7 +155,7 @@ export function ColorfulVerticalStepper({
                               height: '16px',
                               borderRadius: '50%',
                               background: active
-                                ? `linear-gradient(135deg, ${step.color} 0%, ${step.gradientTo || step.color} 100%)`
+                                ? `linear-gradient(135deg, ${step.gradientFrom} 0%, ${step.gradientTo} 100%)`
                                 : '#868e96',
                               color: 'white',
                               display: 'flex',
@@ -173,7 +165,7 @@ export function ColorfulVerticalStepper({
                               fontWeight: 700,
                               border: '2px solid white',
                               boxShadow: active
-                                ? `0 2px 6px ${step.color}30`
+                                ? `0 2px 6px ${step.gradientFrom}30`
                                 : '0 1px 3px rgba(0,0,0,0.1)',
                               transition: 'all 0.3s ease'
                             }}
@@ -190,7 +182,7 @@ export function ColorfulVerticalStepper({
                         size="sm"
                         fw={active ? 700 : completed ? 600 : 500}
                         style={{
-                          color: active ? step.color : completed ? theme.colors.dark[7] : theme.colors.gray[6],
+                          color: active ? step.gradientFrom : completed ? theme.colors.dark[7] : theme.colors.gray[6],
                           transition: 'all 0.3s ease',
                           letterSpacing: active ? '0.3px' : '0px'
                         }}
@@ -215,7 +207,7 @@ export function ColorfulVerticalStepper({
                             width: '100%',
                             height: '2px',
                             borderRadius: '2px',
-                            background: `linear-gradient(90deg, ${step.color} 0%, ${step.gradientTo || step.color} 100%)`,
+                            background: `linear-gradient(90deg, ${step.gradientFrom} 0%, ${step.gradientTo} 100%)`,
                             marginTop: '2px',
                             opacity: 0.6
                           }}
@@ -247,8 +239,8 @@ export function ColorfulVerticalStepper({
               shadow="sm"
               style={{
                 ...transitionStyles,
-                border: `1px solid ${steps[activeStep]?.color}20`,
-                boxShadow: `0 4px 20px ${steps[activeStep]?.color}10, 0 1px 3px rgba(0,0,0,0.05)`,
+                border: `1px solid ${steps[activeStep]?.gradientFrom}20`,
+                boxShadow: `0 4px 20px ${steps[activeStep]?.gradientFrom}10, 0 1px 3px rgba(0,0,0,0.05)`,
                 background: 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
                 minHeight: '440px',
                 position: 'relative',
@@ -263,7 +255,7 @@ export function ColorfulVerticalStepper({
                   left: 0,
                   right: 0,
                   height: '4px',
-                  background: `linear-gradient(90deg, ${steps[activeStep]?.color} 0%, ${steps[activeStep]?.gradientTo || steps[activeStep]?.color} 100%)`,
+                  background: `linear-gradient(90deg, ${steps[activeStep]?.gradientFrom} 0%, ${steps[activeStep]?.gradientTo} 100%)`,
                   borderRadius: '12px 12px 0 0'
                 }}
               />
