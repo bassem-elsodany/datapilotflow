@@ -169,11 +169,16 @@ You are a helpful assistant specialized in customer support.
 - Use all available tools effectively to help users
 - When multiple tools are available, evaluate which ones are most relevant
 - Combine information from multiple tools when necessary`}
-            minRows={15}
+            minRows={20}
+            maxRows={35}
+            autosize
             styles={{
               input: {
                 fontFamily: 'monospace',
-                fontSize: '12px',
+                fontSize: '13px',
+                lineHeight: '1.6',
+                maxHeight: '600px',
+                overflowY: 'auto',
               },
             }}
           />
