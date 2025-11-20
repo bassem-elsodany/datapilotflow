@@ -308,54 +308,41 @@ async def get_response_stream_supervisor(
             f"Tool registry created with {len(tool_registry)} tools: {tool_registry.list_ids()}"
         )
 
-        # Build system prompt (matching assistant agent)
-        system_prompt_parts = []
+        # Build system prompt with user-defined instructions
+        from src.agents.supervisor_agent.base_system_prompt import (
+            BASE_SYSTEM_PROMPT,
+            DEFAULT_INSTRUCTIONS,
+        )
+        from datetime import datetime, UTC
 
-        # Use default prompt from prompts.py
-        from src.agents.supervisor_agent.prompts import SYSTEM_PROMPT
-
-        base_prompt = SYSTEM_PROMPT
-
-        # Inject tool instructions if available
+        # Get user's custom instructions or use defaults
+        user_instructions = ""
         if (
             conversation.assistant_config
-            and conversation.assistant_config.tool_instructions
-            and conversation.assistant_config.tool_instructions.strip()
+            and conversation.assistant_config.instructions
+            and conversation.assistant_config.instructions.strip()
         ):
-            logger.info("Injecting user-configured tool instructions")
-
-            # Find STEP 5 in the prompt
-            step_5_marker = "**STEP 5️⃣: EXECUTE TOOLS WITH COMPLETE CONTEXT**"
-            if step_5_marker in base_prompt:
-                injection_point = base_prompt.find(step_5_marker) + len(step_5_marker)
-
-                user_instructions_section = f"""
-
-🎯 **USER-SPECIFIC TOOL ORCHESTRATION (HIGHEST PRIORITY):**
-
-{conversation.assistant_config.tool_instructions}
-
-**NOTE:** The above instructions are user-configured and take PRECEDENCE over default tool usage patterns below.
-
----
-"""
-                base_prompt = (
-                    base_prompt[:injection_point]
-                    + user_instructions_section
-                    + base_prompt[injection_point:]
-                )
-
-        system_prompt_parts.append(base_prompt)
-
-        # Add knowledge base context
-        if conversation_description:
-            system_prompt_parts.append(
-                f"\n\n**Knowledge Base Context:**\n{conversation_description}"
+            user_instructions = conversation.assistant_config.instructions
+            logger.info(
+                f"✅ Using user-defined instructions ({len(user_instructions)} chars)"
             )
+        else:
+            user_instructions = DEFAULT_INSTRUCTIONS
+            logger.info("✅ Using default instructions (no user customization)")
 
-        system_prompt = "\n".join(system_prompt_parts)
+        # Add knowledge base context to user instructions if available
+        if conversation_description:
+            user_instructions += f"\n\n**Knowledge Base Context:**\n{conversation_description}"
 
-        logger.info(f"System prompt configured: {len(system_prompt)} chars")
+        # Build final prompt: BASE (RAG protocol) + USER (personality/domain)
+        system_prompt = BASE_SYSTEM_PROMPT.prompt.format(
+            user_instructions=user_instructions,
+            system_time=datetime.now(UTC).isoformat(),
+        )
+
+        logger.info(
+            f"System prompt built: {len(system_prompt)} chars (base + user instructions)"
+        )
 
         # Initialize supervisor service and create custom ReAct graph
         logger.info("Creating custom ReAct graph with ToolRegistry")

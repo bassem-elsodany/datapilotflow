@@ -139,7 +139,7 @@ class ConversationSession:
     # Tags for organization
     tags: Optional[List[str]] = None
     # Assistant mode configuration (complex nested structure)
-    # Contains enabled boolean, tools list, and tool_instructions
+    # Contains enabled boolean, tools list, and instructions
     # This is the ONLY place mode is stored - no redundant flat fields
     assistant_config: Optional[AssistantConfig] = None
 

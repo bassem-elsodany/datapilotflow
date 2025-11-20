@@ -106,8 +106,8 @@ class AssistantConfigRequest(BaseModel):
     tools: Optional[List[str]] = Field(
         default_factory=list, description="List of tool IDs bound to this conversation agent"
     )
-    tool_instructions: Optional[str] = Field(
-        None, description="User's custom instructions for how tools should work together"
+    instructions: Optional[str] = Field(
+        None, description="User's custom instructions for agent personality, behavior, and tool usage"
     )
 
 
@@ -218,7 +218,7 @@ def _serialize_conversation_to_response(session: "ConversationSession") -> dict:
         response["assistant_config"] = {
             "enabled": session.assistant_config.enabled,
             "tools": session.assistant_config.tools if session.assistant_config.tools else [],
-            "tool_instructions": session.assistant_config.tool_instructions,
+            "instructions": session.assistant_config.instructions,
         }
 
     return response
@@ -283,8 +283,8 @@ class AssistantConfigResponse(BaseModel):
     tools: List[str] = Field(
         default_factory=list, description="List of tool IDs bound to this conversation agent"
     )
-    tool_instructions: Optional[str] = Field(
-        None, description="User's custom instructions for how tools should work together"
+    instructions: Optional[str] = Field(
+        None, description="User's custom instructions for agent personality, behavior, and tool usage"
     )
 
 
@@ -324,7 +324,7 @@ async def create_conversation_session(
       "assistant_config": {
         "enabled": boolean,
         "tools": ["tool_id_1", "tool_id_2"] (optional),
-        "tool_instructions": "string" (optional)
+        "instructions": "string" (optional)
       },
       "tags": ["string"]
     }
@@ -383,10 +383,10 @@ async def create_conversation_session(
             assistant_config = AssistantConfig(
                 enabled=create_request.assistant_config.enabled,
                 tools=create_request.assistant_config.tools if create_request.assistant_config.tools else [],
-                tool_instructions=create_request.assistant_config.tool_instructions,
+                instructions=create_request.assistant_config.instructions,
             )
             logger.info(
-                f"Created AssistantConfig: enabled={assistant_config.enabled}, tools_count={len(assistant_config.tools)}, has_instructions={bool(create_request.assistant_config.tool_instructions)}"
+                f"Created AssistantConfig: enabled={assistant_config.enabled}, tools_count={len(assistant_config.tools)}, has_instructions={bool(create_request.assistant_config.instructions)}"
             )
 
         session_id = conversation_history_service.create_conversation(
@@ -708,12 +708,11 @@ async def update_conversation_session(
             assistant_config_dict = {
                 "enabled": config_request.assistant_config.enabled,
                 "tools": config_request.assistant_config.tools if config_request.assistant_config.tools else [],
+                "instructions": config_request.assistant_config.instructions,
             }
 
-            # Include tool_instructions if provided
-            if hasattr(config_request.assistant_config, 'tool_instructions') and config_request.assistant_config.tool_instructions:
-                assistant_config_dict["tool_instructions"] = config_request.assistant_config.tool_instructions
-                logger.info(f"Including tool_instructions in update")
+            if config_request.assistant_config.instructions:
+                logger.info(f"Including instructions in update ({len(config_request.assistant_config.instructions)} chars)")
 
             logger.info(
                 f"Updating AssistantConfig: enabled={config_request.assistant_config.enabled}, tools_count={len(assistant_config_dict['tools'])}"
