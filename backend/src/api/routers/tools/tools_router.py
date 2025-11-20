@@ -108,6 +108,41 @@ class GenerateInstructionsRequest(BaseModel):
     )
 
 
+class AssistantInstructionsContext(BaseModel):
+    """Context for generating assistant instructions."""
+
+    persona: str = Field(..., description="Who is this assistant? What role does it play?")
+    personality: str = Field(..., description="Communication style (professional, friendly, etc.)")
+    response_style: Optional[str] = Field(None, description="How should responses be formatted?")
+    task_approach: Optional[str] = Field(None, description="How should the assistant handle user requests?")
+    tool_strategy: Optional[str] = Field(None, description="How should tools be used together?")
+    selected_tools: Optional[List[dict]] = Field(None, description="Information about selected tools")
+
+
+class GenerateAssistantInstructionsRequest(BaseModel):
+    """Request model for generating complete assistant instructions."""
+
+    tool_ids: List[str] = Field(
+        default_factory=list, description="List of tool IDs (optional, can be empty)"
+    )
+    llm_provider_id: str = Field(
+        ..., description="LLM provider ID to use for generation"
+    )
+    model_name: str = Field(
+        ..., description="LLM model name to use for generation"
+    )
+    context: AssistantInstructionsContext = Field(
+        ..., description="Context about assistant persona, personality, and behavior"
+    )
+
+
+class GenerateAssistantInstructionsResponse(BaseModel):
+    """Response model for generated assistant instructions."""
+
+    instructions: str = Field(..., description="Generated assistant instructions")
+    metadata: dict = Field(default_factory=dict, description="Generation metadata")
+
+
 class GenerateInstructionsResponse(BaseModel):
     """Response model for generated tool orchestration instructions."""
 
@@ -666,6 +701,134 @@ Remember: Be practical, concise, and actionable. The supervisor agent will follo
         logger.error(f"Error generating tool instructions: {e}")
         import traceback
 
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate instructions: {str(e)}",
+        )
+
+
+@router.post(
+    "/generate-instructions",
+    response_model=GenerateAssistantInstructionsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Generate complete assistant instructions using AI",
+    description="Generate personalized assistant instructions based on persona, personality, and tools",
+)
+async def generate_assistant_instructions(
+    request: GenerateAssistantInstructionsRequest,
+    current_user: User = Depends(get_current_user),
+) -> GenerateAssistantInstructionsResponse:
+    """
+    Generate complete assistant instructions using LLM.
+
+    This endpoint creates comprehensive instructions for the assistant based on:
+    - Persona (who the assistant is)
+    - Personality (communication style)
+    - Response style
+    - Task approach
+    - Tool usage strategy
+    - Selected tools (if any)
+
+    Args:
+        request: Request containing context and LLM details
+        current_user: Authenticated user
+
+    Returns:
+        Generated instructions
+
+    Raises:
+        400: Invalid request
+        500: LLM generation failed
+    """
+    try:
+        logger.info(
+            f"Generating assistant instructions for user {current_user.id} with persona: {request.context.persona[:50]}..."
+        )
+
+        # Build comprehensive prompt for instruction generation
+        tools_section = ""
+        if request.context.selected_tools and len(request.context.selected_tools) > 0:
+            tools_list = "\n".join([
+                f"- {tool.get('name')}: {tool.get('description', 'No description')} (Type: {tool.get('type')})"
+                for tool in request.context.selected_tools
+            ])
+            tools_section = f"""
+
+**Available Tools:**
+{tools_list}
+
+**Tool Usage Strategy:**
+{request.context.tool_strategy or 'Use tools effectively to provide comprehensive responses.'}"""
+
+        generation_prompt = f"""You are an expert at creating detailed, effective instructions for AI assistants.
+
+Generate comprehensive instructions for an AI assistant based on the following requirements:
+
+**Persona:**
+{request.context.persona}
+
+**Personality:**
+{request.context.personality}
+
+**Response Style:**
+{request.context.response_style or 'Clear and helpful'}
+
+**Approach to Tasks:**
+{request.context.task_approach or 'Methodical and thorough'}{tools_section}
+
+---
+
+**Generate detailed instructions that:**
+1. Define the assistant's identity and role clearly
+2. Specify the communication style and tone
+3. Explain how to handle different types of user requests
+4. Include guidelines for response formatting
+5. {"Explain how to use the available tools effectively" if tools_section else "Provide general best practices"}
+6. Cover error handling and edge cases
+7. Emphasize the RAG-first principle (use knowledge_expert tool for all information)
+
+**Important Guidelines:**
+- Be specific and actionable
+- Use clear, direct language
+- Include concrete examples where helpful
+- Structure instructions logically
+- Make them easy to follow
+
+**Output the complete instructions in a clear, structured format suitable for an AI assistant to follow.**"""
+
+        # Initialize LLM client
+        from litellm import acompletion
+
+        logger.info(f"Calling LLM: {request.llm_provider_id}/{request.model_name}")
+
+        response = await acompletion(
+            model=f"{request.llm_provider_id}/{request.model_name}",
+            messages=[
+                {"role": "system", "content": "You are an expert at creating AI assistant instructions."},
+                {"role": "user", "content": generation_prompt},
+            ],
+            temperature=0.7,
+        )
+
+        instructions = response.choices[0].message.content
+
+        logger.info(
+            f"Successfully generated {len(instructions)} characters of instructions"
+        )
+
+        return GenerateAssistantInstructionsResponse(
+            instructions=instructions,
+            metadata={
+                "persona": request.context.persona,
+                "personality": request.context.personality,
+                "tools_count": len(request.context.selected_tools) if request.context.selected_tools else 0,
+                "generated_by": f"{request.llm_provider_id}/{request.model_name}",
+            },
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to generate assistant instructions: {str(e)}")
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
