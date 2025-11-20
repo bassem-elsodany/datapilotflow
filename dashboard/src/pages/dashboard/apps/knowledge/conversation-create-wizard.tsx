@@ -685,6 +685,9 @@ export function ConversationCreateWizard() {
   // For Assistant mode: no adjustment needed
   const displayActiveStep = form.values.agentType === 'rag' && activeStep === 6 ? 5 : activeStep;
 
+  // Debug logging
+  console.log('[Wizard Render] activeStep:', activeStep, 'displayActiveStep:', displayActiveStep, 'agentType:', form.values.agentType, 'visibleSteps length:', visibleSteps.length);
+
   const pageTitle = isEditMode ? 'Edit Conversation Agent' : 'Create New Conversation Agent';
 
   return (
