@@ -6,18 +6,17 @@ import os
 from dataclasses import dataclass, field, fields
 from typing import Annotated
 
-from . import prompts
-
 
 @dataclass(kw_only=True)
 class Context:
     """The context for the agent."""
 
     system_prompt: str = field(
-        default=prompts.SYSTEM_PROMPT,
+        default="You are a helpful AI assistant.",
         metadata={
             "description": "The system prompt to use for the agent's interactions. "
-            "This prompt sets the context and behavior for the agent."
+            "This prompt sets the context and behavior for the agent. "
+            "NOTE: In production, this is built dynamically from base_system_prompt.py"
         },
     )
 
