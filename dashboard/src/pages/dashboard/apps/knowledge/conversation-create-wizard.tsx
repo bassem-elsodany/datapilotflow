@@ -53,6 +53,7 @@ import {
   IconInfoCircle,
   IconRobot,
   IconScale,
+  IconSearch,
   IconTool,
   IconWand
 } from '@tabler/icons-react';
@@ -256,6 +257,7 @@ export function ConversationCreateWizard() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
   const [isLoadingExisting, setIsLoadingExisting] = useState(false);
+  const [toolSearchQuery, setToolSearchQuery] = useState('');
 
   // Fetch data
   const { data: providers, isLoading: providersLoading } = useGetActiveModelProviders();
@@ -460,10 +462,16 @@ export function ConversationCreateWizard() {
         // Vector Database - collection & topK required
         return !!form.values.collectionName && form.values.topK >= 5;
       case 3:
-        // Judge Ranker - all optional
+        // Judge Ranker - only for RAG mode, all optional
+        if (form.values.agentType === 'assistant') {
+          return true; // Skip validation for assistant mode
+        }
         return true;
       case 4:
-        // Generative Answer - provider & model required only if enabled
+        // Generative Answer - only for RAG mode, provider & model required only if enabled
+        if (form.values.agentType === 'assistant') {
+          return true; // Skip validation for assistant mode
+        }
         if (form.values.enableLLMGeneration) {
           return !!form.values.selectedProviderId && !!form.values.selectedModel;
         }
@@ -490,10 +498,21 @@ export function ConversationCreateWizard() {
     }
     setCompletedSteps((prev) => [...new Set([...prev, activeStep])]);
 
-    // Skip Step 5 (Tools & Instructions) for RAG mode
+    // Determine next step based on agent type
     let nextStep = activeStep + 1;
-    if (activeStep === 4 && form.values.agentType === 'rag') {
-      nextStep = 6; // Skip to Review & Create for RAG mode
+
+    if (form.values.agentType === 'rag') {
+      // RAG mode: Skip Step 5 (Tools & Instructions)
+      if (activeStep === 4) {
+        nextStep = 6; // Skip to Review & Create
+      }
+    } else {
+      // Assistant mode: Skip Step 3 (Judge Ranker) and Step 4 (Generative Answer)
+      if (activeStep === 2) {
+        nextStep = 5; // Skip to Tools & Instructions
+      } else if (activeStep === 5) {
+        nextStep = 6; // Go to Review & Create
+      }
     }
 
     setActiveStep(nextStep);
@@ -502,15 +521,42 @@ export function ConversationCreateWizard() {
   const handlePreviousStep = () => {
     if (activeStep > 0) {
       let prevStep = activeStep - 1;
-      // Skip Step 5 (Tools & Instructions) when going back in RAG mode
-      if (activeStep === 6 && form.values.agentType === 'rag') {
-        prevStep = 4; // Skip from Review & Create back to Generative Answer for RAG
+
+      if (form.values.agentType === 'rag') {
+        // RAG mode: Skip Step 5 (Tools & Instructions) when going back
+        if (activeStep === 6) {
+          prevStep = 4; // Skip from Review & Create back to Generative Answer
+        }
+      } else {
+        // Assistant mode: Skip Step 3 and 4 when going back
+        if (activeStep === 5) {
+          prevStep = 2; // Skip from Tools & Instructions back to Vector Database
+        } else if (activeStep === 6) {
+          prevStep = 5; // From Review & Create back to Tools & Instructions
+        }
       }
+
       setActiveStep(prevStep);
     }
   };
 
-  const handleStepClick = (step: number) => {
+  const handleStepClick = (displayStepIndex: number) => {
+    // Map display step index back to actual step index based on agent type
+    const getActualStep = (displayStep: number): number => {
+      if (form.values.agentType === 'rag') {
+        // RAG mode: display 0,1,2,3,4,5 -> actual 0,1,2,3,4,6
+        if (displayStep === 5) return 6;
+        return displayStep;
+      } else {
+        // Assistant mode: display 0,1,2,3,4 -> actual 0,1,2,5,6
+        if (displayStep === 3) return 5;
+        if (displayStep === 4) return 6;
+        return displayStep;
+      }
+    };
+
+    const step = getActualStep(displayStepIndex);
+
     // In edit mode, allow free navigation between any steps
     if (isEditMode) {
       setActiveStep(step);
@@ -523,9 +569,13 @@ export function ConversationCreateWizard() {
       setActiveStep(step);
       return;
     }
-    
-    // Allow clicking immediate next step (like clicking Next button)
-    if (step === activeStep + 1) {
+
+    // Allow clicking immediate next step (validate current step first)
+    const isNextStep = (form.values.agentType === 'rag' && activeStep === 4 && step === 6) ||
+      (form.values.agentType === 'assistant' && activeStep === 2 && step === 5) ||
+      (step === activeStep + 1);
+
+    if (isNextStep) {
       if (validateStep(activeStep)) {
         setCompletedSteps((prev) => [...new Set([...prev, activeStep])]);
         setActiveStep(step);
@@ -538,7 +588,7 @@ export function ConversationCreateWizard() {
       }
       return;
     }
-    
+
     // Allow revisiting completed steps
     if (completedSteps.includes(step)) {
       setActiveStep(step);
@@ -675,15 +725,37 @@ export function ConversationCreateWizard() {
 
   // Filter steps based on agent type
   // RAG mode: exclude Step 5 (Tools & Instructions)
-  // Assistant mode: include all steps
+  // Assistant mode: exclude Step 3 (Judge Ranker) and Step 4 (Generative Answer)
   const visibleSteps = form.values.agentType === 'rag'
     ? STEP_CONFIGS.filter((_, index) => index !== 5) // Remove Tools & Instructions step for RAG mode
-    : STEP_CONFIGS;
+    : STEP_CONFIGS.filter((_, index) => index !== 3 && index !== 4).map((step, index) => {
+      // Rename Step 1 for Assistant mode
+      if (index === 1) {
+        return {
+          ...step,
+          label: 'LLM Provider',
+          description: 'Configure LLM for query enhancement'
+        };
+      }
+      return step;
+    }); // Remove Judge Ranker and Generative Answer for Assistant mode
 
   // Adjust activeStep display for stepper component based on filtered steps
-  // For RAG mode: steps 0-4 stay the same, step 6 (Review & Create) becomes visual step 5
-  // For Assistant mode: no adjustment needed
-  const displayActiveStep = form.values.agentType === 'rag' && activeStep === 6 ? 5 : activeStep;
+  // Map actual step indices to display indices based on agent type
+  const getDisplayStep = (actualStep: number): number => {
+    if (form.values.agentType === 'rag') {
+      // RAG mode: 0,1,2,3,4,6 -> display as 0,1,2,3,4,5
+      if (actualStep === 6) return 5;
+      return actualStep;
+    } else {
+      // Assistant mode: 0,1,2,5,6 -> display as 0,1,2,3,4
+      if (actualStep === 5) return 3;
+      if (actualStep === 6) return 4;
+      return actualStep;
+    }
+  };
+
+  const displayActiveStep = getDisplayStep(activeStep);
 
   const pageTitle = isEditMode ? 'Edit Conversation Agent' : 'Create New Conversation Agent';
 
@@ -761,57 +833,123 @@ export function ConversationCreateWizard() {
                   </Alert>
                 ) : (
                   <Stack gap="md">
-                    <Text size="sm" fw={500}>Available Tools ({tools?.filter((t: any) => t.is_active).length || 0} active)</Text>
+                    <Group justify="space-between" align="center">
+                      <Text size="sm" fw={500}>
+                        Available Tools ({tools?.filter((t: any) => t.is_active).length || 0} active)
+                      </Text>
+                    </Group>
+                    <TextInput
+                      placeholder="Search tools by name, description, or tags..."
+                      leftSection={<IconSearch size={16} />}
+                      value={toolSearchQuery}
+                      onChange={(e) => setToolSearchQuery(e.currentTarget.value)}
+                      mb="sm"
+                    />
                     <div style={{ maxHeight: '400px', overflowY: 'auto', paddingRight: '8px' }}>
                       <Stack gap="md">
-                        {tools?.filter((t: any) => t.is_active).map((tool: any) => (
-                          <Card key={tool.id} withBorder p="sm" style={{ cursor: 'pointer' }} onClick={() => {
-                            const currentTools = form.values.selectedTools || [];
-                            const isSelected = currentTools.includes(tool.id);
-                            form.setFieldValue(
-                              'selectedTools',
-                              isSelected
-                                ? currentTools.filter((id: string) => id !== tool.id)
-                                : [...currentTools, tool.id]
+                        {(() => {
+                          const activeTools = tools?.filter((t: any) => t.is_active) || [];
+                          const searchLower = toolSearchQuery.toLowerCase().trim();
+
+                          // Helper function to check if tool matches search
+                          const matchesSearch = (tool: any) => {
+                            if (!searchLower) return true;
+                            const name = (tool.name || '').toLowerCase();
+                            const displayName = (tool.display_name || '').toLowerCase();
+                            const description = (tool.description || '').toLowerCase();
+                            const tags = (tool.tags || []).map((tag: string) => tag.toLowerCase()).join(' ');
+                            return (
+                              name.includes(searchLower) ||
+                              displayName.includes(searchLower) ||
+                              description.includes(searchLower) ||
+                              tags.includes(searchLower)
                             );
-                          }}>
-                            <Group justify="space-between" align="flex-start">
-                              <Group align="flex-start" gap="md" style={{ flex: 1 }}>
-                                <input
-                                  type="checkbox"
-                                  checked={form.values.selectedTools?.includes(tool.id) || false}
-                                  onChange={() => { }} // Handled by card onClick
-                                  style={{ marginTop: '4px', cursor: 'pointer' }}
-                                />
-                                <Stack gap="xs" style={{ flex: 1 }}>
-                                  <div>
-                                    <Group gap="xs">
-                                      <Text fw={600} size="sm">{tool.display_name || tool.name}</Text>
-                                      <Badge size="sm" color={tool.tool_type === 'prompt_based' ? 'blue' : 'green'}>
-                                        {tool.tool_type === 'prompt_based' ? 'Prompt-Based' : 'MCP Remote'}
-                                      </Badge>
-                                    </Group>
-                                    <Text size="xs" c="dimmed">ID: {tool.name}</Text>
-                                  </div>
-                                  <Text size="sm" c="dark" lineClamp={2}>
-                                    {tool.description || 'No description'}
-                                  </Text>
-                                  {tool.tags && tool.tags.length > 0 && (
-                                    <Group gap="xs">
-                                      {tool.tags.map((tag: string) => (
-                                        <Badge key={tag} size="xs" variant="dot" color="gray">
-                                          {tag}
+                          };
+
+                          const filteredTools = searchLower
+                            ? activeTools.filter(matchesSearch)
+                            : activeTools;
+
+                          if (filteredTools.length === 0 && searchLower) {
+                            return (
+                              <Alert icon={<IconAlertCircle size={16} />} color="yellow" variant="light">
+                                <Text size="sm">No tools found matching "{toolSearchQuery}"</Text>
+                              </Alert>
+                            );
+                          }
+
+                          return filteredTools.map((tool: any) => (
+                            <Card key={tool.id} withBorder p="sm" style={{ cursor: 'pointer' }} onClick={() => {
+                              const currentTools = form.values.selectedTools || [];
+                              const isSelected = currentTools.includes(tool.id);
+                              form.setFieldValue(
+                                'selectedTools',
+                                isSelected
+                                  ? currentTools.filter((id: string) => id !== tool.id)
+                                  : [...currentTools, tool.id]
+                              );
+                            }}>
+                              <Group justify="space-between" align="flex-start">
+                                <Group align="flex-start" gap="md" style={{ flex: 1 }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={form.values.selectedTools?.includes(tool.id) || false}
+                                    onChange={() => { }} // Handled by card onClick
+                                    style={{ marginTop: '4px', cursor: 'pointer' }}
+                                  />
+                                  <Stack gap="xs" style={{ flex: 1 }}>
+                                    <div>
+                                      <Group gap="xs">
+                                        <Text fw={600} size="sm">{tool.display_name || tool.name}</Text>
+                                        <Badge size="sm" color={tool.tool_type === 'prompt_based' ? 'blue' : 'green'}>
+                                          {tool.tool_type === 'prompt_based' ? 'Prompt-Based' : 'MCP Remote'}
                                         </Badge>
-                                      ))}
-                                    </Group>
-                                  )}
-                                </Stack>
+                                      </Group>
+                                      <Text size="xs" c="dimmed">ID: {tool.name}</Text>
+                                    </div>
+                                    <Text size="sm" c="dark" lineClamp={2}>
+                                      {tool.description || 'No description'}
+                                    </Text>
+                                    {tool.tags && tool.tags.length > 0 && (
+                                      <Group gap="xs">
+                                        {tool.tags.map((tag: string) => (
+                                          <Badge key={tag} size="xs" variant="dot" color="gray">
+                                            {tag}
+                                          </Badge>
+                                        ))}
+                                      </Group>
+                                    )}
+                                  </Stack>
+                                </Group>
                               </Group>
-                            </Group>
-                          </Card>
-                        ))}
+                            </Card>
+                          ));
+                        })()}
                       </Stack>
                     </div>
+                    {toolSearchQuery && (
+                      <Text size="xs" c="dimmed">
+                        {(() => {
+                          const activeTools = tools?.filter((t: any) => t.is_active) || [];
+                          const searchLower = toolSearchQuery.toLowerCase().trim();
+                          const filteredCount = searchLower
+                            ? activeTools.filter((t: any) => {
+                              const name = (t.name || '').toLowerCase();
+                              const displayName = (t.display_name || '').toLowerCase();
+                              const description = (t.description || '').toLowerCase();
+                              const tags = (t.tags || []).map((tag: string) => tag.toLowerCase()).join(' ');
+                              return (
+                                name.includes(searchLower) ||
+                                displayName.includes(searchLower) ||
+                                description.includes(searchLower) ||
+                                tags.includes(searchLower)
+                              );
+                            }).length
+                            : activeTools.length;
+                          return `Showing ${filteredCount} of ${activeTools.length} tools`;
+                        })()}
+                      </Text>
+                    )}
                   </Stack>
                 )}
 
@@ -834,8 +972,8 @@ export function ConversationCreateWizard() {
           </Stack>
         )}
 
-        {/* STEP 6: REVIEW & CREATE (depends on agent type) */}
-        {displayActiveStep === (form.values.agentType === 'assistant' ? 6 : 5) && (
+        {/* STEP 6: REVIEW & CREATE (actual step 6 for both modes) */}
+        {activeStep === 6 && (
           <StepReviewAndCreate
             form={form}
             providers={providers}
@@ -865,24 +1003,31 @@ export function ConversationCreateWizard() {
               Cancel
             </Button>
 
-            {activeStep < 5 ? (
-              <Button
-                onClick={handleNextStep}
-                disabled={isCreating}
-                color="blue"
-              >
-                Next
-              </Button>
-            ) : (
-              <Button
-                onClick={handleCreateConversation}
-                loading={isCreating}
-                leftSection={<IconCheck size={16} />}
-                color="green"
-              >
-                {isEditMode ? 'Update Conversation Agent' : 'Create Conversation Agent'}
-              </Button>
-            )}
+            {(() => {
+              // Determine if we should show "Next" or final action button
+              // RAG: steps 0,1,2,3,4 show "Next", step 6 (Review) shows "Create/Update"
+              // Assistant: steps 0,1,2,5 show "Next", step 6 (Review) shows "Create/Update"
+              const isLastStep = activeStep >= 6; // Both modes end at step 6 (Review & Create)
+
+              return isLastStep ? (
+                <Button
+                  onClick={handleCreateConversation}
+                  loading={isCreating}
+                  leftSection={<IconCheck size={16} />}
+                  color="green"
+                >
+                  {isEditMode ? 'Update Conversation Agent' : 'Create Conversation Agent'}
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleNextStep}
+                  disabled={isCreating}
+                  color="blue"
+                >
+                  Next
+                </Button>
+              );
+            })()}
           </Group>
         </Group>
       </ColorfulVerticalStepper>
@@ -1204,30 +1349,12 @@ function StepAgentTypeAndSettings({ form }: StepProps) {
           </Grid.Col>
         </Grid>
 
-        {form.values.agentType === 'assistant' && (
-          <Alert
-            icon={<IconAlertCircle size={16} />}
-            color="yellow"
-            variant="light"
-            mt="md"
-          >
-            <Text size="sm">
-              Assistant Mode requires a system prompt. You can create or customize one in the Advanced Settings step.
-            </Text>
-          </Alert>
-        )}
+
       </div>
 
       {/* Conversation Settings */}
       <Divider label="Conversation Details" labelPosition="center" />
-
       <div>
-        <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light" mb="md">
-          <Text size="sm">
-            Set up basic information about your conversation. These details help you organize and identify different conversations.
-          </Text>
-        </Alert>
-
         <TextInput
           label="Conversation Name"
           placeholder="e.g., Customer Support Bot"
@@ -1322,84 +1449,68 @@ function StepEnhancementStrategy({ form, onLearnClick, providers, providersLoadi
 
   return (
     <Stack gap="md">
-      {isAssistantMode && (
+      {isAssistantMode ? (
+        // Assistant mode: Just show info about custom variants strategy
         <Alert icon={<IconRobot size={16} />} color="grape" variant="light">
           <Text size="sm">
-            🔒 <strong>Strategy Locked</strong> - Custom Variants automatically generates 3-5 query variants before passing to RAG with parallel search &amp; RRF fusion.
+            <strong>Enhancement Strategy: Custom Variants</strong> - Automatically generates 3-5 query variants before passing to RAG with parallel search &amp; RRF fusion.
           </Text>
         </Alert>
-      )}
-
-      {!isAssistantMode && (
-        <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
-          <Text size="sm">
-            Choose how your queries will be enhanced before searching the knowledge base.
-          </Text>
-        </Alert>
-      )}
-
-      <Group justify="space-between" align="flex-end">
-        <div style={{ flex: 1 }}>
-          {isAssistantMode ? (
-            // Read-only display for Assistant mode
-            <div>
-              <label style={{ fontSize: '14px', fontWeight: 500, display: 'block', marginBottom: '8px' }}>
-                Enhancement Strategy
-              </label>
-              <div style={{
-                padding: '8px 12px',
-                border: '1px solid var(--mantine-color-gray-3)',
-                borderRadius: '4px',
-                backgroundColor: 'var(--mantine-color-gray-1)',
-                color: 'var(--mantine-color-gray-7)',
-                opacity: 0.7,
-              }}>
-                Custom Variants
-              </div>
-            </div>
-          ) : (
-            <Select
-              label="Enhancement Strategy"
-              placeholder="Select strategy"
-              data={ENHANCEMENT_STRATEGIES
-                .filter(s => s.value !== 'custom_variants') // Hide custom_variants in RAG mode
-                .map((s) => ({
-                  value: s.value,
-                  label: s.label,
-                }))}
-              {...form.getInputProps('selectedStrategy')}
-              description="How to enhance queries for better retrieval"
-            />
-          )}
-        </div>
-        {!isAssistantMode && (
-          <Button
-            size="xs"
-            variant="gradient"
-            gradient={{ from: 'violet', to: 'purple', deg: 135 }}
-            leftSection={<IconHelp size={16} />}
-            onClick={onLearnClick}
-            style={{
-              boxShadow: '0 2px 8px rgba(109, 40, 217, 0.3)',
-            }}
-          >
-            Learn & Compare
-          </Button>
-        )}
-      </Group>
-
-      {isNonNativeStrategy && (
+      ) : (
+        // RAG mode: Show strategy selection and info
         <>
-          <Alert icon={<IconInfoCircle size={16} />} color="cyan" variant="light">
+          <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
             <Text size="sm">
-              <strong>LLM Required:</strong> Select an LLM provider &amp; model below (also used for answer generation if enabled in Step 5).
+              Choose how your queries will be enhanced before searching the knowledge base.
             </Text>
           </Alert>
 
-          <Divider my="sm" />
+          <Group justify="space-between" align="flex-end">
+            <div style={{ flex: 1 }}>
+              <Select
+                label="Enhancement Strategy"
+                placeholder="Select strategy"
+                data={ENHANCEMENT_STRATEGIES
+                  .filter(s => s.value !== 'custom_variants') // Hide custom_variants in RAG mode
+                  .map((s) => ({
+                    value: s.value,
+                    label: s.label,
+                  }))}
+                {...form.getInputProps('selectedStrategy')}
+                description="How to enhance queries for better retrieval"
+              />
+            </div>
+            <Button
+              size="xs"
+              variant="gradient"
+              gradient={{ from: 'violet', to: 'purple', deg: 135 }}
+              leftSection={<IconHelp size={16} />}
+              onClick={onLearnClick}
+              style={{
+                boxShadow: '0 2px 8px rgba(109, 40, 217, 0.3)',
+              }}
+            >
+              Learn & Compare
+            </Button>
+          </Group>
+        </>
+      )}
+
+      {isNonNativeStrategy && (
+        <>
+          {!isAssistantMode && (
+            <>
+              <Alert icon={<IconInfoCircle size={16} />} color="cyan" variant="light">
+                <Text size="sm">
+                  <strong>LLM Required:</strong> Select an LLM provider &amp; model below (also used for answer generation if enabled in Step 5).
+                </Text>
+              </Alert>
+              <Divider my="sm" />
+            </>
+          )}
 
           <Select
-            label="LLM Provider for Query Enhancement"
+            label={isAssistantMode ? "LLM Provider" : "LLM Provider for Query Enhancement"}
             placeholder={providersLoading ? 'Loading providers...' : 'Select a provider'}
             data={
               providers?.map((p: any) => ({
@@ -1411,12 +1522,12 @@ function StepEnhancementStrategy({ form, onLearnClick, providers, providersLoadi
             searchable
             disabled={providersLoading}
             required
-            description="Choose an LLM provider to generate query variants"
+            description={isAssistantMode ? "Choose an LLM provider for query enhancement" : "Choose an LLM provider to generate query variants"}
           />
 
           {form.values.selectedProviderId && providers ? (
             <Select
-              label="Model for Query Enhancement"
+              label={isAssistantMode ? "Model" : "Model for Query Enhancement"}
               placeholder="Select a model"
               data={
                 providers
@@ -1429,11 +1540,11 @@ function StepEnhancementStrategy({ form, onLearnClick, providers, providersLoadi
               {...form.getInputProps('selectedModel')}
               searchable
               required
-              description="This model will be used to generate query variants"
+              description={isAssistantMode ? "This model will be used to generate query variants" : "This model will be used to generate query variants"}
             />
           ) : (
             <Select
-              label="Model for Query Enhancement"
+              label={isAssistantMode ? "Model" : "Model for Query Enhancement"}
               placeholder="Select provider first"
               disabled
               required
@@ -1903,35 +2014,54 @@ function StepReviewAndCreate({ form, providers, collections, tools }: StepProps)
         </Stack>
       </Card>
 
-      {/* STEP 1: ENHANCEMENT STRATEGY */}
+      {/* STEP 1: ENHANCEMENT STRATEGY / LLM PROVIDER */}
       <Card withBorder p="md" bg="cyan.0">
         <Stack gap="sm">
-          <Text fw={600}>Step 1: Enhancement Strategy</Text>
-          <Group gap="md">
+          <Text fw={600}>Step 1: {form.values.agentType === 'assistant' ? 'LLM Provider' : 'Enhancement Strategy'}</Text>
+
+          {form.values.agentType === 'assistant' ? (
+            // Assistant mode: Show only LLM details
             <div>
               <Text size="sm" fw={500} mb="xs">
-                Strategy
+                LLM Configuration
               </Text>
-              <Badge size="lg" color={enhancementStrategyInfo?.color || 'gray'}>
-                {enhancementStrategyInfo?.label || 'Native'}
-              </Badge>
+              <Stack gap="4px">
+                <Text size="sm" c="dark">
+                  Provider: {selectedProvider?.name || 'Not selected'}
+                </Text>
+                <Text size="sm" c="dark">
+                  Model: {form.values.selectedModel || 'Not selected'}
+                </Text>
+              </Stack>
             </div>
-            {form.values.selectedStrategy !== 'native' && (
+          ) : (
+            // RAG mode: Show strategy and LLM details
+            <Group gap="md">
               <div>
                 <Text size="sm" fw={500} mb="xs">
-                  Query Enhancement Provider
+                  Strategy
                 </Text>
-                <Stack gap="4px">
-                  <Text size="sm" c="dark">
-                    Provider: {selectedProvider?.name || 'Not selected'}
-                  </Text>
-                  <Text size="sm" c="dark">
-                    Model: {form.values.selectedModel || 'Not selected'}
-                  </Text>
-                </Stack>
+                <Badge size="lg" color={enhancementStrategyInfo?.color || 'gray'}>
+                  {enhancementStrategyInfo?.label || 'Native'}
+                </Badge>
               </div>
-            )}
-          </Group>
+              {form.values.selectedStrategy !== 'native' && (
+                <div>
+                  <Text size="sm" fw={500} mb="xs">
+                    Query Enhancement Provider
+                  </Text>
+                  <Stack gap="4px">
+                    <Text size="sm" c="dark">
+                      Provider: {selectedProvider?.name || 'Not selected'}
+                    </Text>
+                    <Text size="sm" c="dark">
+                      Model: {form.values.selectedModel || 'Not selected'}
+                    </Text>
+                  </Stack>
+                </div>
+              )}
+            </Group>
+          )}
         </Stack>
       </Card>
 
@@ -1964,8 +2094,8 @@ function StepReviewAndCreate({ form, providers, collections, tools }: StepProps)
         </Stack>
       </Card>
 
-      {/* STEP 3: RERANKER (OPTIONAL) */}
-      {form.values.enableReranking && (
+      {/* STEP 3: RERANKER (OPTIONAL) - RAG MODE ONLY */}
+      {form.values.agentType === 'rag' && form.values.enableReranking && (
         <Card withBorder p="md" bg="yellow.0">
           <Stack gap="sm">
             <Text fw={600}>Step 3: Judge Ranker (Document Re-ranking)</Text>
@@ -1998,46 +2128,48 @@ function StepReviewAndCreate({ form, providers, collections, tools }: StepProps)
         </Card>
       )}
 
-      {/* STEP 4: ANSWER GENERATION */}
-      <Card withBorder p="md" bg="lime.0">
-        <Stack gap="sm">
-          <Text fw={600}>
-            Step 4: Answer Generation
-          </Text>
-          <Group gap="md">
-            <div>
-              <Text size="sm" fw={500} mb="xs" c="dark">
-                Generative Answer
-              </Text>
-              <Badge size="lg" color={form.values.enableLLMGeneration ? 'green' : 'gray'}>
-                {form.values.enableLLMGeneration ? 'Enabled' : 'Disabled'}
-              </Badge>
-            </div>
-            {form.values.enableLLMGeneration && (
+      {/* STEP 4: ANSWER GENERATION - RAG MODE ONLY */}
+      {form.values.agentType === 'rag' && (
+        <Card withBorder p="md" bg="lime.0">
+          <Stack gap="sm">
+            <Text fw={600}>
+              Step 4: Answer Generation
+            </Text>
+            <Group gap="md">
               <div>
                 <Text size="sm" fw={500} mb="xs" c="dark">
-                  Answer Generation Provider
+                  Generative Answer
                 </Text>
-                <Stack gap="4px">
-                  <Text size="sm" c="dark">
-                    Provider: {selectedProvider?.name || 'Not selected'}
-                  </Text>
-                  <Text size="sm" c="dark">
-                    Model: {form.values.selectedModel || 'Not selected'}
-                  </Text>
-                </Stack>
+                <Badge size="lg" color={form.values.enableLLMGeneration ? 'green' : 'gray'}>
+                  {form.values.enableLLMGeneration ? 'Enabled' : 'Disabled'}
+                </Badge>
               </div>
-            )}
-          </Group>
-        </Stack>
-      </Card>
+              {form.values.enableLLMGeneration && (
+                <div>
+                  <Text size="sm" fw={500} mb="xs" c="dark">
+                    Answer Generation Provider
+                  </Text>
+                  <Stack gap="4px">
+                    <Text size="sm" c="dark">
+                      Provider: {selectedProvider?.name || 'Not selected'}
+                    </Text>
+                    <Text size="sm" c="dark">
+                      Model: {form.values.selectedModel || 'Not selected'}
+                    </Text>
+                  </Stack>
+                </div>
+              )}
+            </Group>
+          </Stack>
+        </Card>
+      )}
 
-      {/* STEP 5: TOOLS BINDING (Assistant mode only) */}
+      {/* STEP 3/5: TOOLS BINDING (Assistant mode only - Step 3 in Assistant, Step 5 in overall flow) */}
       {form.values.agentType === 'assistant' && (
         <Card withBorder p="md" bg="violet.1" style={{ borderColor: '#a78bfa' }}>
           <Stack gap="sm">
             <Group justify="space-between">
-              <Text fw={600}>Step 5: Tools Binding</Text>
+              <Text fw={600}>Step 3: Tools Binding</Text>
               <Badge size="lg" color="violet">
                 {form.values.selectedTools?.length || 0} Tool{form.values.selectedTools?.length !== 1 ? 's' : ''}
               </Badge>
