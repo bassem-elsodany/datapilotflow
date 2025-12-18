@@ -40,8 +40,28 @@ class RAGQueryInput(BaseModel):
         le=30,
     )
     user_id: str = Field(description="User ID for the RAG workflow")
-    llm_provider_id: str = Field(description="LLM provider ID for query enhancement")
-    llm_model_name: str = Field(description="LLM model name for query enhancement")
+    # Embedding configuration - from vector database collection
+    embedding_provider_id: str = Field(
+        description="Embedding provider ID (from vector database collection config)"
+    )
+    embedding_model_name: str = Field(
+        description="Embedding model name (from vector database collection config)"
+    )
+    vector_dimension: int = Field(
+        default=1536,
+        description="Vector dimension of the embedding model (from collection config)",
+        ge=1,
+        le=4096,
+    )
+    # LLM configuration - only used for reranking (assistant provides enhanced queries)
+    llm_provider_id: str = Field(
+        default="",
+        description="LLM provider ID for reranking (optional, only used if reranking enabled)"
+    )
+    llm_model_name: str = Field(
+        default="",
+        description="LLM model name for reranking (optional, only used if reranking enabled)"
+    )
     conversation_id: str = Field(description="Conversation ID for tracking")
     conversation_description: Optional[str] = Field(
         default=None,
@@ -133,13 +153,28 @@ Use this tool whenever you need to:
                         "type": "string",
                         "description": "User ID for RAG workflow",
                     },
+                    "embedding_provider_id": {
+                        "type": "string",
+                        "description": "Embedding provider ID (from collection config)",
+                    },
+                    "embedding_model_name": {
+                        "type": "string",
+                        "description": "Embedding model name (from collection config)",
+                    },
+                    "vector_dimension": {
+                        "type": "integer",
+                        "default": 1536,
+                        "minimum": 1,
+                        "maximum": 4096,
+                        "description": "Vector dimension of embedding model (from collection config)",
+                    },
                     "llm_provider_id": {
                         "type": "string",
-                        "description": "LLM provider ID for query enhancement",
+                        "description": "LLM provider ID for reranking (optional, only if reranking enabled)",
                     },
                     "llm_model_name": {
                         "type": "string",
-                        "description": "LLM model name for query enhancement",
+                        "description": "LLM model name for reranking (optional, only if reranking enabled)",
                     },
                     "conversation_id": {
                         "type": "string",
@@ -154,8 +189,8 @@ Use this tool whenever you need to:
                     "search_query",
                     "collection_name",
                     "user_id",
-                    "llm_provider_id",
-                    "llm_model_name",
+                    "embedding_provider_id",
+                    "embedding_model_name",
                     "conversation_id",
                 ],
             },

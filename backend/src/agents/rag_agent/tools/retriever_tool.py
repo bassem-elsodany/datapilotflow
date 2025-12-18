@@ -27,11 +27,15 @@ from src.services.model_provider.model_provider_service import (
 
 
 class MilvusRetriever(BaseRetriever):
-    """Custom retriever that uses Milvus for vector search."""
+    """Custom retriever that uses Milvus for vector search with collection-specific embedding config."""
 
     collection_name: str
     user_id: str
     top_k: int = 5
+    # Optional embedding configuration from workflow (used if provided, otherwise fetched from collection)
+    embedding_provider_id: str | None = None
+    embedding_model_name: str | None = None
+    vector_dimension: int | None = None
 
     def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun = None
@@ -51,21 +55,31 @@ class MilvusRetriever(BaseRetriever):
             logger.info(f"   🔎 MILVUS RETRIEVER: Starting vector search")
             logger.info(f"   📝 Query: '{query[:150]}...'")
 
-            # Get collection configuration
-            vectordb_service = get_vectordb_collection_service()
-            collection_config = vectordb_service.get_collection_by_name(
-                self.collection_name
-            )
+            # Determine embedding configuration
+            # Priority: Use provided config from MCP tool, otherwise fetch from collection
+            if self.embedding_provider_id and self.embedding_model_name and self.vector_dimension:
+                # Use provided embedding config from workflow
+                embedding_provider_id = self.embedding_provider_id
+                embedding_model_name = self.embedding_model_name
+                vector_dimension = self.vector_dimension
+                logger.info(f"   ℹ️  Using embedding config from workflow (MCP tool parameters)")
+            else:
+                # Fallback: Fetch from collection configuration
+                logger.info(f"   ℹ️  Fetching embedding config from collection...")
+                vectordb_service = get_vectordb_collection_service()
+                collection_config = vectordb_service.get_collection_by_name(
+                    self.collection_name
+                )
 
-            if not collection_config:
-                raise ValueError(f"Collection not found: {self.collection_name}")
+                if not collection_config:
+                    raise ValueError(f"Collection not found: {self.collection_name}")
 
-            # Get embedding provider
-            embedding_provider_id = collection_config.embedding_model_provider_id
-            embedding_model_name = collection_config.embedding_model_name
-            vector_dimension = collection_config.vector_dimension
+                embedding_provider_id = collection_config.embedding_model_provider_id
+                embedding_model_name = collection_config.embedding_model_name
+                vector_dimension = collection_config.vector_dimension
 
             logger.info(f"   ⚙️  Collection: {self.collection_name}")
+            logger.info(f"   ⚙️  Embedding provider ID: {embedding_provider_id}")
             logger.info(f"   ⚙️  Embedding model: {embedding_model_name}")
             logger.info(f"   ⚙️  Vector dimension: {vector_dimension}")
             logger.info(f"   ⚙️  Top K: {self.top_k}")
@@ -185,22 +199,33 @@ class MilvusRetriever(BaseRetriever):
                 f"   🔎 MILVUS RETRIEVER (ASYNC): Starting vector search , Query: '{query[:150]}...'"
             )
 
-            # Get collection configuration (MongoDB call - wrap in thread)
-            vectordb_service = get_vectordb_collection_service()
-            collection_config = await asyncio.to_thread(
-                vectordb_service.get_collection_by_name, self.collection_name
-            )
+            # Determine embedding configuration
+            # Priority: Use provided config from MCP tool, otherwise fetch from collection
+            if self.embedding_provider_id and self.embedding_model_name and self.vector_dimension:
+                # Use provided embedding config from workflow
+                embedding_provider_id = self.embedding_provider_id
+                embedding_model_name = self.embedding_model_name
+                vector_dimension = self.vector_dimension
+                logger.info(f"   ℹ️  Using embedding config from workflow (MCP tool parameters)")
+            else:
+                # Fallback: Fetch from collection configuration
+                logger.info(f"   ℹ️  Fetching embedding config from collection...")
+                # Get collection configuration (MongoDB call - wrap in thread)
+                vectordb_service = get_vectordb_collection_service()
+                collection_config = await asyncio.to_thread(
+                    vectordb_service.get_collection_by_name, self.collection_name
+                )
 
-            if not collection_config:
-                raise ValueError(f"Collection not found: {self.collection_name}")
+                if not collection_config:
+                    raise ValueError(f"Collection not found: {self.collection_name}")
 
-            # Get embedding provider (MongoDB call - wrap in thread)
-            embedding_provider_id = collection_config.embedding_model_provider_id
-            embedding_model_name = collection_config.embedding_model_name
-            vector_dimension = collection_config.vector_dimension
+                embedding_provider_id = collection_config.embedding_model_provider_id
+                embedding_model_name = collection_config.embedding_model_name
+                vector_dimension = collection_config.vector_dimension
 
             logger.info(
-                f"   ⚙️  Collection: {self.collection_name}, Embedding model: {embedding_model_name}, Vector dimension: {vector_dimension}, Top K: {self.top_k}"
+                f"   ⚙️  Collection: {self.collection_name}, Embedding provider: {embedding_provider_id}, "
+                f"Embedding model: {embedding_model_name}, Vector dimension: {vector_dimension}, Top K: {self.top_k}"
             )
             model_provider_service = get_model_provider_service()
             provider = await asyncio.to_thread(

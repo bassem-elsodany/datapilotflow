@@ -35,17 +35,26 @@ async def knowledge_expert(
     collection_name: str,
     top_k: int = 5,
     user_id: str = "",
+    embedding_provider_id: str = "",
+    embedding_model_name: str = "",
+    vector_dimension: int = 1536,
     llm_provider_id: str = "",
     llm_model_name: str = "",
     conversation_id: str = "",
     conversation_description: str | None = None,
 ) -> Dict[str, Any]:
     """
-    Retrieve relevant documents from the knowledge base using RAG.
+    Retrieve relevant documents from the knowledge base using RAG with reranking.
 
     This tool searches through the knowledge base using multiple query variants
-    to ensure comprehensive document retrieval. It returns structured documents
-    with metadata that you can use to answer questions or generate content.
+    to ensure comprehensive document retrieval. It then reranks documents by relevance
+    and returns structured documents with metadata that you can use to answer questions.
+
+    ASSISTANT MODE CONFIGURATION:
+    - Strategy: custom_variants (supervisor provides pre-generated query variants)
+    - Reranking: ENABLED (uses agent's LLM to rank by relevance)
+    - LLM Generation: Disabled (returns raw documents for agent processing)
+    - Embedding: Uses collection's configured embedding model for vector search
 
     Args:
         search_query: List of exactly 5 diverse query variants for comprehensive retrieval.
@@ -69,14 +78,17 @@ async def knowledge_expert(
         collection_name: Vector database collection name
         top_k: Number of documents to retrieve (default: 5, max: 30)
         user_id: User ID for RAG workflow
-        llm_provider_id: LLM provider ID for query enhancement
-        llm_model_name: LLM model name for query enhancement
+        embedding_provider_id: Embedding provider ID (from vector database collection config)
+        embedding_model_name: Embedding model name (from vector database collection config)
+        vector_dimension: Vector dimension of embedding model (from collection config)
+        llm_provider_id: LLM provider ID for reranking (agent's primary LLM)
+        llm_model_name: LLM model name for reranking (agent's primary LLM)
         conversation_id: Conversation ID for tracking
         conversation_description: Optional conversation domain context
 
     Returns:
         Dictionary containing:
-        - documents: List with {id, content, source, metadata}
+        - documents: List of ranked documents with {id, content, source, metadata}
         - metadata: {total_documents, relevant_documents, source_count, sources}
         - error: Error message if failed (null on success)
     """
@@ -87,26 +99,39 @@ async def knowledge_expert(
             collection_name=collection_name,
             top_k=top_k,
             user_id=user_id,
+            embedding_provider_id=embedding_provider_id,
+            embedding_model_name=embedding_model_name,
+            vector_dimension=vector_dimension,
             llm_provider_id=llm_provider_id,
             llm_model_name=llm_model_name,
             conversation_id=conversation_id,
             conversation_description=conversation_description,
         )
 
-        # ASSISTANT MODE: Fixed configuration
-        enable_reranking = False
-        relevance_threshold = 0.5  # Not used (reranking disabled)
-        enable_llm_generation = False
-        selected_strategy = "custom_variants"
+        # ASSISTANT MODE: Configuration
+        # - Reranking: ENABLED (uses agent's primary LLM to rank documents by relevance)
+        # - LLM Generation: DISABLED (returns raw documents for agent to process)
+        # - Strategy: custom_variants (supervisor provides pre-generated query variants)
+        enable_reranking = True  # ✅ ENABLED - Using agent's primary LLM for reranking
+        relevance_threshold = 0.5  # Threshold for marking documents as relevant
+        enable_llm_generation = False  # Assistant handles answer generation
+        selected_strategy = "custom_variants"  # Supervisor provides variants
 
         # Build workflow configuration
         workflow_config = {
             "collection_name": query_input.collection_name,
             "user_id": query_input.user_id,
+            # Embedding configuration for vector search
+            "embedding_provider_id": query_input.embedding_provider_id,
+            "embedding_model_name": query_input.embedding_model_name,
+            "vector_dimension": query_input.vector_dimension,
+            # LLM configuration for reranking
             "llm_provider_id": query_input.llm_provider_id,
             "llm_model_name": query_input.llm_model_name,
+            # Conversation tracking
             "conversation_id": query_input.conversation_id,
             "conversation_description": query_input.conversation_description,
+            # Retrieval parameters
             "top_k": query_input.top_k,
             "enable_reranking": enable_reranking,
             "reranking_config": {

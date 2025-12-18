@@ -32,11 +32,19 @@ async def document_retriever(state: WorkflowState) -> WorkflowState:
         collection_name = config.get("collection_name", "LongTermMemory")
         user_id = config.get("user_id")
         top_k = config.get("top_k", 5)
+        # Embedding configuration from collection
+        embedding_provider_id = config.get("embedding_provider_id")
+        embedding_model_name = config.get("embedding_model_name")
+        vector_dimension = config.get("vector_dimension", 1536)
 
         if not user_id:
             raise ValueError("user_id is required in config")
 
         logger.info(f"📦 Using collection '{collection_name}' with top_k={top_k}")
+        logger.info(
+            f"📊 Embedding config: provider_id={embedding_provider_id}, "
+            f"model={embedding_model_name}, dimension={vector_dimension}"
+        )
 
         # Get retrieval configuration
         retrieval_config = config.get("retrieval_config", {})
@@ -85,6 +93,9 @@ async def document_retriever(state: WorkflowState) -> WorkflowState:
             collection_name=collection_name,
             user_id=user_id,
             top_k=top_k,
+            embedding_provider_id=embedding_provider_id,
+            embedding_model_name=embedding_model_name,
+            vector_dimension=vector_dimension,
         )
 
         # Decide: Single query or RRF?
