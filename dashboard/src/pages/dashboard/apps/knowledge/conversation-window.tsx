@@ -465,24 +465,44 @@ export default function ConversationWindow() {
           // Check if this is Assistant mode
           const isAssistantMode = config.assistant_config?.enabled ?? (config.agent_type === 'assistant');
 
-          // For Assistant mode, use enhancement.provider; for RAG mode, use answer_generation.provider
-          if (isAssistantMode && config.enhancement?.provider) {
-            setSelectedProviderId(config.enhancement.provider.id || null);
-            setSelectedModel(config.enhancement.provider.model_name || null);
-          } else if (config.answer_generation?.provider) {
-            setSelectedProviderId(config.answer_generation.provider.id || null);
-            setSelectedModel(config.answer_generation.provider.model_name || null);
-          } else {
-            setSelectedProviderId(null);
-            setSelectedModel(null);
+          // Handle both new simplified structure (from agent) and old nested structure (from session for backward compatibility)
+          let agentProviderId: string | null = null;
+          let agentModelName: string | null = null;
+          let strategyValue = 'native';
+          let llmGenerationEnabled = false;
+
+          // NEW STRUCTURE: From agent (simplified fields)
+          if (config.enhancement_strategy !== undefined) {
+            strategyValue = config.enhancement_strategy;
+            // Use agent's primary LLM provider for enhancement
+            if (config.llm_provider) {
+              agentProviderId = config.llm_provider.id || null;
+              agentModelName = config.llm_provider.model_name || null;
+            }
+            llmGenerationEnabled = config.is_llm_generation_enabled ?? false;
+          }
+          // OLD STRUCTURE: From session config (nested objects for backward compatibility)
+          else if (config.enhancement?.strategy !== undefined) {
+            strategyValue = config.enhancement.strategy;
+            // For old structure, get provider from enhancement or answer_generation
+            if (isAssistantMode && config.enhancement?.provider) {
+              agentProviderId = config.enhancement.provider.id || null;
+              agentModelName = config.enhancement.provider.model_name || null;
+            } else if (config.answer_generation?.provider) {
+              agentProviderId = config.answer_generation.provider.id || null;
+              agentModelName = config.answer_generation.provider.model_name || null;
+            }
+            llmGenerationEnabled = config.answer_generation?.enabled ?? false;
           }
 
-          // Extract from nested enhancement config
-          setSelectedStrategy(config.enhancement?.strategy || 'native');
-          if (config.enhancement?.provider) {
+          setSelectedProviderId(agentProviderId);
+          setSelectedModel(agentModelName);
+          setSelectedStrategy(strategyValue);
+
+          if (agentProviderId && agentModelName) {
             setSavedEnhancementProvider({
-              id: config.enhancement.provider.id,
-              model_name: config.enhancement.provider.model_name
+              id: agentProviderId,
+              model_name: agentModelName
             });
           }
 
@@ -495,8 +515,8 @@ export default function ConversationWindow() {
           setSelectedRerankerId(config.reranker?.provider?.id || null);
           setSelectedRerankerModel(config.reranker?.provider?.model_name || null);
 
-          // Determine LLM generation enabled from the enabled flag
-          setEnableLLMGeneration(config.answer_generation?.enabled || false);
+          // Determine LLM generation enabled
+          setEnableLLMGeneration(llmGenerationEnabled);
 
           // Load supervisor setting from assistant_config
           let newEnableKnowledgeAssistant = false;
@@ -1602,29 +1622,13 @@ export default function ConversationWindow() {
         setSavedEnhancementProvider(newProvider);
       }
 
-      // Determine which provider to use - when model changes, use the new provider for BOTH enhancement and answer_generation
-      let providerToUse = providerId && modelName ? { id: providerId, model_name: modelName } : null;
+      // Determine which provider to use - agent always has a primary LLM provider (loaded from savedEnhancementProvider or selected values)
+      // The agent's primary LLM is used for enhancement, reranking (when enabled), and answer generation (when enabled)
+      const providerToUse = (providerId && modelName) ? { id: providerId, model_name: modelName } : savedEnhancementProvider;
 
-      // If model is NOT being updated, use the saved enhancement provider
-      if (!updates.model && savedEnhancementProvider) {
-        providerToUse = savedEnhancementProvider;
-      }
-
-      // Determine final strategy - if strategy is being changed to non-native but no provider exists, force to native
+      // Determine final strategy - use the requested strategy (can always use agent's primary LLM for non-native)
       const requestedStrategy = updates.strategy || selectedStrategy;
-      const finalStrategy = requestedStrategy !== 'native' && !providerToUse ? 'native' : requestedStrategy;
-
-      // If we had to force strategy back to native, warn the user
-      if (requestedStrategy !== 'native' && !providerToUse && updates.strategy) {
-        notifications.show({
-          title: 'Strategy Reset to Native',
-          message: 'Non-native enhancement strategies require an LLM provider and model. Please configure these in settings first.',
-          color: 'yellow',
-          icon: <IconAlertCircle size={16} />,
-          autoClose: 7000,
-        });
-        setSelectedStrategy('native'); // Update UI
-      }
+      const finalStrategy = requestedStrategy;
 
       // Determine reranking enabled state - use update if provided, otherwise current state
       const finalRerankingEnabled = updates.enableReranking !== undefined ? updates.enableReranking : enableReranking;
@@ -1632,13 +1636,11 @@ export default function ConversationWindow() {
       // Determine LLM generation enabled state - use update if provided, otherwise current state
       const finalLLMGenerationEnabled = updates.enableLLMGeneration !== undefined ? updates.enableLLMGeneration : enableLLMGeneration;
 
-      // Build nested configuration structure with current values + updates for Agent
+      // Build configuration structure with current values + updates for Agent
       const payload: any = {
-        // Enhancement configuration - uses the same provider as answer_generation
-        enhancement: {
-          strategy: finalStrategy,
-          provider: finalStrategy !== 'native' ? providerToUse : null,
-        },
+        // NEW SIMPLIFIED STRUCTURE: Direct fields instead of nested objects
+        enhancement_strategy: finalStrategy,
+        is_llm_generation_enabled: finalLLMGenerationEnabled,
         // Vector database configuration
         vector_database: {
           collection_name: collectionName,
@@ -1653,12 +1655,6 @@ export default function ConversationWindow() {
             model_name: selectedRerankerModel,
           } : null,
           relevance_threshold: relevanceThreshold,
-        },
-        // Answer generation configuration - PRESERVE provider even when disabled
-        answer_generation: {
-          enabled: finalLLMGenerationEnabled,
-          // Always send provider if configured, regardless of enabled state
-          provider: providerToUse,
         },
         // Assistant config - preserve existing system_prompt_tasks
         assistant_config: {
