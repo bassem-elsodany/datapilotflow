@@ -162,7 +162,7 @@ export default function ModelProviders() {
     validate: {
       name: (value) => (!value ? 'Name is required' : null),
       provider_type: (value) => (!value ? 'Provider type is required' : null),
-      endpoint: (value) => (!value ? 'Endpoint is required' : null),
+      // Endpoint is optional - only required if using custom URL
       api_key: (value) => (!value ? 'API key is required' : null),
       timeout: (value) => (value < 1 || value > 300 ? 'Timeout must be between 1 and 300 seconds' : null),
     },
@@ -1018,7 +1018,7 @@ export default function ModelProviders() {
             <TextInput
               label="Endpoint"
               placeholder="https://api.example.com/v1"
-              required
+              description="Base API URL for the provider endpoint (optional - only needed for custom URLs)"
               {...createForm.getInputProps('endpoint')}
             />
 
