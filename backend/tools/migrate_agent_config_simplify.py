@@ -11,12 +11,18 @@ Usage:
 """
 
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
+from pathlib import Path
 
 import click
 from loguru import logger
 
-from src.infrastructure.mongo.client import get_database
+# Add project root to path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
+from src.config import settings
+from src.infrastructure.mongo.client import get_mongo_client
 
 
 @click.command()
@@ -33,8 +39,9 @@ def migrate_agent_config(dry_run: bool):
     logger.info("=" * 80)
     
     try:
-        # Get MongoDB collection
-        db = get_database()
+        # Get MongoDB client and database
+        client = get_mongo_client()
+        db = client[settings.MONGO_DB_NAME]
         collection = db["agents"]
         
         # Find all agents that have enhancement.provider or answer_generation.provider
@@ -92,7 +99,7 @@ def migrate_agent_config(dry_run: bool):
                 {
                     "$unset": unset_fields,
                     "$set": {
-                        "updated_at": datetime.utcnow()
+                        "updated_at": datetime.now(timezone.utc)
                     }
                 }
             )
