@@ -40,7 +40,7 @@ class AgentService:
         self.collection.create_index([("agent_type", 1)])
         self.collection.create_index([("tags", 1)])
 
-        logger.info("✅ AgentService initialized with MongoDB collection 'agents'")
+        logger.debug("AgentService initialized")
 
     def create_agent(
         self,
@@ -127,9 +127,7 @@ class AgentService:
         result = self.collection.insert_one(agent_data)
         agent_id = str(result.inserted_id)
 
-        logger.info(
-            f"✅ Created {agent_type.value} agent '{name}' with ID {agent_id} for user {user_id}"
-        )
+        logger.debug(f"Created agent {agent_id}")
 
         return agent_id
 
@@ -150,13 +148,13 @@ class AgentService:
             )
 
             if not doc:
-                logger.warning(f"Agent {agent_id} not found for user {user_id}")
+                logger.debug(f"Agent {agent_id} not found")
                 return None
 
             return self._deserialize_agent(doc)
 
         except Exception as e:
-            logger.error(f"Error fetching agent {agent_id}: {e}")
+            logger.error(f"Error fetching agent: {e}")
             return None
 
     def get_user_agents(
@@ -191,11 +189,11 @@ class AgentService:
             )
 
             agents = [self._deserialize_agent(doc) for doc in cursor]
-            logger.info(f"Retrieved {len(agents)} agents for user {user_id}")
+            logger.debug(f"Retrieved {len(agents)} agents")
             return agents
 
         except Exception as e:
-            logger.error(f"Error fetching agents for user {user_id}: {e}")
+            logger.error(f"Error fetching agents: {e}")
             return []
 
     def update_agent(
@@ -273,14 +271,14 @@ class AgentService:
             )
 
             if result.modified_count > 0:
-                logger.info(f"✅ Updated agent {agent_id}")
+                logger.debug(f"Updated agent {agent_id}")
                 return True
             else:
-                logger.warning(f"No changes made to agent {agent_id}")
+                logger.debug(f"No changes made to agent {agent_id}")
                 return False
 
         except Exception as e:
-            logger.error(f"Error updating agent {agent_id}: {e}")
+            logger.error(f"Error updating agent: {e}")
             return False
 
     def delete_agent(self, agent_id: str, user_id: str) -> bool:
@@ -302,14 +300,14 @@ class AgentService:
             )
 
             if result.deleted_count > 0:
-                logger.info(f"✅ Deleted agent {agent_id}")
+                logger.debug(f"Deleted agent {agent_id}")
                 return True
             else:
-                logger.warning(f"Agent {agent_id} not found or already deleted")
+                logger.debug(f"Agent {agent_id} not found")
                 return False
 
         except Exception as e:
-            logger.error(f"Error deleting agent {agent_id}: {e}")
+            logger.error(f"Error deleting agent: {e}")
             return False
 
     def count_conversations_using_agent(self, agent_id: str) -> int:
@@ -344,7 +342,7 @@ class AgentService:
             return count
 
         except Exception as e:
-            logger.error(f"Error counting conversations for agent {agent_id}: {e}")
+            logger.error(f"Error counting conversations: {e}")
             return 0
 
     def _deserialize_agent(self, doc: Dict) -> Agent:

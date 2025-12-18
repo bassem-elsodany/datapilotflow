@@ -128,6 +128,11 @@ class Settings(BaseSettings):
         le=30000,
     )
 
+    MONGO_AGENT_STATE_CHECKPOINT_ENABLED: bool = Field(
+        default=False,
+        description="Whether to enable MongoDB agent state checkpointing",
+    )
+
     @computed_field
     @property
     def MONGO_CONN_STR(self) -> str:

@@ -135,26 +135,35 @@ async def lifespan(app: FastAPI):
         "✅ Patched langgraph.checkpoint.mongodb.utils.serde with JSONSerializer"
     )
 
-    async with AsyncMongoDBSaver.from_conn_string(
-        conn_string=agent_mongo_uri,
-        db_name=settings.MONGO_AGENT_STATE_CHECKPOINT_DB_NAME,
-        checkpoint_collection_name=settings.MONGO_AGENT_STATE_CHECKPOINT_COLLECTION,
-        writes_collection_name=settings.MONGO_AGENT_STATE_WRITES_COLLECTION,
-    ) as checkpointer:
-        # Store checkpointer in app state and global variable
-        app.state.checkpointer = checkpointer
-
-        # Set checkpointer for assistant_agent
-        from src.agents.assistant_agent.response_handler import (
-            set_checkpointer as set_assistant_checkpointer,
+    if settings.MONGO_AGENT_STATE_CHECKPOINT_ENABLED:
+        logger.info(
+            "MongoDB agent state checkpointing is enabled, configuring MongoDB checkpointer"
         )
+        async with AsyncMongoDBSaver.from_conn_string(
+            conn_string=agent_mongo_uri,
+            db_name=settings.MONGO_AGENT_STATE_CHECKPOINT_DB_NAME,
+            checkpoint_collection_name=settings.MONGO_AGENT_STATE_CHECKPOINT_COLLECTION,
+            writes_collection_name=settings.MONGO_AGENT_STATE_WRITES_COLLECTION,
+        ) as checkpointer:
+            # Store checkpointer in app state and global variable
+            app.state.checkpointer = checkpointer
 
-        set_assistant_checkpointer(checkpointer)  # For assistant agent
+            # Set checkpointer for assistant_agent
+            from src.agents.assistant_agent.response_handler import (
+                set_checkpointer as set_assistant_checkpointer,
+            )
 
-        logger.info("DataPilot API ready and running")
-        logger.info(f"Checkpointer stored in app.state and global: {checkpointer}")
-        logger.info("Checkpointer set for assistant_agent")
-        yield {"checkpointer": checkpointer}  # Application is running
+            set_assistant_checkpointer(checkpointer)  # For assistant agent
+
+            logger.info("DataPilot API ready and running")
+            logger.info(f"Checkpointer stored in app.state and global: {checkpointer}")
+            logger.info("Checkpointer set for assistant_agent")
+            yield {"checkpointer": checkpointer}  # Application is running
+    else:
+        logger.info(
+            "MongoDB agent state checkpointing is disabled, skipping MongoDB checkpointer configuration"
+        )
+        yield {"checkpointer": None}  # Application is running
 
     # Handle graceful shutdown
     if settings.AGENT_TRACING_ENABLED:

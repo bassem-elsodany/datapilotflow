@@ -44,7 +44,7 @@ class ConversationHistoryService:
         self.messages_collection.create_index([("user_id", 1)])
         self.messages_collection.create_index([("timestamp", -1)])
 
-        logger.info("✅ ConversationHistoryService initialized")
+        logger.debug("ConversationHistoryService initialized")
 
     def create_conversation(
         self,
@@ -84,9 +84,7 @@ class ConversationHistoryService:
         result = self.collection.insert_one(conversation_data)
         conversation_id = str(result.inserted_id)
 
-        logger.info(
-            f"✅ Created conversation {conversation_id} for user {user_id} with agent {agent_id}"
-        )
+        logger.debug(f"Created conversation {conversation_id}")
 
         return conversation_id
 
@@ -197,13 +195,11 @@ class ConversationHistoryService:
                     )
                 )
 
-            logger.info(
-                f"Found {len(conversations)} conversations for user {user_id}, agent_id={agent_id}"
-            )
+            logger.debug(f"Found {len(conversations)} conversations")
             return conversations
 
         except Exception as e:
-            logger.error(f"Error fetching conversations for user {user_id}: {e}")
+            logger.error(f"Error fetching conversations: {e}")
             return []
 
     def update_conversation(
@@ -261,12 +257,10 @@ class ConversationHistoryService:
                 self.messages_collection.delete_many(
                     {"conversation_id": conversation_id}
                 )
-                logger.info(
-                    f"✅ Deleted conversation {conversation_id} and its messages"
-                )
+                logger.debug(f"Deleted conversation {conversation_id}")
                 return True
             else:
-                logger.warning(f"Conversation {conversation_id} not found")
+                logger.debug(f"Conversation {conversation_id} not found")
                 return False
 
         except Exception as e:
@@ -441,22 +435,19 @@ class ConversationHistoryService:
             bool: Success
         """
         try:
-            logger.info(f"🔄 [RESET START] conversation_id={conversation_id}, user_id={user_id}")
+            logger.debug(f"Resetting conversation {conversation_id}")
 
             # Verify conversation belongs to user
             conversation = self.get_conversation(conversation_id, user_id)
             if not conversation:
-                logger.error(f"❌ [RESET FAILED] Conversation {conversation_id} not found or unauthorized")
+                logger.error(f"Conversation {conversation_id} not found or unauthorized")
                 return False
 
             # 1. Delete all messages from our app's collection
-            logger.info(f"📝 [DELETING APP MESSAGES] conversation_id={conversation_id}")
             result = self.messages_collection.delete_many(
                 {"conversation_id": conversation_id}
             )
-            logger.info(
-                f"✅ [APP MESSAGES DELETED] Deleted {result.deleted_count} messages from app DB for conversation {conversation_id}"
-            )
+            logger.debug(f"Deleted {result.deleted_count} messages")
 
             # 2. Delete LangGraph checkpoint data AND memory store
             # The checkpointer uses conversation_id as thread_id
@@ -466,104 +457,60 @@ class ConversationHistoryService:
                 ]
 
                 # Delete from checkpoints collection
-                # LangGraph stores thread_id in nested structure: thread_id.thread_id
-                logger.info(f"🔍 [CHECKING CHECKPOINTS] conversation_id={conversation_id}")
                 checkpoints_collection = checkpoint_db[
                     settings.MONGO_AGENT_STATE_CHECKPOINT_COLLECTION
                 ]
 
-                # Debug: Check what checkpoints exist before deletion
-                # Note: LangGraph MongoDBSaver stores thread_id as a simple field (not nested)
-                # and checkpoint_ns defaults to "" (empty string)
                 checkpoint_query = {
                     "thread_id": conversation_id,
                     "checkpoint_ns": ""
                 }
-                existing_checkpoints = list(checkpoints_collection.find(checkpoint_query))
-                logger.info(f"📊 [CHECKPOINTS BEFORE DELETE] Found {len(existing_checkpoints)} checkpoint(s) for thread_id={conversation_id}, checkpoint_ns=''")
-                if existing_checkpoints:
-                    logger.debug(f"📋 [CHECKPOINT DETAILS] {existing_checkpoints[0]}")
-
                 checkpoint_result = checkpoints_collection.delete_many(checkpoint_query)
-                logger.info(
-                    f"✅ [CHECKPOINTS DELETED] Deleted {checkpoint_result.deleted_count} checkpoint entries for thread {conversation_id}"
-                )
+                logger.debug(f"Deleted {checkpoint_result.deleted_count} checkpoint entries")
 
                 # Delete from writes collection
-                logger.info(f"🔍 [CHECKING WRITES] conversation_id={conversation_id}")
                 writes_collection = checkpoint_db[
                     settings.MONGO_AGENT_STATE_WRITES_COLLECTION
                 ]
 
-                # Debug: Check what writes exist before deletion
-                # Note: LangGraph MongoDBSaver stores thread_id as a simple field (not nested)
-                # and checkpoint_ns defaults to "" (empty string)
                 writes_query = {
                     "thread_id": conversation_id,
                     "checkpoint_ns": ""
                 }
-                existing_writes = list(writes_collection.find(writes_query))
-                logger.info(f"📊 [WRITES BEFORE DELETE] Found {len(existing_writes)} write entry(ies) for thread_id={conversation_id}, checkpoint_ns=''")
-                if existing_writes:
-                    logger.debug(f"📋 [WRITES DETAILS] {existing_writes[0]}")
-
                 writes_result = writes_collection.delete_many(writes_query)
-                logger.info(
-                    f"✅ [WRITES DELETED] Deleted {writes_result.deleted_count} writes entries for thread {conversation_id}"
-                )
+                logger.debug(f"Deleted {writes_result.deleted_count} write entries")
 
                 # Delete from agent-specific memory store
-                # MongoDBStore uses agent-specific collections with namespace-based storage
-                # Collection format: "persistent_storage_{agent_id}"
-                # Namespace format: "user:{user_id}:conversation:{conversation_id}"
-                logger.info(f"🔍 [CHECKING MEMORY STORE] conversation_id={conversation_id}, agent_id={conversation.agent_id}")
-
-                # Get agent_id from conversation to determine which memory collection to delete from
                 if conversation.agent_id:
                     memory_collection_name = f"persistent_storage_{conversation.agent_id}"
                     memory_store_collection = checkpoint_db[memory_collection_name]
-
-                    # Memory store items are stored with namespace matching this pattern
                     memory_namespace = f"user:{user_id}:conversation:{conversation_id}"
-
-                    # Debug: Check what memories exist before deletion
-                    existing_memories = list(memory_store_collection.find(
-                        {"namespace": memory_namespace}
-                    ))
-                    logger.info(f"📊 [MEMORY STORE BEFORE DELETE] Found {len(existing_memories)} memory item(s) in collection {memory_collection_name} with namespace: {memory_namespace}")
-                    if existing_memories:
-                        logger.debug(f"📋 [MEMORY STORE DETAILS] First item: {existing_memories[0]}")
 
                     memory_result = memory_store_collection.delete_many(
                         {"namespace": memory_namespace}
                     )
-                    logger.info(
-                        f"✅ [MEMORY STORE DELETED] Deleted {memory_result.deleted_count} memory items from {memory_collection_name} for conversation {conversation_id}"
-                    )
+                    logger.debug(f"Deleted {memory_result.deleted_count} memory items")
                 else:
-                    logger.warning(f"⚠️ [NO AGENT_ID] Conversation {conversation_id} has no agent_id, skipping memory store deletion")
+                    logger.debug(f"No agent_id, skipping memory store deletion")
 
             except Exception as checkpoint_error:
                 # Log but don't fail - checkpoint/memory deletion is best-effort
                 logger.error(
-                    f"❌ [CHECKPOINT DELETE ERROR] Could not delete LangGraph checkpoint/memory data for {conversation_id}: {checkpoint_error}",
+                    f"Could not delete checkpoint/memory data: {checkpoint_error}",
                     exc_info=True
                 )
 
             # Verify deletion was successful
-            logger.info(f"✅ [RESET COMPLETE] Verifying deletion for conversation {conversation_id}")
             verify_messages = self.messages_collection.count_documents(
                 {"conversation_id": conversation_id}
             )
-            logger.info(f"✅ [VERIFICATION] Remaining messages after reset: {verify_messages}")
-
             if verify_messages > 0:
-                logger.warning(f"⚠️ [RESET WARNING] {verify_messages} messages still exist after reset for {conversation_id}")
+                logger.warning(f"{verify_messages} messages still exist after reset")
 
             return True
 
         except Exception as e:
-            logger.error(f"❌ [RESET ERROR] Error resetting conversation {conversation_id}: {e}", exc_info=True)
+            logger.error(f"Error resetting conversation: {e}", exc_info=True)
             return False
 
     def get_conversation_context(

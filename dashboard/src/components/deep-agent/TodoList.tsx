@@ -5,10 +5,10 @@
  * Adapted from: https://github.com/langchain-ai/deep-agents-ui
  */
 
-import { CheckCircle, Circle, Clock, ListTodo } from 'lucide-react';
-import { useMemo } from 'react';
+import { CheckCircle, Circle, Clock, ListTodo, ChevronDown, ChevronRight } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import type { TodoItem } from '@/types/deep-agent';
-import { cn } from '@/lib/utils';
+import { Box, Card, Group, Stack, Text, Badge, Container, Center, ScrollArea, Divider, ActionIcon } from '@mantine/core';
 
 interface TodoListProps {
   todos: TodoItem[];
@@ -17,15 +17,43 @@ interface TodoListProps {
 const getStatusIcon = (status: TodoItem['status']) => {
   switch (status) {
     case 'completed':
-      return <CheckCircle size={16} className="text-green-500" />;
+      return <CheckCircle size={16} color="#16a34a" />;
     case 'in_progress':
-      return <Clock size={16} className="text-yellow-500 animate-pulse" />;
+      return <Clock size={16} color="#ca8a04" style={{ animation: 'spin 1s linear infinite' }} />;
     default:
-      return <Circle size={16} className="text-gray-400" />;
+      return <Circle size={16} color="#d1d5db" />;
+  }
+};
+
+const getStatusColor = (status: TodoItem['status']) => {
+  switch (status) {
+    case 'completed':
+      return 'green';
+    case 'in_progress':
+      return 'yellow';
+    default:
+      return 'gray';
+  }
+};
+
+const getBgColor = (status: TodoItem['status']) => {
+  switch (status) {
+    case 'completed':
+      return '#f0fdf4';
+    case 'in_progress':
+      return '#fefce8';
+    default:
+      return '#f9fafb';
   }
 };
 
 export function TodoList({ todos }: TodoListProps) {
+  const [expandedSections, setExpandedSections] = useState({
+    in_progress: true,
+    pending: true,
+    completed: false,
+  });
+
   const groupedTodos = useMemo(() => {
     return {
       in_progress: todos.filter((t) => t.status === 'in_progress'),
@@ -34,98 +62,183 @@ export function TodoList({ todos }: TodoListProps) {
     };
   }, [todos]);
 
+  const toggleSection = (section: keyof typeof expandedSections) => {
+    setExpandedSections((prev) => ({
+      ...prev,
+      [section]: !prev[section],
+    }));
+  };
+
   if (todos.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center p-6 text-center">
-        <p className="text-sm text-gray-500">
-          No tasks yet. The agent will create a plan when needed.
-        </p>
-      </div>
+      <Center style={{ height: '100%' }}>
+        <Stack align="center" gap="md">
+          <ListTodo size={48} color="#d1d5db" />
+          <Text size="lg" fw={500} c="dimmed">
+            No tasks yet. The agent will create a plan when needed.
+          </Text>
+        </Stack>
+      </Center>
     );
   }
 
   return (
-    <div className="h-full overflow-y-auto p-4 space-y-5">
-      <div className="flex items-center gap-2 pb-2 border-b border-gray-200">
-        <ListTodo size={18} className="text-gray-600" />
-        <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest">
-          Tasks ({todos.length})
-        </h3>
-      </div>
+    <ScrollArea style={{ height: '100%' }} type="auto">
+      <Container size="lg" py="xl">
+        <Card shadow="sm" p="md" radius="md" withBorder mb="lg">
+          <Group gap="md">
+            <Box style={{ backgroundColor: '#fef3c7', padding: 8, borderRadius: 8 }}>
+              <ListTodo size={22} color="#d97706" />
+            </Box>
+            <Stack gap={0}>
+              <Text fw={700} size="lg">
+                Tasks
+              </Text>
+              <Text size="sm" c="dimmed">
+                {todos.length} {todos.length === 1 ? 'task' : 'tasks'}
+              </Text>
+            </Stack>
+          </Group>
+        </Card>
 
-      {/* In Progress */}
-      {groupedTodos.in_progress.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Clock size={18} className="text-amber-500" />
-            <h4 className="text-sm font-bold text-gray-900 uppercase tracking-widest">
-              In Progress ({groupedTodos.in_progress.length})
-            </h4>
-          </div>
-          <div className="space-y-3">
-            {groupedTodos.in_progress.map((todo) => (
-              <div
-                key={todo.id}
-                className="flex items-start gap-3 p-4 rounded-lg bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 hover:border-amber-300 transition-colors"
+        <Stack gap="lg">
+          {/* In Progress */}
+          {groupedTodos.in_progress.length > 0 && (
+            <div>
+              <Group
+                gap="sm"
+                mb="md"
+                style={{ cursor: 'pointer' }}
+                onClick={() => toggleSection('in_progress')}
               >
-                {getStatusIcon(todo.status)}
-                <span className="text-base flex-1 text-gray-900 break-words">{todo.content}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+                <Box style={{ display: 'flex', alignItems: 'center' }}>
+                  {expandedSections.in_progress ? (
+                    <ChevronDown size={18} color="#ca8a04" />
+                  ) : (
+                    <ChevronRight size={18} color="#ca8a04" />
+                  )}
+                </Box>
+                <Clock size={18} color="#ca8a04" />
+                <Text fw={700} size="md" c="var(--mantine-color-dark-9)">
+                  IN PROGRESS ({groupedTodos.in_progress.length})
+                </Text>
+              </Group>
+              {expandedSections.in_progress && (
+                <Stack gap="md">
+                  {groupedTodos.in_progress.map((todo) => (
+                    <Card key={todo.id} padding="md" radius="md" withBorder style={{ backgroundColor: getBgColor(todo.status) }}>
+                      <Group gap="md" align="flex-start">
+                        <Box style={{ paddingTop: 4 }}>
+                          {getStatusIcon(todo.status)}
+                        </Box>
+                        <Stack gap={0} style={{ flex: 1 }}>
+                          <Text size="sm" fw={600} c="var(--mantine-color-dark-9)">
+                            {todo.content}
+                          </Text>
+                          <Badge size="sm" color={getStatusColor(todo.status)} variant="light">
+                            {todo.status.toUpperCase().replace(/_/g, ' ')}
+                          </Badge>
+                        </Stack>
+                      </Group>
+                    </Card>
+                  ))}
+                </Stack>
+              )}
+            </div>
+          )}
 
-      {/* Pending */}
-      {groupedTodos.pending.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Circle size={18} className="text-gray-400" />
-            <h4 className="text-sm font-bold text-gray-900 uppercase tracking-widest">
-              Pending ({groupedTodos.pending.length})
-            </h4>
-          </div>
-          <div className="space-y-3">
-            {groupedTodos.pending.map((todo) => (
-              <div
-                key={todo.id}
-                className="flex items-start gap-3 p-4 rounded-lg bg-gradient-to-r from-gray-50 to-slate-50 border border-gray-200 hover:border-gray-300 transition-colors"
+          {/* Pending */}
+          {groupedTodos.pending.length > 0 && (
+            <div>
+              <Group
+                gap="sm"
+                mb="md"
+                style={{ cursor: 'pointer' }}
+                onClick={() => toggleSection('pending')}
               >
-                {getStatusIcon(todo.status)}
-                <span className="text-base flex-1 text-gray-800 break-words">{todo.content}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+                <Box style={{ display: 'flex', alignItems: 'center' }}>
+                  {expandedSections.pending ? (
+                    <ChevronDown size={18} color="#6b7280" />
+                  ) : (
+                    <ChevronRight size={18} color="#6b7280" />
+                  )}
+                </Box>
+                <Circle size={18} color="#d1d5db" />
+                <Text fw={700} size="md" c="var(--mantine-color-dark-9)">
+                  PENDING ({groupedTodos.pending.length})
+                </Text>
+              </Group>
+              {expandedSections.pending && (
+                <Stack gap="md">
+                  {groupedTodos.pending.map((todo) => (
+                    <Card key={todo.id} padding="md" radius="md" withBorder style={{ backgroundColor: getBgColor(todo.status) }}>
+                      <Group gap="md" align="flex-start">
+                        <Box style={{ paddingTop: 4 }}>
+                          {getStatusIcon(todo.status)}
+                        </Box>
+                        <Stack gap={0} style={{ flex: 1 }}>
+                          <Text size="sm" fw={600} c="var(--mantine-color-dark-9)">
+                            {todo.content}
+                          </Text>
+                          <Badge size="sm" color={getStatusColor(todo.status)} variant="light">
+                            {todo.status.toUpperCase().replace(/_/g, ' ')}
+                          </Badge>
+                        </Stack>
+                      </Group>
+                    </Card>
+                  ))}
+                </Stack>
+              )}
+            </div>
+          )}
 
-      {/* Completed */}
-      {groupedTodos.completed.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <CheckCircle size={18} className="text-emerald-500" />
-            <h4 className="text-sm font-bold text-gray-900 uppercase tracking-widest">
-              Completed ({groupedTodos.completed.length})
-            </h4>
-          </div>
-          <div className="space-y-3">
-            {groupedTodos.completed.map((todo) => (
-              <div
-                key={todo.id}
-                className={cn(
-                  'flex items-start gap-3 p-4 rounded-lg bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 hover:border-emerald-300 transition-colors'
-                )}
+          {/* Completed */}
+          {groupedTodos.completed.length > 0 && (
+            <div>
+              <Group
+                gap="sm"
+                mb="md"
+                style={{ cursor: 'pointer' }}
+                onClick={() => toggleSection('completed')}
               >
-                {getStatusIcon(todo.status)}
-                <span className="text-base flex-1 line-through text-gray-600 break-words">
-                  {todo.content}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
+                <Box style={{ display: 'flex', alignItems: 'center' }}>
+                  {expandedSections.completed ? (
+                    <ChevronDown size={18} color="#16a34a" />
+                  ) : (
+                    <ChevronRight size={18} color="#16a34a" />
+                  )}
+                </Box>
+                <CheckCircle size={18} color="#16a34a" />
+                <Text fw={700} size="md" c="var(--mantine-color-dark-9)">
+                  COMPLETED ({groupedTodos.completed.length})
+                </Text>
+              </Group>
+              {expandedSections.completed && (
+                <Stack gap="md">
+                  {groupedTodos.completed.map((todo) => (
+                    <Card key={todo.id} padding="md" radius="md" withBorder style={{ backgroundColor: getBgColor(todo.status) }}>
+                      <Group gap="md" align="flex-start">
+                        <Box style={{ paddingTop: 4 }}>
+                          {getStatusIcon(todo.status)}
+                        </Box>
+                        <Stack gap={0} style={{ flex: 1 }}>
+                          <Text size="sm" fw={600} c="var(--mantine-color-dark-9)" style={{ textDecoration: 'line-through' }}>
+                            {todo.content}
+                          </Text>
+                          <Badge size="sm" color={getStatusColor(todo.status)} variant="light">
+                            {todo.status.toUpperCase().replace(/_/g, ' ')}
+                          </Badge>
+                        </Stack>
+                      </Group>
+                    </Card>
+                  ))}
+                </Stack>
+              )}
+            </div>
+          )}
+        </Stack>
+      </Container>
+    </ScrollArea>
   );
 }
 

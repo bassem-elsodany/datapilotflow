@@ -33,6 +33,7 @@ import {
   IconCheck,
   IconInfoCircle,
   IconPlus,
+  IconRefresh,
   IconServer,
 } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
@@ -796,7 +797,7 @@ export default function ToolFormPage() {
 
               <Textarea
                 label="Description"
-                value={existingTool.description}
+                value={form.values.description}
                 readOnly
                 disabled
                 minRows={3}
@@ -824,6 +825,54 @@ export default function ToolFormPage() {
                   onClick={() => navigate(paths.dashboard.management.tools.list)}
                 >
                   Cancel
+                </Button>
+                <Button
+                  variant="light"
+                  leftSection={<IconRefresh size={16} />}
+                  loading={isDiscovering}
+                  onClick={async () => {
+                    try {
+                      setIsDiscovering(true);
+                      // Reload tool descriptions from MCP server
+                      const result = await discoverMCPMutation.mutateAsync({
+                        serverId: existingTool.mcp_server_id!
+                      });
+
+                      // Find the current tool in the discovered list
+                      const updatedTool = result.find((t: any) => t.name === existingTool.mcp_tool_name);
+
+                      if (updatedTool) {
+                        // Update form with new description
+                        form.setValues({
+                          ...form.values,
+                          description: updatedTool.description || existingTool.description,
+                        });
+
+                        notifications.show({
+                          title: 'Success',
+                          message: 'Tool description reloaded from MCP server',
+                          color: 'green',
+                        });
+                      } else {
+                        notifications.show({
+                          title: 'Not Found',
+                          message: 'Tool not found on MCP server',
+                          color: 'yellow',
+                        });
+                      }
+                    } catch (error: any) {
+                      notifications.show({
+                        title: 'Error',
+                        message: error.response?.data?.detail || 'Failed to reload tool description',
+                        color: 'red',
+                      });
+                    } finally {
+                      setIsDiscovering(false);
+                    }
+                  }}
+                  disabled={isDiscovering}
+                >
+                  Reload Definition
                 </Button>
                 <Button
                   leftSection={<IconCheck size={16} />}
@@ -900,15 +949,26 @@ export default function ToolFormPage() {
                       searchable
                     />
 
-                    <Button
-                      onClick={handleDiscoverMCPTools}
-                      loading={isDiscovering}
-                      disabled={!selectedMcpServerId}
-                      leftSection={<IconServer size={16} />}
-                      fullWidth
-                    >
-                      Discover Tools from Selected Server
-                    </Button>
+                    <Group grow>
+                      <Button
+                        onClick={handleDiscoverMCPTools}
+                        loading={isDiscovering}
+                        disabled={!selectedMcpServerId}
+                        leftSection={<IconServer size={16} />}
+                      >
+                        Discover Tools
+                      </Button>
+                      <Button
+                        onClick={handleDiscoverMCPTools}
+                        loading={isDiscovering}
+                        disabled={!selectedMcpServerId || discoveredTools.length === 0}
+                        variant="light"
+                        leftSection={<IconRefresh size={16} />}
+                        title="Reload MCP tool descriptions from server"
+                      >
+                        Reload
+                      </Button>
+                    </Group>
                   </>
                 ) : (
                   <Alert color="yellow" icon={<IconAlertCircle />}>
