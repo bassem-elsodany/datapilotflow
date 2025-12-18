@@ -13,11 +13,19 @@ import { createGetQueryHook, createPostMutationHook, createPutMutationHook } fro
 // Zod Schemas
 // ============================================================================
 
-export const ModelTypeSchema = z.enum(['embedding', 'generative', 'both']);
+export const ModelTypeSchema = z.enum(['embedding', 'generative', 'reranker', 'both']);
+// Runtime enum-like helper for UI usage
+export const ModelType = {
+  EMBEDDING: 'embedding',
+  GENERATIVE: 'generative',
+  RERANKER: 'reranker',
+  BOTH: 'both',
+} as const;
 
 export const ModelTypeConfigSchema = z.object({
   models: z.array(z.string()),
   config: z.record(z.any()),
+  endpoint: z.string().optional().nullable(),
 });
 
 export const ModelProviderSchema = z.object({
@@ -25,7 +33,7 @@ export const ModelProviderSchema = z.object({
   name: z.string(),
   provider_type: z.string(),
   endpoint: z.string(),
-  api_key: z.string(),
+  api_key: z.string().nullable(),
   description: z.string().nullable(),
   is_active: z.boolean(),
   timeout: z.number(),
@@ -60,7 +68,7 @@ export const ModelProviderCreateSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   provider_type: z.string().min(1, 'Provider type is required'),
   endpoint: z.string().url('Must be a valid URL'),
-  api_key: z.string().min(1, 'API key is required'),
+  api_key: z.string().optional(),
   description: z.string().optional(),
   is_active: z.boolean().default(true),
   timeout: z.number().min(1).max(300).default(60),
@@ -73,7 +81,7 @@ export const ModelProviderUpdateSchema = z.object({
   name: z.string().min(1, 'Name is required').optional(),
   provider_type: z.string().min(1, 'Provider type is required').optional(),
   endpoint: z.string().url('Must be a valid URL').optional(),
-  api_key: z.string().min(1, 'API key is required').optional(),
+  api_key: z.string().optional(),
   description: z.string().optional(),
   is_active: z.boolean().optional(),
   timeout: z.number().min(1).max(300).optional(),
@@ -92,6 +100,13 @@ export type ModelProvider = z.infer<typeof ModelProviderSchema>;
 export type ModelProviderResponse = z.infer<typeof ModelProviderResponseSchema>;
 export type ModelProviderCreate = z.infer<typeof ModelProviderCreateSchema>;
 export type ModelProviderUpdate = z.infer<typeof ModelProviderUpdateSchema>;
+export const ModelProviderTestResponseSchema = z.object({
+  success: z.boolean(),
+  status_code: z.number().optional(),
+  duration_ms: z.number().optional(),
+  body: z.string().optional(),
+  message: z.string().optional(),
+});
 
 // ============================================================================
 // React Query Hooks
@@ -117,7 +132,13 @@ export const useGetModelProvider = (providerId: string) =>
   createGetQueryHook({
     endpoint: apiEndpoints.modelProviders.get(providerId),
     responseSchema: ModelProviderResponseSchema,
-    rQueryParams: { queryKey: ['model-providers', { providerId }] },
+    rQueryParams: {
+      queryKey: ['model-providers', { providerId }],
+      staleTime: 0,
+      gcTime: 0,
+      refetchOnMount: true,
+      refetchOnWindowFocus: true,
+    },
   })();
 
 // Get active model providers
@@ -156,3 +177,13 @@ export const useUpdateModelProvider = (providerId: string) =>
     responseSchema: ModelProviderResponseSchema,
   })();
 
+// Test model provider (live call) without saving
+export const useTestModelProvider = createPostMutationHook({
+  endpoint: apiEndpoints.modelProviders.test,
+  bodySchema: z.object({
+    provider: ModelProviderCreateSchema,
+    test_type: z.enum(['embedding', 'generative', 'reranker']),
+    model: z.string(),
+  }),
+  responseSchema: ModelProviderTestResponseSchema,
+});

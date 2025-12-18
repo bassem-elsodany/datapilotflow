@@ -1,25 +1,98 @@
-import { useState } from 'react';
+import { ModelType, useCreateModelProvider, useTestModelProvider } from '@/api/resources/model-providers';
 import { Page } from '@/components/page';
 import { PageHeader } from '@/components/page-header';
-import { 
-  Card, 
-  Button, 
-  Group, 
+import { paths } from '@/routes/paths';
+import {
+  Button,
+  Card,
+  Group,
+  Modal,
+  MultiSelect,
+  Paper,
+  Select,
+  SimpleGrid,
   Stack,
+  Switch,
+  TagsInput,
+  Text,
   TextInput,
   Textarea,
-  Switch,
-  SimpleGrid,
-  TagsInput,
-  MultiSelect,
-  Alert
+  Title
 } from '@mantine/core';
-import { paths } from '@/routes/paths';
-import { useCreateModelProvider } from '@/api/resources/model-providers';
-import { ModelType } from '@/api/resources/model-providers';
-import { notifications } from '@mantine/notifications';
 import { useForm } from '@mantine/form';
+import { notifications } from '@mantine/notifications';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+
+// Helper function to mask API key for display
+const maskApiKey = (key: string | undefined): string => {
+  if (!key) return '';
+  if (key.length <= 8) return key; // Too short to mask
+  // Show first 8 chars and mask the rest
+  return key.substring(0, 8) + '•'.repeat(Math.min(key.length - 8, 20));
+};
+
+const PROVIDER_TYPE_OPTIONS = [
+  // Core / OpenAI-compatible
+  { value: 'ai21', label: 'AI21' },
+  { value: 'anthropic', label: 'Anthropic' },
+  { value: 'anyscale', label: 'Anyscale' },
+  { value: 'azure', label: 'Azure OpenAI' },
+  { value: 'azure_ai', label: 'Azure AI' },
+  { value: 'baseten', label: 'Baseten' },
+  { value: 'bedrock', label: 'AWS Bedrock' },
+  { value: 'cerebras', label: 'Cerebras' },
+  { value: 'clarifai', label: 'Clarifai' },
+  { value: 'cloudflare_workers_ai', label: 'Cloudflare Workers AI' },
+  { value: 'codestral', label: 'Codestral API (Mistral AI)' },
+  { value: 'cohere', label: 'Cohere' },
+  { value: 'comet', label: 'CometAPI' },
+  { value: 'datarobot', label: 'DataRobot' },
+  { value: 'databricks', label: 'Databricks' },
+  { value: 'dashscope', label: 'Dashscope' },
+  { value: 'deepinfra', label: 'DeepInfra' },
+  { value: 'deepseek', label: 'Deepseek' },
+  { value: 'docker', label: 'Docker Model Runner' },
+  { value: 'elevenlabs', label: 'ElevenLabs' },
+  { value: 'fal', label: 'Fal AI' },
+  { value: 'fireworks_ai', label: 'Fireworks AI' },
+  { value: 'friendliai', label: 'FriendliAI' },
+  { value: 'gcp_vertex', label: 'GCP Vertex' },
+  { value: 'google_ai_studio', label: 'Google AI Studio' },
+  { value: 'gradient', label: 'GradientAI' },
+  { value: 'groq', label: 'Groq' },
+  { value: 'helicone', label: 'Helicone' },
+  { value: 'huggingface', label: 'HuggingFace Inference' },
+  { value: 'hyperbolic', label: 'Hyperbolic' },
+  { value: 'hyperbolic_api', label: 'Hyperbolic API' },
+  { value: 'infinity', label: 'Infinity' },
+  { value: 'jina', label: 'Jina AI' },
+  { value: 'lambda', label: 'Lambda AI' },
+  { value: 'langgraph', label: 'LangGraph' },
+  { value: 'lemonade', label: 'Lemonade' },
+  { value: 'llamafile', label: 'Llamafile' },
+  { value: 'lmstudio', label: 'LM Studio' },
+  { value: 'milvus', label: 'Milvus Vector Store' },
+  { value: 'mistral', label: 'Mistral AI API' },
+  { value: 'nscale', label: 'Nscale (EU Sovereign)' },
+  { value: 'oci', label: 'Oracle OCI' },
+  { value: 'ollama', label: 'Ollama' },
+  { value: 'openai', label: 'OpenAI' },
+  { value: 'openrouter', label: 'OpenRouter' },
+  { value: 'perplexity', label: 'Perplexity AI' },
+  { value: 'predibase', label: 'Predibase' },
+  { value: 'qwen_dashscope', label: 'Dashscope (Qwen API)' },
+  { value: 'replicate', label: 'Replicate' },
+  { value: 'sagemaker', label: 'AWS Sagemaker' },
+  { value: 'sambanova', label: 'SambaNova' },
+  { value: 'snowflake', label: 'Snowflake Cortex' },
+  { value: 'together_ai', label: 'Together AI' },
+  { value: 'vertex_ai', label: 'Vertex AI' },
+  { value: 'vercel', label: 'Vercel AI Gateway' },
+  { value: 'vllm', label: 'vLLM' },
+  { value: 'voyage', label: 'Voyage AI' },
+  { value: 'xai', label: 'xAI' },
+].sort((a, b) => a.label.localeCompare(b.label));
 
 const breadcrumbs = [
   { label: 'Dashboard', href: paths.dashboard.root },
@@ -28,154 +101,23 @@ const breadcrumbs = [
   { label: 'Create' },
 ];
 
-const predefinedProviders = [
-  {
-    name: 'OpenAI',
-    provider_type: 'openai',
-    endpoint: 'https://api.openai.com/v1',
-    supported_model_types: ['embedding', 'generative'] as ModelType[],
-    embedding_models: [
-      'text-embedding-3-small',
-      'text-embedding-3-large', 
-      'text-embedding-ada-002'
-    ],
-    generative_models: [
-      'gpt-4o',
-      'gpt-4o-mini',
-      'gpt-4-turbo',
-      'gpt-4',
-      'gpt-3.5-turbo'
-    ],
-    description: 'OpenAI\'s unified provider for both embedding and generative models',
-    provider_config: {
-      embedding_endpoint: '/embeddings',
-      generative_endpoint: '/chat/completions',
-      max_tokens: 4096,
-      temperature: 0.7
-    }
-  },
-  {
-    name: 'Anthropic',
-    provider_type: 'anthropic',
-    endpoint: 'https://api.anthropic.com/v1',
-    supported_model_types: ['embedding', 'generative'] as ModelType[],
-    embedding_models: [
-      'claude-3-5-sonnet-embedding',
-      'claude-3-opus-embedding',
-      'claude-3-sonnet-embedding'
-    ],
-    generative_models: [
-      'claude-3-5-sonnet-20241022',
-      'claude-3-5-haiku-20241022',
-      'claude-3-opus-20240229',
-      'claude-3-sonnet-20240229',
-      'claude-3-haiku-20240307'
-    ],
-    description: 'Anthropic\'s unified provider for both embedding and generative models',
-    provider_config: {
-      embedding_endpoint: '/embeddings',
-      generative_endpoint: '/messages',
-      max_tokens: 4096,
-      temperature: 0.7
-    }
-  },
-  {
-    name: 'Google',
-    provider_type: 'google',
-    endpoint: 'https://generativelanguage.googleapis.com/v1beta',
-    supported_model_types: ['embedding', 'generative'] as ModelType[],
-    embedding_models: [
-      'text-embedding-004',
-      'text-multilingual-embedding-002'
-    ],
-    generative_models: [
-      'gemini-1.5-pro',
-      'gemini-1.5-flash',
-      'gemini-1.0-pro'
-    ],
-    description: 'Google\'s unified provider for both embedding and generative models',
-    provider_config: {
-      embedding_endpoint: '/models',
-      generative_endpoint: '/models',
-      max_tokens: 4096,
-      temperature: 0.7
-    }
-  },
-  {
-    name: 'Ollama',
-    provider_type: 'ollama',
-    endpoint: 'http://localhost:11434/api',
-    supported_model_types: ['embedding', 'generative'] as ModelType[],
-    embedding_models: [
-      'nomic-embed-text',
-      'mxbai-embed-large',
-      'all-minilm',
-      'bge-large-en',
-      'bge-base-en'
-    ],
-    generative_models: [
-      'llama3.1:8b',
-      'llama3.1:70b',
-      'mistral:7b',
-      'codellama:7b',
-      'phi3:3.8b'
-    ],
-    description: 'Ollama\'s unified provider for local embedding and generative models',
-    provider_config: {
-      embedding_endpoint: '/embeddings',
-      generative_endpoint: '/generate',
-      max_tokens: 4096,
-      temperature: 0.7
-    }
-  },
-  {
-    name: 'Hugging Face',
-    provider_type: 'huggingface',
-    endpoint: 'https://api-inference.huggingface.co/models',
-    supported_model_types: ['embedding', 'generative'] as ModelType[],
-    embedding_models: [
-      'sentence-transformers/all-MiniLM-L6-v2',
-      'sentence-transformers/all-mpnet-base-v2',
-      'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2',
-      'sentence-transformers/distilbert-base-nli-mean-tokens'
-    ],
-    generative_models: [
-      'microsoft/DialoGPT-medium',
-      'facebook/blenderbot-400M-distill',
-      'google/flan-t5-base'
-    ],
-    description: 'Hugging Face\'s unified provider for both embedding and generative models',
-    provider_config: {
-      embedding_endpoint: '/',
-      generative_endpoint: '/',
-      max_tokens: 4096,
-      temperature: 0.7
-    }
-  },
-  {
-    name: 'Groq',
-    provider_type: 'groq',
-    endpoint: 'https://api.groq.com/openai/v1',
-    supported_model_types: ['generative'] as ModelType[],
-    embedding_models: [],
-    generative_models: [
-      'llama-3.1-70b-versatile',
-      'llama-3.1-8b-instant',
-      'mixtral-8x7b-32768',
-      'gemma-7b-it'
-    ],
-    description: 'Groq\'s high-performance generative model provider',
-    provider_config: {
-      generative_endpoint: '/chat/completions',
-      max_tokens: 4096,
-      temperature: 0.7
-    }
-  }
-];
 
 export default function CreateModelProvider() {
   const navigate = useNavigate();
   const createProviderMutation = useCreateModelProvider();
+  const testProviderMutation = useTestModelProvider();
+
+  const [isEditingApiKey, setIsEditingApiKey] = useState(false);
+  const [testModalOpen, setTestModalOpen] = useState(false);
+  const [testModalType, setTestModalType] = useState<ModelType | null>(null);
+  const [testModalModel, setTestModalModel] = useState<string>('');
+  const [testResult, setTestResult] = useState<{
+    success: boolean;
+    status_code?: number;
+    duration_ms?: number;
+    message?: string;
+    body?: string;
+  } | null>(null);
 
   const form = useForm({
     initialValues: {
@@ -185,50 +127,114 @@ export default function CreateModelProvider() {
       api_key: '',
       description: '',
       is_active: true,
+      timeout: 60,
       supported_model_types: [] as ModelType[],
       embedding_models: [] as string[],
       generative_models: [] as string[],
-      provider_config: {} as Record<string, any>,
+      reranker_models: [] as string[],
+      embedding_config: {} as Record<string, any>,
+      generative_config: {} as Record<string, any>,
+      reranker_config: {} as Record<string, any>,
+      embedding_endpoint: '' as string,
+      generative_endpoint: '' as string,
+      reranker_endpoint: '' as string,
     },
     validate: {
       name: (value) => (!value ? 'Name is required' : null),
       provider_type: (value) => (!value ? 'Provider type is required' : null),
       endpoint: (value) => (!value ? 'Endpoint is required' : null),
-      api_key: (value) => (!value ? 'API key is required' : null),
     },
   });
 
-  const handlePredefinedProviderSelect = (providerName: string) => {
-    const provider = predefinedProviders.find(p => p.name === providerName);
-    if (provider) {
-      form.setValues({
-        name: provider.name,
-        provider_type: provider.provider_type,
-        endpoint: provider.endpoint,
-        api_key: '',
-        description: provider.description,
-        is_active: true,
-        supported_model_types: provider.supported_model_types,
-        embedding_models: provider.embedding_models,
-        generative_models: provider.generative_models,
-        provider_config: provider.provider_config,
+  const buildProviderPayload = (values: typeof form.values) => ({
+    name: values.name,
+    provider_type: values.provider_type,
+    endpoint: values.endpoint,
+    api_key: values.api_key || undefined,
+    description: values.description || undefined,
+    is_active: values.is_active,
+    timeout: values.timeout,
+    embedding: values.embedding_models.length > 0
+      ? {
+        models: values.embedding_models,
+        config: values.embedding_config,
+        endpoint: values.embedding_endpoint || undefined,
+      }
+      : undefined,
+    generative: values.generative_models.length > 0
+      ? {
+        models: values.generative_models,
+        config: values.generative_config,
+        endpoint: values.generative_endpoint || undefined,
+      }
+      : undefined,
+    reranker: values.reranker_models.length > 0
+      ? {
+        models: values.reranker_models,
+        config: values.reranker_config,
+        endpoint: values.reranker_endpoint || undefined,
+      }
+      : undefined,
+  });
+
+  const handleTest = async (testType: ModelType, modelName?: string) => {
+    if (!modelName) {
+      notifications.show({
+        title: 'Error',
+        message: `Please add at least one ${testType} model to test.`,
+        color: 'red',
+      });
+      return;
+    }
+
+    try {
+      const provider = buildProviderPayload(form.values);
+      const payload = { provider, test_type: testType, model: modelName };
+
+      const result = await testProviderMutation.mutateAsync({ variables: payload } as any);
+
+      setTestResult({
+        success: Boolean(result.success),
+        status_code: result.status_code,
+        duration_ms: result.duration_ms,
+        message: result.message,
+        body: result.body,
+      });
+    } catch (error: any) {
+      setTestResult({
+        success: false,
+        status_code: undefined,
+        duration_ms: undefined,
+        message: error?.message || 'Failed to run test',
+        body: undefined,
       });
     }
   };
-
+  const openTestModal = (testType: ModelType, models: string[]) => {
+    if (!models.length) return;
+    if (models.length === 1) {
+      void handleTest(testType, models[0]);
+      return;
+    }
+    setTestModalType(testType);
+    setTestModalModel(models[0]);
+    setTestModalOpen(true);
+  };
   const handleSubmit = async (values: typeof form.values) => {
     try {
-      await createProviderMutation.mutateAsync(values);
+      const payload = buildProviderPayload(values);
+
+      await createProviderMutation.mutateAsync({ variables: payload } as any);
       notifications.show({
         title: 'Success',
         message: 'Model provider created successfully',
         color: 'green',
       });
       navigate(paths.dashboard.management.modelProviders.list);
-    } catch (error) {
+    } catch (error: any) {
       notifications.show({
         title: 'Error',
-        message: 'Failed to create model provider',
+        message: error?.message || 'Failed to create model provider',
         color: 'red',
       });
     }
@@ -236,117 +242,406 @@ export default function CreateModelProvider() {
 
   return (
     <Page title="Create Model Provider">
-      <PageHeader 
-        title="Create Model Provider" 
-        breadcrumbs={breadcrumbs}
-        action={
-          <Group>
-            <Button
-              variant="light"
-              onClick={() => navigate(paths.dashboard.management.modelProviders.list)}
-            >
-              Cancel
-            </Button>
-          </Group>
-        }
-      />
+      <PageHeader title="Create Model Provider" breadcrumbs={breadcrumbs}>
+        <Group>
+          <Button
+            variant="light"
+            onClick={() => navigate(paths.dashboard.management.modelProviders.list)}
+          >
+            Cancel
+          </Button>
+        </Group>
+      </PageHeader>
 
-      <Card>
+      <Card withBorder shadow="sm" radius="md" p="xl">
         <form onSubmit={form.onSubmit(handleSubmit)}>
-          <Stack gap="md">
-            <Alert color="blue" title="Quick Setup">
-              Select a predefined provider below to automatically fill in the configuration, or create a custom provider manually.
-            </Alert>
+          <Stack gap="xl">
 
-            <MultiSelect
-              label="Predefined Providers"
-              placeholder="Select a predefined provider (optional)"
-              data={predefinedProviders.map(p => ({ value: p.name, label: p.name }))}
-              onChange={(value) => {
-                if (value.length > 0) {
-                  handlePredefinedProviderSelect(value[0]);
-                }
-              }}
-              clearable
-            />
+            <Paper withBorder p="lg" radius="md">
+              <Stack gap="md">
+                <Group justify="space-between" align="flex-start">
+                  <div>
+                    <Title order={4}>Basics</Title>
+                    <Text size="sm" c="dimmed">
+                      Core info to identify and reach your provider.
+                    </Text>
+                  </div>
+                  <Switch
+                    label="Active"
+                    {...form.getInputProps('is_active', { type: 'checkbox' })}
+                  />
+                </Group>
 
-            <Divider />
+                <SimpleGrid cols={2} spacing="md">
+                  <TextInput
+                    label="Name"
+                    placeholder="Provider name"
+                    description="Display name shown in the provider list."
+                    required
+                    {...form.getInputProps('name')}
+                  />
+                  <Select
+                    label="Provider Type"
+                    placeholder="Select the provider type"
+                    description="Choose the provider type from the list."
+                    required
+                    searchable
+                    data={[
+                      // Core / OpenAI-compatible
+                      { value: 'openai', label: 'OpenAI' },
+                      { value: 'azure', label: 'Azure OpenAI' },
+                      { value: 'azure_ai', label: 'Azure AI' },
+                      { value: 'vertex_ai', label: 'Vertex AI' },
+                      { value: 'google_ai_studio', label: 'Google AI Studio' },
+                      { value: 'gcp_vertex', label: 'GCP Vertex' },
+                      { value: 'openrouter', label: 'OpenRouter' },
 
-            <SimpleGrid cols={2}>
-              <TextInput
-                label="Name"
-                placeholder="Provider name"
-                required
-                {...form.getInputProps('name')}
-              />
-              <TextInput
-                label="Provider Type"
-                placeholder="e.g., openai, anthropic"
-                required
-                {...form.getInputProps('provider_type')}
-              />
-            </SimpleGrid>
+                      // Major cloud / gateways
+                      { value: 'bedrock', label: 'AWS Bedrock' },
+                      { value: 'sagemaker', label: 'AWS Sagemaker' },
+                      { value: 'snowflake', label: 'Snowflake Cortex' },
+                      { value: 'oci', label: 'Oracle OCI' },
+                      { value: 'vllm', label: 'vLLM' },
+                      { value: 'vercel', label: 'Vercel AI Gateway' },
 
-            <TextInput
-              label="Endpoint"
-              placeholder="https://api.example.com/v1"
-              required
-              {...form.getInputProps('endpoint')}
-            />
+                      // Popular LLM providers from LiteLLM docs
+                      { value: 'anthropic', label: 'Anthropic' },
+                      { value: 'ai21', label: 'AI21' },
+                      { value: 'cohere', label: 'Cohere' },
+                      { value: 'groq', label: 'Groq' },
+                      { value: 'mistral', label: 'Mistral AI API' },
+                      { value: 'codestral', label: 'Codestral API (Mistral AI)' },
+                      { value: 'deepinfra', label: 'DeepInfra' },
+                      { value: 'deepseek', label: 'Deepseek' },
+                      { value: 'anyscale', label: 'Anyscale' },
+                      { value: 'fireworks_ai', label: 'Fireworks AI' },
+                      { value: 'together_ai', label: 'Together AI' },
+                      { value: 'perplexity', label: 'Perplexity AI' },
+                      { value: 'hyperbolic', label: 'Hyperbolic' },
+                      { value: 'nscale', label: 'Nscale (EU Sovereign)' },
+                      { value: 'datarobot', label: 'DataRobot' },
+                      { value: 'predibase', label: 'Predibase' },
+                      { value: 'qwen_dashscope', label: 'Dashscope (Qwen API)' },
+                      { value: 'voyage', label: 'Voyage AI' },
+                      { value: 'replicate', label: 'Replicate' },
+                      { value: 'sambanova', label: 'SambaNova' },
+                      { value: 'huggingface', label: 'HuggingFace Inference' },
+                      { value: 'ollama', label: 'Ollama' },
 
-            <TextInput
-              label="API Key"
-              type="password"
-              placeholder="Your API key"
-              required
-              {...form.getInputProps('api_key')}
-            />
+                      // Smaller / niche providers referenced in LiteLLM docs
+                      { value: 'baseten', label: 'Baseten' },
+                      { value: 'cerebras', label: 'Cerebras' },
+                      { value: 'clarifai', label: 'Clarifai' },
+                      { value: 'cloudflare_workers_ai', label: 'Cloudflare Workers AI' },
+                      { value: 'comet', label: 'CometAPI' },
+                      { value: 'dashscope', label: 'Dashscope' },
+                      { value: 'databricks', label: 'Databricks' },
+                      { value: 'docker', label: 'Docker Model Runner' },
+                      { value: 'elevenlabs', label: 'ElevenLabs' },
+                      { value: 'fal', label: 'Fal AI' },
+                      { value: 'friendliai', label: 'FriendliAI' },
+                      { value: 'gradient', label: 'GradientAI' },
+                      { value: 'helicone', label: 'Helicone' },
+                      { value: 'hyperbolic_api', label: 'Hyperbolic API' },
+                      { value: 'infinity', label: 'Infinity' },
+                      { value: 'jina', label: 'Jina AI' },
+                      { value: 'lambda', label: 'Lambda AI' },
+                      { value: 'langgraph', label: 'LangGraph' },
+                      { value: 'lemonade', label: 'Lemonade' },
+                      { value: 'llamafile', label: 'Llamafile' },
+                      { value: 'lmstudio', label: 'LM Studio' },
+                      { value: 'milvus', label: 'Milvus Vector Store' },
+                      { value: 'moonshot', label: 'Moonshot AI' },
+                      { value: 'morph', label: 'Morph' },
+                      { value: 'nebius', label: 'Nebius AI Studio' },
+                      { value: 'nlpcloud', label: 'NLP Cloud' },
+                      { value: 'novita', label: 'Novita AI' },
+                      { value: 'nvidia_nim', label: 'Nvidia NIM' },
+                      { value: 'petals', label: 'Petals' },
+                      { value: 'publicai', label: 'PublicAI' },
+                      { value: 'ragflow', label: 'RAGFlow' },
+                      { value: 'recraft', label: 'Recraft' },
+                      { value: 'runwayml', label: 'RunwayML' },
+                      { value: 'sap_generative_ai', label: 'SAP Generative AI Hub' },
+                      { value: 'topaz', label: 'Topaz' },
+                      { value: 'triton', label: 'Triton Inference Server' },
+                      { value: 'volcengine', label: 'Volcano Engine' },
+                      { value: 'wandb', label: 'Weights & Biases Inference' },
+                      { value: 'watsonx', label: 'WatsonX' },
+                      { value: 'xai', label: 'xAI' },
+                      { value: 'xinference', label: 'Xinference' },
+                      { value: 'zai', label: 'Z.AI (Zhipu AI)' },
+                    ]}
+                    {...form.getInputProps('provider_type')}
+                  />
+                </SimpleGrid>
 
-            <Textarea
-              label="Description"
-              placeholder="Provider description"
-              {...form.getInputProps('description')}
-            />
+                <SimpleGrid cols={2} spacing="md">
+                  <TextInput
+                    label="Endpoint"
+                    placeholder="https://api.example.com/v1"
+                    description="Base API URL for the provider endpoint."
+                    required
+                    {...form.getInputProps('endpoint')}
+                  />
+                  <TextInput
+                    label="Timeout (seconds)"
+                    type="number"
+                    min={1}
+                    max={300}
+                    description="Request timeout applied to this provider."
+                    {...form.getInputProps('timeout')}
+                  />
+                </SimpleGrid>
 
-            <MultiSelect
-              label="Supported Model Types"
-              placeholder="Select model types"
-              required
-              data={[
-                { value: 'embedding', label: 'Embedding' },
-                { value: 'generative', label: 'Generative' },
-                { value: 'both', label: 'Both' },
-              ]}
-              {...form.getInputProps('supported_model_types')}
-            />
+                <Textarea
+                  label="Description"
+                  placeholder="Provider description"
+                  description="Optional note to help you recognize this provider."
+                  {...form.getInputProps('description')}
+                />
+              </Stack>
+            </Paper>
 
-            <SimpleGrid cols={2}>
-              <TagsInput
-                label="Embedding Models"
-                placeholder="Add embedding models"
-                {...form.getInputProps('embedding_models')}
-              />
-              <TagsInput
-                label="Generative Models"
-                placeholder="Add generative models"
-                {...form.getInputProps('generative_models')}
-              />
-            </SimpleGrid>
+            <Paper withBorder p="lg" radius="md">
+              <Stack gap="md">
+                <Group justify="space-between" align="flex-start">
+                  <div>
+                    <Title order={4}>Authentication</Title>
+                    <Text size="sm" c="dimmed">Manage your API key.</Text>
+                  </div>
+                </Group>
 
-            <Switch
-              label="Active"
-              {...form.getInputProps('is_active', { type: 'checkbox' })}
-            />
+                <div>
+                  <TextInput
+                    label="API Key"
+                    placeholder="Your API key (optional for custom providers)"
+                    description="Secret key sent to the provider (kept encrypted)."
+                    value={isEditingApiKey ? form.values.api_key : maskApiKey(form.values.api_key)}
+                    onChange={(e) => {
+                      if (!isEditingApiKey) {
+                        setIsEditingApiKey(true);
+                        form.setFieldValue('api_key', '');
+                      } else {
+                        form.setFieldValue('api_key', e.currentTarget.value);
+                      }
+                    }}
+                    onFocus={() => {
+                      if (!isEditingApiKey) {
+                        setIsEditingApiKey(true);
+                        form.setFieldValue('api_key', '');
+                      }
+                    }}
+                  />
+                </div>
+              </Stack>
+            </Paper>
 
-            <Group justify="flex-end">
+            <Paper withBorder p="lg" radius="md">
+              <Stack gap="md">
+                <Group justify="space-between" align="flex-start">
+                  <div>
+                    <Title order={4}>Models</Title>
+                    <Text size="sm" c="dimmed">Add model names and configure provider-specific settings.</Text>
+                  </div>
+                </Group>
+
+                <MultiSelect
+                  label="Supported Model Types"
+                  placeholder="Select model types"
+                  description="Choose the model types that this provider will be used for."
+                  required
+                  data={[
+                    { value: ModelType.EMBEDDING, label: 'Embedding' },
+                    { value: ModelType.GENERATIVE, label: 'Generative' },
+                    { value: ModelType.RERANKER, label: 'Reranker' },
+                  ]}
+                  {...form.getInputProps('supported_model_types')}
+                />
+
+                <Stack gap="md">
+                  {/* Embedding group */}
+                  {form.values.supported_model_types.includes(ModelType.EMBEDDING) && (
+                    <Paper withBorder radius="md" p="md">
+                      <Stack gap="xs">
+                        <Group justify="space-between" align="center">
+                          <div>
+                            <Text fw={500}>Embedding models</Text>
+                            <Text size="xs" c="dimmed">
+                              Used for vector search and similarity.
+                            </Text>
+                          </div>
+                          <Button
+                            size="xs"
+                            variant="light"
+                            onClick={() => openTestModal(ModelType.EMBEDDING, form.values.embedding_models)}
+                            disabled={
+                              !form.values.embedding_models.length || testProviderMutation.isPending
+                            }
+                            loading={testProviderMutation.isPending}
+                          >
+                            Test embedding
+                          </Button>
+                        </Group>
+
+                        <TagsInput
+                          label="Embedding Models"
+                          placeholder="Add embedding models"
+                          {...form.getInputProps('embedding_models')}
+                        />
+                        <TextInput
+                          label="Embedding Endpoint (optional)"
+                          placeholder="/v1/embeddings"
+                          {...form.getInputProps('embedding_endpoint')}
+                        />
+                        <SimpleGrid cols={2} spacing="sm">
+                          <TextInput
+                            label="Max Input Tokens"
+                            type="number"
+                            placeholder="8191"
+                            {...form.getInputProps('embedding_config.max_input_tokens')}
+                          />
+                          <TextInput
+                            label="Batch Size"
+                            type="number"
+                            placeholder="100"
+                            {...form.getInputProps('embedding_config.batch_size')}
+                          />
+                        </SimpleGrid>
+                      </Stack>
+                    </Paper>
+                  )}
+
+                  {/* Generative group */}
+                  {form.values.supported_model_types.includes(ModelType.GENERATIVE) && (
+                    <Paper withBorder radius="md" p="md">
+                      <Stack gap="xs">
+                        <Group justify="space-between" align="center">
+                          <div>
+                            <Text fw={500}>Generative models</Text>
+                            <Text size="xs" c="dimmed">
+                              Used for chat, completions, and reasoning.
+                            </Text>
+                          </div>
+                          <Button
+                            size="xs"
+                            variant="light"
+                            onClick={() => openTestModal(ModelType.GENERATIVE, form.values.generative_models)}
+                            disabled={
+                              !form.values.generative_models.length ||
+                              testProviderMutation.isPending
+                            }
+                            loading={testProviderMutation.isPending}
+                          >
+                            Test generative
+                          </Button>
+                        </Group>
+
+                        <TagsInput
+                          label="Generative Models"
+                          placeholder="Add generative models"
+                          {...form.getInputProps('generative_models')}
+                        />
+                        <TextInput
+                          label="Generative Endpoint (optional)"
+                          placeholder="/v1/chat/completions"
+                          {...form.getInputProps('generative_endpoint')}
+                        />
+                        <SimpleGrid cols={3} spacing="sm">
+                          <TextInput
+                            label="Max Tokens"
+                            type="number"
+                            placeholder="4096"
+                            {...form.getInputProps('generative_config.max_tokens')}
+                          />
+                          <TextInput
+                            label="Temperature"
+                            type="number"
+                            step="0.1"
+                            min={0}
+                            max={2}
+                            placeholder="0.7"
+                            {...form.getInputProps('generative_config.temperature')}
+                          />
+                          <TextInput
+                            label="Top P"
+                            type="number"
+                            step="0.1"
+                            min={0}
+                            max={1}
+                            placeholder="1.0"
+                            {...form.getInputProps('generative_config.top_p')}
+                          />
+                        </SimpleGrid>
+                      </Stack>
+                    </Paper>
+                  )}
+
+                  {/* Reranker group */}
+                  {form.values.supported_model_types.includes(ModelType.RERANKER) && (
+                    <Paper withBorder radius="md" p="md">
+                      <Stack gap="xs">
+                        <Group justify="space-between" align="center">
+                          <div>
+                            <Text fw={500}>Reranker models</Text>
+                            <Text size="xs" c="dimmed">
+                              Used to reorder documents by relevance.
+                            </Text>
+                          </div>
+                          <Button
+                            size="xs"
+                            variant="light"
+                            onClick={() => openTestModal(ModelType.RERANKER, form.values.reranker_models)}
+                            disabled={
+                              !form.values.reranker_models.length ||
+                              testProviderMutation.isPending
+                            }
+                            loading={testProviderMutation.isPending}
+                          >
+                            Test reranker
+                          </Button>
+                        </Group>
+
+                        <TagsInput
+                          label="Reranker Models"
+                          placeholder="Add reranker models"
+                          {...form.getInputProps('reranker_models')}
+                        />
+                        <TextInput
+                          label="Reranker Endpoint (optional)"
+                          placeholder="/v1/rerank"
+                          {...form.getInputProps('reranker_endpoint')}
+                        />
+                        <SimpleGrid cols={2} spacing="sm">
+                          <TextInput
+                            label="Max Documents"
+                            type="number"
+                            placeholder="100"
+                            {...form.getInputProps('reranker_config.max_documents')}
+                          />
+                          <TextInput
+                            label="Top N"
+                            type="number"
+                            placeholder="10"
+                            {...form.getInputProps('reranker_config.top_n')}
+                          />
+                        </SimpleGrid>
+                      </Stack>
+                    </Paper>
+                  )}
+                </Stack>
+              </Stack>
+            </Paper>
+
+            <Group justify="flex-end" gap="sm">
               <Button
                 variant="light"
                 onClick={() => navigate(paths.dashboard.management.modelProviders.list)}
               >
                 Cancel
               </Button>
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 loading={createProviderMutation.isPending}
               >
                 Create Provider
@@ -355,6 +650,90 @@ export default function CreateModelProvider() {
           </Stack>
         </form>
       </Card>
+
+      <Modal
+        opened={testModalOpen}
+        onClose={() => {
+          setTestModalOpen(false);
+          setTestResult(null);
+        }}
+        title="Test provider"
+        size="xl"
+        centered
+      >
+        <Stack gap="md">
+          <Text size="sm">
+            {testModalType
+              ? `Select a ${testModalType} model to run a live health check and inspect the response payload.`
+              : 'Select a model to test.'}
+          </Text>
+          <Select
+            label="Model"
+            placeholder="Select model"
+            data={
+              testModalType === ModelType.EMBEDDING
+                ? form.values.embedding_models
+                : testModalType === ModelType.GENERATIVE
+                  ? form.values.generative_models
+                  : form.values.reranker_models
+            }
+            value={testModalModel}
+            onChange={(value) => setTestModalModel(value || '')}
+          />
+          <Group justify="flex-end">
+            <Button
+              variant="default"
+              onClick={() => {
+                setTestModalOpen(false);
+                setTestResult(null);
+              }}
+            >
+              Close
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!testModalType || !testModalModel) return;
+                await handleTest(testModalType, testModalModel);
+              }}
+              disabled={!testModalType || !testModalModel}
+              loading={testProviderMutation.isPending}
+            >
+              Run test
+            </Button>
+          </Group>
+
+          {testResult && (
+            <Stack gap="xs">
+              <Text size="sm" fw={500}>
+                Result
+              </Text>
+              <Text size="sm">
+                Status: {testResult.status_code ?? 'N/A'} | Duration: {testResult.duration_ms ?? 'N/A'}ms
+              </Text>
+              <Text size="sm">Message: {testResult.message ?? 'N/A'}</Text>
+              <Text size="sm" fw={500} mt="sm">
+                Response body (JSON)
+              </Text>
+              <Paper withBorder radius="md" p="xs">
+                <Textarea
+                  value={testResult.body ?? ''}
+                  minRows={8}
+                  maxRows={12}
+                  autosize
+                  readOnly
+                  spellCheck={false}
+                  styles={{
+                    input: {
+                      fontFamily: 'Menlo, Monaco, Consolas, monospace',
+                      fontSize: 12,
+                    },
+                  }}
+                />
+              </Paper>
+            </Stack>
+          )}
+        </Stack>
+      </Modal>
     </Page>
   );
 }

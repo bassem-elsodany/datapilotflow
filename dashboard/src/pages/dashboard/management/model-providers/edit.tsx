@@ -1,4 +1,4 @@
-import { ModelType, useGetModelProvider, useUpdateModelProvider } from '@/api/resources/model-providers';
+import { ModelType, useGetModelProvider, useTestModelProvider, useUpdateModelProvider } from '@/api/resources/model-providers';
 import { Page } from '@/components/page';
 import { PageHeader } from '@/components/page-header';
 import { paths } from '@/routes/paths';
@@ -9,13 +9,18 @@ import {
   Center,
   Group,
   Loader,
+  Modal,
   MultiSelect,
+  Paper,
+  Select,
   SimpleGrid,
   Stack,
   Switch,
   TagsInput,
+  Text,
   TextInput,
-  Textarea
+  Textarea,
+  Title
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
@@ -36,9 +41,20 @@ export default function EditModelProvider() {
 
   const { data: provider, isLoading, error } = useGetModelProvider(providerId || '');
   const updateProviderMutation = useUpdateModelProvider(providerId || '');
+  const testProviderMutation = useTestModelProvider();
 
   const [isEditingApiKey, setIsEditingApiKey] = useState(false);
   const [originalApiKey, setOriginalApiKey] = useState<string>('');
+  const [testModalOpen, setTestModalOpen] = useState(false);
+  const [testModalType, setTestModalType] = useState<ModelType | null>(null);
+  const [testModalModel, setTestModalModel] = useState<string>('');
+  const [testResult, setTestResult] = useState<{
+    success: boolean;
+    status_code?: number;
+    duration_ms?: number;
+    message?: string;
+    body?: string;
+  } | null>(null);
 
   const form = useForm({
     initialValues: {
@@ -48,23 +64,117 @@ export default function EditModelProvider() {
       api_key: '',
       description: '',
       is_active: true,
+      timeout: 60,
       supported_model_types: [] as ModelType[],
       embedding_models: [] as string[],
       generative_models: [] as string[],
-      provider_config: {} as Record<string, any>,
+      reranker_models: [] as string[],
+      embedding_config: {} as Record<string, any>,
+      generative_config: {} as Record<string, any>,
+      reranker_config: {} as Record<string, any>,
+      embedding_endpoint: '' as string,
+      generative_endpoint: '' as string,
+      reranker_endpoint: '' as string,
     },
     validate: {
       name: (value) => (!value ? 'Name is required' : null),
       provider_type: (value) => (!value ? 'Provider type is required' : null),
       endpoint: (value) => (!value ? 'Endpoint is required' : null),
-      api_key: (value) => (!value ? 'API key is required' : null),
     },
   });
+
+  const buildProviderPayload = (values: typeof form.values) => ({
+    name: values.name,
+    provider_type: values.provider_type,
+    endpoint: values.endpoint,
+    api_key: values.api_key || undefined,
+    description: values.description || undefined,
+    is_active: values.is_active,
+    timeout: values.timeout,
+    embedding: values.embedding_models.length > 0
+      ? {
+        models: values.embedding_models,
+        config: values.embedding_config,
+        endpoint: values.embedding_endpoint || undefined,
+      }
+      : undefined,
+    generative: values.generative_models.length > 0
+      ? {
+        models: values.generative_models,
+        config: values.generative_config,
+        endpoint: values.generative_endpoint || undefined,
+      }
+      : undefined,
+    reranker: values.reranker_models.length > 0
+      ? {
+        models: values.reranker_models,
+        config: values.reranker_config,
+        endpoint: values.reranker_endpoint || undefined,
+      }
+      : undefined,
+  });
+
+  const handleTest = async (testType: ModelType, modelName?: string) => {
+    if (!modelName) {
+      notifications.show({
+        title: 'Error',
+        message: `Please add at least one ${testType} model to test.`,
+        color: 'red',
+      });
+      return;
+    }
+
+    try {
+      const providerPayload = buildProviderPayload(form.values);
+      const payload = { provider: providerPayload, test_type: testType, model: modelName };
+
+      const result = await testProviderMutation.mutateAsync({ variables: payload } as any);
+
+      setTestResult({
+        success: Boolean(result.success),
+        status_code: result.status_code,
+        duration_ms: result.duration_ms,
+        message: result.message,
+        body: result.body,
+      });
+    } catch (error: any) {
+      setTestResult({
+        success: false,
+        status_code: undefined,
+        duration_ms: undefined,
+        message: error?.message || 'Failed to run test',
+        body: undefined,
+      });
+    }
+  };
+
+  const openTestModal = (testType: ModelType, models: string[]) => {
+    if (!models.length) return;
+    if (models.length === 1) {
+      // Only one model → test directly
+      void handleTest(testType, models[0]);
+      return;
+    }
+    setTestModalType(testType);
+    setTestModalModel(models[0]);
+    setTestModalOpen(true);
+  };
 
   // Update form when provider data loads
   useEffect(() => {
     if (provider) {
       setOriginalApiKey(provider.api_key || '');
+
+      const embeddingModels = provider.embedding?.models || [];
+      const generativeModels = provider.generative?.models || [];
+      const rerankerModels = provider.reranker?.models || [];
+
+      const derivedSupported = [
+        embeddingModels.length ? ModelType.EMBEDDING : null,
+        generativeModels.length ? ModelType.GENERATIVE : null,
+        rerankerModels.length ? ModelType.RERANKER : null,
+      ].filter(Boolean) as ModelType[];
+
       form.setValues({
         name: provider.name,
         provider_type: provider.provider_type,
@@ -72,17 +182,55 @@ export default function EditModelProvider() {
         api_key: provider.api_key || '',
         description: provider.description || '',
         is_active: provider.is_active,
-        supported_model_types: provider.supported_model_types,
-        embedding_models: provider.embedding_models,
-        generative_models: provider.generative_models,
-        provider_config: provider.provider_config,
+        timeout: provider.timeout,
+        supported_model_types: derivedSupported,
+        embedding_models: embeddingModels,
+        generative_models: generativeModels,
+        reranker_models: rerankerModels,
+        embedding_config: provider.embedding?.config || {},
+        generative_config: provider.generative?.config || {},
+        reranker_config: provider.reranker?.config || {},
+        embedding_endpoint: provider.embedding?.endpoint || '',
+        generative_endpoint: provider.generative?.endpoint || '',
+        reranker_endpoint: provider.reranker?.endpoint || '',
       });
     }
   }, [provider]);
 
   const handleSubmit = async (values: typeof form.values) => {
     try {
-      await updateProviderMutation.mutateAsync(values);
+      const payload = {
+        name: values.name,
+        provider_type: values.provider_type,
+        endpoint: values.endpoint,
+        api_key: values.api_key || undefined,
+        description: values.description || undefined,
+        is_active: values.is_active,
+        timeout: values.timeout,
+        embedding: values.embedding_models.length > 0
+          ? {
+            models: values.embedding_models,
+            config: values.embedding_config,
+            endpoint: values.embedding_endpoint || undefined,
+          }
+          : undefined,
+        generative: values.generative_models.length > 0
+          ? {
+            models: values.generative_models,
+            config: values.generative_config,
+            endpoint: values.generative_endpoint || undefined,
+          }
+          : undefined,
+        reranker: values.reranker_models.length > 0
+          ? {
+            models: values.reranker_models,
+            config: values.reranker_config,
+            endpoint: values.reranker_endpoint || undefined,
+          }
+          : undefined,
+      };
+
+      await updateProviderMutation.mutateAsync({ variables: payload } as any);
       notifications.show({
         title: 'Success',
         message: 'Model provider updated successfully',
@@ -129,125 +277,409 @@ export default function EditModelProvider() {
 
   return (
     <Page title="Edit Model Provider">
-      <PageHeader
-        title={`Edit ${provider.name}`}
-        breadcrumbs={breadcrumbs}
-        action={
-          <Group>
-            <Button
-              variant="light"
-              onClick={() => navigate(paths.dashboard.management.modelProviders.list)}
-            >
-              Cancel
-            </Button>
-          </Group>
-        }
-      />
+      <PageHeader title={`Edit ${provider.name}`} breadcrumbs={breadcrumbs}>
+        <Group>
+          <Button
+            variant="light"
+            onClick={() => navigate(paths.dashboard.management.modelProviders.list)}
+          >
+            Cancel
+          </Button>
+        </Group>
+      </PageHeader>
 
-      <Card>
+      <Card withBorder shadow="sm" radius="md" p="xl">
         <form onSubmit={form.onSubmit(handleSubmit)}>
-          <Stack gap="md">
-            <SimpleGrid cols={2}>
-              <TextInput
-                label="Name"
-                placeholder="Provider name"
-                required
-                {...form.getInputProps('name')}
-              />
-              <TextInput
-                label="Provider Type"
-                placeholder="e.g., openai, anthropic"
-                required
-                {...form.getInputProps('provider_type')}
-              />
-            </SimpleGrid>
+          <Stack gap="xl">
+            <Paper withBorder p="lg" radius="md">
+              <Stack gap="md">
+                <Group justify="space-between" align="flex-start">
+                  <div>
+                    <Title order={4}>Basics</Title>
+                    <Text size="sm" c="dimmed">
+                      Core info to identify and reach your provider.
+                    </Text>
+                  </div>
+                  <Switch
+                    label="Active"
+                    {...form.getInputProps('is_active', { type: 'checkbox' })}
+                  />
+                </Group>
 
-            <TextInput
-              label="Endpoint"
-              placeholder="https://api.example.com/v1"
-              required
-              {...form.getInputProps('endpoint')}
-            />
+                <SimpleGrid cols={2} spacing="md">
+                  <TextInput
+                    label="Name"
+                    placeholder="Provider name"
+                    description="Display name shown in the provider list."
+                    required
+                    {...form.getInputProps('name')}
+                  />
+                  <Select
+                    label="Provider Type"
+                    placeholder="Select the provider type"
+                    description="Choose the provider type from the list."
+                    required
+                    searchable
+                    data={[
+                      { value: 'openai', label: 'OpenAI' },
+                      { value: 'azure', label: 'Azure OpenAI' },
+                      { value: 'azure_ai', label: 'Azure AI' },
+                      { value: 'openrouter', label: 'OpenRouter' },
+                      { value: 'fireworks_ai', label: 'Fireworks AI' },
+                      { value: 'groq', label: 'Groq' },
+                      { value: 'together_ai', label: 'Together AI' },
+                      { value: 'perplexity', label: 'Perplexity AI' },
+                      { value: 'anyscale', label: 'Anyscale' },
+                      { value: 'deepinfra', label: 'DeepInfra' },
+                      { value: 'deepseek', label: 'Deepseek' },
+                      { value: 'mistral', label: 'Mistral AI API' },
+                      { value: 'codestral', label: 'Codestral API (Mistral AI)' },
+                      { value: 'cohere', label: 'Cohere' },
+                      { value: 'ai21', label: 'AI21' },
+                      { value: 'bedrock', label: 'AWS Bedrock (compat)' },
+                      { value: 'vertex_ai', label: 'Vertex AI (compat)' },
+                      { value: 'google_ai_studio', label: 'Google AI Studio' },
+                      { value: 'gcp_vertex', label: 'GCP Vertex (compat)' },
+                      { value: 'snowflake', label: 'Snowflake Cortex (compat)' },
+                      { value: 'qwen_dashscope', label: 'Dashscope (Qwen API)' },
+                      { value: 'voyage', label: 'Voyage AI' },
+                      { value: 'replicate', label: 'Replicate' },
+                      { value: 'sambanova', label: 'SambaNova' },
+                      { value: 'huggingface', label: 'HuggingFace Inference' },
+                      { value: 'ollama', label: 'Ollama' },
+                      { value: 'hyperbolic', label: 'Hyperbolic' },
+                      { value: 'nscale', label: 'Nscale (EU Sovereign)' },
+                      { value: 'datarobot', label: 'DataRobot' },
+                      { value: 'predibase', label: 'Predibase' },
+                      { value: 'baseten', label: 'Baseten' },
+                      { value: 'cerebras', label: 'Cerebras' },
+                      { value: 'clarifai', label: 'Clarifai' },
+                      { value: 'cloudflare_workers_ai', label: 'Cloudflare Workers AI' },
+                      { value: 'comet', label: 'CometAPI' },
+                      { value: 'dashscope', label: 'Dashscope' },
+                      { value: 'databricks', label: 'Databricks' },
+                      { value: 'docker', label: 'Docker Model Runner' },
+                      { value: 'elevenlabs', label: 'ElevenLabs' },
+                      { value: 'fal', label: 'Fal AI' },
+                      { value: 'friendliai', label: 'FriendliAI' },
+                      { value: 'gradient', label: 'GradientAI' },
+                      { value: 'helicone', label: 'Helicone' },
+                      { value: 'hyperbolic_api', label: 'Hyperbolic API' },
+                      { value: 'infinity', label: 'Infinity' },
+                      { value: 'jina', label: 'Jina AI' },
+                      { value: 'lambda', label: 'Lambda AI' },
+                      { value: 'langgraph', label: 'LangGraph' },
+                      { value: 'lepton', label: 'Lepton' },
+                      { value: 'lmarena', label: 'LM Arena' },
+                      { value: 'maritaca', label: 'Maritaca' },
+                      { value: 'modal', label: 'Modal' },
+                      { value: 'nemotron', label: 'Nemotron' },
+                      { value: 'neuroflash', label: 'Neuroflash' },
+                      { value: 'nlp_cloud', label: 'NLP Cloud' },
+                      { value: 'octoai', label: 'OctoAI' },
+                      { value: 'ollama_compatible', label: 'Ollama Compatible' },
+                      { value: 'one_ai', label: 'One AI' },
+                      { value: 'openai_compatible', label: 'OpenAI Compatible (Generic)' },
+                      { value: 'openllm', label: 'OpenLLM' },
+                      { value: 'paradigm', label: 'Paradigm' },
+                      { value: 'pebblo', label: 'Pebblo' },
+                      { value: 'petals', label: 'Petals' },
+                      { value: 'prowler', label: 'Prowler' },
+                      { value: 'ray', label: 'Ray Serve' },
+                      { value: 'sagemaker', label: 'SageMaker' },
+                      { value: 'samba', label: 'Samba' },
+                      { value: 'sap_btp', label: 'SAP BTP' },
+                      { value: 'skylark', label: 'Skylark' },
+                      { value: 'stochastic', label: 'Stochastic' },
+                      { value: 'textcortex', label: 'TextCortex' },
+                      { value: 'together', label: 'Together (legacy)' },
+                      { value: 'upstage', label: 'Upstage' },
+                      { value: 'vllm', label: 'vLLM' },
+                      { value: 'voyage_ai', label: 'Voyage AI (alt)' },
+                      { value: 'writer', label: 'Writer' },
+                      { value: 'xai', label: 'xAI' },
+                    ]}
+                    {...form.getInputProps('provider_type')}
+                  />
+                </SimpleGrid>
 
-            <div>
-              <TextInput
-                label="API Key"
-                placeholder="Your API key"
-                required
-                value={isEditingApiKey ? form.values.api_key : maskApiKey(form.values.api_key)}
-                onChange={(e) => {
-                  if (!isEditingApiKey) {
-                    setIsEditingApiKey(true);
-                    form.setFieldValue('api_key', '');
-                  } else {
-                    form.setFieldValue('api_key', e.currentTarget.value);
-                  }
-                }}
-                onFocus={() => {
-                  if (!isEditingApiKey) {
-                    setIsEditingApiKey(true);
-                    form.setFieldValue('api_key', '');
-                  }
-                }}
-                rightSection={
-                  isEditingApiKey && (
-                    <Button
-                      size="xs"
-                      variant="subtle"
-                      onClick={() => {
-                        setIsEditingApiKey(false);
-                        form.setFieldValue('api_key', originalApiKey);
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  )
-                }
-              />
-              {!isEditingApiKey && (
-                <Text size="xs" c="dimmed" mt={4}>
-                  Click to change API key
-                </Text>
-              )}
-            </div>
+                <SimpleGrid cols={2} spacing="md">
+                  <TextInput
+                    label="Endpoint"
+                    placeholder="https://api.example.com/v1"
+                    description="Base API URL for the provider endpoint."
+                    required
+                    {...form.getInputProps('endpoint')}
+                  />
+                  <TextInput
+                    label="Timeout (seconds)"
+                    type="number"
+                    min={1}
+                    max={300}
+                    description="Request timeout applied to this provider."
+                    {...form.getInputProps('timeout')}
+                  />
+                </SimpleGrid>
 
-            <Textarea
-              label="Description"
-              placeholder="Provider description"
-              {...form.getInputProps('description')}
-            />
+                <Textarea
+                  label="Description"
+                  placeholder="Provider description"
+                  description="Optional note to help you recognize this provider."
+                  {...form.getInputProps('description')}
+                />
+              </Stack>
+            </Paper>
 
-            <MultiSelect
-              label="Supported Model Types"
-              placeholder="Select model types"
-              required
-              data={[
-                { value: 'embedding', label: 'Embedding' },
-                { value: 'generative', label: 'Generative' },
-                { value: 'both', label: 'Both' },
-              ]}
-              {...form.getInputProps('supported_model_types')}
-            />
+            <Paper withBorder p="lg" radius="md">
+              <Stack gap="md">
+                <Group justify="space-between" align="flex-start">
+                  <div>
+                    <Title order={4}>Authentication</Title>
+                    <Text size="sm" c="dimmed">Manage keys and headers.</Text>
+                  </div>
+                </Group>
 
-            <SimpleGrid cols={2}>
-              <TagsInput
-                label="Embedding Models"
-                placeholder="Add embedding models"
-                {...form.getInputProps('embedding_models')}
-              />
-              <TagsInput
-                label="Generative Models"
-                placeholder="Add generative models"
-                {...form.getInputProps('generative_models')}
-              />
-            </SimpleGrid>
+                <div>
+                  <TextInput
+                    label="API Key"
+                    placeholder="Your API key (optional)"
+                    description="Secret key sent to the provider (kept encrypted)."
+                    value={isEditingApiKey ? form.values.api_key : maskApiKey(form.values.api_key)}
+                    onChange={(e) => {
+                      if (!isEditingApiKey) {
+                        setIsEditingApiKey(true);
+                        form.setFieldValue('api_key', '');
+                      } else {
+                        form.setFieldValue('api_key', e.currentTarget.value);
+                      }
+                    }}
+                    onFocus={() => {
+                      if (!isEditingApiKey) {
+                        setIsEditingApiKey(true);
+                        form.setFieldValue('api_key', '');
+                      }
+                    }}
+                    rightSection={
+                      isEditingApiKey && (
+                        <Button
+                          size="xs"
+                          variant="subtle"
+                          onClick={() => {
+                            setIsEditingApiKey(false);
+                            form.setFieldValue('api_key', originalApiKey);
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      )
+                    }
+                  />
+                  {!isEditingApiKey && (
+                    <Text size="xs" c="dimmed" mt={4}>
+                      Click to change API key
+                    </Text>
+                  )}
+                </div>
 
-            <Switch
-              label="Active"
-              {...form.getInputProps('is_active', { type: 'checkbox' })}
-            />
+              </Stack>
+            </Paper>
 
-            <Group justify="flex-end">
+            <Paper withBorder p="lg" radius="md">
+              <Stack gap="md">
+                <Group justify="space-between" align="flex-start">
+                  <div>
+                    <Title order={4}>Models</Title>
+                    <Text size="sm" c="dimmed">Add model names and configure provider-specific settings.</Text>
+                  </div>
+                </Group>
+
+                <MultiSelect
+                  label="Supported Model Types"
+                  placeholder="Select model types"
+                  required
+                  data={[
+                    { value: ModelType.EMBEDDING, label: 'Embedding' },
+                    { value: ModelType.GENERATIVE, label: 'Generative' },
+                    { value: ModelType.RERANKER, label: 'Reranker' },
+                  ]}
+                  {...form.getInputProps('supported_model_types')}
+                />
+
+                <Stack gap="md">
+                  {/* Embedding group */}
+                  {form.values.supported_model_types.includes(ModelType.EMBEDDING) && (
+                    <Paper withBorder radius="md" p="md">
+                      <Stack gap="xs">
+                        <Group justify="space-between" align="center">
+                          <div>
+                            <Text fw={500}>Embedding models</Text>
+                            <Text size="xs" c="dimmed">
+                              Used for vector search and similarity.
+                            </Text>
+                          </div>
+                          <Button
+                            size="xs"
+                            variant="light"
+                            onClick={() => openTestModal(ModelType.EMBEDDING, form.values.embedding_models)}
+                            disabled={
+                              !form.values.embedding_models.length || testProviderMutation.isPending
+                            }
+                            loading={testProviderMutation.isPending}
+                          >
+                            Test embedding
+                          </Button>
+                        </Group>
+
+                        <TagsInput
+                          label="Embedding Models"
+                          placeholder="Add embedding models"
+                          {...form.getInputProps('embedding_models')}
+                        />
+                        <TextInput
+                          label="Embedding Endpoint (optional)"
+                          placeholder="/v1/embeddings"
+                          {...form.getInputProps('embedding_endpoint')}
+                        />
+                        <SimpleGrid cols={2} spacing="sm">
+                          <TextInput
+                            label="Max Input Tokens"
+                            type="number"
+                            placeholder="8191"
+                            {...form.getInputProps('embedding_config.max_input_tokens')}
+                          />
+                          <TextInput
+                            label="Batch Size"
+                            type="number"
+                            placeholder="100"
+                            {...form.getInputProps('embedding_config.batch_size')}
+                          />
+                        </SimpleGrid>
+                      </Stack>
+                    </Paper>
+                  )}
+
+                  {/* Generative group */}
+                  {form.values.supported_model_types.includes(ModelType.GENERATIVE) && (
+                    <Paper withBorder radius="md" p="md">
+                      <Stack gap="xs">
+                        <Group justify="space-between" align="center">
+                          <div>
+                            <Text fw={500}>Generative models</Text>
+                            <Text size="xs" c="dimmed">
+                              Used for chat, completions, and reasoning.
+                            </Text>
+                          </div>
+                          <Button
+                            size="xs"
+                            variant="light"
+                            onClick={() => openTestModal(ModelType.GENERATIVE, form.values.generative_models)}
+                            disabled={
+                              !form.values.generative_models.length ||
+                              testProviderMutation.isPending
+                            }
+                            loading={testProviderMutation.isPending}
+                          >
+                            Test generative
+                          </Button>
+                        </Group>
+
+                        <TagsInput
+                          label="Generative Models"
+                          placeholder="Add generative models"
+                          {...form.getInputProps('generative_models')}
+                        />
+                        <TextInput
+                          label="Generative Endpoint (optional)"
+                          placeholder="/v1/chat/completions"
+                          {...form.getInputProps('generative_endpoint')}
+                        />
+                        <SimpleGrid cols={3} spacing="sm">
+                          <TextInput
+                            label="Max Tokens"
+                            type="number"
+                            placeholder="4096"
+                            {...form.getInputProps('generative_config.max_tokens')}
+                          />
+                          <TextInput
+                            label="Temperature"
+                            type="number"
+                            step="0.1"
+                            min={0}
+                            max={2}
+                            placeholder="0.7"
+                            {...form.getInputProps('generative_config.temperature')}
+                          />
+                          <TextInput
+                            label="Top P"
+                            type="number"
+                            step="0.1"
+                            min={0}
+                            max={1}
+                            placeholder="1.0"
+                            {...form.getInputProps('generative_config.top_p')}
+                          />
+                        </SimpleGrid>
+                      </Stack>
+                    </Paper>
+                  )}
+
+                  {/* Reranker group */}
+                  {form.values.supported_model_types.includes(ModelType.RERANKER) && (
+                    <Paper withBorder radius="md" p="md">
+                      <Stack gap="xs">
+                        <Group justify="space-between" align="center">
+                          <div>
+                            <Text fw={500}>Reranker models</Text>
+                            <Text size="xs" c="dimmed">
+                              Used to reorder documents by relevance.
+                            </Text>
+                          </div>
+                          <Button
+                            size="xs"
+                            variant="light"
+                            onClick={() => openTestModal(ModelType.RERANKER, form.values.reranker_models)}
+                            disabled={
+                              !form.values.reranker_models.length ||
+                              testProviderMutation.isPending
+                            }
+                            loading={testProviderMutation.isPending}
+                          >
+                            Test reranker
+                          </Button>
+                        </Group>
+
+                        <TagsInput
+                          label="Reranker Models"
+                          placeholder="Add reranker models"
+                          {...form.getInputProps('reranker_models')}
+                        />
+                        <TextInput
+                          label="Reranker Endpoint (optional)"
+                          placeholder="/v1/rerank"
+                          {...form.getInputProps('reranker_endpoint')}
+                        />
+                        <SimpleGrid cols={2} spacing="sm">
+                          <TextInput
+                            label="Max Documents"
+                            type="number"
+                            placeholder="100"
+                            {...form.getInputProps('reranker_config.max_documents')}
+                          />
+                          <TextInput
+                            label="Top N"
+                            type="number"
+                            placeholder="10"
+                            {...form.getInputProps('reranker_config.top_n')}
+                          />
+                        </SimpleGrid>
+                      </Stack>
+                    </Paper>
+                  )}
+                </Stack>
+              </Stack>
+            </Paper>
+
+            <Group justify="flex-end" gap="sm">
               <Button
                 variant="light"
                 onClick={() => navigate(paths.dashboard.management.modelProviders.list)}
@@ -264,6 +696,91 @@ export default function EditModelProvider() {
           </Stack>
         </form>
       </Card>
+
+      <Modal
+        opened={testModalOpen}
+        onClose={() => {
+          setTestModalOpen(false);
+          setTestResult(null);
+        }}
+        title="Test provider"
+        size="xl"
+        centered
+      >
+        <Stack gap="md">
+          <Text size="sm">
+            {testModalType
+              ? `Select a ${testModalType} model to run a live health check and inspect the response payload.`
+              : 'Select a model to test.'}
+          </Text>
+          <Select
+            label="Model"
+            placeholder="Select model"
+            data={
+              testModalType === ModelType.EMBEDDING
+                ? form.values.embedding_models
+                : testModalType === ModelType.GENERATIVE
+                  ? form.values.generative_models
+                  : form.values.reranker_models
+            }
+            value={testModalModel}
+            onChange={(value) => setTestModalModel(value || '')}
+          />
+          <Group justify="flex-end">
+            <Button
+              variant="default"
+              onClick={() => {
+                setTestModalOpen(false);
+                setTestResult(null);
+              }}
+            >
+              Close
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!testModalType || !testModalModel) return;
+                await handleTest(testModalType, testModalModel);
+              }}
+              disabled={!testModalType || !testModalModel}
+              loading={testProviderMutation.isPending}
+            >
+              Run test
+            </Button>
+          </Group>
+
+          {testResult && (
+            <Stack gap="xs">
+              <Text size="sm" fw={500}>
+                Result
+              </Text>
+              <Text size="sm">
+                Status: {testResult.status_code ?? 'N/A'} | Duration: {testResult.duration_ms ?? 'N/A'}ms
+              </Text>
+              <Text size="sm">Message: {testResult.message ?? 'N/A'}</Text>
+              <Text size="sm" fw={500} mt="sm">
+                Response body (JSON)
+              </Text>
+              <Paper withBorder radius="md" p="xs">
+                <Textarea
+                  value={testResult.body ?? ''}
+                  minRows={8}
+                  maxRows={12}
+                  autosize
+                  readOnly
+                  spellCheck={false}
+                  styles={{
+                    input: {
+                      fontFamily: 'Menlo, Monaco, Consolas, monospace',
+                      fontSize: 12,
+                    },
+                  }}
+                />
+              </Paper>
+            </Stack>
+          )}
+        </Stack>
+      </Modal>
+
     </Page>
   );
 }

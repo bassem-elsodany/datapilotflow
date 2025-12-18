@@ -11,18 +11,17 @@ import '@mantine/tiptap/styles.layer.css';
 import 'mantine-datatable/styles.layer.css';
 import './global.css';
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import { HelmetProvider } from 'react-helmet-async';
-import { MantineProvider } from '@mantine/core';
-import { ModalsProvider } from '@mantine/modals';
-import { Notifications } from '@mantine/notifications';
-import { NavigationProgress } from '@mantine/nprogress';
 import { queryClient } from '@/api/query-client';
 import { AuthProvider } from '@/providers/auth-provider';
 import { NotificationProvider } from '@/providers/notification-provider';
 import { Router } from '@/routes/router';
 import { theme } from '@/theme';
+import { MantineProvider } from '@mantine/core';
+import { ModalsProvider } from '@mantine/modals';
+import { Notifications } from '@mantine/notifications';
+import { NavigationProgress } from '@mantine/nprogress';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { HelmetProvider } from 'react-helmet-async';
 
 export function App() {
   return (
@@ -31,7 +30,7 @@ export function App() {
         <AuthProvider>
           <MantineProvider theme={theme}>
             <Notifications position="bottom-center" />
-            <NavigationProgress 
+            <NavigationProgress
               color="var(--mantine-color-blue-6)"
               size={3}
               stepInterval={100}
