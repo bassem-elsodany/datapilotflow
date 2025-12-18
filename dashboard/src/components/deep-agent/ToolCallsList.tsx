@@ -72,7 +72,7 @@ function CodeBlock({ content, label, color }: CodeBlockProps) {
           )}
         </CopyButton>
       </Group>
-      <ScrollArea style={{ backgroundColor: codeBgMap[color], borderRadius: '0 0 8px 8px', maxHeight: 400, width: '100%' }}>
+      <Box style={{ backgroundColor: codeBgMap[color], borderRadius: '0 0 8px 8px', padding: '16px' }}>
         <Box
           component="pre"
           style={{
@@ -82,7 +82,6 @@ function CodeBlock({ content, label, color }: CodeBlockProps) {
             lineHeight: 1.7,
             letterSpacing: '0.3px',
             margin: 0,
-            padding: '16px',
             whiteSpace: 'pre-wrap',
             wordWrap: 'break-word',
             wordBreak: 'break-word',
@@ -91,7 +90,7 @@ function CodeBlock({ content, label, color }: CodeBlockProps) {
         >
           {content}
         </Box>
-      </ScrollArea>
+      </Box>
     </Box>
   );
 }
