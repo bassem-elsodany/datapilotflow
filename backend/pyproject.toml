@@ -53,6 +53,8 @@ dependencies = [
     "email-validator>=2.3.0",
     "langchain-mcp-adapters>=0.1.0",
     "opik>=1.9.11",
+    "fastmcp>=0.4.0",
+    "deepagents>=0.1.0",
 ]
 
 [project.optional-dependencies]

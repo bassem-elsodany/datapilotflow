@@ -7,9 +7,10 @@ that support both embedding and generative models from the same provider.
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from loguru import logger
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 
 class ModelType(str, Enum):
@@ -18,7 +19,6 @@ class ModelType(str, Enum):
     EMBEDDING = "embedding"
     GENERATIVE = "generative"
     RERANKER = "reranker"
-    BOTH = "both"  # Provider supports multiple model types
 
 
 class ModelTypeConfig(BaseModel):
@@ -28,26 +28,38 @@ class ModelTypeConfig(BaseModel):
     config: Dict[str, Any] = Field(
         default_factory=dict, description="Configuration specific to this model type"
     )
+    endpoint: Optional[str] = Field(
+        default=None,
+        description=(
+            "Endpoint path for this model type "
+            "(e.g., '/v1/embeddings', '/v1/chat/completions')"
+        ),
+    )
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class ModelProvider(BaseModel):
     """Model representing a unified model provider configuration."""
+
+    model_config = ConfigDict(extra="ignore")
 
     id: str = Field(description="Unique identifier for the model provider")
     name: str = Field(
         description="Name of the model provider (e.g., 'OpenAI', 'Anthropic')"
     )
     provider_type: str = Field(
-        description="Type of provider (e.g., 'openai', 'anthropic', 'google')"
+        description=(
+            "Provider type / LiteLLM provider key used for routing; must match the "
+            "value selected in the dashboard 'Provider Type' dropdown "
+            "(e.g. 'openai', 'azure', 'azure_ai', 'anthropic', 'vertex_ai', "
+            "'google_ai_studio', 'groq', 'cohere', 'deepseek', etc.)."
+        )
     )
     endpoint: str = Field(description="Base API endpoint for the provider")
     api_key: Optional[str] = Field(
         default=None,
         description="API key for authentication (can be None for providers like Ollama)",
-    )
-    api_key_env_var: Optional[str] = Field(
-        default=None,
-        description="Environment variable name for API key (e.g., 'OPENAI_API_KEY')",
     )
     description: Optional[str] = Field(
         default=None, description="Description of the model provider"
@@ -112,21 +124,15 @@ class ModelProvider(BaseModel):
         return self.reranker.models if self.reranker else []
 
     @property
-    def api_key_required(self) -> bool:
-        """Property to indicate if API key is required for this provider."""
-        return self.api_key_env_var is not None
-
-    def get_api_key_env_var(self) -> Optional[str]:
-        """Get the environment variable name for the API key."""
-        return self.api_key_env_var
-
-    def requires_api_key(self) -> bool:
-        """Check if this provider requires an API key."""
-        return self.api_key_required
+    def is_user_managed(self) -> bool:
+        """All providers are user-manageable (no system/custom distinction)."""
+        return True
 
 
 class ModelProviderCreate(BaseModel):
     """Model for creating a new model provider configuration."""
+
+    model_config = ConfigDict(extra="ignore")
 
     name: str = Field(description="Name of the model provider")
     provider_type: str = Field(description="Type of provider")
@@ -134,10 +140,6 @@ class ModelProviderCreate(BaseModel):
     api_key: Optional[str] = Field(
         default=None,
         description="API key for authentication (can be None for providers like Ollama)",
-    )
-    api_key_env_var: Optional[str] = Field(
-        default=None,
-        description="Environment variable name for API key (e.g., 'OPENAI_API_KEY')",
     )
     description: Optional[str] = Field(
         default=None, description="Description of the model provider"
@@ -174,6 +176,8 @@ ModelProviderUpdate = ModelProviderCreate
 class ModelProviderResponse(BaseModel):
     """Response model for model provider that excludes sensitive information."""
 
+    model_config = ConfigDict(extra="ignore")
+
     id: str = Field(description="Unique identifier for the model provider")
     name: str = Field(description="Name of the model provider")
     provider_type: str = Field(description="Type of provider")
@@ -181,10 +185,6 @@ class ModelProviderResponse(BaseModel):
     api_key: Optional[str] = Field(
         default=None,
         description="API key for authentication (full key, UI will mask it for display)",
-    )
-    api_key_env_var: Optional[str] = Field(
-        default=None,
-        description="Environment variable name for API key (e.g., 'OPENAI_API_KEY')",
     )
     description: Optional[str] = Field(
         default=None, description="Description of the model provider"
@@ -216,7 +216,7 @@ class ModelProviderResponse(BaseModel):
     created_by: str = Field(description="User ID who created the provider")
     updated_by: str = Field(description="User ID who last updated the provider")
 
-    @property
+    @computed_field(return_type=List[ModelType])
     def supported_model_types(self) -> List[ModelType]:
         """Get list of supported model types based on available configurations."""
         types = []
@@ -228,30 +228,33 @@ class ModelProviderResponse(BaseModel):
             types.append(ModelType.RERANKER)
         return types
 
-    @property
+    @computed_field(return_type=List[str])
     def embedding_models(self) -> List[str]:
         """Get list of embedding models."""
         return self.embedding.models if self.embedding else []
 
-    @property
+    @computed_field(return_type=List[str])
     def generative_models(self) -> List[str]:
         """Get list of generative models."""
         return self.generative.models if self.generative else []
 
-    @property
+    @computed_field(return_type=List[str])
     def reranker_models(self) -> List[str]:
         """Get list of reranker models."""
         return self.reranker.models if self.reranker else []
 
+    @computed_field(return_type=Dict[str, Any])
+    def provider_config(self) -> Dict[str, Any]:
+        """Get provider-level config from first available model type."""
+        if self.embedding and self.embedding.config:
+            return self.embedding.config
+        if self.generative and self.generative.config:
+            return self.generative.config
+        if self.reranker and self.reranker.config:
+            return self.reranker.config
+        return {}
+
     @property
-    def api_key_required(self) -> bool:
-        """Property to indicate if API key is required for this provider."""
-        return self.api_key_env_var is not None
-
-    def get_api_key_env_var(self) -> Optional[str]:
-        """Get the environment variable name for the API key."""
-        return self.api_key_env_var
-
-    def requires_api_key(self) -> bool:
-        """Check if this provider requires an API key."""
-        return self.api_key_required
+    def is_user_managed(self) -> bool:
+        """All providers are user-manageable (no system/custom distinction)."""
+        return True

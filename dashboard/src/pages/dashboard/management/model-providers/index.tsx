@@ -1,5 +1,5 @@
 import { client } from '@/api/axios';
-import { ModelProviderResponse, useGetModelProviders, useUpdateModelProvider } from '@/api/resources/model-providers';
+import { ModelProviderResponse, useCreateModelProvider, useGetModelProviders, useTestModelProvider, useUpdateModelProvider } from '@/api/resources/model-providers';
 import { Page } from '@/components/page';
 import { PageHeader } from '@/components/page-header';
 import { paths } from '@/routes/paths';
@@ -10,9 +10,11 @@ import {
   Button,
   Card,
   Center,
+  Divider,
   Group,
   Loader,
   Modal,
+  Select,
   SimpleGrid,
   Stack,
   Switch,
@@ -32,6 +34,7 @@ import {
   IconEdit,
   IconFilter,
   IconKey,
+  IconPlayerPlay,
   IconPlus,
   IconRefresh,
   IconRobot,
@@ -109,6 +112,7 @@ export default function ModelProviders() {
   const [records, setRecords] = useState<ModelProviderResponse[]>([]);
   const [selectedRecords, setSelectedRecords] = useState<ModelProviderResponse[]>([]);
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<ModelProviderResponse | null>(null);
   const [isEditingApiKey, setIsEditingApiKey] = useState(false);
@@ -129,6 +133,8 @@ export default function ModelProviders() {
   });
   console.log('JWT Token:', localStorage.getItem('jwt_token'));
   const updateProviderMutation = useUpdateModelProvider(selectedProvider?.id || '');
+  const createProviderMutation = useCreateModelProvider();
+  const testProviderMutation = useTestModelProvider();
 
   // Form for editing
   const editForm = useForm({
@@ -148,6 +154,10 @@ export default function ModelProviders() {
         models: [] as string[],
         config: {} as Record<string, any>,
       },
+      reranker: {
+        models: [] as string[],
+        config: {} as Record<string, any>,
+      },
     },
     validate: {
       name: (value) => (!value ? 'Name is required' : null),
@@ -157,6 +167,78 @@ export default function ModelProviders() {
       timeout: (value) => (value < 1 || value > 300 ? 'Timeout must be between 1 and 300 seconds' : null),
     },
   });
+
+  // Form for creating
+  const createForm = useForm({
+    initialValues: {
+      name: '',
+      provider_type: '',
+      endpoint: '',
+      api_key: '',
+      description: '',
+      is_active: true,
+      timeout: 60,
+      embedding: {
+        models: [] as string[],
+        config: {} as Record<string, any>,
+      },
+      generative: {
+        models: [] as string[],
+        config: {} as Record<string, any>,
+      },
+      reranker: {
+        models: [] as string[],
+        config: {} as Record<string, any>,
+      },
+    },
+    validate: {
+      name: (value) => (!value ? 'Name is required' : null),
+      provider_type: (value) => (!value ? 'Provider type is required' : null),
+      endpoint: (value) => (!value ? 'Endpoint is required' : null),
+      timeout: (value) => (value < 1 || value > 300 ? 'Timeout must be between 1 and 300 seconds' : null),
+    },
+  });
+  const parseJsonField = (value: string, label: string): Record<string, any> | undefined => {
+    if (value && typeof value === 'string' && value.trim()) {
+      try {
+        return JSON.parse(value);
+      } catch (e) {
+        notifications.show({
+          title: 'Error',
+          message: `Invalid JSON format for ${label}`,
+          color: 'red',
+        });
+        throw new Error(`Invalid ${label}`);
+      }
+    }
+    return undefined;
+  };
+
+  const buildProviderPayload = (values: typeof createForm.values) => {
+    return {
+      name: values.name,
+      provider_type: values.provider_type,
+      provider_category: 'custom' as const,
+      endpoint: values.endpoint,
+      api_key: values.api_key || undefined,
+      description: values.description || undefined,
+      is_active: values.is_active,
+      timeout: values.timeout,
+      embedding: values.embedding.models.length > 0 ? {
+        models: values.embedding.models,
+        config: values.embedding.config,
+      } : undefined,
+      generative: values.generative.models.length > 0 ? {
+        models: values.generative.models,
+        config: values.generative.config,
+      } : undefined,
+      reranker: values.reranker.models.length > 0 ? {
+        models: values.reranker.models,
+        config: values.reranker.config,
+      } : undefined,
+    };
+  };
+
 
   // Update records when data changes
   useEffect(() => {
@@ -248,6 +330,76 @@ export default function ModelProviders() {
     }
   };
 
+  const handleCreate = () => {
+    createForm.reset();
+    setCreateModalOpen(true);
+  };
+
+  const handleSaveCreate = async (values: typeof createForm.values) => {
+    try {
+      const payload = buildProviderPayload(values);
+      await createProviderMutation.mutateAsync(payload as any);
+      notifications.show({
+        title: 'Success',
+        message: 'Model provider created successfully',
+        color: 'green',
+      });
+      setCreateModalOpen(false);
+      createForm.reset();
+      refetch();
+    } catch (error: any) {
+      notifications.show({
+        title: 'Error',
+        message: error?.message || 'Failed to create model provider',
+        color: 'red',
+      });
+    }
+  };
+
+
+  const handleTestProvider = async (type: 'embedding' | 'generative' | 'reranker') => {
+    try {
+      const payload = buildProviderPayload(createForm.values);
+      const models = type === 'embedding'
+        ? payload.embedding?.models
+        : type === 'generative'
+          ? payload.generative?.models
+          : payload.reranker?.models;
+
+      if (!models || models.length === 0) {
+        notifications.show({
+          title: 'Missing model',
+          message: `Add at least one ${type} model to test`,
+          color: 'red',
+        });
+        return;
+      }
+
+      const modelName = models[0];
+      const result = await testProviderMutation.mutateAsync({
+        variables: {
+          provider: payload as any,
+          test_type: type,
+          model: modelName,
+        },
+      } as any);
+
+      const success = Boolean(result?.success);
+      notifications.show({
+        title: success ? `${type} test succeeded` : `${type} test failed`,
+        message: success
+          ? `Status ${result.status_code ?? ''} in ${result.duration_ms ?? 0}ms`
+          : result?.message || 'Test failed',
+        color: success ? 'green' : 'red',
+      });
+    } catch (error: any) {
+      notifications.show({
+        title: 'Error',
+        message: error?.message || 'Failed to test provider',
+        color: 'red',
+      });
+    }
+  };
 
   const columns: DataTableColumn<ModelProviderResponse>[] = useMemo(() => [
     {
@@ -367,7 +519,7 @@ export default function ModelProviders() {
           <ActionIcon
             variant="subtle"
             color="blue"
-            onClick={() => handleEdit(provider)}
+            onClick={() => navigate(paths.dashboard.management.modelProviders.providerEdit(provider.id))}
             title="Edit"
           >
             <IconEdit size={16} />
@@ -469,24 +621,22 @@ export default function ModelProviders() {
       <Card mb="md">
         <Stack gap="sm">
           <Text size="sm" c="dimmed">
-            Configure AI model providers to power your embedding and generative AI capabilities.
-            Set up API keys and endpoints for different providers to enable content processing,
-            vector embeddings, and AI-powered responses.
+            Configure AI model providers to power embeddings, rerankers, and generative models. Set up API keys and endpoints to enable vector search, reranking, and AI responses across your apps.
           </Text>
           <Group gap="xs">
             <IconBrain size={16} color="var(--mantine-color-blue-6)" />
             <Text size="sm" fw={500}>Model Types:</Text>
-            <Text size="sm" c="dimmed">Embedding models for vector search, Generative models for AI responses</Text>
+            <Text size="sm" c="dimmed">Embedding models for vector search, Reranker models for relevance ordering, Generative models for AI responses.</Text>
           </Group>
           <Group gap="xs">
             <IconKey size={16} color="var(--mantine-color-green-6)" />
             <Text size="sm" fw={500}>Supported Providers:</Text>
-            <Text size="sm" c="dimmed">OpenAI, Anthropic, Google, Ollama, Hugging Face, Groq</Text>
+            <Text size="sm" c="dimmed">OpenAI-compatible providers (e.g., OpenAI, Azure, OpenRouter, Groq, Fireworks, Together, Perplexity, DeepInfra, Cohere, AI21, Anthropic-compatible, Google-compatible, and other OpenAI-format providers).</Text>
           </Group>
           <Group gap="xs">
             <IconSettings size={16} color="var(--mantine-color-orange-6)" />
             <Text size="sm" fw={500}>Configuration:</Text>
-            <Text size="sm" c="dimmed">API keys, endpoints, model selection, and provider-specific settings</Text>
+            <Text size="sm" c="dimmed">API keys, endpoints, and model lists for embedding / reranker / generative types. Test models before saving to verify connectivity.</Text>
           </Group>
         </Stack>
       </Card>
@@ -533,6 +683,7 @@ export default function ModelProviders() {
               <TextInput
                 label="Name"
                 placeholder="Provider name"
+                description="Display name shown in the provider list."
                 readOnly
                 {...editForm.getInputProps('name')}
               />
@@ -609,9 +760,20 @@ export default function ModelProviders() {
 
             {/* Embedding Section */}
             <Card withBorder p="md" shadow="sm">
-              <Group gap="sm" mb="md">
-                <IconBrain size={18} color="var(--mantine-color-green-6)" />
-                <Title order={6} c="green.8">Embedding Models</Title>
+              <Group gap="sm" mb="md" justify="space-between">
+                <Group gap="sm">
+                  <IconBrain size={18} color="var(--mantine-color-green-6)" />
+                  <Title order={6} c="green.8">Embedding Models</Title>
+                </Group>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  leftSection={<IconPlayerPlay size={14} />}
+                  onClick={() => handleTestProvider('embedding')}
+                  loading={testProviderMutation.isPending}
+                >
+                  Test embedding
+                </Button>
               </Group>
               <TagsInput
                 label="Models"
@@ -646,9 +808,20 @@ export default function ModelProviders() {
 
             {/* Generative Section */}
             <Card withBorder p="md" shadow="sm">
-              <Group gap="sm" mb="md">
-                <IconRobot size={18} color="var(--mantine-color-purple-6)" />
-                <Title order={6} c="purple.8">Generative Models</Title>
+              <Group gap="sm" mb="md" justify="space-between">
+                <Group gap="sm">
+                  <IconRobot size={18} color="var(--mantine-color-purple-6)" />
+                  <Title order={6} c="purple.8">Generative Models</Title>
+                </Group>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  leftSection={<IconPlayerPlay size={14} />}
+                  onClick={() => handleTestProvider('generative')}
+                  loading={testProviderMutation.isPending}
+                >
+                  Test generative
+                </Button>
               </Group>
               <TagsInput
                 label="Models"
@@ -695,9 +868,20 @@ export default function ModelProviders() {
 
             {/* Reranker Section */}
             <Card withBorder p="md" shadow="sm">
-              <Group gap="sm" mb="md">
-                <IconFilter size={18} color="var(--mantine-color-orange-6)" />
-                <Title order={6} c="orange.8">Reranker Models</Title>
+              <Group gap="sm" mb="md" justify="space-between">
+                <Group gap="sm">
+                  <IconFilter size={18} color="var(--mantine-color-orange-6)" />
+                  <Title order={6} c="orange.8">Reranker Models</Title>
+                </Group>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  leftSection={<IconPlayerPlay size={14} />}
+                  onClick={() => handleTestProvider('reranker')}
+                  loading={testProviderMutation.isPending}
+                >
+                  Test reranker
+                </Button>
               </Group>
               <TagsInput
                 label="Models"
@@ -741,6 +925,330 @@ export default function ModelProviders() {
               </Button>
               <Button type="submit" loading={updateProviderMutation.isPending}>
                 Save Changes
+              </Button>
+            </Group>
+          </Stack>
+        </form>
+      </Modal>
+
+      {/* Create Modal */}
+      <Modal
+        opened={createModalOpen}
+        onClose={() => {
+          setCreateModalOpen(false);
+          createForm.reset();
+        }}
+        title={
+          <Group gap="sm">
+            <IconPlus size={20} />
+            <Text fw={600} size="lg">Create Model Provider</Text>
+          </Group>
+        }
+        size="xl"
+        styles={{
+          header: {
+            backgroundColor: 'var(--mantine-color-green-0)',
+            borderBottom: '1px solid var(--mantine-color-green-2)',
+            padding: 'var(--mantine-spacing-md)',
+          },
+          title: {
+            color: 'var(--mantine-color-green-8)',
+          }
+        }}
+      >
+        <form onSubmit={createForm.onSubmit(handleSaveCreate)}>
+          <Stack gap="md">
+            <Alert color="blue" title="Create Custom Provider">
+              Configure a custom model provider for OpenAI-compatible APIs. All fields marked with * are required.
+              <Text size="sm" mt="xs">
+                <strong>Note:</strong> Custom providers must use OpenAI-compatible API formats.
+                See <a href="https://docs.litellm.ai/docs/providers" target="_blank" rel="noopener noreferrer">LiteLLM Providers Documentation</a> for details.
+              </Text>
+            </Alert>
+
+            <SimpleGrid cols={2}>
+              <TextInput
+                label="Name"
+                placeholder="Provider name"
+                description="Display name shown in the provider list."
+                required
+                {...createForm.getInputProps('name')}
+              />
+              <Select
+                label="Provider Type"
+                placeholder="Select OpenAI-compatible provider type"
+                description="Choose from LiteLLM-supported OpenAI-compatible providers"
+                required
+                data={[
+                  { value: 'openai', label: 'OpenAI' },
+                  { value: 'azure', label: 'Azure OpenAI' },
+                  { value: 'azure_ai', label: 'Azure AI' },
+                  { value: 'openrouter', label: 'OpenRouter' },
+                  { value: 'fireworks_ai', label: 'Fireworks AI' },
+                  { value: 'groq', label: 'Groq' },
+                  { value: 'together_ai', label: 'Together AI' },
+                  { value: 'perplexity', label: 'Perplexity AI' },
+                  { value: 'anyscale', label: 'Anyscale' },
+                  { value: 'deepinfra', label: 'DeepInfra' },
+                  { value: 'hyperbolic', label: 'Hyperbolic' },
+                  { value: 'nscale', label: 'Nscale (EU Sovereign)' },
+                  { value: 'codestral', label: 'Codestral (Mistral AI)' },
+                  { value: 'datarobot', label: 'DataRobot' },
+                  { value: 'predibase', label: 'Predibase' },
+                  { value: 'cohere', label: 'Cohere' },
+                  { value: 'ai21', label: 'AI21' },
+                  { value: 'bedrock', label: 'AWS Bedrock (compat)' },
+                  { value: 'vertex_ai', label: 'Vertex AI (compat)' },
+                  { value: 'google_ai_studio', label: 'Google AI Studio' },
+                  { value: 'gcp_vertex', label: 'GCP Vertex (compat)' },
+                  { value: 'snowflake', label: 'Snowflake Cortex (compat)' },
+                  { value: 'qwen_dashscope', label: 'Qwen Dashscope (compat)' },
+                  { value: 'voyage', label: 'Voyage AI' },
+                  { value: 'replicate', label: 'Replicate (compat)' },
+                  { value: 'deepseek', label: 'DeepSeek (compat)' },
+                  { value: 'sambanova', label: 'SambaNova (compat)' },
+                  { value: 'xai', label: 'xAI (compat)' },
+                  { value: 'openai_compatible', label: 'OpenAI Compatible (Generic)' },
+                ]}
+                searchable
+                {...createForm.getInputProps('provider_type')}
+              />
+            </SimpleGrid>
+
+            <TextInput
+              label="Endpoint"
+              placeholder="https://api.example.com/v1"
+              required
+              {...createForm.getInputProps('endpoint')}
+            />
+
+            <SimpleGrid cols={2}>
+              <TextInput
+                label="API Key"
+                type="password"
+                placeholder="Your API key (optional)"
+                description="Secret key sent to the provider (kept encrypted)."
+                {...createForm.getInputProps('api_key')}
+              />
+            </SimpleGrid>
+
+            <Textarea
+              label="Description"
+              placeholder="Provider description"
+              {...createForm.getInputProps('description')}
+            />
+
+            <SimpleGrid cols={2}>
+              <TextInput
+                label="Timeout (seconds)"
+                type="number"
+                min={1}
+                max={300}
+                description="Request timeout applied to this provider."
+                {...createForm.getInputProps('timeout')}
+              />
+              <Switch
+                label="Active"
+                {...createForm.getInputProps('is_active', { type: 'checkbox' })}
+              />
+            </SimpleGrid>
+
+            <Divider label="Custom Provider Configuration" labelPosition="center" />
+
+            <Alert color="blue" title="Advanced Settings">
+              Configure advanced settings for custom/locally hosted providers. These settings are optional but recommended for better integration.
+            </Alert>
+
+            <SimpleGrid cols={2}>
+              <Select
+                label="Custom Authentication Type"
+                placeholder="Select authentication type"
+                description="How your custom provider handles authentication"
+                data={[
+                  { value: 'bearer', label: 'Bearer Token' },
+                  { value: 'api_key', label: 'API Key' },
+                  { value: 'basic', label: 'Basic Auth' },
+                  { value: 'custom', label: 'Custom' },
+                  { value: 'none', label: 'None' },
+                ]}
+                clearable
+                {...createForm.getInputProps('custom_auth_type')}
+              />
+            </SimpleGrid>
+
+            <Divider label="Model Configuration" labelPosition="center" />
+
+            {/* Embedding Section */}
+            <Card withBorder p="md" shadow="sm">
+              <Group gap="sm" mb="md" justify="space-between">
+                <Group gap="sm">
+                  <IconBrain size={18} color="var(--mantine-color-green-6)" />
+                  <Title order={6} c="green.8">Embedding Models</Title>
+                </Group>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  leftSection={<IconPlayerPlay size={14} />}
+                  onClick={() => handleTestProvider('embedding')}
+                  loading={testProviderMutation.isPending}
+                >
+                  Test embedding
+                </Button>
+              </Group>
+              <TagsInput
+                label="Models"
+                placeholder="Add embedding models"
+                {...createForm.getInputProps('embedding.models')}
+              />
+              {createForm.values.embedding && createForm.values.embedding.models.length > 0 && (
+                <>
+                  <SimpleGrid cols={2} mt="md">
+                    <TextInput
+                      label="Max Input Tokens"
+                      type="number"
+                      placeholder="8191"
+                      {...createForm.getInputProps('embedding.config.max_input_tokens')}
+                    />
+                    <TextInput
+                      label="Batch Size"
+                      type="number"
+                      placeholder="100"
+                      {...createForm.getInputProps('embedding.config.batch_size')}
+                    />
+                  </SimpleGrid>
+                  <TextInput
+                    label="Endpoint Suffix"
+                    placeholder="/embeddings"
+                    mt="md"
+                    {...createForm.getInputProps('embedding.config.endpoint_suffix')}
+                  />
+                </>
+              )}
+            </Card>
+
+            {/* Generative Section */}
+            <Card withBorder p="md" shadow="sm">
+              <Group gap="sm" mb="md" justify="space-between">
+                <Group gap="sm">
+                  <IconRobot size={18} color="var(--mantine-color-purple-6)" />
+                  <Title order={6} c="purple.8">Generative Models</Title>
+                </Group>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  leftSection={<IconPlayerPlay size={14} />}
+                  onClick={() => handleTestProvider('generative')}
+                  loading={testProviderMutation.isPending}
+                >
+                  Test generative
+                </Button>
+              </Group>
+              <TagsInput
+                label="Models"
+                placeholder="Add generative models"
+                {...createForm.getInputProps('generative.models')}
+              />
+              {createForm.values.generative && createForm.values.generative.models.length > 0 && (
+                <>
+                  <SimpleGrid cols={3} mt="md">
+                    <TextInput
+                      label="Max Tokens"
+                      type="number"
+                      placeholder="4096"
+                      {...createForm.getInputProps('generative.config.max_tokens')}
+                    />
+                    <TextInput
+                      label="Temperature"
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="2"
+                      placeholder="0.7"
+                      {...createForm.getInputProps('generative.config.temperature')}
+                    />
+                    <TextInput
+                      label="Top P"
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="1"
+                      placeholder="1.0"
+                      {...createForm.getInputProps('generative.config.top_p')}
+                    />
+                  </SimpleGrid>
+                  <TextInput
+                    label="Endpoint Suffix"
+                    placeholder="/chat/completions"
+                    mt="md"
+                    {...createForm.getInputProps('generative.config.endpoint_suffix')}
+                  />
+                </>
+              )}
+            </Card>
+
+            {/* Reranker Section */}
+            <Card withBorder p="md" shadow="sm">
+              <Group gap="sm" mb="md" justify="space-between">
+                <Group gap="sm">
+                  <IconFilter size={18} color="var(--mantine-color-orange-6)" />
+                  <Title order={6} c="orange.8">Reranker Models</Title>
+                </Group>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  leftSection={<IconPlayerPlay size={14} />}
+                  onClick={() => handleTestProvider('reranker')}
+                  loading={testProviderMutation.isPending}
+                >
+                  Test reranker
+                </Button>
+              </Group>
+              <TagsInput
+                label="Models"
+                placeholder="Add reranker models"
+                {...createForm.getInputProps('reranker.models')}
+              />
+              {createForm.values.reranker && createForm.values.reranker.models.length > 0 && (
+                <>
+                  <SimpleGrid cols={2} mt="md">
+                    <TextInput
+                      label="Max Documents"
+                      type="number"
+                      placeholder="100"
+                      {...createForm.getInputProps('reranker.config.max_documents')}
+                    />
+                    <TextInput
+                      label="Top N"
+                      type="number"
+                      placeholder="10"
+                      {...createForm.getInputProps('reranker.config.top_n')}
+                    />
+                  </SimpleGrid>
+                  <TextInput
+                    label="Endpoint Suffix"
+                    placeholder="/rerank"
+                    mt="md"
+                    {...createForm.getInputProps('reranker.config.endpoint_suffix')}
+                  />
+                </>
+              )}
+            </Card>
+
+            <Group justify="flex-end">
+              <Button
+                variant="light"
+                onClick={() => {
+                  setCreateModalOpen(false);
+                  createForm.reset();
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                loading={createProviderMutation.isPending}
+              >
+                Create Provider
               </Button>
             </Group>
           </Stack>
@@ -824,15 +1332,15 @@ export default function ModelProviders() {
                 </div>
                 <SimpleGrid cols={2} mt="md">
                   <div>
-                    <Text size="sm" fw={500} c="dimmed">Max Input Tokens</Text>
+                    <Text size="sm" fw={500}>Max Input Tokens</Text>
                     <Text>{selectedProvider.embedding.config?.max_input_tokens || 'N/A'}</Text>
                   </div>
                   <div>
-                    <Text size="sm" fw={500} c="dimmed">Batch Size</Text>
+                    <Text size="sm" fw={500}>Batch Size</Text>
                     <Text>{selectedProvider.embedding.config?.batch_size || 'N/A'}</Text>
                   </div>
                   <div>
-                    <Text size="sm" fw={500} c="dimmed">Endpoint Suffix</Text>
+                    <Text size="sm" fw={500}>Endpoint Suffix</Text>
                     <Text>{selectedProvider.embedding.config?.endpoint_suffix || 'N/A'}</Text>
                   </div>
                 </SimpleGrid>
@@ -855,19 +1363,19 @@ export default function ModelProviders() {
                 </div>
                 <SimpleGrid cols={2} mt="md">
                   <div>
-                    <Text size="sm" fw={500} c="dimmed">Max Tokens</Text>
+                    <Text size="sm" fw={500}>Max Tokens</Text>
                     <Text>{selectedProvider.generative.config?.max_tokens || 'N/A'}</Text>
                   </div>
                   <div>
-                    <Text size="sm" fw={500} c="dimmed">Temperature</Text>
+                    <Text size="sm" fw={500}>Temperature</Text>
                     <Text>{selectedProvider.generative.config?.temperature || 'N/A'}</Text>
                   </div>
                   <div>
-                    <Text size="sm" fw={500} c="dimmed">Top P</Text>
+                    <Text size="sm" fw={500}>Top P</Text>
                     <Text>{selectedProvider.generative.config?.top_p || 'N/A'}</Text>
                   </div>
                   <div>
-                    <Text size="sm" fw={500} c="dimmed">Endpoint Suffix</Text>
+                    <Text size="sm" fw={500}>Endpoint Suffix</Text>
                     <Text>{selectedProvider.generative.config?.endpoint_suffix || 'N/A'}</Text>
                   </div>
                 </SimpleGrid>
@@ -890,15 +1398,15 @@ export default function ModelProviders() {
                 </div>
                 <SimpleGrid cols={2} mt="md">
                   <div>
-                    <Text size="sm" fw={500} c="dimmed">Max Documents</Text>
+                    <Text size="sm" fw={500}>Max Documents</Text>
                     <Text>{selectedProvider.reranker.config?.max_documents || 'N/A'}</Text>
                   </div>
                   <div>
-                    <Text size="sm" fw={500} c="dimmed">Top N</Text>
+                    <Text size="sm" fw={500}>Top N</Text>
                     <Text>{selectedProvider.reranker.config?.top_n || 'N/A'}</Text>
                   </div>
                   <div>
-                    <Text size="sm" fw={500} c="dimmed">Endpoint Suffix</Text>
+                    <Text size="sm" fw={500}>Endpoint Suffix</Text>
                     <Text>{selectedProvider.reranker.config?.endpoint_suffix || 'N/A'}</Text>
                   </div>
                 </SimpleGrid>

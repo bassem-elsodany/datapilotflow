@@ -28,7 +28,7 @@ class ToolService:
 
     # Tool Management Methods
 
-    def create_tool(self, tool: Tool) -> Tool:
+    def create_tool(self, tool: Tool) -> tuple[str, Tool]:
         """
         Create a new tool.
 
@@ -36,38 +36,38 @@ class ToolService:
             tool: Tool object to create
 
         Returns:
-            Created tool object
+            Tuple of (_id, Tool)
 
         Raises:
             Exception: If creation fails
         """
         try:
-            self.tool_dao.create_tool(tool)
+            _id = self.tool_dao.create_tool(tool)
             logger.info(
-                f"Created tool '{tool.name}' (ID: {tool.id}) for user {tool.user_id}"
+                f"Created tool '{tool.name}' (_id: {_id}) for user {tool.user_id}"
             )
-            return tool
+            return (_id, tool)
         except Exception as e:
             logger.error(f"Error creating tool: {e}")
             logger.error(f"Traceback: {traceback.format_exc()}")
             raise
 
-    def get_tool_by_id(self, tool_id: str, user_id: str) -> Optional[Tool]:
+    def get_tool_by_id(self, tool_id: str, user_id: str) -> Optional[tuple[str, Tool]]:
         """
-        Get tool by ID (with user ownership check).
+        Get tool by _id (with user ownership check).
 
         Args:
-            tool_id: Tool ID
+            tool_id: MongoDB _id as string
             user_id: User ID for ownership verification
 
         Returns:
-            Tool object if found and owned by user, None otherwise
+            Tuple of (_id, Tool) if found and owned by user, None otherwise
         """
         return self.tool_dao.get_tool_by_id(tool_id, user_id)
 
     def get_user_tools(
         self, user_id: str, is_active: Optional[bool] = None
-    ) -> List[Tool]:
+    ) -> List[tuple[str, Tool]]:
         """
         Get all tools for a user.
 
@@ -76,7 +76,7 @@ class ToolService:
             is_active: Optional filter by active status
 
         Returns:
-            List of tools owned by user
+            List of tuples: (_id, Tool)
         """
         tools = self.tool_dao.get_user_tools(user_id, is_active=is_active)
         logger.info(f"Retrieved {len(tools)} tools for user {user_id}")
@@ -148,32 +148,57 @@ class ToolService:
             Exception: If discovery fails
         """
         try:
-            from src.agents.supervisor_agent.tools.tool_factory import ToolFactory
-            from src.domain.tool import MCPServerConfig
+            from langchain_mcp_adapters.client import MultiServerMCPClient
 
             logger.info(f"Discovering MCP tools from {server_url}")
 
-            # Create temporary MCPServerConfig for discovery
-            temp_server = MCPServerConfig(
-                id="",  # Temporary ID for discovery
-                name="temp_discovery",
-                server_url=server_url,
-                auth_type=auth_type,
-                auth_credentials=auth_credentials or {},
-                user_id="",
-            )
+            # Build auth headers
+            headers = {}
+            if auth_type and auth_credentials:
+                if auth_type == "bearer":
+                    token = auth_credentials.get("token") or auth_credentials.get(
+                        "bearer_token"
+                    )
+                    if token:
+                        headers["Authorization"] = f"Bearer {token.strip()}"
+                elif auth_type == "api_key":
+                    api_key = auth_credentials.get("api_key")
+                    header_name = auth_credentials.get("header_name", "X-API-Key")
+                    if api_key:
+                        headers[header_name] = api_key.strip()
 
-            # Use ToolFactory to discover tools (uses langchain-mcp-adapters)
-            discovered_tools_raw = await ToolFactory.discover_mcp_tools(temp_server)
-
-            # Add display_name for UI
-            discovered_tools = []
-            for tool_data in discovered_tools_raw:
-                tool_data_with_display = {
-                    **tool_data,
-                    "display_name": tool_data["name"].replace("_", " ").title(),
+            # Connect to MCP server
+            server_config: dict = {
+                "discovery_server": {
+                    "transport": "streamable_http",
+                    "url": server_url,
                 }
-                discovered_tools.append(tool_data_with_display)
+            }
+            if headers:
+                server_config["discovery_server"]["headers"] = headers
+
+            # Discover tools
+            client = MultiServerMCPClient(server_config)  # type: ignore
+            all_tools = await client.get_tools()
+
+            # Convert to tool metadata
+            discovered_tools = []
+            for tool in all_tools:
+                # Extract schema - handle both dict and Pydantic model
+                schema = {}
+                if hasattr(tool, "args_schema") and tool.args_schema:
+                    if isinstance(tool.args_schema, dict):
+                        schema = tool.args_schema
+                    elif hasattr(tool.args_schema, "schema"):
+                        schema = tool.args_schema.schema()
+
+                tool_data = {
+                    "name": tool.name,
+                    "description": tool.description or "",
+                    "display_name": tool.name.replace("_", " ").title(),
+                    "schema": schema,
+                }
+                discovered_tools.append(tool_data)
 
             logger.info(
                 f"Successfully discovered {len(discovered_tools)} tools from {server_url}"

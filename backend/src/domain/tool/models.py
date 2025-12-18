@@ -42,9 +42,11 @@ class MCPServerConfig:
     Represents a single MCP server connection (NO tool list stored here).
     Individual tools reference this server via mcp_server_id foreign key.
     Tool descriptions/schemas are fetched at runtime (not stored statically).
+    
+    Note: Uses ONLY MongoDB's native _id field (no 'id' field in model).
+          The _id is passed separately when reading from DB.
     """
 
-    id: str  # UUID identifier
     user_id: str  # Owner of this server configuration
     name: str  # Human-readable server name (e.g., "My Utilities Server")
     server_url: str  # MCP server endpoint (http://host:port/mcp)
@@ -65,8 +67,6 @@ class MCPServerConfig:
     updated_at: Optional[datetime] = None
 
     def __post_init__(self):
-        if not self.id or self.id == "":
-            self.id = str(uuid.uuid4())
         if self.created_at is None:
             self.created_at = datetime.utcnow()
         if self.updated_at is None:
@@ -75,9 +75,13 @@ class MCPServerConfig:
 
 @dataclass
 class Tool:
-    """Represents a standalone tool configuration."""
+    """
+    Represents a standalone tool configuration.
+    
+    Note: Uses ONLY MongoDB's native _id field (no 'id' field in model).
+          The _id is passed separately when reading from DB.
+    """
 
-    id: str  # UUID identifier
     name: str  # Tool name (used by LLM to invoke)
     display_name: str  # Human-readable name for UI
     description: str  # Tool description for LLM understanding
@@ -89,7 +93,7 @@ class Tool:
     prompt_config: Optional[PromptBasedToolConfig] = None
 
     # For MCP_REMOTE tools (references MCP server + specific tool on that server)
-    mcp_server_id: Optional[str] = None  # Foreign key to MCPServerConfig
+    mcp_server_id: Optional[str] = None  # Foreign key to MCPServerConfig._id
     mcp_tool_name: Optional[str] = (
         None  # Tool name on the MCP server (e.g., "calculate")
     )
@@ -99,8 +103,6 @@ class Tool:
     updated_at: Optional[datetime] = None
 
     def __post_init__(self):
-        if not self.id or self.id == "":
-            self.id = str(uuid.uuid4())
         if self.created_at is None:
             self.created_at = datetime.utcnow()
         if self.updated_at is None:

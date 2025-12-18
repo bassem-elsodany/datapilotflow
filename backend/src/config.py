@@ -54,6 +54,14 @@ class Settings(BaseSettings):
         default=60, description="WebSocket timeout in seconds"
     )
 
+    # --- RAG MCP Server Configuration ---
+    RAG_MCP_HOST: str = Field(
+        default="0.0.0.0", description="RAG MCP server host", min_length=1
+    )
+    RAG_MCP_PORT: int = Field(
+        default=65510, description="RAG MCP server port", ge=1, le=65535
+    )
+
     # --- JWT Configuration ---
     JWT_SECRET_KEY: str = Field(
         default="supersecret",
@@ -176,7 +184,7 @@ class Settings(BaseSettings):
 
     # --- File Paths Configuration ---
     BASE_DIR: Path = Field(
-        default=Path(__file__).parent.parent.parent.parent,
+        default=Path(__file__).parent.parent,  # backend/ directory
         description="Base directory of the application",
     )
     EVALUATION_DATASET_FILE_PATH: Path = Field(

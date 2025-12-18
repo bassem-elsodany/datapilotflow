@@ -5,7 +5,13 @@ This service handles business logic for unified model provider configurations
 that support both embedding and generative models.
 """
 
-from typing import List, Optional
+import inspect
+import json
+import time
+from typing import Any, Dict, List, Optional
+
+from litellm import acompletion, aembedding, rerank
+from loguru import logger
 
 from src.domain.model_provider.model_provider import (
     ModelProvider,
@@ -24,10 +30,22 @@ class ModelProviderService:
         self.model_provider_dao = ModelProviderDAO()
 
     def create_model_provider(
-        self, provider_data: ModelProviderCreate, user_id: str
+        self,
+        provider_data: ModelProviderCreate,
+        user_id: str,
+        allow_system: bool = False,
     ) -> Optional[ModelProvider]:
-        """Create a new model provider configuration."""
+        """
+        Create a new model provider configuration.
 
+        Users can only create CUSTOM providers. SYSTEM providers are created
+        during system initialization.
+
+        Args:
+            provider_data: Provider data to create
+            user_id: User ID creating the provider
+            allow_system: If True, allows creating SYSTEM providers (for initialization only)
+        """
         provider_id = self.model_provider_dao.create_model_provider(
             provider_data, user_id
         )
@@ -39,6 +57,9 @@ class ModelProviderService:
         if not provider:
             raise ValueError("Failed to retrieve created model provider")
 
+        logger.info(
+            f"Created provider '{provider.name}' (id: {provider_id}) for user {user_id}"
+        )
         return provider
 
     def get_model_provider(
@@ -112,7 +133,18 @@ class ModelProviderService:
     def update_model_provider(
         self, provider_id: str, user_id: str, update_data: ModelProviderUpdate
     ) -> Optional[ModelProvider]:
-        """Update an existing model provider configuration."""
+        """
+        Update an existing model provider configuration.
+
+        System providers can be updated but category cannot be changed.
+        Custom providers can be fully updated by their owner.
+        """
+        # Check if provider exists and get current state
+        existing_provider = self.model_provider_dao.get_model_provider(
+            provider_id, user_id
+        )
+        if not existing_provider:
+            raise ValueError("Model provider not found")
 
         success = self.model_provider_dao.update_model_provider(
             provider_id, user_id, update_data
@@ -125,6 +157,9 @@ class ModelProviderService:
         if not provider:
             raise ValueError("Failed to retrieve updated model provider")
 
+        logger.info(
+            f"Updated provider '{provider.name}' (id: {provider_id}) by user {user_id}"
+        )
         return provider
 
     def get_active_model_providers(self, user_id: str) -> List[ModelProvider]:
@@ -142,6 +177,129 @@ class ModelProviderService:
     ) -> Optional[ModelProvider]:
         """Get a model provider by name."""
         return self.model_provider_dao.get_provider_by_name(user_id, provider_name)
+
+    async def test_model_provider(
+        self,
+        provider_data: ModelProviderCreate,
+        user_id: str,
+        test_type: ModelType,
+        model_name: str,
+    ) -> Dict[str, Any]:
+        """
+        Perform a lightweight live call to validate a provider configuration before saving.
+
+        Returns a dict with success flag, status_code, duration_ms, and a response preview.
+        """
+        start = time.perf_counter()
+
+        api_key = provider_data.api_key
+        base_endpoint = provider_data.endpoint.rstrip("/")
+
+        # LiteLLM expects model identifiers in the form "provider/model_name"
+        # so we compose this from provider_type + model_name when available.
+        model_identifier = (
+            f"{provider_data.provider_type}/{model_name}"
+            if provider_data.provider_type
+            else model_name
+        )
+
+        def common_params() -> Dict[str, Any]:
+            params: Dict[str, Any] = {
+                "model": model_identifier,
+                "api_key": api_key or "",
+                "api_base": base_endpoint,
+                "timeout": provider_data.timeout or 60,
+            }
+            return params
+
+        def wrap_result(
+            raw: Any, success: bool, message: str = "OK", status_code: int = 200
+        ) -> Dict[str, Any]:
+            duration_ms = int((time.perf_counter() - start) * 1000)
+            body = ""
+            try:
+                to_dump = raw
+                if hasattr(raw, "model_dump"):
+                    to_dump = raw.model_dump()
+                body = json.dumps(to_dump, default=str, indent=2)[:800]
+            except Exception:
+                body = str(raw)[:800]
+            return {
+                "success": success,
+                "duration_ms": duration_ms,
+                "body": body,
+                "message": message,
+                "status_code": status_code,
+            }
+
+        # Determine URL and payload per test type
+        if test_type == ModelType.EMBEDDING:
+            if not provider_data.embedding or not provider_data.embedding.models:
+                return wrap_result({}, False, "No embedding models configured", 400)
+            params = common_params()
+            params.update(provider_data.embedding.config or {})
+            # Remove client-only fields that LiteLLM does not accept
+            params.pop("endpoint_suffix", None)
+            params["input"] = ["Health check embedding ping"]
+            params["dimensions"] = params.get(
+                "dimensions", provider_data.embedding.config.get("dimensions")
+            )
+
+            try:
+                resp = await aembedding(**params)
+                return wrap_result(resp, True, "OK", 200)
+            except Exception as e:
+                logger.error(f"Embedding test failed: {e}")
+                return wrap_result({}, False, str(e), 500)
+
+        if test_type == ModelType.GENERATIVE:
+            if not provider_data.generative or not provider_data.generative.models:
+                return wrap_result({}, False, "No generative models configured", 400)
+            params = common_params()
+            params.update(provider_data.generative.config or {})
+            # Remove client-only fields that LiteLLM does not accept
+            params.pop("endpoint_suffix", None)
+            params.pop("max_input_tokens", None)
+            params.pop("batch_size", None)
+
+            messages = [{"role": "user", "content": "Hello! Quick connectivity check."}]
+
+            params["messages"] = messages
+            params["max_tokens"] = params.get("max_tokens", 50)
+
+            try:
+                resp = await acompletion(**params)
+                return wrap_result(resp, True, "OK", 200)
+            except Exception as e:
+                logger.error(f"Generative test failed: {e}")
+                return wrap_result({}, False, str(e), 500)
+
+        if test_type == ModelType.RERANKER:
+            if not provider_data.reranker or not provider_data.reranker.models:
+                return wrap_result({}, False, "No reranker models configured", 400)
+
+            params = common_params()
+            params.update(provider_data.reranker.config or {})
+            # Remove client-only fields that LiteLLM does not accept
+            params.pop("endpoint_suffix", None)
+            params["documents"] = [
+                "Doc A about AI safety.",
+                "Doc B about embedding models.",
+                "Doc C about LLM latency.",
+            ]
+            params["query"] = "Test ranking query"
+            params["top_n"] = params.get("top_n", 3)
+
+            try:
+                result = rerank(**params)
+                if inspect.iscoroutine(result):
+                    result = await result
+                return wrap_result(result, True, "OK", 200)
+            except Exception as e:
+                logger.error(f"Reranker test failed: {e}")
+                return wrap_result({}, False, str(e), 500)
+
+        return wrap_result({}, False, f"Unsupported test type: {test_type}", 400)
 
 
 # Global service instance

@@ -5,7 +5,7 @@ This module defines the base Prompt class used by all prompt modules
 in the LLM prompts subpackage.
 """
 
-
+import opik
 from loguru import logger
 
 from src.config import settings
@@ -14,20 +14,22 @@ from src.config import settings
 class Prompt:
     """
     Wrapper class for managing prompts with Opik versioning.
-    
+
     This class provides a unified interface for prompt management, supporting
     both Opik versioned prompts and local fallback prompts.
-    
+
     Attributes:
         name: Name identifier for the prompt
         prompt: The actual prompt text content
     """
+
     def __init__(self, name: str, prompt: str) -> None:
         self.name = name
 
         try:
-            if settings.OBSERVABILITY_ENABLED:
+            if settings.AGENT_TRACING_ENABLED:
                 import opik
+
                 self.__prompt = opik.Prompt(name=name, prompt=prompt)
             else:
                 self.__prompt = prompt
@@ -42,10 +44,14 @@ class Prompt:
 
     @property
     def prompt(self) -> str:
-        if settings.OBSERVABILITY_ENABLED and hasattr(opik, 'Prompt') and isinstance(self.__prompt, opik.Prompt):
+        if (
+            settings.AGENT_TRACING_ENABLED
+            and hasattr(opik, "Prompt")
+            and isinstance(self.__prompt, opik.Prompt)
+        ):
             return self.__prompt.prompt
         else:
-            return self.__prompt
+            return str(self.__prompt)
 
     def __str__(self) -> str:
         return self.prompt

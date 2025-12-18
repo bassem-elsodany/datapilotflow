@@ -19,11 +19,17 @@ class ToolDAO(MongoClientWrapper[Tool]):
     def __init__(self):
         super().__init__(model=Tool, collection_name="mcp_tools")
 
-        # Create indexes for efficient querying
-        self.collection.create_index([("id", ASCENDING)], unique=True)
+        # Create indexes for efficient querying (using MongoDB's native _id)
         self.collection.create_index([("user_id", ASCENDING)])
         self.collection.create_index([("user_id", ASCENDING), ("is_active", ASCENDING)])
         self.collection.create_index([("user_id", ASCENDING), ("tool_type", ASCENDING)])
+        
+        # Drop the old 'id' index if it exists (cleanup from old schema)
+        try:
+            self.collection.drop_index("id_1")
+            logger.info("Dropped old 'id_1' index (now using native _id)")
+        except Exception:
+            pass  # Index doesn't exist, that's fine
 
         logger.info("ToolDAO initialized with MongoDB collection 'mcp_tools'")
 
@@ -35,10 +41,10 @@ class ToolDAO(MongoClientWrapper[Tool]):
             tool: Tool object to create
 
         Returns:
-            str: The created tool's ID
+            str: The created tool's _id (MongoDB ObjectId as string)
         """
+        # Convert model to dict (MongoDB generates _id automatically)
         tool_dict = {
-            "id": tool.id,
             "name": tool.name,
             "display_name": tool.display_name,
             "description": tool.description,
@@ -67,29 +73,32 @@ class ToolDAO(MongoClientWrapper[Tool]):
             tool_dict["mcp_tool_name"] = tool.mcp_tool_name
 
         result = self.collection.insert_one(tool_dict)
-        logger.info(f"Created tool '{tool.name}' with ID: {tool.id}")
-        return tool.id
+        tool_id = str(result.inserted_id)
+        logger.info(f"Created tool '{tool.name}' with _id: {tool_id}")
+        return tool_id
 
-    def get_tool_by_id(self, tool_id: str, user_id: str) -> Optional[Tool]:
+    def get_tool_by_id(self, tool_id: str, user_id: str) -> Optional[tuple[str, Tool]]:
         """
-        Get a tool by its ID.
+        Get a tool by its _id.
 
         Args:
-            tool_id: Tool ID
+            tool_id: MongoDB _id as string
             user_id: User ID (for ownership validation)
 
         Returns:
-            Tool object or None if not found
+            Tuple of (_id, Tool) or None if not found
         """
-        tool_dict = self.collection.find_one({"id": tool_id, "user_id": user_id})
+        tool_dict = self.collection.find_one({"_id": ObjectId(tool_id), "user_id": user_id})
         if not tool_dict:
             return None
 
-        return self._dict_to_tool(tool_dict)
+        _id = str(tool_dict["_id"])
+        tool = self._dict_to_tool(tool_dict)
+        return (_id, tool)
 
     def get_user_tools(
         self, user_id: str, is_active: Optional[bool] = None
-    ) -> List[Tool]:
+    ) -> List[tuple[str, Tool]]:
         """
         Get all tools for a user.
 
@@ -98,7 +107,7 @@ class ToolDAO(MongoClientWrapper[Tool]):
             is_active: Optional filter by active status
 
         Returns:
-            List of Tool objects
+            List of tuples: (_id, Tool)
         """
         query = {"user_id": user_id}
         if is_active is not None:
@@ -106,7 +115,9 @@ class ToolDAO(MongoClientWrapper[Tool]):
 
         tools = []
         for tool_dict in self.collection.find(query):
-            tools.append(self._dict_to_tool(tool_dict))
+            _id = str(tool_dict["_id"])
+            tool = self._dict_to_tool(tool_dict)
+            tools.append((_id, tool))
 
         logger.info(f"Retrieved {len(tools)} tools for user {user_id}")
         return tools
@@ -116,7 +127,7 @@ class ToolDAO(MongoClientWrapper[Tool]):
         Update a tool.
 
         Args:
-            tool_id: Tool ID
+            tool_id: MongoDB _id as string
             user_id: User ID (for ownership validation)
             updates: Dictionary of fields to update
 
@@ -126,7 +137,7 @@ class ToolDAO(MongoClientWrapper[Tool]):
         updates["updated_at"] = datetime.utcnow()
 
         result = self.collection.update_one(
-            {"id": tool_id, "user_id": user_id}, {"$set": updates}
+            {"_id": ObjectId(tool_id), "user_id": user_id}, {"$set": updates}
         )
 
         if result.modified_count > 0:
@@ -141,13 +152,13 @@ class ToolDAO(MongoClientWrapper[Tool]):
         Delete a tool.
 
         Args:
-            tool_id: Tool ID
+            tool_id: MongoDB _id as string
             user_id: User ID (for ownership validation)
 
         Returns:
             bool: True if deleted successfully
         """
-        result = self.collection.delete_one({"id": tool_id, "user_id": user_id})
+        result = self.collection.delete_one({"_id": ObjectId(tool_id), "user_id": user_id})
 
         if result.deleted_count > 0:
             logger.info(f"Deleted tool {tool_id}")
@@ -157,7 +168,7 @@ class ToolDAO(MongoClientWrapper[Tool]):
             return False
 
     def _dict_to_tool(self, tool_dict: dict) -> Tool:
-        """Convert database dictionary to Tool object."""
+        """Convert database dictionary to Tool object (without _id)."""
         from src.domain.tool import PromptBasedToolConfig, Tool, ToolType
 
         prompt_config = None
@@ -172,7 +183,6 @@ class ToolDAO(MongoClientWrapper[Tool]):
             )
 
         return Tool(
-            id=tool_dict.get("id", ""),
             name=tool_dict.get("name", ""),
             display_name=tool_dict.get("display_name", ""),
             description=tool_dict.get("description", ""),

@@ -19,10 +19,17 @@ class MCPServerDAO(MongoClientWrapper[MCPServerConfig]):
     def __init__(self):
         super().__init__(model=MCPServerConfig, collection_name="mcp_servers")
 
-        # Create indexes for efficient querying (no need for separate 'id' index, using _id)
+        # Create indexes for efficient querying (using MongoDB's native _id)
         self.collection.create_index([("user_id", ASCENDING)])
         self.collection.create_index([("user_id", ASCENDING), ("is_active", ASCENDING)])
         self.collection.create_index([("server_url", ASCENDING)])
+        
+        # Drop the 'id' index if it exists (cleanup from old schema)
+        try:
+            self.collection.drop_index("id_1")
+            logger.info("Dropped old 'id_1' index (now using native _id)")
+        except Exception:
+            pass  # Index doesn't exist, that's fine
 
         logger.info("MCPServerDAO initialized with MongoDB collection 'mcp_servers'")
 
@@ -34,8 +41,9 @@ class MCPServerDAO(MongoClientWrapper[MCPServerConfig]):
             server: MCPServerConfig object to create
 
         Returns:
-            str: The created server's ID (MongoDB _id as string)
+            str: The created server's _id (MongoDB ObjectId as string)
         """
+        # Convert model to dict (MongoDB generates _id automatically)
         server_dict = {
             "user_id": server.user_id,
             "name": server.name,
@@ -52,31 +60,33 @@ class MCPServerDAO(MongoClientWrapper[MCPServerConfig]):
 
         result = self.collection.insert_one(server_dict)
         server_id = str(result.inserted_id)
-        logger.info(f"Created MCP server '{server.name}' with ID: {server_id}")
+        logger.info(f"Created MCP server '{server.name}' with _id: {server_id}")
         return server_id
 
     def get_server_by_id(
         self, server_id: str, user_id: str
-    ) -> Optional[MCPServerConfig]:
+    ) -> Optional[tuple[str, MCPServerConfig]]:
         """
-        Get an MCP server by its ID.
+        Get an MCP server by its _id.
 
         Args:
-            server_id: Server ID (MongoDB _id as string)
+            server_id: MongoDB _id as string
             user_id: User ID (for ownership validation)
 
         Returns:
-            MCPServerConfig object or None if not found
+            Tuple of (_id, MCPServerConfig) or None if not found
         """
         server_dict = self.collection.find_one({"_id": ObjectId(server_id), "user_id": user_id})
         if not server_dict:
             return None
 
-        return self._dict_to_server(server_dict)
+        _id = str(server_dict["_id"])
+        server = self._dict_to_server(server_dict)
+        return (_id, server)
 
     def get_user_servers(
         self, user_id: str, is_active: Optional[bool] = None
-    ) -> List[MCPServerConfig]:
+    ) -> List[tuple[str, MCPServerConfig]]:
         """
         Get all MCP servers for a user.
 
@@ -85,7 +95,7 @@ class MCPServerDAO(MongoClientWrapper[MCPServerConfig]):
             is_active: Optional filter by active status
 
         Returns:
-            List of MCPServerConfig objects
+            List of tuples: (_id, MCPServerConfig)
         """
         query = {"user_id": user_id}
         if is_active is not None:
@@ -93,7 +103,9 @@ class MCPServerDAO(MongoClientWrapper[MCPServerConfig]):
 
         servers = []
         for server_dict in self.collection.find(query):
-            servers.append(self._dict_to_server(server_dict))
+            _id = str(server_dict["_id"])
+            server = self._dict_to_server(server_dict)
+            servers.append((_id, server))
 
         logger.info(f"Retrieved {len(servers)} MCP servers for user {user_id}")
         return servers
@@ -144,9 +156,8 @@ class MCPServerDAO(MongoClientWrapper[MCPServerConfig]):
             return False
 
     def _dict_to_server(self, server_dict: dict) -> MCPServerConfig:
-        """Convert database dictionary to MCPServerConfig object."""
+        """Convert database dictionary to MCPServerConfig object (without _id)."""
         return MCPServerConfig(
-            id=str(server_dict.get("_id", "")),
             user_id=server_dict.get("user_id", ""),
             name=server_dict.get("name", ""),
             server_url=server_dict.get("server_url", ""),

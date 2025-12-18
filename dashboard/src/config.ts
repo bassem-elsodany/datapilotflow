@@ -170,6 +170,7 @@ export const apiEndpoints = {
     update: (providerId: string) => `/model-providers/${providerId}`,
     active: '/model-providers/active/list',
     byType: (modelType: string) => `/model-providers/by-type/${modelType}`,
+    test: '/model-providers/test',
   },
 
   // Notifications

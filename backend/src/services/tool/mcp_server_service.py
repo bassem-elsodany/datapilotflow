@@ -28,7 +28,7 @@ class MCPServerService:
 
     # Server Management Methods
 
-    def create_server(self, server: MCPServerConfig) -> MCPServerConfig:
+    def create_server(self, server: MCPServerConfig) -> tuple[str, MCPServerConfig]:
         """
         Create a new MCP server configuration.
 
@@ -36,17 +36,17 @@ class MCPServerService:
             server: MCPServerConfig object to create
 
         Returns:
-            Created MCPServerConfig object
+            Tuple of (_id, MCPServerConfig)
 
         Raises:
             Exception: If creation fails
         """
         try:
-            self.mcp_server_dao.create_server(server)
+            _id = self.mcp_server_dao.create_server(server)
             logger.info(
-                f"Created MCP server '{server.name}' (ID: {server.id}) for user {server.user_id}"
+                f"Created MCP server '{server.name}' (_id: {_id}) for user {server.user_id}"
             )
-            return server
+            return (_id, server)
         except Exception as e:
             logger.error(f"Error creating MCP server: {e}")
             logger.error(f"Traceback: {traceback.format_exc()}")
@@ -54,22 +54,22 @@ class MCPServerService:
 
     def get_server_by_id(
         self, server_id: str, user_id: str
-    ) -> Optional[MCPServerConfig]:
+    ) -> Optional[tuple[str, MCPServerConfig]]:
         """
-        Get MCP server by ID (with user ownership check).
+        Get MCP server by _id (with user ownership check).
 
         Args:
-            server_id: Server ID
+            server_id: MongoDB _id as string
             user_id: User ID for ownership verification
 
         Returns:
-            MCPServerConfig object if found and owned by user, None otherwise
+            Tuple of (_id, MCPServerConfig) if found and owned by user, None otherwise
         """
         return self.mcp_server_dao.get_server_by_id(server_id, user_id)
 
     def get_user_servers(
         self, user_id: str, is_active: Optional[bool] = None
-    ) -> List[MCPServerConfig]:
+    ) -> List[tuple[str, MCPServerConfig]]:
         """
         Get all MCP servers for a user.
 
@@ -78,7 +78,7 @@ class MCPServerService:
             is_active: Optional filter by active status
 
         Returns:
-            List of MCPServerConfig objects owned by user
+            List of tuples: (_id, MCPServerConfig)
         """
         servers = self.mcp_server_dao.get_user_servers(user_id, is_active=is_active)
         logger.info(f"Retrieved {len(servers)} MCP servers for user {user_id}")
@@ -148,23 +148,63 @@ class MCPServerService:
             Exception: If discovery fails
         """
         try:
-            from src.agents.supervisor_agent.tools.tool_factory import ToolFactory
+            from langchain_mcp_adapters.client import MultiServerMCPClient
 
             logger.info(
                 f"Discovering tools from MCP server '{server.name}' ({server.server_url})"
             )
 
-            # Use ToolFactory to discover tools (uses langchain-mcp-adapters)
-            discovered_tools_raw = await ToolFactory.discover_mcp_tools(server)
+            # Build auth headers
+            headers = {}
+            if server.auth_type and server.auth_credentials:
+                if server.auth_type == "bearer":
+                    token = server.auth_credentials.get(
+                        "token"
+                    ) or server.auth_credentials.get("bearer_token")
+                    if token:
+                        headers["Authorization"] = f"Bearer {token.strip()}"
+                elif server.auth_type == "api_key":
+                    api_key = server.auth_credentials.get("api_key")
+                    header_name = server.auth_credentials.get(
+                        "header_name", "X-API-Key"
+                    )
+                    if api_key:
+                        headers[header_name] = api_key.strip()
 
-            # Add display_name for UI
-            discovered_tools = []
-            for tool_data in discovered_tools_raw:
-                tool_data_with_display = {
-                    **tool_data,
-                    "display_name": tool_data["name"].replace("_", " ").title(),
+            # Connect to MCP server
+            # Use server name as temp ID for discovery
+            temp_server_id = f"discovery_{server.name}"
+            server_config: dict = {
+                temp_server_id: {
+                    "transport": "streamable_http",
+                    "url": server.server_url,
                 }
-                discovered_tools.append(tool_data_with_display)
+            }
+            if headers:
+                server_config[temp_server_id]["headers"] = headers
+
+            # Discover tools
+            client = MultiServerMCPClient(server_config)  # type: ignore
+            all_tools = await client.get_tools()
+
+            # Convert to tool metadata
+            discovered_tools = []
+            for tool in all_tools:
+                # Extract schema - handle both dict and Pydantic model
+                schema = {}
+                if hasattr(tool, "args_schema") and tool.args_schema:
+                    if isinstance(tool.args_schema, dict):
+                        schema = tool.args_schema
+                    elif hasattr(tool.args_schema, "schema"):
+                        schema = tool.args_schema.schema()
+
+                tool_data = {
+                    "name": tool.name,
+                    "description": tool.description or "",
+                    "display_name": tool.name.replace("_", " ").title(),
+                    "schema": schema,
+                }
+                discovered_tools.append(tool_data)
 
             logger.info(
                 f"Successfully discovered {len(discovered_tools)} tools from server '{server.name}'"

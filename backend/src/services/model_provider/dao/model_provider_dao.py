@@ -5,7 +5,7 @@ This module handles data access operations for unified model provider configurat
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from bson import ObjectId
 
@@ -39,13 +39,17 @@ class ModelProviderDAO(MongoClientWrapper[ModelProvider]):
             "is_active": provider_data.is_active,
             "timeout": provider_data.timeout,
             "embedding": (
-                provider_data.embedding.dict() if provider_data.embedding else None
+                provider_data.embedding.model_dump()
+                if provider_data.embedding
+                else None
             ),
             "generative": (
-                provider_data.generative.dict() if provider_data.generative else None
+                provider_data.generative.model_dump()
+                if provider_data.generative
+                else None
             ),
             "reranker": (
-                provider_data.reranker.dict() if provider_data.reranker else None
+                provider_data.reranker.model_dump() if provider_data.reranker else None
             ),
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow(),
@@ -108,11 +112,12 @@ class ModelProviderDAO(MongoClientWrapper[ModelProvider]):
     ) -> List[ModelProvider]:
         """List model provider configurations for a user."""
 
-        # Build query
-        query = {"created_by": user_id}
+        # Build query; values can be heterogeneous so type as Dict[str, Any]
+        query: Dict[str, Any] = {"created_by": user_id}
 
         if is_active is not None:
-            query["is_active"] = is_active
+            # mypy/pylance: dict value type is Any, so both bool and str are acceptable.
+            query["is_active"] = bool(is_active)
 
         if provider_type is not None:
             query["provider_type"] = provider_type
@@ -136,19 +141,22 @@ class ModelProviderDAO(MongoClientWrapper[ModelProvider]):
     ) -> bool:
         """Update an existing model provider configuration."""
 
-        # Build update document
-        update_doc = {"updated_at": datetime.utcnow(), "updated_by": user_id}
+        # Build update document; include only fields that are not None
+        update_doc: Dict[str, Any] = {
+            "updated_at": datetime.utcnow(),
+            "updated_by": user_id,
+        }
 
-        # Add non-None fields from update_data
         for field, value in update_data.model_dump(exclude_unset=True).items():
-            if value is not None:
-                if field in ["embedding", "generative", "reranker"]:
-                    # Convert ModelTypeConfig to dict
-                    update_doc[field] = (
-                        value.dict() if hasattr(value, "dict") else value
-                    )
-                else:
-                    update_doc[field] = value
+            if value is None:
+                continue
+            if field in ["embedding", "generative", "reranker"]:
+                # Convert ModelTypeConfig to plain dict
+                update_doc[field] = (
+                    value.model_dump() if hasattr(value, "model_dump") else value
+                )
+            else:
+                update_doc[field] = value
 
         # Execute update
         result = self.collection.update_one(
