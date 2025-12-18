@@ -22,7 +22,6 @@ Architecture:
 """
 
 from src.agents.assistant_agent.factory import create_assistant_agent_for_conversation
-from src.agents.assistant_agent.memory import create_memory_namespace, get_memory_store
 from src.agents.assistant_agent.response_handler import (
     get_assistant_agent_response,
     get_assistant_agent_streaming_response,
@@ -38,7 +37,4 @@ __all__ = [
     "get_assistant_agent_response",
     "get_assistant_agent_streaming_response",
     "set_checkpointer",
-    # Memory
-    "get_memory_store",
-    "create_memory_namespace",
 ]

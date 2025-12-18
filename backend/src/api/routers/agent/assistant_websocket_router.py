@@ -9,7 +9,7 @@ import asyncio
 import json
 import time
 import traceback
-from typing import cast
+from typing import Any, Dict, Optional, cast
 
 from fastapi import APIRouter, Query, Request, WebSocket, WebSocketDisconnect
 from langchain_core.runnables import RunnableConfig
@@ -23,6 +23,68 @@ from src.services.conversation.conversation_history_service import (
 )
 
 router = APIRouter(tags=["Assistant Agent WebSocket"])
+
+
+async def _retrieve_persistent_files(agent_id: str) -> dict:
+    """
+    Retrieve persistent files from agent-specific MongoDB collection.
+
+    Files saved with /memories/ prefix are stored in MongoDBStore
+    under persistent_storage_{agent_id} collection.
+
+    Args:
+        agent_id: Agent ID to query persistent files for
+
+    Returns:
+        Dict mapping file paths to file metadata
+    """
+    try:
+        if not agent_id:
+            logger.debug("No agent_id provided, skipping persistent file retrieval")
+            return {}
+
+        from pymongo import MongoClient
+
+        # Build MongoDB URI
+        if settings.MONGO_USER and settings.MONGO_PASS:
+            mongo_uri = f"mongodb://{settings.MONGO_USER}:{settings.MONGO_PASS}@{settings.MONGO_HOST}:{settings.MONGO_PORT}"
+        else:
+            mongo_uri = f"mongodb://{settings.MONGO_HOST}:{settings.MONGO_PORT}"
+
+        client = MongoClient(mongo_uri)
+        db = client[settings.MONGO_AGENT_STATE_CHECKPOINT_DB_NAME]
+
+        # Query the agent-specific persistent storage collection
+        collection_name = f"persistent_storage_{agent_id}"
+        if collection_name not in db.list_collection_names():
+            logger.debug(f"No persistent store collection found: {collection_name}")
+            return {}
+
+        collection = db[collection_name]
+
+        # Query all files (namespace='filesystem' for all file documents)
+        docs = list(collection.find({"namespace": ["filesystem"]}))
+        logger.info(f"Found {len(docs)} persistent file documents in {collection_name}")
+
+        files_dict = {}
+        for doc in docs:
+            file_path = doc.get("key")
+            value = doc.get("value", {})
+
+            if file_path and isinstance(value, dict) and "content" in value:
+                files_dict[file_path] = value
+                logger.debug(f"Loaded persistent file: {file_path}")
+
+        if files_dict:
+            logger.info(f"Retrieved {len(files_dict)} persistent files from MongoDBStore")
+        else:
+            logger.info("No persistent files found in MongoDBStore")
+
+        return files_dict
+
+    except Exception as e:
+        logger.error(f"Error retrieving persistent files from store: {e}")
+        return {}
 
 
 @router.websocket("/ws/agent/query/assistant")
@@ -140,18 +202,14 @@ async def agent_query_assistant_websocket(
                     if agent:
                         logger.info(f"✅ Loaded agent '{agent.name}' configuration")
                     else:
-                        logger.warning(
-                            f"⚠️ Agent {conversation.agent_id} not found"
-                        )
+                        logger.warning(f"⚠️ Agent {conversation.agent_id} not found")
 
                 if not agent:
                     await websocket.send_text(
                         json.dumps(
                             {
                                 "type": "error",
-                                "data": {
-                                    "message": "Agent configuration not found"
-                                },
+                                "data": {"message": "Agent configuration not found"},
                                 "timestamp": time.time(),
                             }
                         )
@@ -180,57 +238,94 @@ async def agent_query_assistant_websocket(
                     f"Creating Assistant Agent: provider={llm_provider_id}, model={llm_model_name}"
                 )
 
-                # Get global checkpointer (set during app startup)
-                from src.agents.assistant_agent.response_handler import (
-                    _global_checkpointer,
-                )
-
-                if not _global_checkpointer:
-                    await websocket.send_text(
-                        json.dumps(
-                            {
-                                "type": "error",
-                                "data": {"message": "Checkpointer not initialized"},
-                                "timestamp": time.time(),
-                            }
-                        )
+                if settings.MONGO_AGENT_STATE_CHECKPOINT_ENABLED:
+                    # Get global checkpointer (set during app startup)
+                    from src.agents.assistant_agent.response_handler import (
+                        _global_checkpointer,
                     )
-                    continue
 
-                # DEBUG: Check what checkpoint data exists before agent creation
-                logger.info(f"🔍 [CHECKPOINT DEBUG] Checking for existing checkpoint data for thread_id={conversation_id}")
-                try:
-                    checkpoint_mongo_client = _global_checkpointer.client if hasattr(_global_checkpointer, 'client') else None
-                    if checkpoint_mongo_client:
-                        checkpoint_db = checkpoint_mongo_client[settings.MONGO_AGENT_STATE_CHECKPOINT_DB_NAME]
-                        checkpoints_col = checkpoint_db[settings.MONGO_AGENT_STATE_CHECKPOINT_COLLECTION]
-                        writes_col = checkpoint_db[settings.MONGO_AGENT_STATE_WRITES_COLLECTION]
-                        memory_col = checkpoint_db["agent_memory_store"]
+                    if not _global_checkpointer:
+                        await websocket.send_text(
+                            json.dumps(
+                                {
+                                    "type": "error",
+                                    "data": {"message": "Checkpointer not initialized"},
+                                    "timestamp": time.time(),
+                                }
+                            )
+                        )
+                        continue
 
-                        # Use count_documents for checkpoint counts
-                        checkpoint_count = checkpoints_col.count_documents({"thread_id.thread_id": conversation_id})
-                        writes_count = writes_col.count_documents({"thread_id.thread_id": conversation_id})
+                    # DEBUG: Check what checkpoint data exists before agent creation
+                    logger.info(
+                        f"🔍 [CHECKPOINT DEBUG] Checking for existing checkpoint data for thread_id={conversation_id}"
+                    )
+                    try:
+                        checkpoint_mongo_client = (
+                            _global_checkpointer.client
+                            if hasattr(_global_checkpointer, "client")
+                            else None
+                        )
+                        if checkpoint_mongo_client:
+                            checkpoint_db = checkpoint_mongo_client[
+                                settings.MONGO_AGENT_STATE_CHECKPOINT_DB_NAME
+                            ]
+                            checkpoints_col = checkpoint_db[
+                                settings.MONGO_AGENT_STATE_CHECKPOINT_COLLECTION
+                            ]
+                            writes_col = checkpoint_db[
+                                settings.MONGO_AGENT_STATE_WRITES_COLLECTION
+                            ]
+                            # Agent-specific memory store collection
+                            memory_collection_name = (
+                                f"persistent_storage_{conversation.agent_id}"
+                                if conversation.agent_id
+                                else "persistent_storage_default"
+                            )
+                            memory_col = checkpoint_db[memory_collection_name]
 
-                        # Check memory store for this conversation
-                        memory_namespace = f"user:{user_id}:conversation:{conversation_id}"
-                        memory_count = memory_col.count_documents({"namespace": memory_namespace})
+                            # Use count_documents for checkpoint counts
+                            checkpoint_count = checkpoints_col.count_documents(
+                                {"thread_id.thread_id": conversation_id}
+                            )
+                            writes_count = writes_col.count_documents(
+                                {"thread_id.thread_id": conversation_id}
+                            )
 
-                        logger.info(f"📊 [CHECKPOINT DEBUG] Found {checkpoint_count} checkpoint(s) for thread {conversation_id}")
-                        logger.info(f"📊 [WRITES DEBUG] Found {writes_count} write(s) for thread {conversation_id}")
-                        logger.info(f"📊 [MEMORY STORE DEBUG] Found {memory_count} memory item(s) with namespace: {memory_namespace}")
-                except Exception as debug_error:
-                    logger.warning(f"⚠️ [CHECKPOINT DEBUG ERROR] Could not check checkpoint data: {debug_error}", exc_info=True)
+                            # Check memory store for this agent/conversation
+                            memory_count = memory_col.count_documents(
+                                {"namespace": {"$exists": True}}
+                            )
 
+                            logger.info(
+                                f"📊 [CHECKPOINT DEBUG] Found {checkpoint_count} checkpoint(s) for thread {conversation_id}"
+                            )
+                            logger.info(
+                                f"📊 [WRITES DEBUG] Found {writes_count} write(s) for thread {conversation_id}"
+                            )
+                            logger.info(
+                                f"📊 [MEMORY STORE DEBUG] Found {memory_count} memory item(s) in collection {memory_collection_name}"
+                            )
+                    except Exception as debug_error:
+                        logger.warning(
+                            f"⚠️ [CHECKPOINT DEBUG ERROR] Could not check checkpoint data: {debug_error}",
+                            exc_info=True,
+                        )
+                else:
+                    _global_checkpointer = None
                 # Create Assistant Agent using factory
-                # Note: Uses hybrid storage (StateBackend + StoreBackend with InMemoryStore)
-                logger.info(f"🔧 [CREATING AGENT] Creating Assistant Agent for conversation {conversation_id}")
+                # Note: Uses hybrid storage (StateBackend + StoreBackend with agent-specific MongoDB collection)
+                logger.info(
+                    f"🔧 [CREATING AGENT] Creating Assistant Agent for conversation {conversation_id}, agent {conversation.agent_id}"
+                )
                 agent = await create_assistant_agent_for_conversation(
                     conversation_id=conversation_id,
                     user_id=user_id,
                     llm_provider_id=llm_provider_id,
                     llm_model_name=llm_model_name,
+                    agent_id=conversation.agent_id,
                     checkpointer=_global_checkpointer,
-                    store=None,  # Will use InMemoryStore by default
+                    store=None,  # Will use agent-specific MongoDBStore
                 )
 
                 # Stream agent execution
@@ -240,7 +335,9 @@ async def agent_query_assistant_websocket(
                         "checkpoint_ns": "",
                     }
                 }
-                logger.info(f"🚀 [STREAMING START] Starting agent stream with config: thread_id={conversation_id}")
+                logger.info(
+                    f"🚀 [STREAMING START] Starting agent stream with config: thread_id={conversation_id}"
+                )
 
                 # Send start event
                 await websocket.send_text(
@@ -258,13 +355,23 @@ async def agent_query_assistant_websocket(
 
                 # DEBUG: Log what we're sending to the agent
                 logger.info(f"📤 [AGENT INPUT] Sending to agent:")
-                logger.info(f"   Query: {query[:100]}{'...' if len(query) > 100 else ''}")
-                logger.info(f"   Thread ID (from config): {config['configurable']['thread_id']}")
-                logger.info(f"   Input format: messages=[{{'role': 'human', 'content': query}}]")
-                logger.info(f"   Note: Agent will automatically load checkpoint data from checkpoint storage if it exists")
+                logger.info(
+                    f"   Query: {query[:100]}{'...' if len(query) > 100 else ''}"
+                )
+                logger.info(
+                    f"   Thread ID (from config): {config['configurable']['thread_id']}"
+                )
+                logger.info(
+                    f"   Input format: messages=[{{'role': 'human', 'content': query}}]"
+                )
+                logger.info(
+                    f"   Note: Agent will automatically load checkpoint data from checkpoint storage if it exists"
+                )
 
                 # Stream events from agent
-                logger.info(f"⏳ [AGENT STREAM START] Beginning agent execution stream...")
+                logger.info(
+                    f"⏳ [AGENT STREAM START] Beginning agent execution stream..."
+                )
                 stream_events_logged = False
                 async for event in agent.astream_events(
                     {"messages": [{"role": "human", "content": query}]},
@@ -278,15 +385,24 @@ async def agent_query_assistant_websocket(
                     # Log initial state on first event
                     if not stream_events_logged and event_type == "on_chain_start":
                         stream_events_logged = True
-                        logger.info(f"✅ [AGENT STATE AT START] First event received from agent")
+                        logger.info(
+                            f"✅ [AGENT STATE AT START] First event received from agent"
+                        )
                         logger.info(f"   Event name: {event_name}")
                         if "input" in event_data:
                             input_data = event_data["input"]
                             logger.info(f"   Input type: {type(input_data)}")
-                            if isinstance(input_data, dict) and "messages" in input_data:
-                                logger.info(f"   Messages in state: {len(input_data['messages'])}")
-                                if input_data['messages']:
-                                    logger.info(f"   First message: role={input_data['messages'][0].get('role')}, content_len={len(str(input_data['messages'][0].get('content', '')))}")
+                            if (
+                                isinstance(input_data, dict)
+                                and "messages" in input_data
+                            ):
+                                logger.info(
+                                    f"   Messages in state: {len(input_data['messages'])}"
+                                )
+                                if input_data["messages"]:
+                                    logger.info(
+                                        f"   First message: role={input_data['messages'][0].get('role')}, content_len={len(str(input_data['messages'][0].get('content', '')))}"
+                                    )
 
                     # Stream message chunks
                     if event_type == "on_chat_model_stream":
@@ -454,6 +570,38 @@ async def agent_query_assistant_websocket(
                 except Exception as e:
                     logger.error(f"Failed to save messages: {e}")
                     logger.error(f"Traceback: {traceback.format_exc()}")
+
+                # Extract and send persistent files from MongoDB store
+                logger.info("📁 Retrieving persistent files from MongoDB store...")
+                try:
+                    if conversation.agent_id:
+                        persistent_files = await _retrieve_persistent_files(
+                            conversation.agent_id
+                        )
+                        if persistent_files:
+                            logger.info(
+                                f"📁 Sending {len(persistent_files)} persistent file(s) to frontend"
+                            )
+                            await websocket.send_text(
+                                json.dumps(
+                                    {
+                                        "type": "files",
+                                        "data": persistent_files,
+                                        "timestamp": time.time(),
+                                    }
+                                )
+                            )
+                        else:
+                            logger.info(
+                                "No persistent files to send (or agent has no saved files)"
+                            )
+                    else:
+                        logger.info("No agent_id available, skipping file retrieval")
+                except Exception as file_error:
+                    logger.error(
+                        f"Error retrieving persistent files: {file_error}",
+                        exc_info=True,
+                    )
 
                 # Send completion
                 await websocket.send_text(

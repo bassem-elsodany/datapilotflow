@@ -12,10 +12,112 @@ from typing import Any, AsyncGenerator, Dict, Optional
 from loguru import logger
 
 from src.agents.assistant_agent.factory import create_assistant_agent_for_conversation
-from src.agents.assistant_agent.memory import create_memory_namespace, get_memory_store
 
 # Global checkpointer - set during app startup
 _global_checkpointer: Optional[Any] = None
+
+
+async def _extract_files_from_state(final_state: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Extract files from agent's final state.
+
+    Deep Agents automatically populates the "files" key in the output state
+    when the agent calls file manipulation tools (write_file, edit_file).
+
+    Args:
+        final_state: Final state dict from agent execution
+
+    Returns:
+        Dict mapping file paths to content
+    """
+    try:
+        # The "files" key is populated by FilesystemMiddleware in Deep Agents
+        # Structure: {"path": {"content": list[str], "created_at": str, "modified_at": str}}
+        files = final_state.get("files", {})
+
+        if files:
+            logger.info(f"Extracted {len(files)} files from agent state")
+            # Log file details for debugging
+            for path, data in files.items():
+                if isinstance(data, dict) and "content" in data:
+                    content = data["content"]
+                    if isinstance(content, list):
+                        logger.debug(f"File: {path} ({len(content)} lines)")
+                    else:
+                        logger.debug(f"File: {path} ({len(str(content))} chars)")
+                else:
+                    logger.debug(f"File: {path} ({type(data)})")
+        else:
+            logger.info("No files found in agent state")
+
+        return files
+
+    except Exception as e:
+        logger.error(f"Error extracting files from state: {e}")
+        return {}
+
+
+async def _extract_persistent_files_from_store(agent_id: Optional[str]) -> Dict[str, Any]:
+    """
+    Extract persistent files from MongoDBStore.
+
+    Files saved with /memories/ prefix are stored in the MongoDBStore
+    under agent-specific collections.
+
+    Args:
+        agent_id: Agent ID for accessing agent-specific store
+
+    Returns:
+        Dict mapping file paths to content
+    """
+    try:
+        if not agent_id:
+            logger.debug("No agent_id provided, skipping persistent file retrieval")
+            return {}
+
+        from pymongo import MongoClient
+        from src.config import settings
+
+        # Build MongoDB URI
+        if settings.MONGO_USER and settings.MONGO_PASS:
+            mongo_uri = f"mongodb://{settings.MONGO_USER}:{settings.MONGO_PASS}@{settings.MONGO_HOST}:{settings.MONGO_PORT}"
+        else:
+            mongo_uri = f"mongodb://{settings.MONGO_HOST}:{settings.MONGO_PORT}"
+
+        client = MongoClient(mongo_uri)
+        db = client[settings.MONGO_AGENT_STATE_CHECKPOINT_DB_NAME]
+
+        # Query the agent-specific persistent storage collection
+        collection_name = f"persistent_storage_{agent_id}"
+        if collection_name not in db.list_collection_names():
+            logger.debug(f"No persistent store collection found: {collection_name}")
+            return {}
+
+        collection = db[collection_name]
+
+        # Query all files (namespace='filesystem' for all file documents)
+        docs = list(collection.find({"namespace": ["filesystem"]}))
+        logger.info(f"Found {len(docs)} persistent file documents")
+
+        files_dict: Dict[str, Any] = {}
+        for doc in docs:
+            file_path = doc.get("key")
+            value = doc.get("value", {})
+
+            if file_path and isinstance(value, dict) and "content" in value:
+                files_dict[file_path] = value
+                logger.debug(f"Loaded persistent file: {file_path}")
+
+        if files_dict:
+            logger.info(f"Extracted {len(files_dict)} persistent files from MongoDBStore")
+        else:
+            logger.info("No persistent files found in MongoDBStore")
+
+        return files_dict
+
+    except Exception as e:
+        logger.error(f"Error extracting persistent files from store: {e}")
+        return {}
 
 
 def set_checkpointer(checkpointer: Any) -> None:
@@ -32,7 +134,6 @@ async def get_assistant_agent_response(
     llm_provider_id: str,
     llm_model_name: str,
     system_prompt: Optional[str] = None,
-    use_long_term_memory: bool = False,
     new_thread: bool = False,
 ) -> tuple[str, Dict[str, Any]]:
     """
@@ -40,7 +141,7 @@ async def get_assistant_agent_response(
 
     Uses hybrid storage pattern:
     - Transient files: StateBackend (ephemeral, per-thread)
-    - Persistent files (/memories/): StoreBackend (cross-thread)
+    - Persistent files (/memories/): StoreBackend with agent-specific MongoDB collection
 
     Args:
         user_message: User's input message
@@ -49,7 +150,6 @@ async def get_assistant_agent_response(
         llm_provider_id: LLM provider ID
         llm_model_name: LLM model name
         system_prompt: Optional custom system prompt
-        use_long_term_memory: Whether to enable long-term memory store
         new_thread: Whether to create a new conversation thread
 
     Returns:
@@ -66,33 +166,28 @@ async def get_assistant_agent_response(
     global _global_checkpointer
     checkpointer = _global_checkpointer
 
-    # Setup memory store if enabled
-    store = None
-    if use_long_term_memory:
-        store = get_memory_store()
-        logger.info("Using long-term memory store")
+    # Get agent_id from conversation
+    from src.services.conversation.conversation_history_service import (
+        conversation_history_service,
+    )
+    conversation = conversation_history_service.get_conversation(local_conversation_id)
+    agent_id = conversation.agent_id if conversation else None
 
     # Create assistant agent with hybrid storage
+    # Long-term memory is handled via MongoDBStore with agent-specific collections
     agent = await create_assistant_agent_for_conversation(
         conversation_id=local_conversation_id,
         user_id=user_id,
         llm_provider_id=llm_provider_id,
         llm_model_name=llm_model_name,
+        agent_id=agent_id,
         system_prompt=system_prompt,
         checkpointer=checkpointer,
-        store=store,
+        store=None,  # Will use agent-specific MongoDBStore
     )
 
-    # Setup config
+    # Setup config with thread_id for checkpoint persistence
     config: Dict[str, Any] = {"configurable": {"thread_id": local_conversation_id}}
-
-    # Add long-term memory if enabled
-    # TODO: Deep Agents handles store configuration internally
-    # For now, we'll just use the thread_id for persistence via checkpointer
-    if use_long_term_memory:
-        memory_namespace = create_memory_namespace(user_id, local_conversation_id)
-        config["configurable"]["memory_namespace"] = memory_namespace
-        logger.info(f"Long-term memory namespace: {memory_namespace}")
 
     # Execute agent
     logger.info("Invoking deep agent...")
@@ -102,6 +197,12 @@ async def get_assistant_agent_response(
 
     # Extract response
     response_text = result["messages"][-1].content if result.get("messages") else ""
+
+    # Log files in result for debugging
+    if result.get("files"):
+        logger.info(f"Agent created {len(result['files'])} files")
+    if result.get("todos"):
+        logger.info(f"Agent created {len(result['todos'])} todos")
 
     logger.info(f"Deep agent completed. Response length: {len(response_text)} chars")
 
@@ -115,14 +216,13 @@ async def get_assistant_agent_streaming_response(
     llm_provider_id: str,
     llm_model_name: str,
     system_prompt: Optional[str] = None,
-    use_long_term_memory: bool = False,
     new_thread: bool = False,
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
     Execute deep agent with streaming responses.
 
     Yields real-time updates including tool calls, planning, and responses.
-    Uses hybrid storage pattern (StateBackend + StoreBackend).
+    Uses hybrid storage pattern with agent-specific MongoDB collection for persistent memory.
 
     Args:
         user_message: User's input message
@@ -131,7 +231,6 @@ async def get_assistant_agent_streaming_response(
         llm_provider_id: LLM provider ID
         llm_model_name: LLM model name
         system_prompt: Optional custom system prompt
-        use_long_term_memory: Whether to enable long-term memory store
         new_thread: Whether to create a new conversation thread
 
     Yields:
@@ -150,37 +249,33 @@ async def get_assistant_agent_streaming_response(
     global _global_checkpointer
     checkpointer = _global_checkpointer
 
-    # Setup memory store if enabled
-    store = None
-    if use_long_term_memory:
-        store = get_memory_store()
-        logger.info("Using long-term memory store")
+    # Get agent_id from conversation
+    from src.services.conversation.conversation_history_service import (
+        conversation_history_service,
+    )
+    conversation = conversation_history_service.get_conversation(local_conversation_id)
+    agent_id = conversation.agent_id if conversation else None
 
     # Create assistant agent with hybrid storage
+    # Long-term memory is handled via MongoDBStore with agent-specific collections
     agent = await create_assistant_agent_for_conversation(
         conversation_id=local_conversation_id,
         user_id=user_id,
         llm_provider_id=llm_provider_id,
         llm_model_name=llm_model_name,
+        agent_id=agent_id,
         system_prompt=system_prompt,
         checkpointer=checkpointer,
-        store=store,
+        store=None,  # Will use agent-specific MongoDBStore
     )
 
-    # Setup config
+    # Setup config with thread_id for checkpoint persistence
     config: Dict[str, Any] = {"configurable": {"thread_id": local_conversation_id}}
-
-    # Add long-term memory if enabled
-    # TODO: Deep Agents handles store configuration internally
-    # For now, we'll just use the thread_id for persistence via checkpointer
-    if use_long_term_memory:
-        memory_namespace = create_memory_namespace(user_id, local_conversation_id)
-        config["configurable"]["memory_namespace"] = memory_namespace
-        logger.info(f"Long-term memory namespace: {memory_namespace}")
 
     # Stream agent execution
     try:
         logger.info("Starting deep agent stream...")
+        final_state: Dict[str, Any] = {}
 
         async for event in agent.astream_events(
             {"messages": [{"role": "user", "content": user_message}]},
@@ -191,6 +286,12 @@ async def get_assistant_agent_streaming_response(
                 event_type = event.get("event")
                 event_name = event.get("name", "")
                 event_data = event.get("data", {})
+
+                # Capture final state output
+                if event_type == "on_chain_end" and event_name == "LangGraph":
+                    output = event_data.get("output", {})
+                    final_state.update(output)
+                    logger.debug(f"Captured final state with keys: {list(output.keys())}")
 
                 # Tool call start
                 if event_type == "on_chat_model_stream" and "tool_calls" in event_data:
@@ -228,6 +329,36 @@ async def get_assistant_agent_streaming_response(
             except Exception as e:
                 logger.warning(f"Error processing stream event: {e}")
                 continue
+
+        # Extract files from both transient state and persistent store
+        logger.info("Extracting files from agent state and persistent store...")
+
+        # Get transient files from final state
+        transient_files = await _extract_files_from_state(final_state)
+        logger.info(f"Transient files from state: {len(transient_files)}")
+
+        # Get persistent files from MongoDBStore
+        persistent_files = await _extract_persistent_files_from_store(agent_id)
+        logger.info(f"Persistent files from store: {len(persistent_files)}")
+
+        # Merge all files (persistent takes precedence if paths overlap)
+        all_files = {**transient_files, **persistent_files}
+
+        if all_files:
+            logger.info(f"Sending {len(all_files)} total files to UI (transient: {len(transient_files)}, persistent: {len(persistent_files)})")
+            yield {
+                "type": "files",
+                "data": all_files,
+                "timestamp": datetime.now().isoformat(),
+                "metadata": {
+                    "conversation_id": local_conversation_id,
+                    "file_count": len(all_files),
+                    "transient_count": len(transient_files),
+                    "persistent_count": len(persistent_files),
+                },
+            }
+        else:
+            logger.info("No files created during this execution")
 
         # Send completion
         yield {

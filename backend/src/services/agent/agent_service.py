@@ -388,6 +388,8 @@ class AgentService:
             vector_database = VectorDatabaseConfig(
                 collection_name=doc["vector_database"]["collection_name"],
                 top_k=doc["vector_database"]["top_k"],
+                embedding_provider=deserialize_provider(doc["vector_database"].get("embedding_provider")),
+                vector_dimension=doc["vector_database"].get("vector_dimension", 1536),
             )
 
         # Deserialize reranker config

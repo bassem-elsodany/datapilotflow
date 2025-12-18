@@ -473,16 +473,18 @@ class ConversationHistoryService:
                 ]
 
                 # Debug: Check what checkpoints exist before deletion
-                existing_checkpoints = list(checkpoints_collection.find(
-                    {"thread_id.thread_id": conversation_id}
-                ))
-                logger.info(f"📊 [CHECKPOINTS BEFORE DELETE] Found {len(existing_checkpoints)} checkpoint(s)")
+                # Note: LangGraph MongoDBSaver stores thread_id as a simple field (not nested)
+                # and checkpoint_ns defaults to "" (empty string)
+                checkpoint_query = {
+                    "thread_id": conversation_id,
+                    "checkpoint_ns": ""
+                }
+                existing_checkpoints = list(checkpoints_collection.find(checkpoint_query))
+                logger.info(f"📊 [CHECKPOINTS BEFORE DELETE] Found {len(existing_checkpoints)} checkpoint(s) for thread_id={conversation_id}, checkpoint_ns=''")
                 if existing_checkpoints:
                     logger.debug(f"📋 [CHECKPOINT DETAILS] {existing_checkpoints[0]}")
 
-                checkpoint_result = checkpoints_collection.delete_many(
-                    {"thread_id.thread_id": conversation_id}
-                )
+                checkpoint_result = checkpoints_collection.delete_many(checkpoint_query)
                 logger.info(
                     f"✅ [CHECKPOINTS DELETED] Deleted {checkpoint_result.deleted_count} checkpoint entries for thread {conversation_id}"
                 )
@@ -494,43 +496,52 @@ class ConversationHistoryService:
                 ]
 
                 # Debug: Check what writes exist before deletion
-                existing_writes = list(writes_collection.find(
-                    {"thread_id.thread_id": conversation_id}
-                ))
-                logger.info(f"📊 [WRITES BEFORE DELETE] Found {len(existing_writes)} write entry(ies)")
+                # Note: LangGraph MongoDBSaver stores thread_id as a simple field (not nested)
+                # and checkpoint_ns defaults to "" (empty string)
+                writes_query = {
+                    "thread_id": conversation_id,
+                    "checkpoint_ns": ""
+                }
+                existing_writes = list(writes_collection.find(writes_query))
+                logger.info(f"📊 [WRITES BEFORE DELETE] Found {len(existing_writes)} write entry(ies) for thread_id={conversation_id}, checkpoint_ns=''")
                 if existing_writes:
                     logger.debug(f"📋 [WRITES DETAILS] {existing_writes[0]}")
 
-                writes_result = writes_collection.delete_many(
-                    {"thread_id.thread_id": conversation_id}
-                )
+                writes_result = writes_collection.delete_many(writes_query)
                 logger.info(
                     f"✅ [WRITES DELETED] Deleted {writes_result.deleted_count} writes entries for thread {conversation_id}"
                 )
 
-                # Delete from agent memory store
-                # MongoDBStore uses namespace-based storage for long-term agent memory
+                # Delete from agent-specific memory store
+                # MongoDBStore uses agent-specific collections with namespace-based storage
+                # Collection format: "persistent_storage_{agent_id}"
                 # Namespace format: "user:{user_id}:conversation:{conversation_id}"
-                logger.info(f"🔍 [CHECKING MEMORY STORE] conversation_id={conversation_id}, user_id={user_id}")
-                memory_store_collection = checkpoint_db["agent_memory_store"]
+                logger.info(f"🔍 [CHECKING MEMORY STORE] conversation_id={conversation_id}, agent_id={conversation.agent_id}")
 
-                # Memory store items are stored with namespace matching this pattern
-                memory_namespace = f"user:{user_id}:conversation:{conversation_id}"
+                # Get agent_id from conversation to determine which memory collection to delete from
+                if conversation.agent_id:
+                    memory_collection_name = f"persistent_storage_{conversation.agent_id}"
+                    memory_store_collection = checkpoint_db[memory_collection_name]
 
-                # Debug: Check what memories exist before deletion
-                existing_memories = list(memory_store_collection.find(
-                    {"namespace": memory_namespace}
-                ))
-                logger.info(f"📊 [MEMORY STORE BEFORE DELETE] Found {len(existing_memories)} memory item(s) with namespace: {memory_namespace}")
-                if existing_memories:
-                    logger.debug(f"📋 [MEMORY STORE DETAILS] First item: {existing_memories[0]}")
+                    # Memory store items are stored with namespace matching this pattern
+                    memory_namespace = f"user:{user_id}:conversation:{conversation_id}"
 
-                memory_result = memory_store_collection.delete_many(
-                    {"namespace": memory_namespace}
-                )
-                logger.info(
-                    f"✅ [MEMORY STORE DELETED] Deleted {memory_result.deleted_count} memory items for conversation {conversation_id}"
-                )
+                    # Debug: Check what memories exist before deletion
+                    existing_memories = list(memory_store_collection.find(
+                        {"namespace": memory_namespace}
+                    ))
+                    logger.info(f"📊 [MEMORY STORE BEFORE DELETE] Found {len(existing_memories)} memory item(s) in collection {memory_collection_name} with namespace: {memory_namespace}")
+                    if existing_memories:
+                        logger.debug(f"📋 [MEMORY STORE DETAILS] First item: {existing_memories[0]}")
+
+                    memory_result = memory_store_collection.delete_many(
+                        {"namespace": memory_namespace}
+                    )
+                    logger.info(
+                        f"✅ [MEMORY STORE DELETED] Deleted {memory_result.deleted_count} memory items from {memory_collection_name} for conversation {conversation_id}"
+                    )
+                else:
+                    logger.warning(f"⚠️ [NO AGENT_ID] Conversation {conversation_id} has no agent_id, skipping memory store deletion")
 
             except Exception as checkpoint_error:
                 # Log but don't fail - checkpoint/memory deletion is best-effort
