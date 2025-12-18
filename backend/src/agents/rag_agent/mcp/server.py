@@ -38,6 +38,7 @@ async def knowledge_expert(
     embedding_provider_id: str = "",
     embedding_model_name: str = "",
     vector_dimension: int = 1536,
+    enable_reranking: bool = False,
     llm_provider_id: str = "",
     llm_model_name: str = "",
     conversation_id: str = "",
@@ -81,8 +82,9 @@ async def knowledge_expert(
         embedding_provider_id: Embedding provider ID (from vector database collection config)
         embedding_model_name: Embedding model name (from vector database collection config)
         vector_dimension: Vector dimension of embedding model (from collection config)
-        llm_provider_id: LLM provider ID for reranking (agent's primary LLM)
-        llm_model_name: LLM model name for reranking (agent's primary LLM)
+        enable_reranking: Enable document reranking by relevance (default: False)
+        llm_provider_id: LLM provider ID for reranking (required if enable_reranking is True)
+        llm_model_name: LLM model name for reranking (required if enable_reranking is True)
         conversation_id: Conversation ID for tracking
         conversation_description: Optional conversation domain context
 
@@ -102,6 +104,7 @@ async def knowledge_expert(
             embedding_provider_id=embedding_provider_id,
             embedding_model_name=embedding_model_name,
             vector_dimension=vector_dimension,
+            enable_reranking=enable_reranking,
             llm_provider_id=llm_provider_id,
             llm_model_name=llm_model_name,
             conversation_id=conversation_id,
@@ -111,19 +114,17 @@ async def knowledge_expert(
         # ASSISTANT MODE: Configuration
         # - Strategy: custom_variants (supervisor provides pre-generated query variants)
         # - LLM Generation: DISABLED (returns raw documents for agent to process)
-        # - Reranking: DETERMINED BY SUPERVISOR (enabled if llm_provider_id is passed)
+        # - Reranking: CONTROLLED BY SUPERVISOR via enable_reranking flag
         selected_strategy = "custom_variants"  # Supervisor provides variants
         enable_llm_generation = False  # Assistant handles answer generation
 
-        # Determine reranking based on whether LLM provider is passed
-        # If supervisor passes llm_provider_id + llm_model_name, enable reranking
-        # If supervisor does NOT pass them, skip reranking (just retrieve documents)
-        enable_reranking = bool(query_input.llm_provider_id and query_input.llm_model_name)
-        relevance_threshold = 0.5 if enable_reranking else None
+        # Use the explicit enable_reranking flag from supervisor
+        reranking_enabled = query_input.enable_reranking
+        relevance_threshold = 0.5 if reranking_enabled else None
 
         logger.info(
-            f"🔧 MCP Configuration: reranking={'ENABLED' if enable_reranking else 'DISABLED'} "
-            f"(supervisor {'provided' if enable_reranking else 'did not provide'} LLM provider)"
+            f"🔧 MCP Configuration: reranking={'ENABLED' if reranking_enabled else 'DISABLED'} "
+            f"(supervisor {'enabled' if reranking_enabled else 'disabled'} reranking via flag)"
         )
 
         # Build workflow configuration
@@ -135,18 +136,18 @@ async def knowledge_expert(
             "embedding_model_name": query_input.embedding_model_name,
             "vector_dimension": query_input.vector_dimension,
             # LLM configuration for reranking (OPTIONAL - only if supervisor enables it)
-            "llm_provider_id": query_input.llm_provider_id if enable_reranking else None,
-            "llm_model_name": query_input.llm_model_name if enable_reranking else None,
+            "llm_provider_id": query_input.llm_provider_id if reranking_enabled else None,
+            "llm_model_name": query_input.llm_model_name if reranking_enabled else None,
             # Conversation tracking
             "conversation_id": query_input.conversation_id,
             "conversation_description": query_input.conversation_description,
             # Retrieval parameters
             "top_k": query_input.top_k,
-            "enable_reranking": enable_reranking,
+            "enable_reranking": reranking_enabled,
             "reranking_config": {
                 "relevance_threshold": relevance_threshold,
                 "use_score_based": True,
-            } if enable_reranking else None,
+            } if reranking_enabled else None,
             "enable_llm_generation": enable_llm_generation,
             "selected_strategy": selected_strategy,
             "retrieval_config": {

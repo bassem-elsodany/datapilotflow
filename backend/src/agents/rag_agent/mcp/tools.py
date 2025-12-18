@@ -53,14 +53,19 @@ class RAGQueryInput(BaseModel):
         ge=1,
         le=4096,
     )
+    # Reranking configuration
+    enable_reranking: bool = Field(
+        default=False,
+        description="Enable document reranking by relevance using LLM provider"
+    )
     # LLM configuration - only used for reranking (assistant provides enhanced queries)
     llm_provider_id: str = Field(
         default="",
-        description="LLM provider ID for reranking (optional, only used if reranking enabled)"
+        description="LLM provider ID for reranking (required if enable_reranking is True)"
     )
     llm_model_name: str = Field(
         default="",
-        description="LLM model name for reranking (optional, only used if reranking enabled)"
+        description="LLM model name for reranking (required if enable_reranking is True)"
     )
     conversation_id: str = Field(description="Conversation ID for tracking")
     conversation_description: Optional[str] = Field(
@@ -168,13 +173,18 @@ Use this tool whenever you need to:
                         "maximum": 4096,
                         "description": "Vector dimension of embedding model (from collection config)",
                     },
+                    "enable_reranking": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "Enable document reranking by relevance using LLM provider",
+                    },
                     "llm_provider_id": {
                         "type": "string",
-                        "description": "LLM provider ID for reranking (optional, only if reranking enabled)",
+                        "description": "LLM provider ID for reranking (required if enable_reranking is True)",
                     },
                     "llm_model_name": {
                         "type": "string",
-                        "description": "LLM model name for reranking (optional, only if reranking enabled)",
+                        "description": "LLM model name for reranking (required if enable_reranking is True)",
                     },
                     "conversation_id": {
                         "type": "string",
