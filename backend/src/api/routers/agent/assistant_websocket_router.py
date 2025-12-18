@@ -197,8 +197,33 @@ async def agent_query_assistant_websocket(
                     )
                     continue
 
+                # DEBUG: Check what checkpoint data exists before agent creation
+                logger.info(f"🔍 [CHECKPOINT DEBUG] Checking for existing checkpoint data for thread_id={conversation_id}")
+                try:
+                    checkpoint_mongo_client = _global_checkpointer.client if hasattr(_global_checkpointer, 'client') else None
+                    if checkpoint_mongo_client:
+                        checkpoint_db = checkpoint_mongo_client[settings.MONGO_AGENT_STATE_CHECKPOINT_DB_NAME]
+                        checkpoints_col = checkpoint_db[settings.MONGO_AGENT_STATE_CHECKPOINT_COLLECTION]
+                        writes_col = checkpoint_db[settings.MONGO_AGENT_STATE_WRITES_COLLECTION]
+                        memory_col = checkpoint_db["agent_memory_store"]
+
+                        # Use count_documents for checkpoint counts
+                        checkpoint_count = checkpoints_col.count_documents({"thread_id.thread_id": conversation_id})
+                        writes_count = writes_col.count_documents({"thread_id.thread_id": conversation_id})
+
+                        # Check memory store for this conversation
+                        memory_namespace = f"user:{user_id}:conversation:{conversation_id}"
+                        memory_count = memory_col.count_documents({"namespace": memory_namespace})
+
+                        logger.info(f"📊 [CHECKPOINT DEBUG] Found {checkpoint_count} checkpoint(s) for thread {conversation_id}")
+                        logger.info(f"📊 [WRITES DEBUG] Found {writes_count} write(s) for thread {conversation_id}")
+                        logger.info(f"📊 [MEMORY STORE DEBUG] Found {memory_count} memory item(s) with namespace: {memory_namespace}")
+                except Exception as debug_error:
+                    logger.warning(f"⚠️ [CHECKPOINT DEBUG ERROR] Could not check checkpoint data: {debug_error}", exc_info=True)
+
                 # Create Assistant Agent using factory
                 # Note: Uses hybrid storage (StateBackend + StoreBackend with InMemoryStore)
+                logger.info(f"🔧 [CREATING AGENT] Creating Assistant Agent for conversation {conversation_id}")
                 agent = await create_assistant_agent_for_conversation(
                     conversation_id=conversation_id,
                     user_id=user_id,
@@ -215,6 +240,7 @@ async def agent_query_assistant_websocket(
                         "checkpoint_ns": "",
                     }
                 }
+                logger.info(f"🚀 [STREAMING START] Starting agent stream with config: thread_id={conversation_id}")
 
                 # Send start event
                 await websocket.send_text(
@@ -230,7 +256,16 @@ async def agent_query_assistant_websocket(
                 # Track complete assistant response for persistence
                 full_assistant_response = ""
 
+                # DEBUG: Log what we're sending to the agent
+                logger.info(f"📤 [AGENT INPUT] Sending to agent:")
+                logger.info(f"   Query: {query[:100]}{'...' if len(query) > 100 else ''}")
+                logger.info(f"   Thread ID (from config): {config['configurable']['thread_id']}")
+                logger.info(f"   Input format: messages=[{{'role': 'human', 'content': query}}]")
+                logger.info(f"   Note: Agent will automatically load checkpoint data from checkpoint storage if it exists")
+
                 # Stream events from agent
+                logger.info(f"⏳ [AGENT STREAM START] Beginning agent execution stream...")
+                stream_events_logged = False
                 async for event in agent.astream_events(
                     {"messages": [{"role": "human", "content": query}]},
                     config=config,
@@ -239,6 +274,19 @@ async def agent_query_assistant_websocket(
                     event_type = event.get("event")
                     event_name = event.get("name")
                     event_data = event.get("data", {})
+
+                    # Log initial state on first event
+                    if not stream_events_logged and event_type == "on_chain_start":
+                        stream_events_logged = True
+                        logger.info(f"✅ [AGENT STATE AT START] First event received from agent")
+                        logger.info(f"   Event name: {event_name}")
+                        if "input" in event_data:
+                            input_data = event_data["input"]
+                            logger.info(f"   Input type: {type(input_data)}")
+                            if isinstance(input_data, dict) and "messages" in input_data:
+                                logger.info(f"   Messages in state: {len(input_data['messages'])}")
+                                if input_data['messages']:
+                                    logger.info(f"   First message: role={input_data['messages'][0].get('role')}, content_len={len(str(input_data['messages'][0].get('content', '')))}")
 
                     # Stream message chunks
                     if event_type == "on_chat_model_stream":
