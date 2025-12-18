@@ -262,11 +262,23 @@ export default function ToolsManagementPage() {
       closeDeleteModal();
       refetchTools();
     } catch (error: any) {
+      console.error('Failed to delete tool(s):', error);
+      
+      // Handle 409 Conflict - tool is bound to conversations (referential integrity)
+      if (error.response?.status === 409) {
+        notifications.show({
+          title: 'Cannot Delete Tool',
+          message: error.response?.data?.detail || 'This tool is bound to one or more conversation agents. Please unbind it first.',
+          color: 'orange',
+          autoClose: 10000, // Show longer for users to read the conversation names
+        });
+      } else {
       notifications.show({
         title: 'Error',
         message: error.response?.data?.detail || 'Failed to delete tool(s)',
         color: 'red',
       });
+      }
     }
   };
 
@@ -405,10 +417,12 @@ export default function ToolsManagementPage() {
         color: 'green',
       });
     } catch (error: any) {
+      const errorDetail = error.response?.data?.detail || 'Failed to connect to MCP server';
       notifications.show({
         title: 'Connection Failed',
-        message: error.response?.data?.detail || 'Failed to connect to MCP server',
+        message: errorDetail,
         color: 'red',
+        autoClose: 10000, // Keep visible for 10 seconds so user can read the error
       });
     } finally {
       setIsTestingConnection(false);

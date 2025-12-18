@@ -35,7 +35,7 @@ import {
   Switch,
   Table,
   Text,
-  TextInput,
+  Textarea,
   ThemeIcon,
   Tooltip
 } from '@mantine/core';
@@ -47,6 +47,7 @@ import {
   IconCheck,
   IconChevronDown,
   IconDatabase,
+  IconEdit,
   IconHelp,
   IconInfoCircle,
   IconLoader,
@@ -61,6 +62,7 @@ import {
 } from '@tabler/icons-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { AssistantModeView } from './assistant-mode-view';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -230,7 +232,7 @@ export default function ConversationWindow() {
       await deleteConversationMutation.mutateAsync({ model: {}, route: { conversationId: sessionId } });
       notifications.show({ title: 'Deleted', message: 'Conversation deleted', color: 'green' });
       setDeleteModalOpen(false);
-      navigate(paths.dashboard.apps.knowledgeSearch);
+      navigate(paths.dashboard.apps.agents);
     } catch (err: any) {
       notifications.show({ title: 'Error', message: 'Failed to delete conversation', color: 'red' });
     }
@@ -256,8 +258,9 @@ export default function ConversationWindow() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [sessionName, setSessionName] = useState('Conversation');
+  const [agentId, setAgentId] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(true); // Start as connected since we connect on-demand
   const [connectionRetries, setConnectionRetries] = useState(0);
   const [messageMode, setMessageMode] = useState<'agent' | 'rag'>('rag'); // Mode selector for current message
@@ -429,7 +432,7 @@ export default function ConversationWindow() {
 
       // Force fresh data - no caching
       const token = localStorage.getItem('jwt_token');
-      const fetchPromise = fetch(apiUtils.buildApiUrl(`/conversations/${sessionId}?t=${Date.now()}`), {
+      const fetchPromise = fetch(apiUtils.buildApiUrl(`/conversations/${sessionId}?expand=messages,agent&t=${Date.now()}`), {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -447,60 +450,74 @@ export default function ConversationWindow() {
 
         setSessionName(data.session?.name || 'Conversation');
 
-        // Load conversation settings from nested structure
-        if (data.session) {
-          // Extract from nested answer_generation config
-          if (data.session.answer_generation?.provider) {
-            setSelectedProviderId(data.session.answer_generation.provider.id || null);
-            setSelectedModel(data.session.answer_generation.provider.model_name || null);
+        // Capture agent ID for navigation
+        if (data.agent?.id) {
+          setAgentId(data.agent.id);
+        } else if (data.session?.agent_id) {
+          setAgentId(data.session.agent_id);
+        }
+
+        // NEW ARCHITECTURE: Load configuration from agent (config is now stored in agent, not conversation)
+        // Use agent config if available, otherwise fallback to session config for backward compatibility
+        const config = data.agent || data.session;
+
+        if (config) {
+          // Check if this is Assistant mode
+          const isAssistantMode = config.assistant_config?.enabled ?? (config.agent_type === 'assistant');
+
+          // For Assistant mode, use enhancement.provider; for RAG mode, use answer_generation.provider
+          if (isAssistantMode && config.enhancement?.provider) {
+            setSelectedProviderId(config.enhancement.provider.id || null);
+            setSelectedModel(config.enhancement.provider.model_name || null);
+          } else if (config.answer_generation?.provider) {
+            setSelectedProviderId(config.answer_generation.provider.id || null);
+            setSelectedModel(config.answer_generation.provider.model_name || null);
           } else {
             setSelectedProviderId(null);
             setSelectedModel(null);
           }
 
           // Extract from nested enhancement config
-          setSelectedStrategy(data.session.enhancement?.strategy || 'native');
-          if (data.session.enhancement?.provider) {
+          setSelectedStrategy(config.enhancement?.strategy || 'native');
+          if (config.enhancement?.provider) {
             setSavedEnhancementProvider({
-              id: data.session.enhancement.provider.id,
-              model_name: data.session.enhancement.provider.model_name
+              id: config.enhancement.provider.id,
+              model_name: config.enhancement.provider.model_name
             });
           }
 
           // Extract from nested vector_database config
-          setCollectionName(data.session.vector_database?.collection_name || 'LongTermMemory');
-          setTopK(data.session.vector_database?.top_k || 5);
+          setCollectionName(config.vector_database?.collection_name || 'LongTermMemory');
+          setTopK(config.vector_database?.top_k || 5);
 
           // Extract from nested reranker config
-          setEnableReranking(data.session.reranker?.enabled || false);
-          setSelectedRerankerId(data.session.reranker?.provider?.id || null);
-          setSelectedRerankerModel(data.session.reranker?.provider?.model_name || null);
+          setEnableReranking(config.reranker?.enabled || false);
+          setSelectedRerankerId(config.reranker?.provider?.id || null);
+          setSelectedRerankerModel(config.reranker?.provider?.model_name || null);
 
           // Determine LLM generation enabled from the enabled flag
-          setEnableLLMGeneration(data.session.answer_generation?.enabled || false);
+          setEnableLLMGeneration(config.answer_generation?.enabled || false);
 
           // Load supervisor setting from assistant_config
           let newEnableKnowledgeAssistant = false;
-          if (data.session.assistant_config) {
+          if (config.assistant_config) {
             // Use nested assistant_config structure
-            newEnableKnowledgeAssistant = data.session.assistant_config.enabled ?? false;
+            newEnableKnowledgeAssistant = config.assistant_config.enabled ?? false;
             // Load system_prompt_tasks
-            if (data.session.assistant_config.system_prompt_tasks) {
-              setSystemPromptTasks(data.session.assistant_config.system_prompt_tasks);
+            if (config.assistant_config.system_prompt_tasks) {
+              setSystemPromptTasks(config.assistant_config.system_prompt_tasks);
             }
           }
           setEnableKnowledgeAssistant(newEnableKnowledgeAssistant);
         }
 
         // Optimize timestamp conversion - only process if messages exist
-        if (data.messages && Array.isArray(data.messages)) {
+        if (data.messages && Array.isArray(data.messages) && data.messages.length > 0) {
           const messagesWithDates = data.messages.map((msg: any) => ({
             ...msg,
             timestamp: typeof msg.timestamp === 'string' ? new Date(msg.timestamp) : msg.timestamp
           }));
           setMessages(messagesWithDates);
-        } else {
-          setMessages([]);
         }
       } else {
         // Silently handle failed conversation load
@@ -521,7 +538,7 @@ export default function ConversationWindow() {
     if (enableReranking && (!selectedRerankerId || !selectedRerankerModel)) {
       notifications.show({
         title: 'Reranking Configuration Required',
-        message: 'Reranking is enabled but the provider is not configured. Please click "Edit Conversation" button to configure a reranker provider, or disable reranking.',
+        message: 'Reranking is enabled but the provider is not configured. Please click "Edit Agent" button to configure a reranker provider, or disable reranking.',
         color: 'yellow',
         icon: <IconAlertCircle size={16} />,
         autoClose: 6000,
@@ -1378,7 +1395,7 @@ export default function ConversationWindow() {
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
@@ -1422,7 +1439,15 @@ export default function ConversationWindow() {
   };
 
   const handleSaveSettings = async () => {
-    if (!sessionId) return;
+    // NEW ARCHITECTURE: Configuration is stored in Agent, not Conversation
+    if (!agentId) {
+      notifications.show({
+        title: 'Error',
+        message: 'Agent not found. Cannot update settings.',
+        color: 'red',
+      });
+      return;
+    }
 
     // Validate BEFORE setting loading state
     if (enableLLMGeneration && !selectedProviderId) {
@@ -1463,7 +1488,7 @@ export default function ConversationWindow() {
         });
       }
 
-      // Build nested configuration structure
+      // Build nested configuration structure for Agent update
       const payload: any = {
         // Enhancement configuration
         enhancement: {
@@ -1495,14 +1520,10 @@ export default function ConversationWindow() {
             model_name: selectedModel,
           } : null,
         },
-        enable_knowledge_assistant: enableKnowledgeAssistant,
-        // NOTE: assistant_config intentionally NOT included in manual save
-        // We only update it explicitly when user edits system prompts in the wizard
-        // Including it with null would overwrite existing system_prompt_tasks
       };
 
-
-      const response = await fetch(apiUtils.buildApiUrl(`/conversations/${sessionId}`), {
+      // UPDATE AGENT instead of conversation (new architecture)
+      const response = await fetch(apiUtils.buildApiUrl(`/agents/${agentId}`), {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1512,14 +1533,12 @@ export default function ConversationWindow() {
       });
 
       if (response.ok) {
-        const responseData = await response.json();
-
         // Reload conversation data FIRST to reflect new settings
         await loadConversationHistory();
 
         notifications.show({
           title: 'Success',
-          message: 'Conversation settings updated successfully',
+          message: 'Agent settings updated successfully',
           color: 'green',
           icon: <IconCheck size={16} />,
         });
@@ -1529,16 +1548,16 @@ export default function ConversationWindow() {
         const errorData = await response.json().catch(() => ({}));
         notifications.show({
           title: 'Error',
-          message: errorData.detail || 'Failed to update settings',
+          message: errorData.detail || 'Failed to update agent settings',
           color: 'red',
           icon: <IconAlertCircle size={16} />,
         });
       }
     } catch (error) {
-      console.error('Error updating conversation settings:', error);
+      console.error('Error updating agent settings:', error);
       notifications.show({
         title: 'Error',
-        message: 'Failed to update conversation settings',
+        message: 'Failed to update agent settings',
         color: 'red',
         icon: <IconAlertCircle size={16} />,
       });
@@ -1555,7 +1574,11 @@ export default function ConversationWindow() {
     enableReranking?: boolean,
     enableLLMGeneration?: boolean,
   }) => {
-    if (!sessionId) return;
+    // NEW ARCHITECTURE: Configuration is stored in Agent, not Conversation
+    if (!agentId) {
+      console.error('❌ Agent ID not available for quick update');
+      return;
+    }
 
     try {
       const token = localStorage.getItem('jwt_token');
@@ -1609,7 +1632,7 @@ export default function ConversationWindow() {
       // Determine LLM generation enabled state - use update if provided, otherwise current state
       const finalLLMGenerationEnabled = updates.enableLLMGeneration !== undefined ? updates.enableLLMGeneration : enableLLMGeneration;
 
-      // Build nested configuration structure with current values + updates
+      // Build nested configuration structure with current values + updates for Agent
       const payload: any = {
         // Enhancement configuration - uses the same provider as answer_generation
         enhancement: {
@@ -1644,11 +1667,11 @@ export default function ConversationWindow() {
         },
       };
 
+      console.log('🔄 [QUICK UPDATE] Updating Agent:', agentId);
       console.log('🔄 [QUICK UPDATE] Payload:', JSON.stringify(payload, null, 2));
-      console.log('🔄 [QUICK UPDATE] System Prompt Tasks:', systemPromptTasks);
-      console.log('🔄 [QUICK UPDATE] Provider (Enhancement & Answer Gen):', providerToUse);
 
-      const response = await fetch(apiUtils.buildApiUrl(`/conversations/${sessionId}`), {
+      // UPDATE AGENT instead of conversation (new architecture)
+      const response = await fetch(apiUtils.buildApiUrl(`/agents/${agentId}`), {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1658,19 +1681,29 @@ export default function ConversationWindow() {
       });
 
       if (response.ok) {
-        console.log('✅ Quick update saved successfully');
+        console.log('✅ Quick update saved to agent successfully');
       } else {
         const errorData = await response.json().catch(() => ({}));
-        console.error('❌ Failed to save quick update:', errorData);
+        console.error('❌ Failed to save quick update to agent:', errorData);
       }
     } catch (error) {
-      console.error('❌ Error saving quick update:', error);
+      console.error('❌ Error saving quick update to agent:', error);
     }
   };
 
   const handleBack = () => {
-    navigate(paths.dashboard.apps.knowledgeSearch);
+    navigate(paths.dashboard.apps.agents);
   };
+
+  // Render Assistant Mode View if knowledge assistant is enabled
+  if (enableKnowledgeAssistant && messageMode === 'agent') {
+    return (
+      <AssistantModeView
+        sessionId={sessionId || ''}
+        sessionName={sessionName}
+      />
+    );
+  }
 
   return (
     <Box style={{
@@ -1694,7 +1727,7 @@ export default function ConversationWindow() {
               <Tooltip label="Click to go to Knowledge Search">
                 <Anchor
                   component="button"
-                  onClick={() => navigate(paths.dashboard.apps.knowledgeSearch)}
+                  onClick={() => navigate(paths.dashboard.apps.agents)}
                   style={{
                     fontSize: 'var(--mantine-h3-font-size)',
                     fontWeight: 'var(--mantine-h3-font-weight)',
@@ -1741,6 +1774,20 @@ export default function ConversationWindow() {
                 loading={resetMessagesMutation.isPending}
               >
                 <IconRefresh size={16} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="Edit Agent">
+              <ActionIcon
+                variant="subtle"
+                color="blue"
+                onClick={() => {
+                  if (agentId) {
+                    navigate(paths.dashboard.apps.agentEdit(agentId));
+                  }
+                }}
+                disabled={!agentId}
+              >
+                <IconEdit size={16} />
               </ActionIcon>
             </Tooltip>
             <Tooltip label="Delete session">
@@ -1791,7 +1838,11 @@ export default function ConversationWindow() {
         }}
       >
         <Stack gap="md">
-          {messages.length === 0 && !isLoadingHistory ? (
+          {isLoadingHistory ? (
+            <Box ta="center" py="xl">
+              <Text size="sm" c="dimmed">Loading messages...</Text>
+            </Box>
+          ) : messages.length === 0 ? (
             <Box ta="center" py="xl">
               <IconMessageCircle size={48} color="var(--mantine-color-gray-4)" />
               <Text size="lg" c="dimmed" mt="md">
@@ -2099,30 +2150,50 @@ export default function ConversationWindow() {
         <Stack gap="sm">
           {/* Query Input - Top */}
           <Box>
-            <Group gap="xs" align="center">
-              <TextInput
-                placeholder={messageMode === 'agent'
-                  ? "Ask the agent to help with tasks or answer questions..."
-                  : "Ask about your knowledge base or refine your query..."}
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                onKeyPress={handleKeyPress}
-                size="md"
-                radius="md"
-                style={{
-                  borderColor: isConnected ? undefined : 'var(--mantine-color-orange-4)',
-                  transition: 'all 0.2s ease',
-                  flex: 1,
-                }}
-                disabled={isLoading || isLoadingHistory}
-                rightSection={
-                  isLoading ? (
-                    <IconLoader size={18} className="animate-spin" />
-                  ) : !isConnected ? (
-                    <IconLoader size={18} className="animate-spin" style={{ color: 'var(--mantine-color-orange-6)' }} />
-                  ) : null
-                }
-              />
+            <Group gap="xs" align="flex-end">
+              <Box style={{ flex: 1, position: 'relative' }}>
+                <Textarea
+                  placeholder={messageMode === 'agent'
+                    ? "Ask the agent to help with tasks or answer questions..."
+                    : "Ask about your knowledge base or refine your query..."}
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      sendMessage();
+                    }
+                  }}
+                  size="md"
+                  radius="md"
+                  minRows={1}
+                  maxRows={8}
+                  autosize
+                  style={{
+                    borderColor: isConnected ? undefined : 'var(--mantine-color-orange-4)',
+                    transition: 'all 0.2s ease',
+                    paddingRight: (isLoading || !isConnected) ? '40px' : undefined,
+                  }}
+                  disabled={isLoading || isLoadingHistory}
+                />
+                {(isLoading || !isConnected) && (
+                  <Box
+                    style={{
+                      position: 'absolute',
+                      right: '12px',
+                      top: '12px',
+                      pointerEvents: 'none',
+                      zIndex: 1,
+                    }}
+                  >
+                    <IconLoader
+                      size={18}
+                      className="animate-spin"
+                      style={{ color: !isConnected ? 'var(--mantine-color-orange-6)' : undefined }}
+                    />
+                  </Box>
+                )}
+              </Box>
               {isConnected && !isLoading && (
                 <Button
                   onClick={sendMessage}
@@ -2145,319 +2216,271 @@ export default function ConversationWindow() {
             {/* Settings Row: Mode, Strategy, Model, Settings */}
             <Group gap="sm" justify="flex-start" align="flex-end" grow={false}>
               {/* Mode Toggle Button */}
-              <Tooltip label={messageMode === 'rag' ? "Click to switch to Assistant Agent" : "Click to switch to RAG Agent"}>
+              {messageMode === 'agent' ? (
+                // Assistant Agent Mode - Non-clickable badge with provider/model info
                 <Badge
                   variant="light"
-                  color={messageMode === 'agent' ? 'violet' : 'blue'}
-                  leftSection={messageMode === 'agent' ? <IconRobot size={14} /> : <IconDatabase size={14} />}
-                  style={{ cursor: 'pointer' }}
+                  color="violet"
+                  leftSection={<IconRobot size={14} />}
+                  style={{ cursor: 'default' }}
                   size="md"
-                  onClick={() => {
-                    const newMode = messageMode === 'rag' ? 'agent' : 'rag';
-                    setMessageMode(newMode);
-                    // When user selects a mode, also update the enableKnowledgeAssistant setting
-                    const newEnableKA = newMode === 'agent';
-                    setEnableKnowledgeAssistant(newEnableKA);
-                    console.log(`🔄 [MODE CHANGED] User selected: ${newMode} → enableKnowledgeAssistant=${newEnableKA}`);
-
-                    // Auto-configure settings for Assistant Agent mode
-                    let strategyUpdate = undefined;
-                    let disableLLM = false;
-                    let changesMessage = [];
-
-                    if (newMode === 'agent') {
-                      // 1. Set strategy to custom_variants
-                      if (selectedStrategy !== 'custom_variants') {
-                        const previousStrategy = selectedStrategy;
-                        setSelectedStrategy('custom_variants');
-                        strategyUpdate = 'custom_variants';
-                        changesMessage.push(`• Strategy: "${previousStrategy || 'native'}" → "custom_variants"`);
-                        console.log(`🔄 [STRATEGY AUTO-CHANGED] ${previousStrategy || 'native'} → custom_variants (Assistant Agent mode)`);
-                      }
-
-                      // 2. Enable LLM generation (supervisor uses task agent tools for generation)
-                      if (!enableLLMGeneration) {
-                        setEnableLLMGeneration(true);
-                        disableLLM = false;
-                        changesMessage.push(`• LLM Generation: "disabled" → "enabled"`);
-                        console.log(`🔄 [LLM GENERATION ENABLED] Supervisor agent calls task agent tools for response generation (Assistant Agent mode)`);
-                      }
-
-                      // Show notification if any changes were made
-                      if (changesMessage.length > 0) {
-                        notifications.show({
-                          title: 'Settings Auto-Optimized for Assistant Agent',
-                          message: (
-                            <div>
-                              <div style={{ marginBottom: '8px' }}>
-                                Configuration automatically adjusted for optimal performance:
-                              </div>
-                              {changesMessage.map((msg, idx) => (
-                                <div key={idx} style={{ fontSize: '12px', marginLeft: '4px' }}>{msg}</div>
-                              ))}
-                              <div style={{ marginTop: '8px', fontSize: '11px', opacity: 0.8 }}>
-                                Assistant Agent orchestrates RAG retrieval and calls task agent tools for response generation.
-                              </div>
-                            </div>
-                          ),
-                          color: 'blue',
-                          icon: <IconInfoCircle size={16} />,
-                          autoClose: 10000,
-                        });
-                      }
-                    }
-
-                    // Save to database (include strategy and LLM generation settings if changed)
-                    handleQuickUpdate({
-                      mode: newMode,
-                      ...(strategyUpdate && { strategy: strategyUpdate }),
-                      ...(newMode === 'agent' && !enableLLMGeneration && { enableLLMGeneration: true })
-                    });
-                  }}
                 >
-                  {messageMode === 'agent' ? 'Assistant Agent' : 'RAG Agent'}
+                  Assistant Agent{selectedProviderId && selectedModel
+                    ? ` (${providers?.find(p => p.id === selectedProviderId)?.name || 'Unknown'}/${selectedModel})`
+                    : ''}
                 </Badge>
-              </Tooltip>
+              ) : (
+                // RAG Agent Mode - Non-clickable badge
+                <Badge
+                  variant="light"
+                  color="blue"
+                  leftSection={<IconDatabase size={14} />}
+                  style={{ cursor: 'default' }}
+                  size="md"
+                >
+                  RAG Agent
+                </Badge>
+              )}
 
-              {/* Strategy Badge Button with Menu (disabled in Assistant mode) */}
-              <Menu shadow="md" width={300} position="bottom-start" disabled={messageMode === 'agent'}>
-                <Menu.Target>
-                  <Tooltip
-                    label={
-                      messageMode === 'agent'
-                        ? "Strategy is locked to 'Custom Variants' in Assistant Mode - the agent generates query variants automatically"
-                        : "Click to change query enhancement strategy"
-                    }
-                  >
-                    <Badge
-                      variant="light"
-                      color="grape"
-                      leftSection={<IconSettings size={14} />}
-                      style={{ cursor: messageMode === 'agent' ? 'not-allowed' : 'pointer', opacity: messageMode === 'agent' ? 0.6 : 1 }}
-                      size="md"
-                    >
-                      {ENHANCEMENT_STRATEGIES.find(s => s.value === selectedStrategy)?.label || 'Strategy'}
-                      {selectedStrategy !== 'native' && savedEnhancementProvider
-                        ? ` (${providers?.find((p: any) => p.id === savedEnhancementProvider.id)?.name}/${savedEnhancementProvider.model_name})`
-                        : ''
-                      }
-                    </Badge>
-                  </Tooltip>
-                </Menu.Target>
+              {/* Strategy Badge Button with Menu (hidden in Assistant mode) */}
+              {messageMode !== 'agent' && (
+                <Menu shadow="md" width={300} position="bottom-start">
+                  <Menu.Target>
+                    <Tooltip label="Click to change query enhancement strategy">
+                      <Badge
+                        variant="light"
+                        color="grape"
+                        leftSection={<IconSettings size={14} />}
+                        style={{ cursor: 'pointer' }}
+                        size="md"
+                      >
+                        {ENHANCEMENT_STRATEGIES.find(s => s.value === selectedStrategy)?.label || 'Strategy'}
+                        {selectedStrategy !== 'native' && savedEnhancementProvider
+                          ? ` (${providers?.find((p: any) => p.id === savedEnhancementProvider.id)?.name}/${savedEnhancementProvider.model_name})`
+                          : ''
+                        }
+                      </Badge>
+                    </Tooltip>
+                  </Menu.Target>
 
-                <Menu.Dropdown>
-                  <Menu.Label>Query Enhancement Strategy</Menu.Label>
-                  {ENHANCEMENT_STRATEGIES
-                    .filter(strategy => messageMode === 'agent' || strategy.value !== 'custom_variants') // Hide custom_variants in RAG mode
-                    .map((strategy) => (
-                      <Menu.Item
-                        key={strategy.value}
-                        leftSection={selectedStrategy === strategy.value ? <IconCheck size={16} /> : <div style={{ width: 16 }} />}
+                  <Menu.Dropdown>
+                    <Menu.Label>Query Enhancement Strategy</Menu.Label>
+                    {ENHANCEMENT_STRATEGIES
+                      .filter(strategy => strategy.value !== 'custom_variants') // Hide custom_variants in RAG mode
+                      .map((strategy) => (
+                        <Menu.Item
+                          key={strategy.value}
+                          leftSection={selectedStrategy === strategy.value ? <IconCheck size={16} /> : <div style={{ width: 16 }} />}
+                          onClick={() => {
+                            setSelectedStrategy(strategy.value);
+                            handleQuickUpdate({ strategy: strategy.value });
+                            notifications.show({
+                              title: 'Strategy Updated',
+                              message: `Query enhancement strategy changed to ${strategy.label}`,
+                              color: 'grape',
+                              icon: <IconCheck size={16} />,
+                            });
+                          }}
+                          style={{
+                            backgroundColor: selectedStrategy === strategy.value ? 'var(--mantine-color-grape-0)' : undefined
+                          }}
+                        >
+                          <div>
+                            <Text size="sm" fw={selectedStrategy === strategy.value ? 600 : 400}>
+                              {strategy.label}
+                            </Text>
+                            <Text size="xs" c="dimmed" lineClamp={2}>
+                              {strategy.description}
+                            </Text>
+                          </div>
+                        </Menu.Item>
+                      ))}
+                  </Menu.Dropdown>
+                </Menu>
+              )}
+
+              {/* Reranking Toggle Button (hidden in Assistant mode) */}
+              {messageMode !== 'agent' && (
+                enableReranking ? (
+                  selectedRerankerId && selectedRerankerModel ? (
+                    <Tooltip label="Click to disable reranking">
+                      <Badge
+                        variant="light"
+                        color="green"
+                        leftSection={<IconSortDescending size={14} />}
+                        style={{ cursor: 'pointer' }}
+                        size="md"
                         onClick={() => {
-                          setSelectedStrategy(strategy.value);
-                          handleQuickUpdate({ strategy: strategy.value });
+                          setEnableReranking(false);
+                          handleQuickUpdate({ enableReranking: false });
                           notifications.show({
-                            title: 'Strategy Updated',
-                            message: `Query enhancement strategy changed to ${strategy.label}`,
-                            color: 'grape',
+                            title: 'Reranking Disabled',
+                            message: 'Document reranking has been disabled',
+                            color: 'blue',
                             icon: <IconCheck size={16} />,
                           });
                         }}
-                        style={{
-                          backgroundColor: selectedStrategy === strategy.value ? 'var(--mantine-color-grape-0)' : undefined
-                        }}
                       >
-                        <div>
-                          <Text size="sm" fw={selectedStrategy === strategy.value ? 600 : 400}>
-                            {strategy.label}
-                          </Text>
-                          <Text size="xs" c="dimmed" lineClamp={2}>
-                            {strategy.description}
-                          </Text>
-                        </div>
-                      </Menu.Item>
-                    ))}
-                </Menu.Dropdown>
-              </Menu>
-
-              {/* Reranking Toggle Button */}
-              {enableReranking ? (
-                selectedRerankerId && selectedRerankerModel ? (
-                  <Tooltip label="Click to disable reranking">
+                        Reranking ({providers?.find(p => p.id === selectedRerankerId)?.name}/{selectedRerankerModel})
+                      </Badge>
+                    </Tooltip>
+                  ) : (
+                    <Tooltip label="Reranking is enabled but provider is not configured. Please edit conversation settings.">
+                      <Badge
+                        variant="light"
+                        color="yellow"
+                        leftSection={<IconAlertCircle size={14} />}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => {
+                          notifications.show({
+                            title: 'Reranker Provider Required',
+                            message: 'Please click "Edit Agent" button to configure a reranker provider.',
+                            color: 'yellow',
+                            icon: <IconAlertCircle size={16} />,
+                            autoClose: 5000,
+                          });
+                        }}
+                        size="md"
+                      >
+                        Reranking (Provider Required)
+                      </Badge>
+                    </Tooltip>
+                  )
+                ) : (
+                  <Tooltip label="Click to enable reranking">
                     <Badge
                       variant="light"
-                      color="green"
+                      color="gray"
                       leftSection={<IconSortDescending size={14} />}
                       style={{ cursor: 'pointer' }}
                       size="md"
                       onClick={() => {
-                        setEnableReranking(false);
-                        handleQuickUpdate({ enableReranking: false });
-                        notifications.show({
-                          title: 'Reranking Disabled',
-                          message: 'Document reranking has been disabled',
-                          color: 'blue',
-                          icon: <IconCheck size={16} />,
-                        });
+                        // Check if provider is configured
+                        if (selectedRerankerId && selectedRerankerModel) {
+                          setEnableReranking(true);
+                          handleQuickUpdate({ enableReranking: true });
+                          notifications.show({
+                            title: 'Reranking Enabled',
+                            message: `Document reranking enabled with ${providers?.find(p => p.id === selectedRerankerId)?.name}/${selectedRerankerModel}`,
+                            color: 'green',
+                            icon: <IconCheck size={16} />,
+                          });
+                        } else {
+                          // No provider configured - ask user to edit conversation
+                          notifications.show({
+                            title: 'Reranker Provider Required',
+                            message: 'Please click "Edit Agent" button to configure a reranker provider before enabling reranking.',
+                            color: 'yellow',
+                            icon: <IconAlertCircle size={16} />,
+                            autoClose: 6000,
+                          });
+                        }
                       }}
                     >
-                      Reranking ({providers?.find(p => p.id === selectedRerankerId)?.name}/{selectedRerankerModel})
-                    </Badge>
-                  </Tooltip>
-                ) : (
-                  <Tooltip label="Reranking is enabled but provider is not configured. Please edit conversation settings.">
-                    <Badge
-                      variant="light"
-                      color="yellow"
-                      leftSection={<IconAlertCircle size={14} />}
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => {
-                        notifications.show({
-                          title: 'Reranker Provider Required',
-                          message: 'Please click "Edit Conversation" button to configure a reranker provider.',
-                          color: 'yellow',
-                          icon: <IconAlertCircle size={16} />,
-                          autoClose: 5000,
-                        });
-                      }}
-                      size="md"
-                    >
-                      Reranking (Provider Required)
+                      Reranking (Off)
                     </Badge>
                   </Tooltip>
                 )
-              ) : (
-                <Tooltip label="Click to enable reranking">
-                  <Badge
-                    variant="light"
-                    color="gray"
-                    leftSection={<IconSortDescending size={14} />}
-                    style={{ cursor: 'pointer' }}
-                    size="md"
-                    onClick={() => {
-                      // Check if provider is configured
-                      if (selectedRerankerId && selectedRerankerModel) {
-                        setEnableReranking(true);
-                        handleQuickUpdate({ enableReranking: true });
-                        notifications.show({
-                          title: 'Reranking Enabled',
-                          message: `Document reranking enabled with ${providers?.find(p => p.id === selectedRerankerId)?.name}/${selectedRerankerModel}`,
-                          color: 'green',
-                          icon: <IconCheck size={16} />,
-                        });
-                      } else {
-                        // No provider configured - ask user to edit conversation
-                        notifications.show({
-                          title: 'Reranker Provider Required',
-                          message: 'Please click "Edit Conversation" button to configure a reranker provider before enabling reranking.',
-                          color: 'yellow',
-                          icon: <IconAlertCircle size={16} />,
-                          autoClose: 6000,
-                        });
-                      }
-                    }}
-                  >
-                    Reranking (Off)
-                  </Badge>
-                </Tooltip>
               )}
 
-              {/* LLM Generation Toggle Button */}
-              {enableLLMGeneration ? (
-                selectedProviderId && selectedModel ? (
-                  <Tooltip label="Click to disable LLM answer generation">
+              {/* LLM Generation Toggle Button (hidden in Assistant mode) */}
+              {messageMode !== 'agent' && (
+                enableLLMGeneration ? (
+                  selectedProviderId && selectedModel ? (
+                    <Tooltip label="Click to disable LLM answer generation">
+                      <Badge
+                        variant="light"
+                        color="green"
+                        leftSection={<IconMessageCircle size={14} />}
+                        style={{ cursor: 'pointer' }}
+                        size="md"
+                        onClick={() => {
+                          setEnableLLMGeneration(false);
+                          handleQuickUpdate({ enableLLMGeneration: false });
+                          notifications.show({
+                            title: 'LLM Generation Disabled',
+                            message: 'Answer generation has been disabled',
+                            color: 'blue',
+                            icon: <IconCheck size={16} />,
+                          });
+                        }}
+                      >
+                        LLM Generation ({providers?.find(p => p.id === selectedProviderId)?.name}/{selectedModel})
+                      </Badge>
+                    </Tooltip>
+                  ) : (
+                    <Tooltip label="LLM generation is enabled but provider is not configured. Please edit conversation settings.">
+                      <Badge
+                        variant="light"
+                        color="yellow"
+                        leftSection={<IconAlertCircle size={14} />}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => {
+                          notifications.show({
+                            title: 'LLM Provider Required',
+                            message: 'Please click "Edit Agent" button to configure an LLM provider.',
+                            color: 'yellow',
+                            icon: <IconAlertCircle size={16} />,
+                            autoClose: 5000,
+                          });
+                        }}
+                        size="md"
+                      >
+                        LLM Generation (Provider Required)
+                      </Badge>
+                    </Tooltip>
+                  )
+                ) : (
+                  <Tooltip label="Click to enable LLM answer generation">
                     <Badge
                       variant="light"
-                      color="green"
+                      color="gray"
                       leftSection={<IconMessageCircle size={14} />}
                       style={{ cursor: 'pointer' }}
                       size="md"
                       onClick={() => {
-                        setEnableLLMGeneration(false);
-                        handleQuickUpdate({ enableLLMGeneration: false });
-                        notifications.show({
-                          title: 'LLM Generation Disabled',
-                          message: 'Answer generation has been disabled',
-                          color: 'blue',
-                          icon: <IconCheck size={16} />,
-                        });
+                        // Check if provider is configured
+                        if (selectedProviderId && selectedModel) {
+                          setEnableLLMGeneration(true);
+                          handleQuickUpdate({ enableLLMGeneration: true });
+                          notifications.show({
+                            title: 'LLM Generation Enabled',
+                            message: `Answer generation enabled with ${providers?.find(p => p.id === selectedProviderId)?.name}/${selectedModel}`,
+                            color: 'green',
+                            icon: <IconCheck size={16} />,
+                          });
+                        } else {
+                          // No provider configured - ask user to edit conversation
+                          notifications.show({
+                            title: 'LLM Provider Required',
+                            message: 'Please click "Edit Agent" button to configure an LLM provider before enabling answer generation.',
+                            color: 'yellow',
+                            icon: <IconAlertCircle size={16} />,
+                            autoClose: 6000,
+                          });
+                        }
                       }}
                     >
-                      LLM Generation ({providers?.find(p => p.id === selectedProviderId)?.name}/{selectedModel})
-                    </Badge>
-                  </Tooltip>
-                ) : (
-                  <Tooltip label="LLM generation is enabled but provider is not configured. Please edit conversation settings.">
-                    <Badge
-                      variant="light"
-                      color="yellow"
-                      leftSection={<IconAlertCircle size={14} />}
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => {
-                        notifications.show({
-                          title: 'LLM Provider Required',
-                          message: 'Please click "Edit Conversation" button to configure an LLM provider.',
-                          color: 'yellow',
-                          icon: <IconAlertCircle size={16} />,
-                          autoClose: 5000,
-                        });
-                      }}
-                      size="md"
-                    >
-                      LLM Generation (Provider Required)
+                      LLM Generation (Off)
                     </Badge>
                   </Tooltip>
                 )
-              ) : (
-                <Tooltip label="Click to enable LLM answer generation">
-                  <Badge
-                    variant="light"
-                    color="gray"
-                    leftSection={<IconMessageCircle size={14} />}
-                    style={{ cursor: 'pointer' }}
-                    size="md"
-                    onClick={() => {
-                      // Check if provider is configured
-                      if (selectedProviderId && selectedModel) {
-                        setEnableLLMGeneration(true);
-                        handleQuickUpdate({ enableLLMGeneration: true });
-                        notifications.show({
-                          title: 'LLM Generation Enabled',
-                          message: `Answer generation enabled with ${providers?.find(p => p.id === selectedProviderId)?.name}/${selectedModel}`,
-                          color: 'green',
-                          icon: <IconCheck size={16} />,
-                        });
-                      } else {
-                        // No provider configured - ask user to edit conversation
-                        notifications.show({
-                          title: 'LLM Provider Required',
-                          message: 'Please click "Edit Conversation" button to configure an LLM provider before enabling answer generation.',
-                          color: 'yellow',
-                          icon: <IconAlertCircle size={16} />,
-                          autoClose: 6000,
-                        });
-                      }
-                    }}
-                  >
-                    LLM Generation (Off)
-                  </Badge>
-                </Tooltip>
               )}
 
               {/* Spacer */}
               <Box style={{ flex: 1 }} />
 
               {/* Settings Icon */}
-              <Tooltip label="Edit Conversation Settings">
+              <Tooltip label="Edit Agent Settings">
                 <ActionIcon
                   size="md"
                   variant="light"
                   onClick={() => {
-                    navigate(paths.dashboard.apps.conversationCreate, {
-                      state: { editingConversationId: sessionId }
-                    });
+                    if (agentId) {
+                      navigate(paths.dashboard.apps.agentEdit(agentId));
+                    }
                   }}
-                  disabled={isLoading || isLoadingHistory}
+                  disabled={isLoading || isLoadingHistory || !agentId}
                 >
                   <IconSettings size={18} />
                 </ActionIcon>

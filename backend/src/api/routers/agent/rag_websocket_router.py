@@ -9,6 +9,7 @@ import asyncio
 import json
 import time
 import traceback
+from typing import List
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from loguru import logger
@@ -23,12 +24,13 @@ from src.services.conversation.conversation_history_service import (
 router = APIRouter(tags=["RAG WebSocket"])
 
 
-def extract_conversation_config(conversation) -> dict:
+def extract_agent_config(agent, conversation=None) -> dict:
     """
-    Extract configuration from conversation object with new nested structure.
+    Extract configuration from Agent object (new architecture).
 
     Args:
-        conversation: ConversationSession object with nested configuration
+        agent: Agent object with configuration
+        conversation: Optional ConversationSession for description
 
     Returns:
         Dictionary with extracted configuration values
@@ -47,62 +49,60 @@ def extract_conversation_config(conversation) -> dict:
         "reranker_model_name": None,
     }
 
-    if not conversation:
+    if not agent:
         return config
 
     # Load answer generation settings (LLM provider and model)
     # CRITICAL: Only enable LLM generation if user has explicitly enabled it
     if (
-        conversation.answer_generation
-        and conversation.answer_generation.enabled
-        and conversation.answer_generation.provider
+        agent.answer_generation
+        and agent.answer_generation.enabled
+        and agent.answer_generation.provider
     ):
-        config["llm_provider_id"] = conversation.answer_generation.provider.id
-        config["llm_model_name"] = conversation.answer_generation.provider.model_name
+        config["llm_provider_id"] = agent.answer_generation.provider.id
+        config["llm_model_name"] = agent.answer_generation.provider.model_name
         config["enable_llm_generation"] = True
         logger.info("✅ LLM generation ENABLED by user")
     else:
         logger.info("❌ LLM generation DISABLED by user - will return raw documents")
 
     # Load vector database settings
-    if conversation.vector_database:
-        config["collection_name"] = conversation.vector_database.collection_name
-        config["top_k"] = conversation.vector_database.top_k
+    if agent.vector_database:
+        config["collection_name"] = agent.vector_database.collection_name
+        config["top_k"] = agent.vector_database.top_k
 
     # Load enhancement strategy and provider
-    if conversation.enhancement:
-        config["selected_strategy"] = conversation.enhancement.strategy
+    if agent.enhancement:
+        config["selected_strategy"] = agent.enhancement.strategy
 
         # For non-native strategies, the provider is required and stored in enhancement.provider
         # If answer_generation doesn't have a provider, use enhancement.provider as fallback
         if (
-            conversation.enhancement.strategy != "native"
-            and conversation.enhancement.provider
+            agent.enhancement.strategy != "native"
+            and agent.enhancement.provider
             and not config["llm_provider_id"]
         ):
-            config["llm_provider_id"] = conversation.enhancement.provider.id
-            config["llm_model_name"] = conversation.enhancement.provider.model_name
+            config["llm_provider_id"] = agent.enhancement.provider.id
+            config["llm_model_name"] = agent.enhancement.provider.model_name
             logger.debug(
                 f"Using enhancement provider for non-native strategy: {config['llm_provider_id']}/{config['llm_model_name']}"
             )
 
     # Load reranking settings
     # CRITICAL: Only enable reranking if user has explicitly enabled it
-    if (
-        conversation.reranker
-        and conversation.reranker.enabled
-        and conversation.reranker.provider
-    ):
+    if agent.reranker and agent.reranker.enabled and agent.reranker.provider:
         config["enable_reranking"] = True
-        config["relevance_threshold"] = conversation.reranker.relevance_threshold
-        config["reranker_model_name"] = conversation.reranker.provider.model_name
+        config["relevance_threshold"] = agent.reranker.relevance_threshold
+        config["reranker_model_name"] = agent.reranker.provider.model_name
         logger.info("✅ Reranking ENABLED by user")
     else:
         logger.info("❌ Reranking DISABLED by user")
 
     # Load conversation description for query enhancement context
-    if conversation.description:
+    if conversation and conversation.description:
         config["conversation_description"] = conversation.description
+    elif agent.description:
+        config["conversation_description"] = agent.description
 
     return config
 
@@ -204,18 +204,21 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
                 llm_provider_id = None
                 llm_model_name = None
                 selected_strategy = None
-                collection_name = None
+                collection_name: str = "LongTermMemory"  # Default collection
                 enhancement_config = {}
-                enable_reranking = True
-                enable_llm_generation = True
+                enable_reranking = False
+                enable_llm_generation = False
                 top_k = 5
                 conversation_description = None
+                relevance_threshold = 0.6
+                retrieval_strategy = None
+                reranker_model_name = None
 
-                # Load ALL settings from conversation (UI should NOT send these)
+                # Load ALL settings from agent (via conversation) - UI should NOT send these
                 if conversation_id:
                     try:
                         logger.debug(
-                            f"Loading ALL conversation settings from conversation_id: {conversation_id}"
+                            f"Loading conversation and agent settings for conversation_id: {conversation_id}"
                         )
                         conversation = conversation_history_service.get_conversation(
                             conversation_id
@@ -223,8 +226,47 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
                         if conversation:
                             logger.debug(f"Conversation found: {conversation.name}")
 
-                            # Load ALL settings from conversation using helper function
-                            config = extract_conversation_config(conversation)
+                            # NEW ARCHITECTURE: Configuration is stored in Agent, not Conversation
+                            agent = None
+                            if conversation.agent_id:
+                                logger.info(
+                                    f"🔗 Conversation linked to agent {conversation.agent_id}"
+                                )
+                                from src.services.agent.agent_service import (
+                                    get_agent_service,
+                                )
+
+                                agent_service = get_agent_service()
+                                agent = agent_service.get_agent(
+                                    conversation.agent_id, user_id
+                                )
+
+                                if agent:
+                                    logger.info(
+                                        f"✅ Loaded agent '{agent.name}' configuration"
+                                    )
+                                else:
+                                    logger.warning(
+                                        f"⚠️ Agent {conversation.agent_id} not found"
+                                    )
+
+                            if not agent:
+                                error_msg = f"Agent not found for conversation {conversation_id}"
+                                logger.error(error_msg)
+                                await websocket.send_text(
+                                    json.dumps(
+                                        {
+                                            "type": "error",
+                                            "stage": "error",
+                                            "message": "Agent configuration not found. Please check the agent settings.",
+                                            "timestamp": time.time(),
+                                        }
+                                    )
+                                )
+                                continue
+
+                            # Load ALL settings from agent using helper function
+                            config = extract_agent_config(agent, conversation)
                             llm_provider_id = config["llm_provider_id"]
                             llm_model_name = config["llm_model_name"]
                             selected_strategy = config["selected_strategy"]
@@ -248,7 +290,7 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
                                 )
 
                             logger.info(
-                                f"Loaded ALL settings from conversation: provider={llm_provider_id}, model={llm_model_name}, strategy={selected_strategy}, collection={collection_name}, reranking={enable_reranking}, llm_generation={enable_llm_generation}, top_k={top_k}"
+                                f"Loaded ALL settings from agent: provider={llm_provider_id}, model={llm_model_name}, strategy={selected_strategy}, collection={collection_name}, reranking={enable_reranking}, llm_generation={enable_llm_generation}, top_k={top_k}"
                             )
                         else:
                             error_msg = f"Conversation not found: {conversation_id}"
@@ -294,19 +336,23 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
                     )
                     continue
 
-                if not all(
-                    [llm_provider_id, llm_model_name, collection_name, conversation_id]
-                ):
-                    missing = []
-                    if not llm_provider_id:
-                        missing.append("llm_provider_id")
-                    if not llm_model_name:
-                        missing.append("llm_model_name")
-                    if not collection_name:
-                        missing.append("collection_name")
-                    if not conversation_id:
-                        missing.append("conversation_id")
+                # Always require a collection and conversation_id
+                base_missing = []
+                if not collection_name:
+                    base_missing.append("collection_name")
+                if not conversation_id:
+                    base_missing.append("conversation_id")
 
+                # Only require LLM provider/model when generation or reranking is enabled
+                llm_missing: List[str] = []
+                if enable_llm_generation or enable_reranking:
+                    if not llm_provider_id:
+                        llm_missing.append("llm_provider_id")
+                    if not llm_model_name:
+                        llm_missing.append("llm_model_name")
+
+                missing = base_missing + llm_missing
+                if missing:
                     error_msg = f"Missing required fields: {', '.join(missing)}"
                     logger.error(f"{error_msg}")
                     await websocket.send_text(
@@ -356,6 +402,7 @@ async def agent_query_rag_websocket(websocket: WebSocket, token: str = Query(Non
                 )
 
                 # Stream events to WebSocket
+                # NOTE: Message saving is handled inside get_response_stream_rag()
                 async for chunk in stream:
                     chunk_type = chunk.get("type")
                     chunk_stage = chunk.get("stage")

@@ -68,20 +68,36 @@ const router = createBrowserRouter([
           {
             index: true,
             path: paths.dashboard.apps.root,
-            element: <Navigate to={paths.dashboard.apps.knowledgeSearch} replace />,
+            element: <Navigate to={paths.dashboard.apps.agents} replace />,
           },
         ],
       },
       {
-        path: paths.dashboard.apps.knowledgeSearch,
+        path: paths.dashboard.apps.agents,
         element: LazyPage(() => import('@/pages/dashboard/apps/knowledge/knowledge-search')),
+      },
+      {
+        path: '/dashboard/apps/agents/create',
+        element: LazyPage(() => import('@/pages/dashboard/apps/knowledge/conversation-create')),
+      },
+      {
+        path: '/dashboard/apps/agents/:agentId/edit',
+        element: LazyPage(() => import('@/pages/dashboard/apps/knowledge/conversation-create')),
+      },
+      {
+        path: '/dashboard/apps/agents/:agentId/conversations',
+        element: LazyPage(() => import('@/pages/dashboard/apps/knowledge/agent-conversations')),
+      },
+      {
+        path: paths.dashboard.apps.conversations,
+        element: LazyPage(() => import('@/pages/dashboard/apps/knowledge/all-conversations')),
       },
       {
         path: paths.dashboard.apps.conversationCreate,
         element: LazyPage(() => import('@/pages/dashboard/apps/knowledge/conversation-create')),
       },
       {
-        path: '/dashboard/apps/conversation/:sessionId',
+        path: '/dashboard/apps/conversations/:sessionId',
         element: LazyPage(() => import('@/pages/dashboard/apps/knowledge/conversation-window')),
       },
       /* ------------------------------- MANAGEMENT ------------------------------- */
@@ -161,6 +177,14 @@ const router = createBrowserRouter([
               {
                 index: true,
                 element: LazyPage(() => import('@/pages/dashboard/management/model-providers')),
+              },
+              {
+                path: 'create',
+                element: LazyPage(() => import('@/pages/dashboard/management/model-providers/create')),
+              },
+              {
+                path: ':providerId/edit',
+                element: LazyPage(() => import('@/pages/dashboard/management/model-providers/edit')),
               },
             ],
           },

@@ -161,10 +161,10 @@ class GenerateInstructionsResponse(BaseModel):
 # ============================================================================
 
 
-def tool_to_response(tool: Tool) -> ToolResponse:
-    """Convert Tool domain object to API response."""
+def tool_to_response(_id: str, tool: Tool) -> ToolResponse:
+    """Convert (_id, Tool) to API response."""
     response_dict = {
-        "id": tool.id,
+        "id": _id,  # Use MongoDB _id
         "name": tool.name,
         "display_name": tool.display_name,
         "description": tool.description,
@@ -256,9 +256,8 @@ async def create_tool(
                     detail="mcp_server_id and mcp_tool_name are required for mcp_remote tools",
                 )
 
-        # Create tool object
+        # Create tool object (without id - MongoDB will generate _id)
         tool = Tool(
-            id=str(uuid.uuid4()),
             name=request.name,
             display_name=request.display_name,
             description=request.description,
@@ -273,9 +272,9 @@ async def create_tool(
 
         # Save via service
         tool_service = get_tool_service()
-        created_tool = tool_service.create_tool(tool)
+        _id, created_tool = tool_service.create_tool(tool)
 
-        return tool_to_response(created_tool)
+        return tool_to_response(_id, created_tool)
 
     except HTTPException:
         raise
@@ -313,7 +312,7 @@ async def list_tools(
         tool_service = get_tool_service()
         tools = tool_service.get_user_tools(user_id, is_active=is_active)
 
-        return [tool_to_response(tool) for tool in tools]
+        return [tool_to_response(_id, tool) for _id, tool in tools]
 
     except HTTPException:
         raise
@@ -352,14 +351,15 @@ async def get_tool(
             )
 
         tool_service = get_tool_service()
-        tool = tool_service.get_tool_by_id(tool_id, user_id)
-        if not tool:
+        result = tool_service.get_tool_by_id(tool_id, user_id)
+        if not result:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Tool with ID {tool_id} not found",
             )
 
-        return tool_to_response(tool)
+        _id, tool = result
+        return tool_to_response(_id, tool)
 
     except HTTPException:
         raise
@@ -402,12 +402,14 @@ async def update_tool(
         tool_service = get_tool_service()
 
         # Check if tool exists
-        existing_tool = tool_service.get_tool_by_id(tool_id, user_id)
-        if not existing_tool:
+        result = tool_service.get_tool_by_id(tool_id, user_id)
+        if not result:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Tool with ID {tool_id} not found",
             )
+
+        _id, existing_tool = result
 
         # Build updates dictionary
         updates = {}
@@ -454,9 +456,15 @@ async def update_tool(
             )
 
         # Fetch updated tool
-        updated_tool = tool_service.get_tool_by_id(tool_id, user_id)
+        result = tool_service.get_tool_by_id(tool_id, user_id)
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Tool with ID {tool_id} not found after update",
+            )
 
-        return tool_to_response(updated_tool)
+        _id, updated_tool = result
+        return tool_to_response(_id, updated_tool)
 
     except HTTPException:
         raise
@@ -476,12 +484,17 @@ async def delete_tool(
     """
     Delete a tool.
 
+    Cannot delete a tool if it's bound to any conversation agents.
+    Unbind the tool from conversations first.
+
     Args:
         tool_id: Tool ID
         user_data: Authenticated user data
 
     Raises:
-        HTTPException: If tool not found or deletion fails
+        HTTPException: 
+            - 404 if tool not found
+            - 409 if tool is bound to conversations (referential integrity)
     """
     try:
         user_id = current_user.id
@@ -492,6 +505,58 @@ async def delete_tool(
             )
 
         tool_service = get_tool_service()
+        
+        # Check if tool exists
+        result = tool_service.get_tool_by_id(tool_id, user_id)
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Tool with ID {tool_id} not found",
+            )
+        
+        _id, existing_tool = result
+
+        # Check for conversations using this tool (referential integrity)
+        from src.services.conversation.conversation_history_service import (
+            conversation_history_service,
+        )
+
+        # Query conversations that have this tool_id in their assistant_config.tools array
+        bound_conversations = list(
+            conversation_history_service.collection.find(
+                {
+                    "user_id": user_id,
+                    "assistant_config.tools": tool_id,  # MongoDB array contains check
+                },
+                {"_id": 1, "name": 1},
+            )
+        )
+
+        if bound_conversations:
+            # Tool is bound to conversations - prevent deletion
+            conversation_names = [
+                conv.get("name", "Unnamed") for conv in bound_conversations[:5]
+            ]
+            if len(bound_conversations) > 5:
+                conversation_names.append(f"and {len(bound_conversations) - 5} more")
+
+            logger.warning(
+                f"User {user_id} attempted to delete tool {tool_id} "
+                f"('{existing_tool.display_name or existing_tool.name}') "
+                f"which is bound to {len(bound_conversations)} conversation(s): {conversation_names}"
+            )
+
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Cannot delete tool '{existing_tool.display_name or existing_tool.name}'. "
+                f"It is currently bound to {len(bound_conversations)} conversation agent(s): {', '.join(conversation_names)}. "
+                f"Please unbind this tool from the conversations first by editing them in the conversation management page.",
+            )
+
+        # Safe to delete - no conversations are using this tool
+        logger.info(
+            f"User {user_id} deleting tool {tool_id} ('{existing_tool.display_name or existing_tool.name}')"
+        )
         success = tool_service.delete_tool(tool_id, user_id)
         if not success:
             raise HTTPException(

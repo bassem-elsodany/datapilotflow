@@ -39,8 +39,8 @@ litellm.drop_params = True
 async def get_response_stream_rag(
     query: str,
     user_id: str,
-    llm_provider_id: str,
-    llm_model_name: str,
+    llm_provider_id: Optional[str],
+    llm_model_name: Optional[str],
     conversation_id: str,
     collection_name: str,
     selected_strategy: Optional[str] = None,
@@ -51,6 +51,8 @@ async def get_response_stream_rag(
     enable_llm_generation: bool = True,
     top_k: int = 5,
     conversation_description: Optional[str] = None,
+    reranker_provider_id: Optional[str] = None,
+    reranker_model_name: Optional[str] = None,
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
     Generate AI response using direct RAG-only pipeline (streaming).
@@ -133,50 +135,146 @@ async def get_response_stream_rag(
             f"🔧 Workflow config: enable_reranking={enable_reranking}, enable_llm_generation={enable_llm_generation}, collection={collection_name}, strategy={selected_strategy}"
         )
 
-        # Get provider configuration to create LLM client
-        provider_service = get_model_provider_service()
-        provider = provider_service.get_model_provider(llm_provider_id, user_id)
+        # Determine if primary LLM is needed:
+        # - For LLM generation (answer synthesis)
+        # - For non-native strategies (augmented, hyde, multi_query need LLM for query enhancement)
+        # - For reranking ONLY if no separate reranker provider is specified
+        strategy_requires_llm = selected_strategy and selected_strategy.lower() not in [
+            "native",
+            "",
+        ]
+        needs_primary_llm = (
+            enable_llm_generation
+            or strategy_requires_llm
+            or (enable_reranking and not reranker_provider_id)
+        )
 
-        if not provider:
-            raise ValueError(f"Provider not found: {llm_provider_id}")
-
-        if not provider.is_active:
-            raise ValueError(f"Provider is not active: {provider.name}")
-
-        # Validate API key is configured for this provider
-        if not provider.api_key or provider.api_key.strip() == "":
-            raise ValueError(
-                f"API key not configured for provider '{provider.name}' ({provider.provider_type}). "
-                f"Please configure the API key in the provider settings."
+        # Create primary LLM client if needed
+        if needs_primary_llm and llm_provider_id and llm_model_name:
+            logger.info(
+                f"🔑 Primary LLM provider required - fetching provider configuration (reranking={enable_reranking and not reranker_provider_id}, generation={enable_llm_generation}, strategy_requires_llm={strategy_requires_llm})"
             )
 
-        logger.debug(
-            f"🔑 Provider API key status: {'SET (' + str(len(provider.api_key)) + ' chars)' if provider.api_key else 'NOT SET'}"
-        )
+            # Get provider configuration to create primary LLM client
+            provider_service = get_model_provider_service()
+            provider = provider_service.get_model_provider(llm_provider_id, user_id)
 
-        # Get temperature and max_tokens from provider's generative config
-        generative_config = provider.generative.config if provider.generative else {}
-        temperature = generative_config.get("temperature", 0.7)
-        max_tokens = generative_config.get("max_tokens", 4096)
+            if not provider:
+                raise ValueError(f"Primary provider not found: {llm_provider_id}")
 
-        # Create LLM client using ChatLiteLLM with provider's config
-        model_string = f"{provider.provider_type}/{llm_model_name}"
-        llm_client = ChatLiteLLM(
-            model=model_string,
-            api_key=provider.api_key,
-            api_base=provider.endpoint if provider.endpoint else None,
-            timeout=provider.timeout if provider.timeout else 60,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            streaming=True,  # Enable streaming for real-time response chunks
-        )
+            if not provider.is_active:
+                raise ValueError(f"Primary provider is not active: {provider.name}")
 
-        logger.info(
-            f"✅ Created LLM client: {model_string} (temperature={temperature}, max_tokens={max_tokens}, api_key={'***' + provider.api_key[-4:] if provider.api_key else 'NONE'})"
-        )
+            # Validate API key is configured for this provider
+            if not provider.api_key or provider.api_key.strip() == "":
+                raise ValueError(
+                    f"API key not configured for provider '{provider.name}' ({provider.provider_type}). "
+                    f"Please configure the API key in the provider settings."
+                )
 
-        # Add LLM client to workflow config
-        workflow_config["llm_client"] = llm_client
+            logger.debug(
+                f"🔑 Primary provider API key status: {'SET (' + str(len(provider.api_key)) + ' chars)' if provider.api_key else 'NOT SET'}"
+            )
+
+            # Get temperature and max_tokens from provider's generative config
+            generative_config = (
+                provider.generative.config if provider.generative else {}
+            )
+            temperature = generative_config.get("temperature", 0.7)
+            max_tokens = generative_config.get("max_tokens", 4096)
+
+            # Create primary LLM client using ChatLiteLLM with provider's config
+            model_string = f"{provider.provider_type}/{llm_model_name}"
+            llm_client = ChatLiteLLM(
+                model=model_string,
+                api_key=provider.api_key,
+                api_base=provider.endpoint if provider.endpoint else None,
+                timeout=provider.timeout if provider.timeout else 60,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                streaming=True,  # Enable streaming for real-time response chunks
+            )
+
+            logger.info(
+                f"✅ Created primary LLM client: {model_string} (temperature={temperature}, max_tokens={max_tokens})"
+            )
+
+            # Add primary LLM client to workflow config
+            workflow_config["llm_client"] = llm_client
+        else:
+            if not needs_primary_llm:
+                logger.info(
+                    f"⏭️  Skipping primary LLM provider setup - native strategy with no reranking/generation (strategy={selected_strategy})"
+                )
+            else:
+                logger.warning(
+                    "⚠️ Primary LLM provider ID or model name missing but required"
+                )
+
+        # Create reranker LLM client if reranking is enabled and separate provider is specified
+        if enable_reranking and reranker_provider_id and reranker_model_name:
+            logger.info(
+                f"🔑 Reranker LLM provider specified - creating separate reranker client"
+            )
+
+            # Get reranker provider configuration
+            provider_service = get_model_provider_service()
+            reranker_provider = provider_service.get_model_provider(
+                reranker_provider_id, user_id
+            )
+
+            if not reranker_provider:
+                raise ValueError(
+                    f"Reranker provider not found: {reranker_provider_id}"
+                )
+
+            if not reranker_provider.is_active:
+                raise ValueError(
+                    f"Reranker provider is not active: {reranker_provider.name}"
+                )
+
+            # Validate API key is configured for reranker provider
+            if not reranker_provider.api_key or reranker_provider.api_key.strip() == "":
+                raise ValueError(
+                    f"API key not configured for reranker provider '{reranker_provider.name}' ({reranker_provider.provider_type}). "
+                    f"Please configure the API key in the provider settings."
+                )
+
+            # Get temperature and max_tokens from reranker provider's generative config
+            reranker_generative_config = (
+                reranker_provider.generative.config
+                if reranker_provider.generative
+                else {}
+            )
+            reranker_temperature = reranker_generative_config.get("temperature", 0.7)
+            reranker_max_tokens = reranker_generative_config.get("max_tokens", 4096)
+
+            # Create reranker LLM client
+            reranker_model_string = (
+                f"{reranker_provider.provider_type}/{reranker_model_name}"
+            )
+            reranker_client = ChatLiteLLM(
+                model=reranker_model_string,
+                api_key=reranker_provider.api_key,
+                api_base=reranker_provider.endpoint
+                if reranker_provider.endpoint
+                else None,
+                timeout=reranker_provider.timeout if reranker_provider.timeout else 60,
+                temperature=reranker_temperature,
+                max_tokens=reranker_max_tokens,
+                streaming=True,
+            )
+
+            logger.info(
+                f"✅ Created reranker LLM client: {reranker_model_string} (temperature={reranker_temperature}, max_tokens={reranker_max_tokens})"
+            )
+
+            # Add reranker LLM client to workflow config
+            workflow_config["reranker_client"] = reranker_client
+        elif enable_reranking:
+            logger.info(
+                "✅ Reranking enabled - will use primary LLM client for reranking"
+            )
 
         logger.info("Using direct RAG workflow (no supervisor)")
 
@@ -780,31 +878,41 @@ async def get_response_stream_rag(
 
             # SAVE messages to conversation history
             try:
+                # Extract the final response from state
+                final_response = last_state.get("final_answer", "")
+
                 # Save user query message
-                user_message = ConversationMessage(
+                conversation_history_service.add_message(
+                    conversation_id=conversation_id,
+                    user_id=user_id,
                     role="user",
                     content=query,
-                    timestamp=datetime.now(timezone.utc),
                 )
-                conversation_history_service.add_message(conversation_id, user_message)
+                logger.info(
+                    f"✅ [RAG] Saved user message to conversation {conversation_id}"
+                )
 
                 # Save assistant response message with metadata
-                assistant_message = ConversationMessage(
+                conversation_history_service.add_message(
+                    conversation_id=conversation_id,
+                    user_id=user_id,
                     role="assistant",
-                    content=response,
-                    timestamp=datetime.now(timezone.utc),
-                    source_links=source_links,  # Structured links with URL, title, and chunk_id
+                    content=final_response,
+                    source_links=source_links,
                     enhancement_strategy_used=enhancement_strategy,
                     enhanced_queries=enhanced_queries,
-                    document_count=len(retrieved_docs),
                     processing_time_ms=int(execution_time_ms),
+                    document_count=len(retrieved_docs),
                 )
-                conversation_history_service.add_message(
-                    conversation_id, assistant_message
+                logger.info(
+                    f"✅ [RAG] Saved assistant message to conversation {conversation_id} (response length: {len(final_response)} chars)"
                 )
 
             except Exception as e:
-                pass
+                logger.error(
+                    f"❌ [RAG] FAILED to save messages to conversation {conversation_id}: {e}"
+                )
+                logger.error(f"Traceback: {traceback.format_exc()}")
 
             yield final_result
         else:

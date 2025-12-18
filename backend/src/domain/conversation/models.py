@@ -50,10 +50,8 @@ class ProviderConfig:
 class EnhancementConfig:
     """Query enhancement configuration for a conversation."""
 
-    strategy: str  # "native", "multi_query", "augmented", "hyde", "decomposition"
-    provider: Optional[ProviderConfig] = (
-        None  # Provider for enhancement (e.g., embedding model)
-    )
+    strategy: str  # "native", "multi_query", "augmented", "hyde", "decomposition", "custom_variants"
+    # Note: Enhancement uses the agent's primary llm_provider, no separate provider needed
 
 
 @dataclass
@@ -78,7 +76,7 @@ class AnswerGenerationConfig:
     """Answer generation configuration."""
 
     enabled: bool = False  # Whether answer generation is enabled
-    provider: Optional[ProviderConfig] = None  # LLM provider for answer generation
+    # Note: Answer generation uses the agent's primary llm_provider, no separate provider needed
 
 
 # NOTE: AssistantTool and SystemPromptTask classes have been removed.
@@ -100,11 +98,19 @@ class AssistantConfig:
 
 @dataclass
 class ConversationMessage:
-    """Represents a single message in a conversation."""
+    """
+    Represents a single message in a conversation.
 
+    NEW ARCHITECTURE: Stored in separate 'messages' collection.
+    """
+
+    _id: str  # MongoDB _id
+    conversation_id: str  # Foreign key to ConversationSession
+    user_id: str  # Denormalized for faster queries
     role: str  # "user" or "assistant"
     content: str
     timestamp: datetime
+    message_index: int = 0  # Preserves order within conversation
     source_links: Optional[List[Dict[str, str]]] = (
         None  # List of dicts with 'url', 'title', 'chunk_id', 'query_variant_index', 'query_variant'
     )
@@ -118,80 +124,29 @@ class ConversationMessage:
 
 @dataclass
 class ConversationSession:
-    """Represents a conversation session with history."""
+    """
+    Represents a conversation session (thread).
 
-    _id: str  # MongoDB _id as primary identifier
+    NEW ARCHITECTURE:
+    - agent_id links to reusable agent configuration
+    - messages are stored in separate 'messages' collection
+    - NO configuration fields here (all in agent)
+    """
+
+    _id: str  # MongoDB _id as primary identifier (conversation_id/thread_id)
     user_id: str
+    agent_id: str  # Foreign key to Agent collection (REQUIRED)
     created_at: datetime
     last_updated: datetime
-    messages: List[ConversationMessage]
     name: Optional[str] = None
     description: Optional[str] = None
-    # Nested configuration structures
-    enhancement: Optional[EnhancementConfig] = None  # Query enhancement configuration
-    vector_database: Optional[VectorDatabaseConfig] = (
-        None  # Vector database configuration
-    )
-    reranker: Optional[RerankerConfig] = None  # Document reranker configuration
-    answer_generation: Optional[AnswerGenerationConfig] = (
-        None  # Answer generation configuration
-    )
-    # Tags for organization
+    last_message_at: Optional[datetime] = None
+    is_archived: bool = False
     tags: Optional[List[str]] = None
-    # Assistant mode configuration (complex nested structure)
-    # Contains enabled boolean, tools list, and instructions
-    # This is the ONLY place mode is stored - no redundant flat fields
-    assistant_config: Optional[AssistantConfig] = None
 
     def __post_init__(self):
         if self.tags is None:
             self.tags = []
         # Generate default name if none provided
         if self.name is None:
-            self.name = f"Session {self.created_at.strftime('%Y-%m-%d %H:%M')}"
-
-    @property
-    def message_count(self) -> int:
-        """Get the number of messages in this session."""
-        return len(self.messages)
-
-    @property
-    def agent_type(self) -> str:
-        """Get agent type based on assistant_config.enabled flag."""
-        return (
-            "supervisor"
-            if (self.assistant_config and self.assistant_config.enabled)
-            else "rag"
-        )
-
-    @property
-    def has_answer_generation(self) -> bool:
-        """Check if answer generation is configured."""
-        return (
-            self.answer_generation is not None
-            and self.answer_generation.provider is not None
-        )
-
-    @property
-    def has_enhancement(self) -> bool:
-        """Check if enhancement configuration is set."""
-        return self.enhancement is not None and self.enhancement.strategy != "native"
-
-    @property
-    def current_strategy(self) -> str:
-        """Get current enhancement strategy."""
-        if self.enhancement:
-            return self.enhancement.strategy
-        return "native"
-
-    @property
-    def has_system_prompt(self) -> bool:
-        """Check if system prompt is configured (deprecated - kept for backward compatibility)."""
-        # System prompts are no longer stored in assistant_config
-        # This property always returns False now
-        return False
-
-    @property
-    def has_reranker(self) -> bool:
-        """Check if reranker is configured."""
-        return self.reranker is not None and self.reranker.provider is not None
+            self.name = f"Conversation {self.created_at.strftime('%Y-%m-%d %H:%M')}"

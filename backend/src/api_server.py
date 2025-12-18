@@ -14,6 +14,7 @@ from fastapi import FastAPI, HTTPException, Query, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
+from langgraph.checkpoint.mongodb.aio import AsyncMongoDBSaver
 from loguru import logger
 from opik.integrations.langchain import OpikTracer
 
@@ -29,6 +30,7 @@ else:
 
 from src.api.constants import API_CONFIG, API_PREFIX
 from src.api.routers import (
+    assistant_router,
     auth_router,
     conversation_router,
     document_splitter_router,
@@ -42,10 +44,10 @@ from src.api.routers import (
     notification_router,
     notification_websocket_router,
     rag_router,
-    supervisor_router,
     tools_router,
     vectordb_collection_router,
 )
+from src.api.routers.agent.agent_router import router as agent_router
 from src.api.routers.knowledge.knowledge_source_preview_router import (
     router as knowledge_source_preview_router,
 )
@@ -53,6 +55,8 @@ from src.api.routers.tools import mcp_servers_router
 
 # Job timeline endpoints are now part of the knowledge job router
 from src.api.routers.users import roles_router, users_router
+
+agent_mongo_uri = f"mongodb://{settings.MONGO_USER}:{settings.MONGO_PASS}@{settings.MONGO_HOST}:{settings.MONGO_PORT}/{settings.MONGO_AGENT_STATE_CHECKPOINT_DB_NAME}?authSource=admin"
 
 
 async def initialize_system_if_needed():
@@ -111,7 +115,46 @@ async def lifespan(app: FastAPI):
     logger.info("DataPilotFlow API ready and running")
     logger.info("RAG Agent configured for independent stateless query processing")
 
-    yield  # Application is running
+    # FIX LangGraph bug: MongoDB utils.py has hardcoded JsonPlusSerializer which lacks dumps() method
+    # Monkey-patch the module-level serde variable before creating checkpointer
+    import json
+
+    import langgraph.checkpoint.mongodb.utils as mongodb_utils
+
+    class JSONSerializer:
+        """Simple JSON serializer with dumps/loads methods."""
+
+        def dumps(self, obj):
+            return json.dumps(obj, default=str).encode("utf-8")
+
+        def loads(self, data):
+            return json.loads(data.decode("utf-8") if isinstance(data, bytes) else data)
+
+    mongodb_utils.serde = JSONSerializer()
+    logger.info(
+        "✅ Patched langgraph.checkpoint.mongodb.utils.serde with JSONSerializer"
+    )
+
+    async with AsyncMongoDBSaver.from_conn_string(
+        conn_string=agent_mongo_uri,
+        db_name=settings.MONGO_AGENT_STATE_CHECKPOINT_DB_NAME,
+        checkpoint_collection_name=settings.MONGO_AGENT_STATE_CHECKPOINT_COLLECTION,
+        writes_collection_name=settings.MONGO_AGENT_STATE_WRITES_COLLECTION,
+    ) as checkpointer:
+        # Store checkpointer in app state and global variable
+        app.state.checkpointer = checkpointer
+
+        # Set checkpointer for assistant_agent
+        from src.agents.assistant_agent.response_handler import (
+            set_checkpointer as set_assistant_checkpointer,
+        )
+
+        set_assistant_checkpointer(checkpointer)  # For assistant agent
+
+        logger.info("DataPilot API ready and running")
+        logger.info(f"Checkpointer stored in app.state and global: {checkpointer}")
+        logger.info("Checkpointer set for assistant_agent")
+        yield {"checkpointer": checkpointer}  # Application is running
 
     # Handle graceful shutdown
     if settings.AGENT_TRACING_ENABLED:
@@ -165,10 +208,13 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 # Include routers under API version prefix
 app.include_router(auth_router, prefix=API_PREFIX, tags=["Authentication Management"])
 app.include_router(rag_router, prefix=API_PREFIX, tags=["RAG WebSocket"])
-app.include_router(supervisor_router, prefix=API_PREFIX, tags=["Supervisor WebSocket"])
+app.include_router(
+    assistant_router, prefix=API_PREFIX, tags=["Assistant Agent WebSocket"]
+)
 app.include_router(
     conversation_router, prefix=API_PREFIX, tags=["Conversations Management"]
 )
+app.include_router(agent_router, prefix=API_PREFIX, tags=["Agents Management"])
 app.include_router(
     tools_router, prefix=f"{API_PREFIX}/tools", tags=["Tools Management"]
 )

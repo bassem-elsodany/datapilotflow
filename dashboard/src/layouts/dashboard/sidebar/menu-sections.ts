@@ -2,9 +2,9 @@ import { paths } from '@/routes/paths';
 import { ElementType } from 'react';
 import {
   PiBrainDuotone,
+  PiChatsDuotone,
   PiCpuDuotone,
   PiGearSixDuotone,
-  PiMagnifyingGlassDuotone,
   PiStarDuotone,
   PiUsersDuotone
 } from 'react-icons/pi';
@@ -44,15 +44,14 @@ export const menu: MenuItem[] = [
     header: 'Apps',
     section: [
       {
-        name: 'Knowledge',
-        href: paths.dashboard.apps.knowledgeSearch,
-        icon: PiMagnifyingGlassDuotone,
-        dropdownItems: [
-          {
-            name: 'Conversations',
-            href: paths.dashboard.apps.knowledgeSearch,
-          },
-        ],
+        name: 'Agents',
+        href: paths.dashboard.apps.agents,
+        icon: PiBrainDuotone,
+      },
+      {
+        name: 'Conversations',
+        href: paths.dashboard.apps.conversations,
+        icon: PiChatsDuotone,
       },
     ],
   },

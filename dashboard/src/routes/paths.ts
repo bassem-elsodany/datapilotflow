@@ -65,9 +65,15 @@ export const paths = {
     },
     apps: {
       root: '/dashboard/apps',
-      knowledgeSearch: '/dashboard/apps/knowledge-search',
-      conversationCreate: '/dashboard/apps/conversation/create',
-      conversation: (sessionId: string) => `/dashboard/apps/conversation/${sessionId}`,
+      // Agent management
+      agents: '/dashboard/apps/agents',
+      agentCreate: '/dashboard/apps/agents/create',
+      agentEdit: (agentId: string) => `/dashboard/apps/agents/${agentId}/edit`,
+      agentConversations: (agentId: string) => `/dashboard/apps/agents/${agentId}/conversations`,
+      // Conversations
+      conversations: '/dashboard/apps/conversations',
+      conversationCreate: '/dashboard/apps/conversations/create',
+      conversation: (sessionId: string) => `/dashboard/apps/conversations/${sessionId}`,
     },
   },
 };

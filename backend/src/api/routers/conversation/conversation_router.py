@@ -1,28 +1,23 @@
 """
 Conversation Router - REST Endpoints
 
-This module contains conversation management REST endpoints including
-traditional chat, memory reset, and conversation session management.
-All conversation-related functionality is centralized here.
+This module contains conversation management REST endpoints.
+
+NEW ARCHITECTURE:
+- Conversations are lightweight threads linked to agents via agent_id
+- Configuration (enhancement, vector_database, reranker, answer_generation, assistant_config)
+  is stored in the Agent, not in the Conversation
+- Messages are stored in a separate collection
 """
 
-from dataclasses import asdict
-from typing import List, Optional
+from typing import List, Optional, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from loguru import logger
 from pydantic import BaseModel, Field
 
 from src.api.routers.auth.auth_router import get_current_user
-from src.domain.conversation import (
-    AnswerGenerationConfig,
-    AssistantConfig,
-    ConversationSession,
-    EnhancementConfig,
-    ProviderConfig,
-    RerankerConfig,
-    VectorDatabaseConfig,
-)
+from src.domain.conversation import ConversationSession
 from src.domain.user import User
 from src.services.conversation.conversation_history_service import (
     conversation_history_service,
@@ -32,259 +27,65 @@ from src.services.conversation.conversation_history_service import (
 router = APIRouter(prefix="/conversations", tags=["Conversations Management"])
 
 
+def get_user_id(user: User) -> str:
+    """Get user ID with type safety. Raises HTTPException if user ID is not set."""
+    if user.id is None:
+        raise HTTPException(status_code=401, detail="User ID not found")
+    return user.id
+
+
 # ============================================================================
-# NEW PYDANTIC MODELS FOR RESTRUCTURED CONVERSATION SCHEMA
+# REQUEST MODELS
 # ============================================================================
-
-
-class ProviderConfigRequest(BaseModel):
-    """Request model for provider configuration."""
-
-    id: str = Field(..., description="Provider ID")
-    model_name: str = Field(..., description="Model name")
-
-
-class EnhancementConfigRequest(BaseModel):
-    """Request model for enhancement strategy configuration."""
-
-    strategy: str = Field(
-        ...,
-        description="Enhancement strategy (native, multi_query, augmented, hyde, decomposition)",
-    )
-    provider: Optional[ProviderConfigRequest] = Field(
-        None, description="Provider for enhancement"
-    )
-
-
-class VectorDatabaseConfigRequest(BaseModel):
-    """Request model for vector database configuration."""
-
-    collection_name: str = Field(
-        "LongTermMemory", description="Vector database collection name"
-    )
-    top_k: int = Field(5, ge=5, le=30, description="Number of documents to retrieve")
-
-
-class RerankerConfigRequest(BaseModel):
-    """Request model for reranker configuration."""
-
-    enabled: bool = Field(False, description="Whether reranking is enabled")
-    provider: Optional[ProviderConfigRequest] = Field(
-        None, description="Reranker provider"
-    )
-    relevance_threshold: float = Field(
-        0.5,
-        ge=0.0,
-        le=1.0,
-        description="Relevance score threshold for filtering documents",
-    )
-
-
-class AnswerGenerationConfigRequest(BaseModel):
-    """Request model for answer generation configuration."""
-
-    enabled: bool = Field(False, description="Whether answer generation is enabled")
-    provider: Optional[ProviderConfigRequest] = Field(
-        None, description="LLM provider for answer generation"
-    )
-
-
-class SystemPromptRequest(BaseModel):
-    """Request model for embedded system prompt."""
-
-    id: str = Field(..., description="System prompt ID")
-    title: str = Field(..., description="System prompt title")
-    content: str = Field(..., description="System prompt content")
-
-
-class AssistantConfigRequest(BaseModel):
-    """Request model for Assistant mode configuration."""
-
-    enabled: bool = Field(
-        True, description="Whether Assistant mode is enabled (true) or RAG mode (false)"
-    )
-    tools: Optional[List[str]] = Field(
-        default_factory=list, description="List of tool IDs bound to this conversation agent"
-    )
-    instructions: Optional[str] = Field(
-        None, description="User's custom instructions for agent personality, behavior, and tool usage"
-    )
 
 
 class CreateSessionRequest(BaseModel):
-    """Request model for creating a new conversation session with new structure."""
+    """
+    Request model for creating a new conversation session.
 
+    NEW ARCHITECTURE: Conversations are linked to agents.
+    Create an agent first, then create conversations using that agent's ID.
+    """
+
+    agent_id: str = Field(..., description="ID of agent to use (REQUIRED)")
     name: Optional[str] = Field(None, max_length=100, description="Conversation name")
     description: Optional[str] = Field(
         None, max_length=500, description="Conversation description"
     )
-    system_prompt: Optional[SystemPromptRequest] = Field(
-        None,
-        description="Embedded system prompt (deprecated - use assistant_config for Assistant mode)",
-    )
-    enhancement: Optional[EnhancementConfigRequest] = Field(
-        None, description="Query enhancement configuration"
-    )
-    vector_database: Optional[VectorDatabaseConfigRequest] = Field(
-        None, description="Vector database configuration"
-    )
-    reranker: Optional[RerankerConfigRequest] = Field(
-        None, description="Document reranker configuration"
-    )
-    answer_generation: Optional[AnswerGenerationConfigRequest] = Field(
-        None, description="Answer generation configuration"
-    )
     tags: Optional[List[str]] = Field(
         None, description="Tags for organizing conversations"
     )
-    enable_knowledge_assistant: bool = Field(
-        False,
-        description="Enable multi-agent supervisor (deprecated - use assistant_config)",
-    )
-    assistant_config: Optional[AssistantConfigRequest] = Field(
-        None,
-        description="Complex nested configuration for Assistant mode (RAG=null, Assistant=object)",
-    )
 
 
-def _serialize_conversation_to_response(session: "ConversationSession") -> dict:
-    """Serialize ConversationSession to API response format (new nested structure)."""
-    # Determine agent mode based on assistant_config
-    agent_mode = "assistant" if (session.assistant_config and session.assistant_config.enabled) else "rag"
-    
-    response = {
+def _serialize_conversation_to_response(
+    session: "ConversationSession", message_count: int = 0
+) -> dict:
+    """
+    Serialize ConversationSession to API response format.
+
+    NEW ARCHITECTURE: Configuration is now stored in the linked Agent, not in the conversation.
+    """
+    return {
         "id": session._id,
-        "name": session.name or f"Session {session._id[:8]}",
+        "agent_id": session.agent_id,
+        "name": session.name or f"Conversation {session._id[:8]}",
         "description": session.description,
         "created_at": session.created_at.isoformat(),
         "last_updated": session.last_updated.isoformat(),
-        "message_count": session.message_count,
+        "last_message_at": (
+            session.last_message_at.isoformat() if session.last_message_at else None
+        ),
+        "message_count": message_count,
         "tags": session.tags or [],
-        "agent_mode": agent_mode,  # "rag" or "assistant"
+        "is_archived": session.is_archived,
     }
-
-    # Enhancement configuration
-    if session.enhancement:
-        response["enhancement"] = {
-            "strategy": session.enhancement.strategy,
-            "provider": (
-                {
-                    "id": session.enhancement.provider.id,
-                    "model_name": session.enhancement.provider.model_name,
-                }
-                if session.enhancement.provider
-                else None
-            ),
-        }
-
-    # Vector database configuration
-    if session.vector_database:
-        response["vector_database"] = {
-            "collection_name": session.vector_database.collection_name,
-            "top_k": session.vector_database.top_k,
-        }
-
-    # Reranker configuration
-    if session.reranker:
-        response["reranker"] = {
-            "enabled": session.reranker.enabled,
-            "provider": (
-                {
-                    "id": session.reranker.provider.id,
-                    "model_name": session.reranker.provider.model_name,
-                }
-                if session.reranker.provider
-                else None
-            ),
-            "relevance_threshold": session.reranker.relevance_threshold,
-        }
-
-    # Answer generation configuration
-    if session.answer_generation:
-        response["answer_generation"] = {
-            "enabled": session.answer_generation.enabled,
-            "provider": (
-                {
-                    "id": session.answer_generation.provider.id,
-                    "model_name": session.answer_generation.provider.model_name,
-                }
-                if session.answer_generation.provider
-                else None
-            ),
-        }
-
-    # Assistant configuration (tool bindings)
-    if session.assistant_config:
-        response["assistant_config"] = {
-            "enabled": session.assistant_config.enabled,
-            "tools": session.assistant_config.tools if session.assistant_config.tools else [],
-            "instructions": session.assistant_config.instructions,
-        }
-
-    return response
-
-
-class ChatMessage(BaseModel):
-    message: str
-    candidate_id: str
-    role: str
-    seniority: str
-    domain: str
 
 
 class RenameSessionRequest(BaseModel):
+    """Request model for renaming a conversation."""
+
     new_name: str = Field(
         ..., min_length=1, max_length=100, description="New name for the conversation"
-    )
-
-
-class UpdateSessionConfigRequest(BaseModel):
-    """Request model for updating conversation configuration with new nested structure."""
-
-    name: Optional[str] = Field(None, max_length=100, description="Conversation name")
-    description: Optional[str] = Field(
-        None, max_length=500, description="Conversation description"
-    )
-    system_prompt: Optional[SystemPromptRequest] = Field(
-        None,
-        description="Embedded system prompt (deprecated - use assistant_config for Assistant mode)",
-    )
-    enhancement: Optional[EnhancementConfigRequest] = Field(
-        None, description="Query enhancement configuration"
-    )
-    vector_database: Optional[VectorDatabaseConfigRequest] = Field(
-        None, description="Vector database configuration"
-    )
-    reranker: Optional[RerankerConfigRequest] = Field(
-        None, description="Document reranker configuration"
-    )
-    answer_generation: Optional[AnswerGenerationConfigRequest] = Field(
-        None, description="Answer generation configuration"
-    )
-    tags: Optional[List[str]] = Field(
-        None, description="Tags for organizing conversations"
-    )
-    enable_knowledge_assistant: Optional[bool] = Field(
-        None,
-        description="Enable multi-agent supervisor (deprecated - use assistant_config)",
-    )
-    assistant_config: Optional[AssistantConfigRequest] = Field(
-        None,
-        description="Complex nested configuration for Assistant mode (RAG=null, Assistant=object)",
-    )
-
-
-class AssistantConfigResponse(BaseModel):
-    """Response model for Assistant mode configuration."""
-
-    enabled: bool = Field(
-        ..., description="Whether Assistant mode is enabled (true) or RAG mode (false)"
-    )
-    tools: List[str] = Field(
-        default_factory=list, description="List of tool IDs bound to this conversation agent"
-    )
-    instructions: Optional[str] = Field(
-        None, description="User's custom instructions for agent personality, behavior, and tool usage"
     )
 
 
@@ -299,137 +100,56 @@ async def create_conversation_session(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Create a new conversation session with nested configuration structure.
+    Create a new conversation session linked to an agent.
 
-    Request body structure:
+    Request body:
     {
+      "agent_id": "string (REQUIRED)",
       "name": "string (optional)",
       "description": "string (optional)",
-      "system_prompt": {...},  # optional
-      "enhancement": {
-        "strategy": "string",
-        "provider": {"id": "string", "model_name": "string"} (optional)
-      },
-      "vector_database": {
-        "collection_name": "string",
-        "top_k": number
-      },
-      "reranker": {
-        "provider": {"id": "string", "model_name": "string"} (optional),
-        "relevance_threshold": number
-      },
-      "answer_generation": {
-        "provider": {"id": "string", "model_name": "string"} (optional)
-      },
-      "assistant_config": {
-        "enabled": boolean,
-        "tools": ["tool_id_1", "tool_id_2"] (optional),
-        "instructions": "string" (optional)
-      },
-      "tags": ["string"]
+      "tags": ["string"] (optional)
     }
     """
     try:
-        # Convert request models to service dataclasses
+        logger.info(f"Creating conversation from agent {create_request.agent_id}")
 
-        enhancement = None
-        if create_request.enhancement:
-            provider = None
-            if create_request.enhancement.provider:
-                provider = ProviderConfig(
-                    id=create_request.enhancement.provider.id,
-                    model_name=create_request.enhancement.provider.model_name,
-                )
-            enhancement = EnhancementConfig(
-                strategy=create_request.enhancement.strategy, provider=provider
+        # Validate agent exists and belongs to user
+        from src.services.agent.agent_service import get_agent_service
+
+        agent_service = get_agent_service()
+        user_id = get_user_id(current_user)
+        agent = agent_service.get_agent(create_request.agent_id, user_id)
+
+        if not agent:
+            raise HTTPException(
+                status_code=404, detail=f"Agent {create_request.agent_id} not found"
             )
 
-        vector_database = None
-        if create_request.vector_database:
-            vector_database = VectorDatabaseConfig(
-                collection_name=create_request.vector_database.collection_name,
-                top_k=create_request.vector_database.top_k,
-            )
-
-        reranker = None
-        if create_request.reranker:
-            provider = None
-            if create_request.reranker.provider:
-                provider = ProviderConfig(
-                    id=create_request.reranker.provider.id,
-                    model_name=create_request.reranker.provider.model_name,
-                )
-            reranker = RerankerConfig(
-                enabled=create_request.reranker.enabled,
-                provider=provider,
-                relevance_threshold=create_request.reranker.relevance_threshold,
-            )
-
-        answer_generation = None
-        if create_request.answer_generation:
-            provider = None
-            if create_request.answer_generation.provider:
-                provider = ProviderConfig(
-                    id=create_request.answer_generation.provider.id,
-                    model_name=create_request.answer_generation.provider.model_name,
-                )
-            answer_generation = AnswerGenerationConfig(
-                enabled=create_request.answer_generation.enabled, provider=provider
-            )
-
-        # Build assistant_config if provided
-        assistant_config = None
-        if create_request.assistant_config:
-            assistant_config = AssistantConfig(
-                enabled=create_request.assistant_config.enabled,
-                tools=create_request.assistant_config.tools if create_request.assistant_config.tools else [],
-                instructions=create_request.assistant_config.instructions,
-            )
-            logger.info(
-                f"Created AssistantConfig: enabled={assistant_config.enabled}, tools_count={len(assistant_config.tools)}, has_instructions={bool(create_request.assistant_config.instructions)}"
-            )
-
+        # Create conversation (metadata only)
         session_id = conversation_history_service.create_conversation(
-            user_id=current_user.id,
+            user_id=user_id,
+            agent_id=create_request.agent_id,
             name=create_request.name,
             description=create_request.description,
-            enhancement=enhancement,
-            vector_database=vector_database,
-            reranker=reranker,
-            answer_generation=answer_generation,
             tags=create_request.tags,
-            assistant_config=assistant_config,
         )
 
-        # Determine agent type from assistant_config
-        if assistant_config:
-            agent_type = "supervisor" if assistant_config.enabled else "rag"
-        else:
-            agent_type = "rag"  # Default to RAG if no assistant_config
-
-        # Fetch the created conversation and return the full session
-        created_session = conversation_history_service.get_conversation(
-            session_id, current_user.id
+        logger.info(
+            f"Created conversation {session_id} for agent {create_request.agent_id}"
         )
 
         return {
             "success": True,
             "id": session_id,
-            "session": (
-                _serialize_conversation_to_response(created_session)
-                if created_session
-                else None
-            ),
-            "name": create_request.name or f"Session {session_id[:8]}",
-            "agent_type": agent_type,
-            "enhancement_strategy": (
-                create_request.enhancement.strategy
-                if create_request.enhancement
-                else None
-            ),
-            "message": "Conversation session created successfully",
+            "agent_id": create_request.agent_id,
+            "agent_name": agent.name,
+            "agent_type": agent.agent_type.value,
+            "name": create_request.name or f"Conversation {session_id[:8]}",
+            "message": "Conversation created successfully",
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error creating conversation session: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -460,8 +180,9 @@ async def reset_conversation_messages(
     but keeps the session itself. Useful for starting fresh within a conversation.
     """
     try:
+        user_id = get_user_id(current_user)
         success = conversation_history_service.reset_conversation_messages(
-            conversation_id, current_user.id
+            conversation_id, user_id
         )
 
         if not success:
@@ -483,23 +204,65 @@ async def reset_conversation_messages(
 
 
 @router.get("", status_code=status.HTTP_200_OK)
-async def get_conversation_sessions(current_user: User = Depends(get_current_user)):
+async def get_conversation_sessions(
+    agent_id: Optional[str] = Query(None, description="Filter by agent ID"),
+    limit: int = Query(
+        100, ge=1, le=1000, description="Maximum number of conversations"
+    ),
+    offset: int = Query(0, ge=0, description="Number of conversations to skip"),
+    current_user: User = Depends(get_current_user),
+):
     """
     Get all conversation sessions for the current user with new nested configuration structure.
+
+    Query Parameters:
+        - agent_id: Optional filter by agent ID
+        - limit: Maximum number of conversations to return (default: 100)
+        - offset: Number of conversations to skip (default: 0)
     """
     try:
-        sessions = conversation_history_service.get_user_conversations(current_user.id)
+        user_id = get_user_id(current_user)
+        logger.info(
+            f"GET /conversations called with agent_id={agent_id}, user_id={user_id}"
+        )
+
+        sessions = conversation_history_service.get_user_conversations(
+            user_id=user_id,
+            agent_id=agent_id,
+            limit=limit,
+            offset=offset,
+        )
+
+        logger.info(f"Found {len(sessions)} conversations")
 
         session_responses = []
         for session in sessions:
-            # Serialize each conversation to response format (new nested structure)
-            session_data = _serialize_conversation_to_response(session)
+            # Get message count for this conversation
+            message_count = conversation_history_service.get_message_count(session._id)
+
+            session_data = {
+                "id": session._id,
+                "agent_id": session.agent_id,
+                "name": session.name or f"Conversation {session._id[:8]}",
+                "description": session.description,
+                "created_at": session.created_at.isoformat(),
+                "last_updated": session.last_updated.isoformat(),
+                "last_message_at": (
+                    session.last_message_at.isoformat()
+                    if session.last_message_at
+                    else None
+                ),
+                "message_count": message_count,
+                "tags": session.tags or [],
+                "is_archived": session.is_archived,
+            }
             session_responses.append(session_data)
 
         return {
             "success": True,
             "sessions": session_responses,
             "total_count": len(session_responses),
+            "agent_id": agent_id,
         }
 
     except Exception as e:
@@ -511,50 +274,102 @@ async def get_conversation_sessions(current_user: User = Depends(get_current_use
 async def get_conversation_session(
     conversation_id: str,
     expand: Optional[str] = Query(
-        None, description="Comma-separated fields to expand (e.g., llm_provider)"
+        None, description="Comma-separated fields to expand (e.g., agent, messages)"
     ),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Get specific conversation session details and messages with optional provider expansion.
+    Get specific conversation session details.
+
+    Query Parameters:
+        - expand: Comma-separated fields to expand
+            - "messages": Include full message history
+            - "agent": Include agent details
     """
     try:
-        # Check if we need to expand provider
-        expand_provider = expand and "llm_provider" in expand.split(",")
-
-        if expand_provider:
-            result = conversation_history_service.get_conversation_with_provider(
-                conversation_id, current_user.id
-            )
-            if not result:
-                raise HTTPException(
-                    status_code=404, detail="Conversation session not found"
-                )
-            session = result["session"]
-            llm_provider = result["llm_provider"]
-        else:
-            session = conversation_history_service.get_conversation(
-                conversation_id, current_user.id
-            )
-            llm_provider = None
+        user_id = get_user_id(current_user)
+        session = conversation_history_service.get_conversation(
+            conversation_id, user_id
+        )
 
         if not session:
             raise HTTPException(
                 status_code=404, detail="Conversation session not found"
             )
 
-        messages = conversation_history_service.get_session_messages(
-            conversation_id, current_user.id
-        )
+        # Get message count
+        message_count = conversation_history_service.get_message_count(conversation_id)
 
-        # Serialize conversation to response format (new nested structure)
-        session_data = _serialize_conversation_to_response(session)
+        # Serialize conversation
+        session_data = _serialize_conversation_to_response(session, message_count)
 
-        # Add expanded provider if requested
-        if llm_provider:
-            session_data["llm_provider"] = llm_provider
+        # Handle expansions
+        expand_fields = expand.split(",") if expand else []
 
-        return {"success": True, "session": session_data, "messages": messages}
+        # Expand messages if requested
+        messages = None
+        if "messages" in expand_fields:
+            message_list = conversation_history_service.get_conversation_messages(
+                conversation_id
+            )
+            messages = [
+                {
+                    "id": msg._id,
+                    "role": msg.role,
+                    "content": msg.content,
+                    "timestamp": msg.timestamp.isoformat(),
+                    "message_index": msg.message_index,
+                    "source_links": msg.source_links,
+                    "enhancement_strategy_used": msg.enhancement_strategy_used,
+                    "enhanced_queries": msg.enhanced_queries,
+                    "processing_time_ms": msg.processing_time_ms,
+                    "document_count": msg.document_count,
+                }
+                for msg in message_list
+            ]
+
+        # Expand agent if requested
+        agent_data = None
+        if "agent" in expand_fields:
+            from dataclasses import asdict
+
+            from src.services.agent.agent_service import get_agent_service
+
+            agent_service = get_agent_service()
+            agent = agent_service.get_agent(session.agent_id, user_id)
+            if agent:
+                # Serialize configuration objects to dicts
+                def config_to_dict(obj):
+                    if obj is None:
+                        return None
+                    if hasattr(obj, "__dataclass_fields__"):
+                        result = {}
+                        for field in obj.__dataclass_fields__:
+                            value = getattr(obj, field)
+                            result[field] = config_to_dict(value)
+                        return result
+                    return obj
+
+                agent_data = {
+                    "id": agent._id,
+                    "name": agent.name,
+                    "agent_type": agent.agent_type.value,
+                    "description": agent.description,
+                    # Include full configuration for frontend
+                    "enhancement": config_to_dict(agent.enhancement),
+                    "vector_database": config_to_dict(agent.vector_database),
+                    "reranker": config_to_dict(agent.reranker),
+                    "answer_generation": config_to_dict(agent.answer_generation),
+                    "assistant_config": config_to_dict(agent.assistant_config),
+                }
+
+        response = {"success": True, "session": session_data}
+        if messages is not None:
+            response["messages"] = messages
+        if agent_data is not None:
+            response["agent"] = agent_data
+
+        return response
 
     except HTTPException:
         raise
@@ -571,8 +386,9 @@ async def delete_conversation_session(
     Delete a conversation session and all its messages.
     """
     try:
+        user_id = get_user_id(current_user)
         success = conversation_history_service.delete_conversation(
-            conversation_id, current_user.id
+            conversation_id, user_id
         )
 
         if not success:
@@ -599,10 +415,11 @@ async def rename_conversation_session(
     Rename a conversation session.
     """
     try:
-        success = conversation_history_service.rename_conversation(
+        user_id = get_user_id(current_user)
+        success = conversation_history_service.update_conversation(
             conversation_id=conversation_id,
-            new_name=rename_request.new_name,
-            user_id=current_user.id,
+            user_id=user_id,
+            name=rename_request.new_name,
         )
 
         if not success:
@@ -624,118 +441,45 @@ async def rename_conversation_session(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class UpdateConversationRequest(BaseModel):
+    """Request model for updating conversation metadata."""
+
+    name: Optional[str] = Field(None, max_length=100, description="Conversation name")
+    description: Optional[str] = Field(
+        None, max_length=500, description="Conversation description"
+    )
+    tags: Optional[List[str]] = Field(
+        None, description="Tags for organizing conversations"
+    )
+    is_archived: Optional[bool] = Field(
+        None, description="Whether the conversation is archived"
+    )
+
+
 @router.put("/{conversation_id}", status_code=status.HTTP_200_OK)
 async def update_conversation_session(
     conversation_id: str,
-    config_request: UpdateSessionConfigRequest,
+    update_request: UpdateConversationRequest,
     current_user: User = Depends(get_current_user),
 ):
     """
-    Update conversation session with new nested configuration structure.
+    Update conversation metadata.
+
+    NOTE: Configuration (enhancement, vector_database, reranker, answer_generation, assistant_config)
+    is now stored in the linked Agent. Use PUT /agents/{agent_id} to update configuration.
     """
     try:
-        # Get current conversation
-        conversation = conversation_history_service.get_conversation(
-            conversation_id, current_user.id
-        )
-        if not conversation:
-            raise HTTPException(status_code=404, detail="Conversation not found")
-
-        # Build MongoDB update document with new nested structure
-        update_doc = {}
-
-        # Basic fields
-        if config_request.name is not None:
-            update_doc["name"] = config_request.name
-        if config_request.description is not None:
-            update_doc["description"] = config_request.description
-        if config_request.tags is not None:
-            update_doc["tags"] = config_request.tags
-
-        # Enhancement configuration
-        if config_request.enhancement is not None:
-            provider = None
-            if config_request.enhancement.provider:
-                provider = {
-                    "id": config_request.enhancement.provider.id,
-                    "model_name": config_request.enhancement.provider.model_name,
-                }
-            update_doc["enhancement"] = {
-                "strategy": config_request.enhancement.strategy,
-                "provider": provider,
-            }
-
-        # Vector database configuration
-        if config_request.vector_database is not None:
-            update_doc["vector_database"] = {
-                "collection_name": config_request.vector_database.collection_name,
-                "top_k": config_request.vector_database.top_k,
-            }
-
-        # Reranker configuration
-        if config_request.reranker is not None:
-            provider = None
-            if config_request.reranker.provider:
-                provider = {
-                    "id": config_request.reranker.provider.id,
-                    "model_name": config_request.reranker.provider.model_name,
-                }
-            update_doc["reranker"] = {
-                "enabled": config_request.reranker.enabled,
-                "provider": provider,
-                "relevance_threshold": config_request.reranker.relevance_threshold,
-            }
-
-        # Answer generation configuration
-        if config_request.answer_generation is not None:
-            provider = None
-            if config_request.answer_generation.provider:
-                provider = {
-                    "id": config_request.answer_generation.provider.id,
-                    "model_name": config_request.answer_generation.provider.model_name,
-                }
-            update_doc["answer_generation"] = {
-                "enabled": config_request.answer_generation.enabled,
-                "provider": provider,
-            }
-
-        # Assistant configuration (tool bindings)
-        if config_request.assistant_config is not None:
-            logger.info(
-                f"Updating assistant_config: enabled={config_request.assistant_config.enabled}"
-            )
-
-            assistant_config_dict = {
-                "enabled": config_request.assistant_config.enabled,
-                "tools": config_request.assistant_config.tools if config_request.assistant_config.tools else [],
-                "instructions": config_request.assistant_config.instructions,
-            }
-
-            if config_request.assistant_config.instructions:
-                logger.info(f"Including instructions in update ({len(config_request.assistant_config.instructions)} chars)")
-
-            logger.info(
-                f"Updating AssistantConfig: enabled={config_request.assistant_config.enabled}, tools_count={len(assistant_config_dict['tools'])}"
-            )
-            update_doc["assistant_config"] = assistant_config_dict
-
-        if not update_doc:
-            raise HTTPException(status_code=400, detail="No fields to update")
-
-        # Update last_updated timestamp
-        from datetime import datetime
-
-        update_doc["last_updated"] = datetime.utcnow()
-
-        # Update MongoDB document
-        from bson import ObjectId
-
-        result = conversation_history_service.collection.update_one(
-            {"_id": ObjectId(conversation_id), "user_id": current_user.id},
-            {"$set": update_doc},
+        user_id = get_user_id(current_user)
+        success = conversation_history_service.update_conversation(
+            conversation_id=conversation_id,
+            user_id=user_id,
+            name=update_request.name,
+            description=update_request.description,
+            tags=update_request.tags,
+            is_archived=update_request.is_archived,
         )
 
-        if result.matched_count == 0:
+        if not success:
             raise HTTPException(status_code=404, detail="Conversation not found")
 
         return {

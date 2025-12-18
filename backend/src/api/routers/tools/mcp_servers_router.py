@@ -21,6 +21,90 @@ from src.services.tool import get_mcp_server_service, get_tool_service
 router = APIRouter()
 
 
+def extract_root_cause(exc: Exception) -> str:
+    """
+    Extract a meaningful error message from an exception.
+
+    Handles ExceptionGroup (Python 3.11+) by unwrapping nested exceptions
+    to find the actual root cause error message.
+
+    Args:
+        exc: The exception to extract the root cause from
+
+    Returns:
+        A human-readable error message describing the root cause
+    """
+    # Handle ExceptionGroup / BaseExceptionGroup
+    if isinstance(exc, BaseExceptionGroup):
+        # Get all nested exceptions
+        exceptions = exc.exceptions
+        root_causes = []
+
+        for nested_exc in exceptions:
+            # Recursively extract from nested groups
+            if isinstance(nested_exc, BaseExceptionGroup):
+                root_causes.append(extract_root_cause(nested_exc))
+            else:
+                # Try to get the most meaningful error message
+                error_msg = _get_exception_message(nested_exc)
+                if error_msg:
+                    root_causes.append(error_msg)
+
+        if root_causes:
+            # Return unique root causes
+            unique_causes = list(dict.fromkeys(root_causes))
+            return "; ".join(unique_causes)
+
+    # For regular exceptions
+    return _get_exception_message(exc)
+
+
+def _get_exception_message(exc: Exception) -> str:
+    """
+    Get a meaningful error message from a single exception.
+
+    Handles common exception types and extracts user-friendly messages.
+
+    Args:
+        exc: The exception to extract the message from
+
+    Returns:
+        A human-readable error message
+    """
+    exc_type = type(exc).__name__
+    exc_msg = str(exc)
+
+    # Common connection/network errors - provide user-friendly messages
+    if "ConnectError" in exc_type or "ConnectionError" in exc_type:
+        if "nodename nor servname provided" in exc_msg or "Name or service not known" in exc_msg:
+            return "Cannot resolve server hostname. Please check the URL is correct."
+        if "Connection refused" in exc_msg:
+            return "Connection refused. The server may be down or the port may be incorrect."
+        if "timed out" in exc_msg.lower() or "timeout" in exc_msg.lower():
+            return "Connection timed out. The server may be unreachable or slow to respond."
+        return f"Connection error: {exc_msg}"
+
+    if "TimeoutError" in exc_type or "timeout" in exc_msg.lower():
+        return "Request timed out. The server may be unreachable or slow to respond."
+
+    if "SSLError" in exc_type or "SSL" in exc_msg:
+        return f"SSL/TLS error: {exc_msg}. Check if the server uses HTTPS and has valid certificates."
+
+    if "AuthenticationError" in exc_type or "401" in exc_msg or "Unauthorized" in exc_msg:
+        return "Authentication failed. Please check your credentials."
+
+    if "PermissionError" in exc_type or "403" in exc_msg or "Forbidden" in exc_msg:
+        return "Permission denied. Your credentials may not have access to this server."
+
+    if "404" in exc_msg or "Not Found" in exc_msg:
+        return "MCP endpoint not found. Please verify the server URL is correct."
+
+    # For other exceptions, return the type and message
+    if exc_msg:
+        return f"{exc_type}: {exc_msg}"
+    return exc_type
+
+
 # ============================================================================
 # REQUEST/RESPONSE MODELS
 # ============================================================================
@@ -89,10 +173,10 @@ class DiscoverToolsRequest(BaseModel):
 # ============================================================================
 
 
-def server_to_response(server: MCPServerConfig) -> MCPServerResponse:
-    """Convert MCPServerConfig domain object to API response."""
+def server_to_response(_id: str, server: MCPServerConfig) -> MCPServerResponse:
+    """Convert (_id, MCPServerConfig) to API response."""
     return MCPServerResponse(
-        id=server.id,
+        id=_id,  # Use MongoDB _id
         user_id=server.user_id,
         name=server.name,
         server_url=server.server_url,
@@ -135,9 +219,8 @@ async def create_mcp_server(
                 detail="User ID not found",
             )
 
-        # Create server object (id will be assigned by MongoDB)
+        # Create server object (without id - MongoDB will generate _id)
         server = MCPServerConfig(
-            id="",  # Will be set by MongoDB _id
             user_id=user_id,
             name=request.name,
             server_url=request.server_url,
@@ -151,9 +234,9 @@ async def create_mcp_server(
 
         # Save via service
         mcp_server_service = get_mcp_server_service()
-        created_server = mcp_server_service.create_server(server)
+        _id, created_server = mcp_server_service.create_server(server)
 
-        return server_to_response(created_server)
+        return server_to_response(_id, created_server)
 
     except HTTPException:
         raise
@@ -191,7 +274,7 @@ async def list_mcp_servers(
         mcp_server_service = get_mcp_server_service()
         servers = mcp_server_service.get_user_servers(user_id, is_active=is_active)
 
-        return [server_to_response(server) for server in servers]
+        return [server_to_response(_id, server) for _id, server in servers]
 
     except HTTPException:
         raise
@@ -227,14 +310,15 @@ async def get_mcp_server(
             )
 
         mcp_server_service = get_mcp_server_service()
-        server = mcp_server_service.get_server_by_id(server_id, user_id)
-        if not server:
+        result = mcp_server_service.get_server_by_id(server_id, user_id)
+        if not result:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"MCP server with ID {server_id} not found",
             )
 
-        return server_to_response(server)
+        _id, server = result
+        return server_to_response(_id, server)
 
     except HTTPException:
         raise
@@ -307,9 +391,15 @@ async def update_mcp_server(
             )
 
         # Fetch updated server
-        updated_server = mcp_server_service.get_server_by_id(server_id, user_id)
+        result = mcp_server_service.get_server_by_id(server_id, user_id)
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"MCP server with ID {server_id} not found after update",
+            )
 
-        return server_to_response(updated_server)
+        _id, updated_server = result
+        return server_to_response(_id, updated_server)
 
     except HTTPException:
         raise
@@ -328,14 +418,14 @@ async def delete_mcp_server(
 ):
     """
     Delete an MCP server.
-    
+
     Cannot delete a server if it has associated tools.
     Delete or reassign the tools first.
 
     Args:
         server_id: Server ID
         current_user: Authenticated user
-        
+
     Raises:
         HTTPException: 409 if server has related tools
     """
@@ -349,41 +439,46 @@ async def delete_mcp_server(
 
         mcp_server_service = get_mcp_server_service()
         tool_service = get_tool_service()
-        
+
         # Check if server exists
-        existing_server = mcp_server_service.get_server_by_id(server_id, user_id)
-        if not existing_server:
+        result = mcp_server_service.get_server_by_id(server_id, user_id)
+        if not result:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"MCP server with ID {server_id} not found",
             )
-        
+
+        _id, existing_server = result
+
         # Check for related tools
-        all_tools = tool_service.get_all_tools(user_id)
+        all_tools = tool_service.get_user_tools(user_id)
         related_tools = [
-            tool for tool in all_tools 
-            if tool.tool_type.value == 'mcp_remote' and tool.mcp_server_id == server_id
+            tool
+            for tool in all_tools
+            if tool.tool_type.value == "mcp_remote" and tool.mcp_server_id == server_id
         ]
-        
+
         if related_tools:
-            tool_names = ', '.join([tool.display_name for tool in related_tools[:5]])
+            tool_names = ", ".join([tool.display_name for tool in related_tools[:5]])
             if len(related_tools) > 5:
-                tool_names += f' and {len(related_tools) - 5} more'
-            
+                tool_names += f" and {len(related_tools) - 5} more"
+
             logger.warning(
                 f"User {user_id} attempted to delete MCP server {server_id} "
                 f"with {len(related_tools)} related tool(s): {tool_names}"
             )
-            
+
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Cannot delete MCP server '{existing_server.name}'. "
-                       f"It has {len(related_tools)} tool(s) associated with it: {tool_names}. "
-                       f"Please delete or reassign these tools first.",
+                f"It has {len(related_tools)} tool(s) associated with it: {tool_names}. "
+                f"Please delete or reassign these tools first.",
             )
-        
+
         # Safe to delete
-        logger.info(f"User {user_id} deleting MCP server {server_id} ('{existing_server.name}')")
+        logger.info(
+            f"User {user_id} deleting MCP server {server_id} ('{existing_server.name}')"
+        )
         success = mcp_server_service.delete_server(server_id, user_id)
         if not success:
             raise HTTPException(
@@ -430,9 +525,8 @@ async def discover_mcp_tools(
 
         logger.info(f"User {user_id} requested MCP discovery for {request.server_url}")
 
-        # Create temporary server config for discovery (ID not needed, will not be saved)
+        # Create temporary server config for discovery (will not be saved)
         temp_server = MCPServerConfig(
-            id="",
             user_id=user_id,
             name="Discovery Test",
             server_url=request.server_url,
@@ -455,9 +549,11 @@ async def discover_mcp_tools(
     except Exception as e:
         logger.error(f"Error discovering MCP tools from {request.server_url}: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
+        # Extract meaningful error message from exception (including ExceptionGroup)
+        error_message = extract_root_cause(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to discover MCP tools: {str(e)}",
+            detail=f"Failed to discover MCP tools: {error_message}",
         )
 
 
@@ -490,14 +586,17 @@ async def discover_from_existing_server(
         mcp_server_service = get_mcp_server_service()
 
         # Get server config
-        server = mcp_server_service.get_server_by_id(server_id, user_id)
-        if not server:
+        result = mcp_server_service.get_server_by_id(server_id, user_id)
+        if not result:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"MCP server with ID {server_id} not found",
             )
 
-        logger.info(f"User {user_id} discovering tools from saved server '{server.name}' ({server_id})")
+        _id, server = result
+        logger.info(
+            f"User {user_id} discovering tools from saved server '{server.name}' ({server_id})"
+        )
 
         # Discover tools from server
         discovered_tools = await mcp_server_service.discover_tools_from_server(server)
@@ -509,9 +608,11 @@ async def discover_from_existing_server(
     except Exception as e:
         logger.error(f"Error discovering tools from MCP server {server_id}: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
+        # Extract meaningful error message from exception (including ExceptionGroup)
+        error_message = extract_root_cause(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to discover MCP tools: {str(e)}",
+            detail=f"Failed to discover MCP tools: {error_message}",
         )
 
 
@@ -544,13 +645,14 @@ async def get_server_tools(
         mcp_server_service = get_mcp_server_service()
 
         # Get server config
-        server = mcp_server_service.get_server_by_id(server_id, user_id)
-        if not server:
+        result = mcp_server_service.get_server_by_id(server_id, user_id)
+        if not result:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"MCP server with ID {server_id} not found",
             )
 
+        _id, server = result
         # Discover tools from server
         all_tools = await mcp_server_service.discover_tools_from_server(server)
 
@@ -561,7 +663,9 @@ async def get_server_tools(
     except Exception as e:
         logger.error(f"Error getting tools from MCP server {server_id}: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
+        # Extract meaningful error message from exception (including ExceptionGroup)
+        error_message = extract_root_cause(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get MCP server tools: {str(e)}",
+            detail=f"Failed to get MCP server tools: {error_message}",
         )

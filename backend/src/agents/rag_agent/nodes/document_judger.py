@@ -94,13 +94,27 @@ async def document_judger(state: WorkflowState) -> WorkflowState:
     logger.info("🚀 [NODE START] document_judger")
     try:
         # Get LLM client from config
+        # Use reranker_client if available (separate provider), otherwise use primary llm_client
         config = state.get("config", {})
+        reranker_client = config.get("reranker_client")
         llm_client = config.get("llm_client")
 
-        if not llm_client:
-            raise ValueError("llm_client not found in config")
+        # Prefer reranker_client if available, otherwise use primary llm_client
+        client_to_use = reranker_client if reranker_client else llm_client
 
-        logger.info(f"🔍 Judging documents using LLM client (ASYNC PARALLEL MODE)")
+        if not client_to_use:
+            raise ValueError(
+                "LLM client not found in config (neither reranker_client nor llm_client)"
+            )
+
+        if reranker_client:
+            logger.info(
+                f"🔍 Judging documents using separate reranker LLM client (ASYNC PARALLEL MODE)"
+            )
+        else:
+            logger.info(
+                f"🔍 Judging documents using primary LLM client (ASYNC PARALLEL MODE)"
+            )
 
         retrieved_docs = state.get("retrieved_documents", [])
         if not retrieved_docs:
@@ -110,8 +124,8 @@ async def document_judger(state: WorkflowState) -> WorkflowState:
             logger.info("✅ [NODE FINISH] document_judger (no documents)")
             return state
 
-        # Get the judger chain
-        chain = get_judger_chain(llm_client=llm_client, config=config)
+        # Get the judger chain using the appropriate client
+        chain = get_judger_chain(llm_client=client_to_use, config=config)
 
         # Get reranking config
         reranking_config = config.get("reranking_config", {})

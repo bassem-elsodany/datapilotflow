@@ -1,881 +1,528 @@
 """
-Conversation History Service for Knowledge Search
+Conversation History Service
 
-This module provides conversation history management for knowledge search sessions,
-enabling context-aware responses that understand previous interactions.
-
-NESTED CONFIGURATION STRUCTURE
-===============================
-
-The conversation configuration has been restructured into organized, nested dataclasses:
-
-1. **SystemPrompt**: Embedded system prompt for the conversation
-   - id: UUID identifier
-   - title: Prompt title
-   - content: Actual prompt content
-
-2. **EnhancementConfig**: Query enhancement strategy and provider
-   - strategy: "native", "multi_query", "augmented", "hyde", "decomposition"
-   - provider: Optional provider for enhancement (e.g., embedding model)
-
-3. **VectorDatabaseConfig**: Vector database settings
-   - collection_name: Database collection name (default: "LongTermMemory")
-   - top_k: Number of documents to retrieve (default: 5)
-
-4. **RerankerConfig**: Document reranking settings
-   - provider: Optional reranker provider
-   - relevance_threshold: Score threshold for document filtering (0-1, default: 0.5)
-
-5. **AnswerGenerationConfig**: LLM-based answer generation
-   - provider: Optional LLM provider for answer generation
-
-BOUNDARY PATTERN ARCHITECTURE
-==============================
-
-The service uses a boundary pattern where:
-- API endpoints and WebSocket handlers perform conversion at boundaries
-- Core business logic remains unchanged
-- extract_conversation_config() helper flattens nested structure for agents
-- Deserialization inlined in get_conversation() and get_user_conversations()
-- asdict() converts dataclass objects to MongoDB-compatible dictionaries
-
-SINGLE STRUCTURED IMPLEMENTATION
-=================================
-
-Only the nested configuration structure is supported:
-- create_conversation() - Creates conversations with nested config
-- update_conversation_config() - Updates conversations with nested config
-
-No backwards compatibility is maintained - all methods use nested dataclasses.
-
-USE EXTRACT_CONVERSATION_CONFIG FOR AGENT CODE
-==============================================
-
-When passing conversation config to agents, always use:
-  config = extract_conversation_config(conversation)
-
-This ensures agents work with the flat parameter structure they expect,
-while the database maintains the organized nested structure.
+This service manages conversations and messages in the new agent-based architecture:
+- Conversations are stored in 'agent_conversation_sessions' collection (metadata only)
+- Messages are stored in separate 'agent_conversation_session_messages' collection
+- Agent configuration is fetched from 'agents' collection via agent_id
 """
 
-from dataclasses import asdict
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from bson import ObjectId
 from loguru import logger
 from pymongo import MongoClient
 
 from src.config import settings
-from src.domain.conversation import (
-    AnswerGenerationConfig,
-    AssistantConfig,
-    ConversationMessage,
-    ConversationSession,
-    EnhancementConfig,
-    ProviderConfig,
-    RerankerConfig,
-    VectorDatabaseConfig,
-)
+from src.domain.conversation import ConversationMessage, ConversationSession
+
+# Collection names
+CONVERSATIONS_COLLECTION = "agent_conversation_sessions"
+MESSAGES_COLLECTION = "agent_conversation_session_messages"
 
 
 class ConversationHistoryService:
-    """Service for managing conversation history for knowledge search."""
+    """Service for managing conversations and messages."""
 
     def __init__(self):
         from src.infrastructure.mongo.client import get_mongo_client
 
         self.client = get_mongo_client()
         self.db = self.client[settings.MONGO_DB_NAME]
-        self.collection = self.db["knowledge_conversation_history"]
+        self.collection = self.db[CONVERSATIONS_COLLECTION]
+        self.messages_collection = self.db[MESSAGES_COLLECTION]
 
-        # Create indexes for efficient querying
+        # Create indexes
         self.collection.create_index([("user_id", 1), ("last_updated", -1)])
+        self.collection.create_index([("agent_id", 1)])
         self.collection.create_index([("_id", 1)])
-        self.collection.create_index(
-            [("last_updated", 1)], expireAfterSeconds=86400 * 30
-        )  # 30 days TTL
+
+        self.messages_collection.create_index(
+            [("conversation_id", 1), ("message_index", 1)]
+        )
+        self.messages_collection.create_index([("user_id", 1)])
+        self.messages_collection.create_index([("timestamp", -1)])
+
+        logger.info("✅ ConversationHistoryService initialized")
 
     def create_conversation(
         self,
         user_id: str,
+        agent_id: str,
         name: Optional[str] = None,
         description: Optional[str] = None,
-        enhancement: Optional[EnhancementConfig] = None,
-        vector_database: Optional[VectorDatabaseConfig] = None,
-        reranker: Optional[RerankerConfig] = None,
-        answer_generation: Optional[AnswerGenerationConfig] = None,
         tags: Optional[List[str]] = None,
-        assistant_config: Optional[AssistantConfig] = None,
     ) -> str:
-        """Create a new conversation with nested configuration structure.
+        """
+        Create a new conversation.
 
         Args:
             user_id: User ID
+            agent_id: Agent ID (REQUIRED)
             name: Conversation name
-            description: Conversation description
-            enhancement: Enhancement configuration
-            vector_database: Vector database configuration
-            reranker: Reranker configuration
-            answer_generation: Answer generation configuration
-            tags: Tags for organization
-            assistant_config: Configuration for Assistant mode
-                Required - contains enabled boolean and tools list (tool IDs)
+            description: Description
+            tags: Tags
+
+        Returns:
+            str: Created conversation ID
         """
+        now = datetime.utcnow()
 
-        # Validate enhancement provider if provided
-        if enhancement and enhancement.provider:
-            try:
-                from src.services.model_provider.model_provider_service import (
-                    get_model_provider_service,
-                )
-
-                provider_service = get_model_provider_service()
-                provider = provider_service.get_model_provider(
-                    enhancement.provider.id, user_id
-                )
-
-                if not provider or not provider.is_active:
-                    logger.warning(
-                        f"Enhancement provider not found or inactive: {enhancement.provider.id}"
-                    )
-                    enhancement = None
-            except Exception as e:
-                logger.error(f"Error validating enhancement provider: {e}")
-                enhancement = None
-
-        # Validate answer generation provider if provided
-        if answer_generation and answer_generation.provider:
-            try:
-                from src.services.model_provider.model_provider_service import (
-                    get_model_provider_service,
-                )
-
-                provider_service = get_model_provider_service()
-                provider = provider_service.get_model_provider(
-                    answer_generation.provider.id, user_id
-                )
-
-                if not provider or not provider.is_active:
-                    logger.warning(
-                        f"Answer generation provider not found or inactive: {answer_generation.provider.id}"
-                    )
-                    answer_generation = None
-            except Exception as e:
-                logger.error(f"Error validating answer generation provider: {e}")
-                answer_generation = None
-
-        # Validate reranker provider if provided
-        if reranker and reranker.provider:
-            try:
-                from src.services.model_provider.model_provider_service import (
-                    get_model_provider_service,
-                )
-
-                provider_service = get_model_provider_service()
-                provider = provider_service.get_model_provider(
-                    reranker.provider.id, user_id
-                )
-
-                if not provider or not provider.is_active:
-                    logger.warning(
-                        f"Reranker provider not found or inactive: {reranker.provider.id}"
-                    )
-                    reranker = None
-                elif not provider.reranker:
-                    logger.warning(
-                        f"Provider does not support reranking: {provider.name}"
-                    )
-                    reranker = None
-            except Exception as e:
-                logger.error(f"Error validating reranker provider: {e}")
-                reranker = None
-
-        # Build conversation data
         conversation_data = {
             "user_id": user_id,
-            "created_at": datetime.utcnow(),
-            "last_updated": datetime.utcnow(),
-            "messages": [],
-            "name": name,
+            "agent_id": agent_id,
+            "name": name or f"Conversation {now.strftime('%Y-%m-%d %H:%M')}",
             "description": description,
-            "enhancement": asdict(enhancement) if enhancement else None,
-            "vector_database": asdict(vector_database) if vector_database else None,
-            "reranker": asdict(reranker) if reranker else None,
-            "answer_generation": (
-                asdict(answer_generation) if answer_generation else None
-            ),
+            "created_at": now,
+            "last_updated": now,
+            "last_message_at": None,
+            "is_archived": False,
             "tags": tags or [],
         }
 
-        # Assistant config is required - always serialize it
-        if not assistant_config:
-            raise ValueError("assistant_config is required - must specify enabled mode")
-
-        assistant_config_dict = {
-            "enabled": assistant_config.enabled,
-            "tools": assistant_config.tools if assistant_config.tools else [],
-            "instructions": assistant_config.instructions,
-        }
-
-        if assistant_config.tools:
-            logger.info(
-                f"Saving {len(assistant_config.tools)} tool IDs to conversation: {assistant_config.tools}"
-            )
-        else:
-            logger.debug("No tools configured for this conversation")
-
-        if assistant_config.instructions:
-            logger.info(
-                f"Saving instructions: {len(assistant_config.instructions)} chars"
-            )
-
-        conversation_data["assistant_config"] = assistant_config_dict
-
-        # Insert and get the MongoDB _id
         result = self.collection.insert_one(conversation_data)
         conversation_id = str(result.inserted_id)
 
-        # Determine agent type from assistant_config
-        agent_type = "supervisor" if assistant_config.enabled else "rag"
-
         logger.info(
-            f"Created conversation {conversation_id} for user {user_id} "
-            f"with agent_type: {agent_type}, "
-            f"strategy: {enhancement.strategy if enhancement else 'native'}"
+            f"✅ Created conversation {conversation_id} for user {user_id} with agent {agent_id}"
         )
+
         return conversation_id
 
     def get_conversation(
-        self, conversation_id: str, user_id: str = None
+        self, conversation_id: str, user_id: Optional[str] = None
     ) -> Optional[ConversationSession]:
-        """Retrieve a conversation by ID."""
-        from bson import ObjectId
+        """
+        Get a conversation by ID.
 
+        Args:
+            conversation_id: Conversation ID
+            user_id: Optional user ID for authorization
+
+        Returns:
+            ConversationSession or None
+        """
         try:
-            # Query by MongoDB _id
-            query = {"_id": ObjectId(conversation_id)}
+            query: Dict[str, Any] = {"_id": ObjectId(conversation_id)}
             if user_id:
                 query["user_id"] = user_id
 
             doc = self.collection.find_one(query)
-            if doc:
-                # Convert messages
-                messages = []
-                for msg_doc in doc.get("messages", []):
-                    msg = ConversationMessage(
-                        role=msg_doc["role"],
-                        content=msg_doc["content"],
-                        timestamp=msg_doc["timestamp"],
-                        source_links=msg_doc.get("source_links"),
-                        enhancement_strategy_used=msg_doc.get(
-                            "enhancement_strategy_used"
-                        ),
-                        enhanced_queries=msg_doc.get("enhanced_queries"),
-                        processing_time_ms=msg_doc.get("processing_time_ms"),
-                        document_count=msg_doc.get("document_count"),
-                    )
-                    messages.append(msg)
 
-                # Deserialize enhancement config
-                enhancement = None
-                if doc.get("enhancement"):
-                    enh = doc["enhancement"]
-                    provider = None
-                    if enh.get("provider"):
-                        p = enh["provider"]
-                        provider = ProviderConfig(
-                            id=p.get("id"), model_name=p.get("model_name")
-                        )
-                    enhancement = EnhancementConfig(
-                        strategy=enh.get("strategy", "native"), provider=provider
-                    )
+            if not doc:
+                return None
 
-                # Deserialize vector database config
-                vector_database = None
-                if doc.get("vector_database"):
-                    vdb = doc["vector_database"]
-                    vector_database = VectorDatabaseConfig(
-                        collection_name=vdb.get("collection_name", "LongTermMemory"),
-                        top_k=vdb.get("top_k", 5),
-                    )
+            # Handle agent_id as either string or ObjectId
+            doc_agent_id = doc.get("agent_id")
+            if isinstance(doc_agent_id, ObjectId):
+                doc_agent_id = str(doc_agent_id)
 
-                # Deserialize reranker config
-                reranker = None
-                if doc.get("reranker"):
-                    rer = doc["reranker"]
-                    provider = None
-                    if rer.get("provider"):
-                        p = rer["provider"]
-                        provider = ProviderConfig(
-                            id=p.get("id"), model_name=p.get("model_name")
-                        )
-                    reranker = RerankerConfig(
-                        enabled=rer.get(
-                            "enabled", bool(provider)
-                        ),  # Enabled if provider is set
-                        provider=provider,
-                        relevance_threshold=rer.get("relevance_threshold", 0.5),
-                    )
-
-                # Deserialize answer generation config
-                answer_generation = None
-                if doc.get("answer_generation"):
-                    ag = doc["answer_generation"]
-                    provider = None
-                    if ag.get("provider"):
-                        p = ag["provider"]
-                        provider = ProviderConfig(
-                            id=p.get("id"), model_name=p.get("model_name")
-                        )
-                    answer_generation = AnswerGenerationConfig(
-                        enabled=ag.get(
-                            "enabled", bool(provider)
-                        ),  # Enabled if provider is set
-                        provider=provider,
-                    )
-
-                # Deserialize assistant config
-                assistant_config = None
-                if doc.get("assistant_config"):
-                    ac = doc["assistant_config"]
-
-                    # Tools are now just a list of tool IDs (strings)
-                    tools = ac.get("tools", [])
-                    instructions = ac.get("instructions")
-
-                    assistant_config = AssistantConfig(
-                        enabled=ac.get("enabled", False),
-                        tools=tools if tools else [],
-                        instructions=instructions,
-                    )
-
-                session = ConversationSession(
-                    _id=str(doc["_id"]),
-                    user_id=doc["user_id"],
-                    created_at=doc["created_at"],
-                    last_updated=doc["last_updated"],
-                    messages=messages,
-                    name=doc.get("name"),
-                    description=doc.get("description"),
-                    enhancement=enhancement,
-                    vector_database=vector_database,
-                    reranker=reranker,
-                    answer_generation=answer_generation,
-                    tags=doc.get("tags", []),
-                    assistant_config=assistant_config,
-                )
-                return session
-            return None
-        except Exception as e:
-            logger.error(
-                f"Error retrieving conversation {conversation_id}: {e}", exc_info=True
-            )
-            return None
-
-    def get_conversation_messages(
-        self, conversation_id: str, user_id: str = None
-    ) -> List[Dict[str, Any]]:
-        """Get messages for a specific session."""
-        session = self.get_conversation(conversation_id, user_id)
-        if not session:
-            return []
-
-        # Convert messages to dictionary format for API response
-        messages = []
-        for msg in session.messages:
-            message_dict = {
-                "role": msg.role,
-                "content": msg.content,
-                "timestamp": msg.timestamp.isoformat(),
-            }
-            if msg.source_links:
-                message_dict["source_links"] = msg.source_links
-            messages.append(message_dict)
-
-        return messages
-
-    def get_user_conversations(
-        self, user_id: str, limit: int = 10
-    ) -> List[ConversationSession]:
-        """Get recent conversation sessions for a user."""
-        docs = (
-            self.collection.find({"user_id": user_id})
-            .sort("last_updated", -1)
-            .limit(limit)
-        )
-
-        sessions = []
-        for doc in docs:
-            # Convert messages
-            messages = []
-            for msg_doc in doc.get("messages", []):
-                msg = ConversationMessage(
-                    role=msg_doc["role"],
-                    content=msg_doc["content"],
-                    timestamp=msg_doc["timestamp"],
-                    source_links=msg_doc.get("source_links"),
-                    enhancement_strategy_used=msg_doc.get("enhancement_strategy_used"),
-                    enhanced_queries=msg_doc.get("enhanced_queries"),
-                    processing_time_ms=msg_doc.get("processing_time_ms"),
-                    document_count=msg_doc.get("document_count"),
-                )
-                messages.append(msg)
-
-            # Deserialize enhancement config
-            enhancement = None
-            if doc.get("enhancement"):
-                enh = doc["enhancement"]
-                provider = None
-                if enh.get("provider"):
-                    p = enh["provider"]
-                    provider = ProviderConfig(
-                        id=p.get("id"), model_name=p.get("model_name")
-                    )
-                enhancement = EnhancementConfig(
-                    strategy=enh.get("strategy", "native"), provider=provider
-                )
-
-            # Deserialize vector database config
-            vector_database = None
-            if doc.get("vector_database"):
-                vdb = doc["vector_database"]
-                vector_database = VectorDatabaseConfig(
-                    collection_name=vdb.get("collection_name", "LongTermMemory"),
-                    top_k=vdb.get("top_k", 5),
-                )
-
-            # Deserialize reranker config
-            reranker = None
-            if doc.get("reranker"):
-                rer = doc["reranker"]
-                provider = None
-                if rer.get("provider"):
-                    p = rer["provider"]
-                    provider = ProviderConfig(
-                        id=p.get("id"), model_name=p.get("model_name")
-                    )
-                reranker = RerankerConfig(
-                    enabled=rer.get(
-                        "enabled", bool(provider)
-                    ),  # Enabled if provider is set
-                    provider=provider,
-                    relevance_threshold=rer.get("relevance_threshold", 0.5),
-                )
-
-            # Deserialize answer generation config
-            answer_generation = None
-            if doc.get("answer_generation"):
-                ag = doc["answer_generation"]
-                provider = None
-                if ag.get("provider"):
-                    p = ag["provider"]
-                    provider = ProviderConfig(
-                        id=p.get("id"), model_name=p.get("model_name")
-                    )
-                answer_generation = AnswerGenerationConfig(
-                    enabled=ag.get(
-                        "enabled", bool(provider)
-                    ),  # Enabled if provider is set
-                    provider=provider,
-                )
-
-            # Deserialize assistant config
-            assistant_config = None
-            if doc.get("assistant_config"):
-                ac = doc["assistant_config"]
-
-                # Tools are now just a list of tool IDs (strings)
-                tools = ac.get("tools", [])
-                instructions = ac.get("instructions")
-
-                assistant_config = AssistantConfig(
-                    enabled=ac.get("enabled", False),
-                    tools=tools if tools else [],
-                    instructions=instructions,
-                )
-
-            session = ConversationSession(
+            return ConversationSession(
                 _id=str(doc["_id"]),
                 user_id=doc["user_id"],
-                created_at=doc["created_at"],
-                last_updated=doc["last_updated"],
-                messages=messages,
+                agent_id=doc_agent_id or "",
                 name=doc.get("name"),
                 description=doc.get("description"),
-                enhancement=enhancement,
-                vector_database=vector_database,
-                reranker=reranker,
-                answer_generation=answer_generation,
+                created_at=doc["created_at"],
+                last_updated=doc["last_updated"],
+                last_message_at=doc.get("last_message_at"),
+                is_archived=doc.get("is_archived", False),
                 tags=doc.get("tags", []),
-                assistant_config=assistant_config,
             )
-            sessions.append(session)
 
-        return sessions
+        except Exception as e:
+            logger.error(f"Error fetching conversation {conversation_id}: {e}")
+            return None
 
-    def get_session_messages(
-        self, session_id: str, user_id: str = None
-    ) -> List[Dict[str, Any]]:
-        """Get messages for a specific session with all metadata."""
-        session = self.get_conversation(session_id, user_id)
-        if not session:
+    def get_user_conversations(
+        self,
+        user_id: str,
+        agent_id: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> List[ConversationSession]:
+        """
+        Get all conversations for a user.
+
+        Args:
+            user_id: User ID
+            agent_id: Optional filter by agent
+            limit: Max results
+            offset: Skip results
+
+        Returns:
+            List of ConversationSession
+        """
+        try:
+            query: Dict[str, Any] = {"user_id": user_id}
+            if agent_id:
+                # Handle both string and ObjectId formats for agent_id
+                if ObjectId.is_valid(agent_id):
+                    query["$or"] = [
+                        {"agent_id": agent_id},
+                        {"agent_id": ObjectId(agent_id)},
+                    ]
+                else:
+                    query["agent_id"] = agent_id
+
+            logger.debug(f"Querying conversations with: {query}")
+
+            cursor = (
+                self.collection.find(query)
+                .sort("last_updated", -1)
+                .skip(offset)
+                .limit(limit)
+            )
+
+            conversations = []
+            for doc in cursor:
+                # Handle agent_id as either string or ObjectId
+                doc_agent_id = doc.get("agent_id")
+                if isinstance(doc_agent_id, ObjectId):
+                    doc_agent_id = str(doc_agent_id)
+
+                conversations.append(
+                    ConversationSession(
+                        _id=str(doc["_id"]),
+                        user_id=doc["user_id"],
+                        agent_id=doc_agent_id or "",
+                        name=doc.get("name"),
+                        description=doc.get("description"),
+                        created_at=doc["created_at"],
+                        last_updated=doc["last_updated"],
+                        last_message_at=doc.get("last_message_at"),
+                        is_archived=doc.get("is_archived", False),
+                        tags=doc.get("tags", []),
+                    )
+                )
+
+            logger.info(
+                f"Found {len(conversations)} conversations for user {user_id}, agent_id={agent_id}"
+            )
+            return conversations
+
+        except Exception as e:
+            logger.error(f"Error fetching conversations for user {user_id}: {e}")
             return []
 
-        messages = []
-        for msg in session.messages:
-            message_dict = {
-                "role": msg.role,
-                "content": msg.content,
-                "timestamp": msg.timestamp.isoformat(),
-            }
-
-            # Build metadata object with all available fields
-            metadata = {}
-            if msg.source_links:
-                metadata["source_links"] = msg.source_links
-            if msg.document_count is not None:
-                metadata["document_count"] = msg.document_count
-            if msg.enhancement_strategy_used:
-                metadata["enhancement_strategy"] = msg.enhancement_strategy_used
-            if msg.enhanced_queries:
-                metadata["enhanced_queries"] = msg.enhanced_queries
-            if msg.processing_time_ms is not None:
-                metadata["processing_time_ms"] = msg.processing_time_ms
-
-            # Only add metadata if it's not empty
-            if metadata:
-                message_dict["metadata"] = metadata
-
-            messages.append(message_dict)
-
-        return messages
-
-    def add_message(self, session_id: str, message: ConversationMessage) -> bool:
-        """Add a message to a conversation session."""
-        try:
-            # Update the session with new message
-            update_data = {
-                "$push": {"messages": asdict(message)},
-                "$set": {"last_updated": datetime.utcnow()},
-            }
-
-            from bson import ObjectId
-
-            result = self.collection.update_one(
-                {"_id": ObjectId(session_id)}, update_data
-            )
-
-            if result.modified_count > 0:
-                logger.debug(f"Added message to session: {session_id}")
-                return True
-            else:
-                logger.warning(f"Failed to add message to session: {session_id}")
-                return False
-
-        except Exception as e:
-            logger.error(f"Error adding message to session {session_id}: {e}")
-            return False
-
-    def get_conversation_context(self, session_id: str, max_messages: int = 10) -> str:
-        """Get conversation context for LLM prompt."""
-        session = self.get_conversation(session_id)
-        if not session or not session.messages:
-            return ""
-
-        # Get recent messages
-        recent_messages = session.messages[-max_messages:]
-
-        context_parts = []
-        context_parts.append("CONVERSATION HISTORY:")
-        context_parts.append("=" * 50)
-
-        for msg in recent_messages:
-            role = "User" if msg.role == "user" else "Assistant"
-            timestamp = msg.timestamp.strftime("%H:%M")
-            context_parts.append(f"[{timestamp}] {role}: {msg.content}")
-
-            # Add source links if available
-            if msg.source_links:
-                source_urls = [link["url"] for link in msg.source_links[:3]]
-                context_parts.append(
-                    f"  Sources: {', '.join(source_urls)}"
-                )  # Limit to 3 sources
-
-        context_parts.append("=" * 50)
-
-        return "\n".join(context_parts)
-
-    def update_context_summary(self, session_id: str, summary: str) -> bool:
-        """Update the context summary for a session."""
-        from bson import ObjectId
-
-        try:
-            result = self.collection.update_one(
-                {"_id": ObjectId(session_id)},
-                {
-                    "$set": {
-                        "context_summary": summary,
-                        "last_updated": datetime.utcnow(),
-                    }
-                },
-            )
-            return result.modified_count > 0
-        except Exception as e:
-            logger.error(
-                f"Error updating context summary for session {session_id}: {e}"
-            )
-            return False
-
-    def rename_conversation(
-        self, conversation_id: str, new_name: str, user_id: str = None
+    def update_conversation(
+        self,
+        conversation_id: str,
+        user_id: str,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        is_archived: Optional[bool] = None,
     ) -> bool:
-        """Rename a conversation session."""
-        from bson import ObjectId
-
+        """Update conversation metadata."""
         try:
-            if not new_name or not new_name.strip():
-                logger.warning(f"Cannot rename session {conversation_id} to empty name")
-                return False
+            set_data: Dict[str, Any] = {"last_updated": datetime.utcnow()}
 
-            query = {"_id": ObjectId(conversation_id)}
-            if user_id:
-                query["user_id"] = user_id
+            if name is not None:
+                set_data["name"] = name
+            if description is not None:
+                set_data["description"] = description
+            if tags is not None:
+                set_data["tags"] = tags
+            if is_archived is not None:
+                set_data["is_archived"] = is_archived
 
             result = self.collection.update_one(
-                query,
-                {"$set": {"name": new_name.strip(), "last_updated": datetime.utcnow()}},
+                {"_id": ObjectId(conversation_id), "user_id": user_id},
+                {"$set": set_data},
             )
 
-            if result.modified_count > 0:
-                logger.info(f"Renamed session {conversation_id} to: {new_name}")
-                return True
-            else:
-                logger.warning(f"Failed to rename session {conversation_id}")
-                return False
+            return result.modified_count > 0
 
         except Exception as e:
-            logger.error(f"Error renaming session {conversation_id}: {e}")
+            logger.error(f"Error updating conversation {conversation_id}: {e}")
             return False
 
-    def delete_conversation(self, conversation_id: str, user_id: str = None) -> bool:
-        """Delete a conversation session."""
-        from bson import ObjectId
+    def delete_conversation(self, conversation_id: str, user_id: str) -> bool:
+        """
+        Delete a conversation and all its messages.
 
+        Args:
+            conversation_id: Conversation ID
+            user_id: User ID (for authorization)
+
+        Returns:
+            bool: Success
+        """
         try:
-            query = {"_id": ObjectId(conversation_id)}
-            if user_id:
-                query["user_id"] = user_id
+            # Delete conversation
+            result = self.collection.delete_one(
+                {"_id": ObjectId(conversation_id), "user_id": user_id}
+            )
 
-            result = self.collection.delete_one(query)
-            return result.deleted_count > 0
+            if result.deleted_count > 0:
+                # Delete all messages
+                self.messages_collection.delete_many(
+                    {"conversation_id": conversation_id}
+                )
+                logger.info(
+                    f"✅ Deleted conversation {conversation_id} and its messages"
+                )
+                return True
+            else:
+                logger.warning(f"Conversation {conversation_id} not found")
+                return False
+
         except Exception as e:
             logger.error(f"Error deleting conversation {conversation_id}: {e}")
             return False
 
-    def reset_conversation_messages(
-        self, conversation_id: str, user_id: str = None
-    ) -> bool:
-        """Reset messages for a specific conversation session."""
-        from bson import ObjectId
+    # ========================================================================
+    # MESSAGE METHODS
+    # ========================================================================
 
+    def add_message(
+        self,
+        conversation_id: str,
+        user_id: str,
+        role: str,
+        content: str,
+        source_links: Optional[List[Dict]] = None,
+        enhancement_strategy_used: Optional[str] = None,
+        enhanced_queries: Optional[List[str]] = None,
+        processing_time_ms: Optional[int] = None,
+        document_count: Optional[int] = None,
+    ) -> str:
+        """
+        Add a message to a conversation.
+
+        Args:
+            conversation_id: Conversation ID
+            user_id: User ID
+            role: "user" or "assistant"
+            content: Message content
+            source_links: Optional source links
+            enhancement_strategy_used: Optional strategy used
+            enhanced_queries: Optional enhanced queries
+            processing_time_ms: Optional processing time
+            document_count: Optional document count
+
+        Returns:
+            str: Created message ID
+        """
         try:
-            query = {"_id": ObjectId(conversation_id)}
-            if user_id:
-                query["user_id"] = user_id
+            # Get current message count for indexing
+            message_count = self.messages_collection.count_documents(
+                {"conversation_id": conversation_id}
+            )
 
-            result = self.collection.update_one(
-                query,
+            message_data = {
+                "conversation_id": conversation_id,
+                "user_id": user_id,
+                "role": role,
+                "content": content,
+                "timestamp": datetime.utcnow(),
+                "message_index": message_count,
+                "source_links": source_links,
+                "enhancement_strategy_used": enhancement_strategy_used,
+                "enhanced_queries": enhanced_queries,
+                "processing_time_ms": processing_time_ms,
+                "document_count": document_count,
+            }
+
+            result = self.messages_collection.insert_one(message_data)
+            message_id = str(result.inserted_id)
+
+            # Update conversation's last_message_at
+            self.collection.update_one(
+                {"_id": ObjectId(conversation_id)},
                 {
                     "$set": {
-                        "messages": [],
+                        "last_message_at": datetime.utcnow(),
                         "last_updated": datetime.utcnow(),
                     }
                 },
             )
 
-            if result.modified_count > 0:
-                logger.info(f"Reset messages for session {conversation_id}")
-                return True
-            else:
-                logger.warning(
-                    f"Failed to reset messages for session {conversation_id}"
-                )
-                return False
+            logger.debug(
+                f"Added message {message_id} to conversation {conversation_id}"
+            )
+            return message_id
 
         except Exception as e:
-            logger.error(f"Error resetting messages for session {conversation_id}: {e}")
-            return False
+            logger.error(f"Error adding message to conversation {conversation_id}: {e}")
+            raise
 
-    def cleanup_old_conversations(self, days: int = 30) -> int:
-        """Clean up sessions older than specified days."""
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
-        try:
-            result = self.collection.delete_many({"last_updated": {"$lt": cutoff_date}})
-            logger.info(f"Cleaned up {result.deleted_count} old conversations")
-            return result.deleted_count
-        except Exception as e:
-            logger.error(f"Error cleaning up old conversations: {e}")
-            return 0
-
-    def get_recent_context(self, user_id: str, limit: int = 5) -> str:
-        """Get recent conversation context for a user."""
-        try:
-            # Get recent sessions
-            recent_sessions = self.get_user_conversations(user_id, limit=limit)
-
-            if not recent_sessions:
-                return ""
-
-            context_parts = []
-            context_parts.append("RECENT CONVERSATION CONTEXT:")
-            context_parts.append("=" * 50)
-
-            for session in recent_sessions:
-                if session.messages:
-                    context_parts.append(f"Session: {session.name}")
-                    context_parts.append(
-                        f"Created: {session.created_at.strftime('%Y-%m-%d %H:%M')}"
-                    )
-
-                    # Get last few messages from this session
-                    recent_messages = session.messages[-3:]  # Last 3 messages
-                    for msg in recent_messages:
-                        role = "User" if msg.role == "user" else "Assistant"
-                        timestamp = msg.timestamp.strftime("%H:%M")
-                        context_parts.append(
-                            f"[{timestamp}] {role}: {msg.content[:100]}..."
-                        )  # Truncate long messages
-
-                    context_parts.append("-" * 30)
-
-            context_parts.append("=" * 50)
-            return "\n".join(context_parts)
-
-        except Exception as e:
-            logger.error(f"Error getting recent context for user {user_id}: {e}")
-            return ""
-
-    def update_conversation_config(
-        self,
-        conversation_id: str,
-        user_id: str,
-        enhancement: Optional[EnhancementConfig] = None,
-        vector_database: Optional[VectorDatabaseConfig] = None,
-        reranker: Optional[RerankerConfig] = None,
-        answer_generation: Optional[AnswerGenerationConfig] = None,
-        tags: Optional[List[str]] = None,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        assistant_config: Optional[AssistantConfig] = None,
-    ) -> bool:
-        """Update conversation configuration with nested structure support.
+    def get_conversation_messages(
+        self, conversation_id: str, limit: Optional[int] = None
+    ) -> List[ConversationMessage]:
+        """
+        Get all messages for a conversation.
 
         Args:
             conversation_id: Conversation ID
-            user_id: User ID
-            enhancement: Enhancement configuration
-            vector_database: Vector database configuration
-            reranker: Reranker configuration
-            answer_generation: Answer generation configuration
-            tags: Tags for organization
-            name: Conversation name
-            description: Conversation description
-            assistant_config: Complex nested configuration for Assistant mode
+            limit: Optional limit (returns latest N messages)
+
+        Returns:
+            List of ConversationMessage (ordered by message_index)
         """
-        from bson import ObjectId
-
         try:
-            update_data = {"$set": {"last_updated": datetime.utcnow()}}
-
-            # Update basic fields
-            if name is not None:
-                update_data["$set"]["name"] = name
-            if description is not None:
-                update_data["$set"]["description"] = description
-            if tags is not None:
-                update_data["$set"]["tags"] = tags
-
-            # Update enhancement configuration
-            if enhancement is not None:
-                enhancement_dict = {
-                    "strategy": enhancement.strategy,
-                    "provider": (
-                        asdict(enhancement.provider) if enhancement.provider else None
-                    ),
+            # Try both string and ObjectId formats for conversation_id
+            if ObjectId.is_valid(conversation_id):
+                query = {
+                    "$or": [
+                        {"conversation_id": conversation_id},
+                        {"conversation_id": ObjectId(conversation_id)},
+                    ]
                 }
-                update_data["$set"]["enhancement"] = enhancement_dict
-
-            # Update vector database configuration
-            if vector_database is not None:
-                update_data["$set"]["vector_database"] = asdict(vector_database)
-
-            # Update reranker configuration
-            if reranker is not None:
-                reranker_dict = {
-                    "provider": (
-                        asdict(reranker.provider) if reranker.provider else None
-                    ),
-                    "relevance_threshold": reranker.relevance_threshold,
-                }
-                update_data["$set"]["reranker"] = reranker_dict
-
-            # Update answer generation configuration
-            if answer_generation is not None:
-                answer_gen_dict = {
-                    "provider": (
-                        asdict(answer_generation.provider)
-                        if answer_generation.provider
-                        else None
-                    ),
-                }
-                update_data["$set"]["answer_generation"] = answer_gen_dict
-
-            # Update assistant_config (configuration for Assistant mode with tool IDs)
-            if assistant_config is not None:
-                assistant_config_dict = {
-                    "enabled": assistant_config.enabled,
-                    "tools": assistant_config.tools if assistant_config.tools else [],
-                    "instructions": assistant_config.instructions,
-                }
-                update_data["$set"]["assistant_config"] = assistant_config_dict
-
-                if assistant_config.instructions:
-                    logger.info(
-                        f"Updating instructions: {len(assistant_config.instructions)} chars"
-                    )
-
-            result = self.collection.update_one(
-                {"_id": ObjectId(conversation_id), "user_id": user_id}, update_data
-            )
-
-            if result.modified_count > 0:
-                logger.info(f"Updated configuration for conversation {conversation_id}")
-                return True
             else:
-                logger.warning(f"No changes made to conversation {conversation_id}")
-                return False
+                query = {"conversation_id": conversation_id}
+
+            if limit:
+                # Get latest N messages - count first, then skip
+                total_count = self.messages_collection.count_documents(query)
+                skip_count = max(0, total_count - limit)
+                cursor = (
+                    self.messages_collection.find(query)
+                    .sort("message_index", 1)
+                    .skip(skip_count)
+                )
+            else:
+                cursor = self.messages_collection.find(query).sort("message_index", 1)
+
+            messages = []
+            for doc in cursor:
+                # Convert conversation_id to string if it's an ObjectId
+                conv_id = doc["conversation_id"]
+                if isinstance(conv_id, ObjectId):
+                    conv_id = str(conv_id)
+
+                messages.append(
+                    ConversationMessage(
+                        _id=str(doc["_id"]),
+                        conversation_id=conv_id,
+                        user_id=doc["user_id"],
+                        role=doc["role"],
+                        content=doc["content"],
+                        timestamp=doc["timestamp"],
+                        message_index=doc.get("message_index", 0),
+                        source_links=doc.get("source_links"),
+                        enhancement_strategy_used=doc.get("enhancement_strategy_used"),
+                        enhanced_queries=doc.get("enhanced_queries"),
+                        processing_time_ms=doc.get("processing_time_ms"),
+                        document_count=doc.get("document_count"),
+                    )
+                )
+
+            return messages
 
         except Exception as e:
             logger.error(
-                f"Error updating conversation configuration {conversation_id}: {e}"
+                f"Error fetching messages for conversation {conversation_id}: {e}"
             )
+            return []
+
+    def get_message_count(self, conversation_id: str) -> int:
+        """Get the number of messages in a conversation."""
+        return self.messages_collection.count_documents(
+            {"conversation_id": conversation_id}
+        )
+
+    def reset_conversation_messages(self, conversation_id: str, user_id: str) -> bool:
+        """
+        Delete all messages in a conversation and clear LangGraph checkpoint data.
+
+        This function deletes:
+        1. Messages from our app's messages collection
+        2. LangGraph checkpoint data (so agent forgets conversation history)
+        3. LangGraph writes data
+
+        Args:
+            conversation_id: Conversation ID
+            user_id: User ID (for authorization)
+
+        Returns:
+            bool: Success
+        """
+        try:
+            # Verify conversation belongs to user
+            conversation = self.get_conversation(conversation_id, user_id)
+            if not conversation:
+                return False
+
+            # 1. Delete all messages from our app's collection
+            result = self.messages_collection.delete_many(
+                {"conversation_id": conversation_id}
+            )
+            logger.info(
+                f"✅ Deleted {result.deleted_count} messages from app DB for conversation {conversation_id}"
+            )
+
+            # 2. Delete LangGraph checkpoint data
+            # The checkpointer uses conversation_id as thread_id
+            try:
+                checkpoint_db = self.client[
+                    settings.MONGO_AGENT_STATE_CHECKPOINT_DB_NAME
+                ]
+
+                # Delete from checkpoints collection
+                # LangGraph stores thread_id in nested structure: thread_id.thread_id
+                checkpoints_collection = checkpoint_db[
+                    settings.MONGO_AGENT_STATE_CHECKPOINT_COLLECTION
+                ]
+                checkpoint_result = checkpoints_collection.delete_many(
+                    {"thread_id.thread_id": conversation_id}
+                )
+                logger.info(
+                    f"✅ Deleted {checkpoint_result.deleted_count} checkpoint entries for thread {conversation_id}"
+                )
+
+                # Delete from writes collection
+                writes_collection = checkpoint_db[
+                    settings.MONGO_AGENT_STATE_WRITES_COLLECTION
+                ]
+                writes_result = writes_collection.delete_many(
+                    {"thread_id.thread_id": conversation_id}
+                )
+                logger.info(
+                    f"✅ Deleted {writes_result.deleted_count} writes entries for thread {conversation_id}"
+                )
+
+            except Exception as checkpoint_error:
+                # Log but don't fail - checkpoint deletion is best-effort
+                logger.warning(
+                    f"⚠️ Could not delete LangGraph checkpoint data for {conversation_id}: {checkpoint_error}"
+                )
+
+            logger.info(
+                f"✅ Reset conversation {conversation_id} - messages and checkpoint data cleared"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(f"Error resetting conversation {conversation_id}: {e}")
             return False
 
-    def get_conversation_with_provider(
-        self, conversation_id: str, user_id: str
-    ) -> Optional[Dict[str, Any]]:
-        """Get conversation with expanded provider details.
-
-        NOTE: Currently returns only the conversation session.
-        LLM provider expansion is handled through the answer_generation config.
+    def get_conversation_context(
+        self, conversation_id: str, max_messages: int = 10
+    ) -> str:
         """
-        session = self.get_conversation(conversation_id, user_id)
-        if not session:
-            return None
+        Get conversation context as formatted string.
 
-        result = {"session": session, "llm_provider": None}
-        # Provider details are embedded in answer_generation config
-        return result
+        Args:
+            conversation_id: Conversation ID
+            max_messages: Maximum number of recent messages to include
+
+        Returns:
+            Formatted conversation history string
+        """
+        messages = self.get_conversation_messages(conversation_id, limit=max_messages)
+
+        if not messages:
+            return ""
+
+        context_parts = []
+        for msg in messages:
+            role_label = "User" if msg.role == "user" else "Assistant"
+            context_parts.append(f"{role_label}: {msg.content}")
+
+        return "\n".join(context_parts)
 
 
 # Global instance
