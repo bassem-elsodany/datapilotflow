@@ -98,7 +98,7 @@ export function BrowseModelsModal({
 
             <ScrollArea style={{ height: 400 }}>
               <Stack gap="xs" p="xs">
-                {availableModels.map((model: string) => (
+                {[...availableModels].sort().map((model: string) => (
                   <Group key={model} gap="xs">
                     <Checkbox
                       checked={selectedModels.has(model)}
