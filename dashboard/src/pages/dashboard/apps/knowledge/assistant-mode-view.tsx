@@ -873,12 +873,14 @@ export function AssistantModeView({
         {sidebarVisible && (
           <Paper
             withBorder
+            radius="md"
             style={{
               width: '420px',
               display: 'flex',
               flexDirection: 'column',
-              background: 'linear-gradient(to bottom, #f9fafb, #ffffff)',
-              borderLeft: '2px solid #e5e7eb',
+              background: 'linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)',
+              borderLeft: '3px solid #4c6ef5',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
             }}
           >
             <Tabs
@@ -886,16 +888,20 @@ export function AssistantModeView({
               variant="pills"
               style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
             >
-              <Box p="md" pb={0}>
-                <Group justify="space-between" mb="xs">
-                  <Text size="sm" fw={600} c="dimmed">
-                    Workflow State
-                  </Text>
+              <Box p="md" pb="sm" style={{ borderBottom: '1px solid #e9ecef' }}>
+                <Group justify="space-between" mb="md">
+                  <Group gap="xs">
+                    <IconRobot size={18} color="#4c6ef5" />
+                    <Text size="sm" fw={700} c="gray.9">
+                      Workflow State
+                    </Text>
+                  </Group>
                   <ActionIcon
                     size="sm"
                     variant="subtle"
                     color="gray"
                     onClick={() => setSidebarVisible(false)}
+                    title="Hide sidebar"
                   >
                     <IconChevronRight size={16} />
                   </ActionIcon>
@@ -905,12 +911,13 @@ export function AssistantModeView({
                     value="tasks"
                     leftSection={<IconCheckbox size={16} />}
                     style={{
-                      fontWeight: 500,
+                      fontWeight: 600,
+                      fontSize: '0.875rem',
                     }}
                   >
                     Tasks
                     {todos.length > 0 && (
-                      <Badge size="sm" ml="xs" variant="filled" color="grape">
+                      <Badge size="xs" ml="xs" variant="gradient" gradient={{ from: 'violet', to: 'grape' }}>
                         {todos.length}
                       </Badge>
                     )}
@@ -919,12 +926,13 @@ export function AssistantModeView({
                     value="files"
                     leftSection={<IconFileText size={16} />}
                     style={{
-                      fontWeight: 500,
+                      fontWeight: 600,
+                      fontSize: '0.875rem',
                     }}
                   >
                     Files
                     {Object.keys(files).length > 0 && (
-                      <Badge size="sm" ml="xs" variant="filled" color="green">
+                      <Badge size="xs" ml="xs" variant="gradient" gradient={{ from: 'teal', to: 'green' }}>
                         {Object.keys(files).length}
                       </Badge>
                     )}
@@ -933,20 +941,19 @@ export function AssistantModeView({
                     value="tools"
                     leftSection={<IconTool size={16} />}
                     style={{
-                      fontWeight: 500,
+                      fontWeight: 600,
+                      fontSize: '0.875rem',
                     }}
                   >
                     Tools
                     {toolCalls.length > 0 && (
-                      <Badge size="sm" ml="xs" variant="filled" color="blue">
+                      <Badge size="xs" ml="xs" variant="gradient" gradient={{ from: 'cyan', to: 'blue' }}>
                         {toolCalls.length}
                       </Badge>
                     )}
                   </Tabs.Tab>
                 </Tabs.List>
               </Box>
-
-              <Divider my="sm" />
 
               <Box style={{ flex: 1, overflow: 'hidden' }} px="md" pb="md">
                 <Tabs.Panel value="tasks" style={{ height: '100%' }}>
