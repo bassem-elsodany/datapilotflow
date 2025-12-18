@@ -724,30 +724,36 @@ export default function CreateModelProvider() {
           setTestModalOpen(false);
           setTestResult(null);
         }}
-        title="Test provider"
-        size="xl"
+        title={`Test ${testModalType ? testModalType.charAt(0).toUpperCase() + testModalType.slice(1) : 'Model'}`}
+        size="lg"
         centered
       >
-        <Stack gap="md">
-          <Text size="sm">
-            {testModalType
-              ? `Select a ${testModalType} model to run a live health check and inspect the response payload.`
-              : 'Select a model to test.'}
-          </Text>
-          <Select
-            label="Model"
-            placeholder="Select model"
-            data={
-              testModalType === ModelType.EMBEDDING
-                ? form.values.embedding_models
-                : testModalType === ModelType.GENERATIVE
-                  ? form.values.generative_models
-                  : form.values.reranker_models
-            }
-            value={testModalModel}
-            onChange={(value) => setTestModalModel(value || '')}
-          />
-          <Group justify="flex-end">
+        <Stack gap="lg">
+          {/* Model Selection Section */}
+          <Stack gap="sm">
+            <Text size="sm" c="dimmed">
+              {testModalType
+                ? `Select a ${testModalType} model to run a live health check and inspect the response payload.`
+                : 'Select a model to test.'}
+            </Text>
+            <Select
+              label="Model"
+              placeholder="Select model"
+              data={
+                testModalType === ModelType.EMBEDDING
+                  ? form.values.embedding_models
+                  : testModalType === ModelType.GENERATIVE
+                    ? form.values.generative_models
+                    : form.values.reranker_models
+              }
+              value={testModalModel}
+              onChange={(value) => setTestModalModel(value || '')}
+              searchable
+            />
+          </Stack>
+
+          {/* Action Buttons */}
+          <Group justify="flex-end" gap="sm">
             <Button
               variant="default"
               onClick={() => {
@@ -769,34 +775,52 @@ export default function CreateModelProvider() {
             </Button>
           </Group>
 
+          {/* Test Results Section */}
           {testResult && (
-            <Stack gap="xs">
-              <Text size="sm" fw={500}>
-                Result
-              </Text>
-              <Text size="sm">
-                Status: {testResult.status_code ?? 'N/A'} | Duration: {testResult.duration_ms ?? 'N/A'}ms
-              </Text>
-              <Text size="sm">Message: {testResult.message ?? 'N/A'}</Text>
-              <Text size="sm" fw={500} mt="sm">
-                Response body (JSON)
-              </Text>
-              <Paper withBorder radius="md" p="xs">
-                <Textarea
-                  value={testResult.body ?? ''}
-                  minRows={8}
-                  maxRows={12}
-                  autosize
-                  readOnly
-                  spellCheck={false}
-                  styles={{
-                    input: {
-                      fontFamily: 'Menlo, Monaco, Consolas, monospace',
-                      fontSize: 12,
-                    },
-                  }}
-                />
-              </Paper>
+            <Stack gap="md" p="md" style={{ backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
+              <div>
+                <Text size="sm" fw={600} mb="xs">
+                  Test Result
+                </Text>
+                <Stack gap="xs" style={{ fontSize: '0.875rem' }}>
+                  <Group justify="space-between">
+                    <Text c="dimmed">Status Code:</Text>
+                    <Text fw={500}>{testResult.status_code ?? 'N/A'}</Text>
+                  </Group>
+                  <Group justify="space-between">
+                    <Text c="dimmed">Duration:</Text>
+                    <Text fw={500}>{testResult.duration_ms ?? 'N/A'} ms</Text>
+                  </Group>
+                  <Group justify="space-between">
+                    <Text c="dimmed">Message:</Text>
+                    <Text fw={500} c={testResult.success ? 'green' : 'red'}>
+                      {testResult.message ?? 'N/A'}
+                    </Text>
+                  </Group>
+                </Stack>
+              </div>
+
+              <div>
+                <Text size="sm" fw={600} mb="xs">
+                  Response Body (JSON)
+                </Text>
+                <Paper withBorder radius="md" p="xs" style={{ backgroundColor: 'white' }}>
+                  <Textarea
+                    value={testResult.body ?? ''}
+                    minRows={8}
+                    maxRows={12}
+                    autosize
+                    readOnly
+                    spellCheck={false}
+                    styles={{
+                      input: {
+                        fontFamily: 'Menlo, Monaco, Consolas, monospace',
+                        fontSize: 12,
+                      },
+                    }}
+                  />
+                </Paper>
+              </div>
             </Stack>
           )}
         </Stack>
