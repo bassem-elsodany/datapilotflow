@@ -317,20 +317,34 @@ class ModelProviderService:
             List of available model names for the provider
         """
         try:
-            # Import litellm's get_available_models function
-            from litellm import get_available_models
+            # Import litellm's models_by_provider to get available models
+            from litellm import models_by_provider
 
             logger.info(f"Fetching available models for provider: {provider_type}")
 
             # Get all models for this provider from LiteLLM
-            available_models = get_available_models(provider=provider_type)
+            if provider_type not in models_by_provider:
+                logger.warning(f"Provider '{provider_type}' not found in LiteLLM models_by_provider")
+                return []
+
+            available_models = list(models_by_provider[provider_type])
 
             if not available_models:
                 logger.warning(f"No models found for provider: {provider_type}")
                 return []
 
-            logger.info(f"Found {len(available_models)} models for provider {provider_type}")
-            return available_models
+            # Strip provider prefix if it exists (e.g., "azure_ai/model-name" -> "model-name")
+            # This makes the model names cleaner in the UI
+            cleaned_models = []
+            prefix = f"{provider_type}/"
+            for model in available_models:
+                if model.startswith(prefix):
+                    cleaned_models.append(model[len(prefix):])
+                else:
+                    cleaned_models.append(model)
+
+            logger.info(f"Found {len(cleaned_models)} models for provider {provider_type}")
+            return cleaned_models
 
         except Exception as e:
             logger.error(f"Error fetching available models for {provider_type}: {e}")
