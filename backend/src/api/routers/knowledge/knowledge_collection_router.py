@@ -27,26 +27,37 @@ knowledge_collection_router = APIRouter()
 @knowledge_collection_router.get("/")
 def list_vectordb_collections(
     name: Optional[str] = None,
+    expand: Optional[str] = Query(None, description="Comma-separated list of fields to expand. Use 'embedding_provider' to get full provider details."),
     current_user: User = Depends(get_current_user),
     service: VectorDBCollectionService = Depends(get_vectordb_collection_service),
 ):
-    """List all vector DB collection configurations or check if a specific name exists."""
+    """List all vector DB collection configurations or get a specific collection by name.
+
+    Query Parameters:
+    - name: Filter by collection name
+    - expand: Comma-separated list of fields to expand (e.g., 'embedding_provider')
+    """
     try:
         if name:
-            # Check if collection name exists
+            # Get collection by name and return full details for UI display
             existing_collection = service.get_collection_by_name(name)
-            return {
-                "collection_name": name,
-                "exists": existing_collection is not None,
-                "message": (
-                    f"Collection name '{name}' already exists"
-                    if existing_collection
-                    else f"Collection name '{name}' is available"
-                ),
-            }
+            if existing_collection:
+                # Return full collection config with embedding details for UI
+                response = _serialize_collection(existing_collection, expand, current_user.id)
+                return response
+            else:
+                # Collection not found
+                return {
+                    "collection_name": name,
+                    "exists": False,
+                    "message": f"Collection name '{name}' is available",
+                }
         else:
             # List all collections
             collections = service.list_collections(current_user.id, 0, 1000)
+            if expand:
+                # Expand requested fields for each collection
+                collections = [_serialize_collection(c, expand, current_user.id) for c in collections]
             return collections
 
     except Exception as e:
@@ -54,6 +65,83 @@ def list_vectordb_collections(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
+
+
+def _serialize_collection(collection: VectorDBCollection, expand: Optional[str], user_id: Optional[str]) -> dict:
+    """Serialize a collection, optionally expanding provider details.
+
+    Args:
+        collection: The collection to serialize
+        expand: Comma-separated list of fields to expand
+        user_id: User ID for fetching provider details
+
+    Returns:
+        Dictionary with collection data and optionally expanded provider details
+    """
+    response = {
+        "id": collection.id,
+        "description": collection.description,
+        "collection_name": collection.collection_name,
+        "embedding_model_provider_id": collection.embedding_model_provider_id,
+        "embedding_model_name": collection.embedding_model_name,
+        "vector_dimension": collection.vector_dimension,
+        "created_at": collection.created_at.isoformat() if hasattr(collection.created_at, 'isoformat') else collection.created_at,
+        "created_by": collection.created_by,
+    }
+
+    # Expand embedding provider if requested
+    if expand and "embedding_provider" in expand:
+        response["embedding_provider"] = _expand_embedding_provider(
+            collection.embedding_model_provider_id,
+            collection.embedding_model_name,
+            user_id,
+        )
+
+    return response
+
+
+def _expand_embedding_provider(provider_id: str, model_name: str, user_id: Optional[str]) -> dict:
+    """Fetch and return expanded embedding provider details.
+
+    Args:
+        provider_id: The provider ID
+        model_name: The model name
+        user_id: User ID for fetching provider details
+
+    Returns:
+        Dictionary with expanded provider information
+    """
+    try:
+        if not user_id:
+            # Fallback if user_id is not available
+            return {
+                "id": provider_id,
+                "model_name": model_name,
+            }
+
+        from src.services.model_provider.model_provider_service import (
+            get_model_provider_service,
+        )
+
+        provider_service = get_model_provider_service()
+        provider = provider_service.get_model_provider(provider_id, user_id)
+
+        if provider:
+            return {
+                "id": provider_id,
+                "name": provider.name,
+                "model_name": model_name,
+                "provider_type": provider.provider_type,
+                "endpoint": provider.endpoint,
+            }
+    except Exception as e:
+        logger.warning(f"Could not expand embedding provider {provider_id}: {e}")
+
+    # Fallback to basic info
+    return {
+        "id": provider_id,
+        "model_name": model_name,
+    }
 
 
 @knowledge_collection_router.get("/{collection_id}", response_model=VectorDBCollection)

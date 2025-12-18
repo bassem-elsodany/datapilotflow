@@ -52,16 +52,15 @@ def extract_agent_config(agent, conversation=None) -> dict:
     if not agent:
         return config
 
-    # Load answer generation settings (LLM provider and model)
+    # Load primary LLM provider (used for enhancement, answer generation, etc.)
+    if agent.llm_provider:
+        config["llm_provider_id"] = agent.llm_provider.id
+        config["llm_model_name"] = agent.llm_provider.model_name
+
+    # Load answer generation settings
     # CRITICAL: Only enable LLM generation if user has explicitly enabled it
-    if (
-        agent.answer_generation
-        and agent.answer_generation.enabled
-        and agent.answer_generation.provider
-    ):
-        config["llm_provider_id"] = agent.answer_generation.provider.id
-        config["llm_model_name"] = agent.answer_generation.provider.model_name
-        config["enable_llm_generation"] = True
+    config["enable_llm_generation"] = agent.is_llm_generation_enabled
+    if agent.is_llm_generation_enabled:
         logger.info("✅ LLM generation ENABLED by user")
     else:
         logger.info("❌ LLM generation DISABLED by user - will return raw documents")
@@ -71,22 +70,8 @@ def extract_agent_config(agent, conversation=None) -> dict:
         config["collection_name"] = agent.vector_database.collection_name
         config["top_k"] = agent.vector_database.top_k
 
-    # Load enhancement strategy and provider
-    if agent.enhancement:
-        config["selected_strategy"] = agent.enhancement.strategy
-
-        # For non-native strategies, the provider is required and stored in enhancement.provider
-        # If answer_generation doesn't have a provider, use enhancement.provider as fallback
-        if (
-            agent.enhancement.strategy != "native"
-            and agent.enhancement.provider
-            and not config["llm_provider_id"]
-        ):
-            config["llm_provider_id"] = agent.enhancement.provider.id
-            config["llm_model_name"] = agent.enhancement.provider.model_name
-            logger.debug(
-                f"Using enhancement provider for non-native strategy: {config['llm_provider_id']}/{config['llm_model_name']}"
-            )
+    # Load enhancement strategy (uses primary llm_provider)
+    config["selected_strategy"] = agent.enhancement_strategy or "native"
 
     # Load reranking settings
     # CRITICAL: Only enable reranking if user has explicitly enabled it

@@ -56,10 +56,21 @@ class EnhancementConfig:
 
 @dataclass
 class VectorDatabaseConfig:
-    """Vector database configuration."""
+    """Vector database configuration.
+
+    The embedding provider configured here MUST match the vector database collection's
+    embedding provider. This ensures query embeddings are compatible with stored document embeddings.
+    """
 
     collection_name: str = "LongTermMemory"
     top_k: int = 5  # Number of documents to retrieve
+
+    # Embedding provider - denormalized from collection config for consistency and clarity
+    # This MUST be the same provider used to embed the collection's documents
+    embedding_provider: Optional[ProviderConfig] = None  # Provider for query vectorization
+
+    # Vector dimension - denormalized from collection config for validation
+    vector_dimension: int = 1536  # Must match the dimension of embeddings in collection
 
 
 @dataclass

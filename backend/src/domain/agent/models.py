@@ -11,9 +11,7 @@ from enum import Enum
 from typing import List, Optional
 
 from src.domain.conversation.models import (
-    AnswerGenerationConfig,
     AssistantConfig,
-    EnhancementConfig,
     ProviderConfig,
     RerankerConfig,
     VectorDatabaseConfig,
@@ -25,6 +23,17 @@ class AgentType(str, Enum):
 
     RAG = "rag"
     ASSISTANT = "assistant"
+
+
+class EnhancementStrategy(str, Enum):
+    """Query enhancement strategies for RAG agents."""
+
+    NATIVE = "native"  # Traditional RAG without enhancement
+    AUGMENTED = "augmented"  # Augmented queries
+    MULTI_QUERY = "multi_query"  # Multiple query variants
+    HYDE = "hyde"  # Hypothetical Document Embeddings
+    DECOMPOSITION = "decomposition"  # Query decomposition
+    CUSTOM_VARIANTS = "custom_variants"  # Custom query variants
 
 
 @dataclass
@@ -49,10 +58,10 @@ class Agent:
         updated_at: Last modification timestamp
 
         RAG Configuration (only if agent_type = RAG):
-        - enhancement: Query enhancement strategy
+        - enhancement_strategy: Query enhancement strategy (e.g., "native", "augmented", "custom_variants")
         - vector_database: Vector DB settings
         - reranker: Reranker configuration
-        - answer_generation: LLM answer generation settings
+        - is_llm_generation_enabled: Whether LLM answer generation is enabled
 
         Assistant Configuration (only if agent_type = ASSISTANT):
         - assistant_config: Tools, instructions, and LLM settings
@@ -74,10 +83,10 @@ class Agent:
     llm_provider: Optional[ProviderConfig] = None
 
     # RAG-specific configuration (only populated if agent_type = RAG)
-    enhancement: Optional[EnhancementConfig] = None
+    enhancement_strategy: EnhancementStrategy = EnhancementStrategy.NATIVE
     vector_database: Optional[VectorDatabaseConfig] = None
     reranker: Optional[RerankerConfig] = None
-    answer_generation: Optional[AnswerGenerationConfig] = None
+    is_llm_generation_enabled: bool = False  # Whether LLM answer generation is enabled
 
     # Assistant-specific configuration (only populated if agent_type = ASSISTANT)
     assistant_config: Optional[AssistantConfig] = None

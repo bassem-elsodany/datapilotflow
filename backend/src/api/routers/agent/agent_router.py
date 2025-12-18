@@ -11,11 +11,9 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 from src.api.routers.auth.auth_router import get_current_user
-from src.domain.agent.models import Agent, AgentType
+from src.domain.agent.models import Agent, AgentType, EnhancementStrategy
 from src.domain.conversation.models import (
-    AnswerGenerationConfig,
     AssistantConfig,
-    EnhancementConfig,
     ProviderConfig,
     RerankerConfig,
     VectorDatabaseConfig,
@@ -38,18 +36,15 @@ class ProviderConfigRequest(BaseModel):
     model_name: str
 
 
-class EnhancementConfigRequest(BaseModel):
-    """Enhancement configuration request model."""
-
-    strategy: str
-    # Note: Enhancement uses the agent's primary llm_provider, no separate provider needed
-
-
 class VectorDatabaseConfigRequest(BaseModel):
     """Vector database configuration request model."""
 
     collection_name: str = "LongTermMemory"
     top_k: int = 5
+    # Embedding provider - must match the vector database collection's embedding provider
+    embedding_provider: Optional[ProviderConfigRequest] = None
+    # Vector dimension - must match the collection's vector dimension
+    vector_dimension: int = 1536
 
 
 class RerankerConfigRequest(BaseModel):
@@ -58,13 +53,6 @@ class RerankerConfigRequest(BaseModel):
     enabled: bool = False
     provider: Optional[ProviderConfigRequest] = None
     relevance_threshold: float = 0.5
-
-
-class AnswerGenerationConfigRequest(BaseModel):
-    """Answer generation configuration request model."""
-
-    enabled: bool = False
-    # Note: Answer generation uses the agent's primary llm_provider, no separate provider needed
 
 
 class AssistantConfigRequest(BaseModel):
@@ -86,10 +74,10 @@ class CreateAgentRequest(BaseModel):
     llm_provider: Optional[ProviderConfigRequest] = None
 
     # RAG-specific configuration
-    enhancement: Optional[EnhancementConfigRequest] = None
+    enhancement_strategy: str = EnhancementStrategy.NATIVE.value  # Query enhancement strategy
     vector_database: Optional[VectorDatabaseConfigRequest] = None
     reranker: Optional[RerankerConfigRequest] = None
-    answer_generation: Optional[AnswerGenerationConfigRequest] = None
+    is_llm_generation_enabled: bool = False  # Whether LLM answer generation is enabled
 
     # Assistant-specific configuration
     assistant_config: Optional[AssistantConfigRequest] = None
@@ -107,10 +95,10 @@ class UpdateAgentRequest(BaseModel):
     llm_provider: Optional[ProviderConfigRequest] = None
 
     # RAG-specific configuration
-    enhancement: Optional[EnhancementConfigRequest] = None
+    enhancement_strategy: Optional[str] = None  # Query enhancement strategy
     vector_database: Optional[VectorDatabaseConfigRequest] = None
     reranker: Optional[RerankerConfigRequest] = None
-    answer_generation: Optional[AnswerGenerationConfigRequest] = None
+    is_llm_generation_enabled: Optional[bool] = None  # Whether LLM answer generation is enabled
 
     # Assistant-specific configuration
     assistant_config: Optional[AssistantConfigRequest] = None
@@ -182,10 +170,10 @@ class AgentResponse(BaseModel):
     llm_provider: Optional[dict] = None
 
     # Configuration (type-specific)
-    enhancement: Optional[dict] = None
+    enhancement_strategy: str = ""  # Query enhancement strategy
     vector_database: Optional[dict] = None
     reranker: Optional[dict] = None
-    answer_generation: Optional[dict] = None
+    is_llm_generation_enabled: bool = False  # Whether LLM answer generation is enabled
     assistant_config: Optional[dict] = None
 
     # Expandable: conversations
@@ -354,15 +342,22 @@ def serialize_agent(
         )
 
     # Add RAG configuration (for both RAG and ASSISTANT agents with Knowledge Expert)
-    # Enhancement config (no provider - uses agent's primary llm_provider)
-    response_data["enhancement"] = (
-        asdict(agent.enhancement) if agent.enhancement else None
+    # Enhancement strategy (simplified - just a string)
+    response_data["enhancement_strategy"] = (
+        agent.enhancement_strategy.value
+        if isinstance(agent.enhancement_strategy, EnhancementStrategy)
+        else agent.enhancement_strategy
     )
 
-    # Vector database config (no expansion needed)
-    response_data["vector_database"] = (
-        asdict(agent.vector_database) if agent.vector_database else None
-    )
+    # Vector database config with optional embedding provider expansion
+    if agent.vector_database:
+        vector_db_data = asdict(agent.vector_database)
+        # Convert embedding_provider ProviderConfig to dict
+        if agent.vector_database.embedding_provider:
+            vector_db_data["embedding_provider"] = asdict(agent.vector_database.embedding_provider)
+        response_data["vector_database"] = vector_db_data
+    else:
+        response_data["vector_database"] = None
 
     # Reranker config
     if agent.reranker:
@@ -377,10 +372,8 @@ def serialize_agent(
     else:
         response_data["reranker"] = None
 
-    # Answer generation config (no provider - uses agent's primary llm_provider)
-    response_data["answer_generation"] = (
-        asdict(agent.answer_generation) if agent.answer_generation else None
-    )
+    # LLM generation enabled flag (simplified - just a boolean)
+    response_data["is_llm_generation_enabled"] = agent.is_llm_generation_enabled
 
     # Add assistant config (for ASSISTANT agents)
     if agent.agent_type == AgentType.ASSISTANT:
@@ -490,17 +483,13 @@ async def create_agent(
         agent_type = AgentType(request.agent_type)
 
         # Convert request models to domain models
-        enhancement = None
-        if request.enhancement:
-            enhancement = EnhancementConfig(
-                strategy=request.enhancement.strategy,
-            )
-
         vector_database = None
         if request.vector_database:
             vector_database = VectorDatabaseConfig(
                 collection_name=request.vector_database.collection_name,
                 top_k=request.vector_database.top_k,
+                embedding_provider=convert_provider_config(request.vector_database.embedding_provider),
+                vector_dimension=request.vector_database.vector_dimension,
             )
 
         reranker = None
@@ -509,12 +498,6 @@ async def create_agent(
                 enabled=request.reranker.enabled,
                 provider=convert_provider_config(request.reranker.provider),
                 relevance_threshold=request.reranker.relevance_threshold,
-            )
-
-        answer_generation = None
-        if request.answer_generation:
-            answer_generation = AnswerGenerationConfig(
-                enabled=request.answer_generation.enabled,
             )
 
         assistant_config = None
@@ -528,6 +511,17 @@ async def create_agent(
         # Convert llm_provider
         llm_provider = convert_provider_config(request.llm_provider)
 
+        # Convert enhancement_strategy string to enum
+        enhancement_strategy = EnhancementStrategy.NATIVE
+        if request.enhancement_strategy:
+            try:
+                enhancement_strategy = EnhancementStrategy(request.enhancement_strategy)
+            except ValueError:
+                raise ValueError(
+                    f"Invalid enhancement strategy: {request.enhancement_strategy}. "
+                    f"Valid values are: {', '.join([s.value for s in EnhancementStrategy])}"
+                )
+
         # Create agent
         agent_id = agent_service.create_agent(
             user_id=current_user.id,
@@ -535,10 +529,10 @@ async def create_agent(
             agent_type=agent_type,
             description=request.description,
             llm_provider=llm_provider,
-            enhancement=enhancement,
+            enhancement_strategy=enhancement_strategy,
             vector_database=vector_database,
             reranker=reranker,
-            answer_generation=answer_generation,
+            is_llm_generation_enabled=request.is_llm_generation_enabled,
             assistant_config=assistant_config,
             tags=request.tags,
         )
@@ -678,17 +672,13 @@ async def update_agent(
             raise HTTPException(status_code=404, detail="Agent not found")
 
         # Convert request models to domain models
-        enhancement = None
-        if request.enhancement:
-            enhancement = EnhancementConfig(
-                strategy=request.enhancement.strategy,
-            )
-
         vector_database = None
         if request.vector_database:
             vector_database = VectorDatabaseConfig(
                 collection_name=request.vector_database.collection_name,
                 top_k=request.vector_database.top_k,
+                embedding_provider=convert_provider_config(request.vector_database.embedding_provider),
+                vector_dimension=request.vector_database.vector_dimension,
             )
 
         reranker = None
@@ -697,12 +687,6 @@ async def update_agent(
                 enabled=request.reranker.enabled,
                 provider=convert_provider_config(request.reranker.provider),
                 relevance_threshold=request.reranker.relevance_threshold,
-            )
-
-        answer_generation = None
-        if request.answer_generation:
-            answer_generation = AnswerGenerationConfig(
-                enabled=request.answer_generation.enabled,
             )
 
         assistant_config = None
@@ -716,6 +700,17 @@ async def update_agent(
         # Convert llm_provider
         llm_provider = convert_provider_config(request.llm_provider)
 
+        # Convert enhancement_strategy string to enum
+        enhancement_strategy = None
+        if request.enhancement_strategy is not None:
+            try:
+                enhancement_strategy = EnhancementStrategy(request.enhancement_strategy)
+            except ValueError:
+                raise ValueError(
+                    f"Invalid enhancement strategy: {request.enhancement_strategy}. "
+                    f"Valid values are: {', '.join([s.value for s in EnhancementStrategy])}"
+                )
+
         # Update agent
         success = agent_service.update_agent(
             agent_id=agent_id,
@@ -723,10 +718,10 @@ async def update_agent(
             name=request.name,
             description=request.description,
             llm_provider=llm_provider,
-            enhancement=enhancement,
+            enhancement_strategy=enhancement_strategy,
             vector_database=vector_database,
             reranker=reranker,
-            answer_generation=answer_generation,
+            is_llm_generation_enabled=request.is_llm_generation_enabled,
             assistant_config=assistant_config,
             tags=request.tags,
         )

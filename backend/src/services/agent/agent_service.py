@@ -14,11 +14,9 @@ from loguru import logger
 from pymongo import MongoClient
 
 from src.config import settings
-from src.domain.agent.models import Agent, AgentType
+from src.domain.agent.models import Agent, AgentType, EnhancementStrategy
 from src.domain.conversation.models import (
-    AnswerGenerationConfig,
     AssistantConfig,
-    EnhancementConfig,
     ProviderConfig,
     RerankerConfig,
     VectorDatabaseConfig,
@@ -51,10 +49,10 @@ class AgentService:
         agent_type: AgentType,
         description: Optional[str] = None,
         llm_provider: Optional[ProviderConfig] = None,
-        enhancement: Optional[EnhancementConfig] = None,
+        enhancement_strategy: EnhancementStrategy = EnhancementStrategy.NATIVE,
         vector_database: Optional[VectorDatabaseConfig] = None,
         reranker: Optional[RerankerConfig] = None,
-        answer_generation: Optional[AnswerGenerationConfig] = None,
+        is_llm_generation_enabled: bool = False,
         assistant_config: Optional[AssistantConfig] = None,
         tags: Optional[List[str]] = None,
     ) -> str:
@@ -67,10 +65,10 @@ class AgentService:
             agent_type: Type of agent (RAG or ASSISTANT)
             description: Optional description
             llm_provider: Primary LLM provider config (for both RAG and ASSISTANT agents)
-            enhancement: Query enhancement config (for RAG agents)
+            enhancement_strategy: Query enhancement strategy (e.g., "native", "augmented", "custom_variants")
             vector_database: Vector DB config (for RAG agents)
             reranker: Reranker config (for RAG agents)
-            answer_generation: Answer generation config (for RAG agents)
+            is_llm_generation_enabled: Whether LLM answer generation is enabled
             assistant_config: Assistant config (for ASSISTANT agents)
             tags: Organizational tags
 
@@ -97,14 +95,16 @@ class AgentService:
         }
 
         # Add RAG configuration (can be used by both RAG and ASSISTANT agents with Knowledge Expert)
-        agent_data["enhancement"] = asdict(enhancement) if enhancement else None
+        agent_data["enhancement_strategy"] = (
+            enhancement_strategy.value
+            if isinstance(enhancement_strategy, EnhancementStrategy)
+            else enhancement_strategy
+        )
         agent_data["vector_database"] = (
             asdict(vector_database) if vector_database else None
         )
         agent_data["reranker"] = asdict(reranker) if reranker else None
-        agent_data["answer_generation"] = (
-            asdict(answer_generation) if answer_generation else None
-        )
+        agent_data["is_llm_generation_enabled"] = is_llm_generation_enabled
 
         # Agent type specific validation and configuration
         if agent_type == AgentType.RAG:
@@ -205,10 +205,10 @@ class AgentService:
         name: Optional[str] = None,
         description: Optional[str] = None,
         llm_provider: Optional[ProviderConfig] = None,
-        enhancement: Optional[EnhancementConfig] = None,
+        enhancement_strategy: Optional[EnhancementStrategy] = None,
         vector_database: Optional[VectorDatabaseConfig] = None,
         reranker: Optional[RerankerConfig] = None,
-        answer_generation: Optional[AnswerGenerationConfig] = None,
+        is_llm_generation_enabled: Optional[bool] = None,
         assistant_config: Optional[AssistantConfig] = None,
         tags: Optional[List[str]] = None,
     ) -> bool:
@@ -221,10 +221,10 @@ class AgentService:
             name: New name (optional)
             description: New description (optional)
             llm_provider: New LLM provider config (optional)
-            enhancement: New enhancement config (optional)
+            enhancement_strategy: New enhancement strategy (optional)
             vector_database: New vector DB config (optional)
             reranker: New reranker config (optional)
-            answer_generation: New answer generation config (optional)
+            is_llm_generation_enabled: Whether LLM generation is enabled (optional)
             assistant_config: New assistant config (optional)
             tags: New tags (optional)
 
@@ -244,14 +244,20 @@ class AgentService:
                 update_data["$set"]["llm_provider"] = asdict(llm_provider)
 
             # Update RAG configuration
-            if enhancement is not None:
-                update_data["$set"]["enhancement"] = asdict(enhancement)
+            if enhancement_strategy is not None:
+                update_data["$set"]["enhancement_strategy"] = (
+                    enhancement_strategy.value
+                    if isinstance(enhancement_strategy, EnhancementStrategy)
+                    else enhancement_strategy
+                )
             if vector_database is not None:
                 update_data["$set"]["vector_database"] = asdict(vector_database)
             if reranker is not None:
                 update_data["$set"]["reranker"] = asdict(reranker)
-            if answer_generation is not None:
-                update_data["$set"]["answer_generation"] = asdict(answer_generation)
+            if is_llm_generation_enabled is not None:
+                update_data["$set"][
+                    "is_llm_generation_enabled"
+                ] = is_llm_generation_enabled
 
             # Update assistant configuration
             if assistant_config is not None:
@@ -358,12 +364,23 @@ class AgentService:
                 return None
             return ProviderConfig(id=data["id"], model_name=data["model_name"])
 
-        # Deserialize enhancement config
-        enhancement = None
-        if doc.get("enhancement"):
-            enhancement = EnhancementConfig(
-                strategy=doc["enhancement"]["strategy"],
-            )
+        # Deserialize enhancement strategy (new simplified format)
+        # Support backward compatibility with old "enhancement" object format
+        enhancement_strategy = EnhancementStrategy.NATIVE
+        if "enhancement_strategy" in doc:
+            strategy_value = doc["enhancement_strategy"] or "native"
+            try:
+                enhancement_strategy = EnhancementStrategy(strategy_value)
+            except ValueError:
+                # Default to NATIVE if invalid value
+                enhancement_strategy = EnhancementStrategy.NATIVE
+        elif doc.get("enhancement"):
+            # Backward compatibility: extract strategy from old enhancement object
+            strategy_value = doc["enhancement"].get("strategy", "native")
+            try:
+                enhancement_strategy = EnhancementStrategy(strategy_value)
+            except ValueError:
+                enhancement_strategy = EnhancementStrategy.NATIVE
 
         # Deserialize vector database config
         vector_database = None
@@ -382,12 +399,14 @@ class AgentService:
                 relevance_threshold=doc["reranker"].get("relevance_threshold", 0.5),
             )
 
-        # Deserialize answer generation config
-        answer_generation = None
-        if doc.get("answer_generation"):
-            answer_generation = AnswerGenerationConfig(
-                enabled=doc["answer_generation"].get("enabled", False),
-            )
+        # Deserialize LLM generation enabled flag (new simplified format)
+        # Support backward compatibility with old "answer_generation" object format
+        is_llm_generation_enabled = False
+        if "is_llm_generation_enabled" in doc:
+            is_llm_generation_enabled = doc.get("is_llm_generation_enabled", False)
+        elif doc.get("answer_generation"):
+            # Backward compatibility: extract enabled from old answer_generation object
+            is_llm_generation_enabled = doc["answer_generation"].get("enabled", False)
 
         # Deserialize assistant config
         assistant_config = None
@@ -410,10 +429,10 @@ class AgentService:
             created_at=doc["created_at"],
             updated_at=doc["updated_at"],
             llm_provider=llm_provider,
-            enhancement=enhancement,
+            enhancement_strategy=enhancement_strategy,
             vector_database=vector_database,
             reranker=reranker,
-            answer_generation=answer_generation,
+            is_llm_generation_enabled=is_llm_generation_enabled,
             assistant_config=assistant_config,
             tags=doc.get("tags", []),
         )

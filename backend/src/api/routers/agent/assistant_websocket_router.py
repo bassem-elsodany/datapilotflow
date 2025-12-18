@@ -158,11 +158,8 @@ async def agent_query_assistant_websocket(
                     )
                     continue
 
-                # Extract LLM config from agent's enhancement provider
-                if (
-                    not agent.enhancement
-                    or not agent.enhancement.provider
-                ):
+                # Use primary LLM provider (required for Assistant mode)
+                if not agent.llm_provider:
                     await websocket.send_text(
                         json.dumps(
                             {
@@ -176,8 +173,8 @@ async def agent_query_assistant_websocket(
                     )
                     continue
 
-                llm_provider_id = agent.enhancement.provider.id
-                llm_model_name = agent.enhancement.provider.model_name
+                llm_provider_id = agent.llm_provider.id
+                llm_model_name = agent.llm_provider.model_name
 
                 logger.info(
                     f"Creating Assistant Agent: provider={llm_provider_id}, model={llm_model_name}"

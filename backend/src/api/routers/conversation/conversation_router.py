@@ -358,6 +358,7 @@ async def get_conversation_session(
                     # Include full configuration for frontend
                     "enhancement_strategy": agent.enhancement_strategy.value,
                     "is_llm_generation_enabled": agent.is_llm_generation_enabled,
+                    "llm_provider": config_to_dict(agent.llm_provider),
                     "vector_database": config_to_dict(agent.vector_database),
                     "reranker": config_to_dict(agent.reranker),
                     "assistant_config": config_to_dict(agent.assistant_config),

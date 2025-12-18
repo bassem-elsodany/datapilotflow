@@ -96,9 +96,15 @@ interface ConversationFormData {
   // Vector Database settings (RAG mode always / Assistant mode if Knowledge Expert enabled)
   collectionName: string;
   topK: number;
+  // Embedding provider - auto-populated from collection, for consistency and clarity
+  embeddingProviderId: string | null;
+  embeddingProviderName: string | null;  // Provider name (human-readable) from expanded response
+  embeddingModelName: string | null;
+  vectorDimension: number;
 
   // Step 3 - Judge Ranker (RAG) / Part of Knowledge Expert Config (Assistant)
   enableReranking: boolean;
+  useAgentLlmAsJudge: boolean;  // Use agent's LLM provider/model for reranking instead of selecting a different one
   relevanceThreshold: number;
   selectedRerankerId: string | null;
   selectedRerankerModel: string | null;
@@ -306,7 +312,12 @@ export function ConversationCreateWizard() {
       useKnowledgeExpert: false, // Assistant mode: whether to use knowledge_expert MCP tool
       collectionName: '',  // Empty - user must select a collection
       topK: 5,
+      embeddingProviderId: null,  // Auto-populated from collection
+      embeddingProviderName: null,  // Provider name - auto-populated from collection expand response
+      embeddingModelName: null,  // Auto-populated from collection
+      vectorDimension: 1536,  // Auto-populated from collection
       enableReranking: false,
+      useAgentLlmAsJudge: true,  // Default: use agent's LLM for reranking
       relevanceThreshold: 0.5,
       selectedRerankerId: null,
       selectedRerankerModel: null,
@@ -318,10 +329,6 @@ export function ConversationCreateWizard() {
     validate: {
       conversationName: (value) =>
         !value?.trim() ? 'Conversation name is required' : null,
-      selectedProviderId: (value) =>
-        !value ? 'LLM provider is required' : null,
-      selectedModel: (value) =>
-        !value ? 'LLM model is required' : null,
       collectionName: (value) =>
         !value ? 'Vector DB collection is required' : null,
       topK: (value) =>
@@ -388,6 +395,23 @@ export function ConversationCreateWizard() {
     }
   }, [form.values.agentType]);
 
+  // Sync reranker settings when "Use Agent LLM as Judge" checkbox changes
+  useEffect(() => {
+    if (form.values.enableReranking && form.values.useAgentLlmAsJudge) {
+      // When checkbox is enabled, sync reranker to use agent's LLM
+      form.setFieldValue('selectedRerankerId', form.values.agentLlmProviderId);
+      form.setFieldValue('selectedRerankerModel', form.values.agentLlmModel);
+    }
+  }, [form.values.useAgentLlmAsJudge, form.values.enableReranking]);
+
+  // Auto-populate embedding provider details when collection name changes
+  // This ensures the UI always shows the correct embedding configuration for the selected collection
+  useEffect(() => {
+    if (form.values.collectionName && !isLoadingExisting) {
+      fetchEmbeddingProviderDetails(form.values.collectionName);
+    }
+  }, [form.values.collectionName, isLoadingExisting]);
+
   // Fetch collection name by ID
   const fetchCollectionName = async (collectionId: string) => {
     try {
@@ -403,12 +427,68 @@ export function ConversationCreateWizard() {
         console.log('[DEBUG] Fetched collection:', collection);
         if (collection.collection_name) {
           form.setFieldValue('collectionName', collection.collection_name);
+          // Auto-populate embedding provider from collection
+          if (collection.embedding_model_provider_id) {
+            form.setFieldValue('embeddingProviderId', collection.embedding_model_provider_id);
+          }
+          if (collection.embedding_model_name) {
+            form.setFieldValue('embeddingModelName', collection.embedding_model_name);
+          }
+          if (collection.vector_dimension) {
+            form.setFieldValue('vectorDimension', collection.vector_dimension);
+          }
         }
       } else {
         console.error('[ERROR] Failed to fetch collection:', response.status);
       }
     } catch (error) {
       console.error('[ERROR] Error fetching collection:', error);
+    }
+  };
+
+  // Fetch and populate embedding provider details for a collection by name
+  // This is automatically called when collection name changes to ensure UI always shows correct embedding config
+  const fetchEmbeddingProviderDetails = async (collectionName: string) => {
+    try {
+      const token = localStorage.getItem('jwt_token');
+
+      // Call the API with expand=embedding_provider to get full provider details
+      // Use the collection name as query parameter
+      const response = await fetch(
+        apiUtils.buildApiUrl(`/knowledge/vectordb-collections/?name=${encodeURIComponent(collectionName)}&expand=embedding_provider`),
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('[DEBUG] Collection embedding details response:', data);
+
+        // The response should have embedding details at top level or in expanded provider
+        if (data && data.collection_name && data.embedding_model_provider_id) {
+          // Update form with embedding details
+          form.setFieldValue('embeddingProviderId', data.embedding_model_provider_id);
+          // Extract provider name from expanded provider object, or fallback to ID
+          const providerName = data.embedding_provider?.name || data.embedding_model_provider_id;
+          form.setFieldValue('embeddingProviderName', providerName);
+          form.setFieldValue('embeddingModelName', data.embedding_model_name || '');
+          form.setFieldValue('vectorDimension', data.vector_dimension || 1536);
+
+          console.log('[DEBUG] Populated embedding details:', {
+            providerId: data.embedding_model_provider_id,
+            providerName: providerName,
+            modelName: data.embedding_model_name,
+            dimension: data.vector_dimension,
+          });
+        }
+      } else {
+        console.warn('[WARN] Failed to fetch collection embedding details:', response.status);
+      }
+    } catch (error) {
+      console.error('[ERROR] Error fetching embedding provider details:', error);
     }
   };
 
@@ -547,7 +627,13 @@ export function ConversationCreateWizard() {
           useKnowledgeExpert: shouldEnableKnowledgeExpert,
           collectionName: agent.vector_database?.collection_name || '',
           topK: agent.vector_database?.top_k || 5,
+          // Embedding provider - loaded from agent's vector database config
+          embeddingProviderId: agent.vector_database?.embedding_provider?.id || null,
+          embeddingProviderName: agent.vector_database?.embedding_provider?.name || null,
+          embeddingModelName: agent.vector_database?.embedding_provider?.model_name || null,
+          vectorDimension: agent.vector_database?.vector_dimension || 1536,
           enableReranking: agent.reranker?.enabled || false,
+          useAgentLlmAsJudge: agent.reranker?.provider?.id === agent.llm_provider?.id && agent.reranker?.provider?.model_name === agent.llm_provider?.model_name,
           relevanceThreshold: agent.reranker?.relevance_threshold || 0.5,
           selectedRerankerId: agent.reranker?.provider?.id || null,
           selectedRerankerModel: agent.reranker?.provider?.model_name || null,
@@ -591,15 +677,10 @@ export function ConversationCreateWizard() {
         // Agent type & conversation settings - name required
         return !!form.values.conversationName.trim();
       case 1:
-        // Enhancement Strategy - if non-native, LLM provider & model are required for generating variants
-        // For Assistant mode, this is handled in step 3 (merged with Vector DB)
-        if (form.values.agentType === 'assistant') {
-          return true; // For Assistant, enhancement LLM is selected in step 3
-        }
-        if (form.values.selectedStrategy !== 'native') {
-          return !!form.values.selectedProviderId && !!form.values.selectedModel;
-        }
-        return true; // Native strategy doesn't need LLM provider
+        // Enhancement Strategy - just need to select a strategy
+        // For RAG: uses agent's primary LLM (selected in step 2), so no separate provider validation needed
+        // For Assistant: this step is skipped (goes to step 2 instead)
+        return !!form.values.selectedStrategy;
       case 2:
         // Agent LLM Provider - provider & model required for both RAG and Assistant modes
         return !!form.values.agentLlmProviderId && !!form.values.agentLlmModel;
@@ -614,15 +695,17 @@ export function ConversationCreateWizard() {
           if (!form.values.collectionName || form.values.topK < 5) {
             return false;
           }
-          // Validate enhancement LLM - always required for Assistant mode (custom_variants strategy)
-          if (!form.values.selectedProviderId || !form.values.selectedModel) {
-            return false;
-          }
+          // Enhancement strategy uses agent's primary LLM for Assistant mode, so no separate provider validation needed
           // Validate reranker if enabled
           if (form.values.enableReranking) {
-            if (!form.values.selectedRerankerId || !form.values.selectedRerankerModel) {
-              return false;
+            // Reranker validation depends on whether using agent LLM or custom provider
+            if (!form.values.useAgentLlmAsJudge) {
+              // Only validate if NOT using agent LLM
+              if (!form.values.selectedRerankerId || !form.values.selectedRerankerModel) {
+                return false;
+              }
             }
+            // If using agent LLM, validation is automatic (inherited from agent's LLM)
           }
           return true;
         }
@@ -635,14 +718,12 @@ export function ConversationCreateWizard() {
         }
         return true;
       case 5:
-        // Generative Answer - only for RAG mode, provider & model required only if enabled
+        // Generative Answer - only for RAG mode
+        // Uses agent's primary LLM for generation, so no separate provider validation needed
         if (form.values.agentType === 'assistant') {
           return true; // Skip validation for assistant mode
         }
-        if (form.values.enableLLMGeneration) {
-          return !!form.values.selectedProviderId && !!form.values.selectedModel;
-        }
-        return true;
+        return true; // No validation needed - uses agent's primary LLM
       case 6:
         // Tools & Instructions - only for Assistant mode, always valid
         return true;
@@ -834,17 +915,19 @@ export function ConversationCreateWizard() {
         // Enhancement configuration - only if Knowledge Expert is used
         // For Assistant mode: always use custom_variants strategy
         // For RAG mode: use the selected strategy
-        enhancement: useKnowledgeExpert ? {
-          strategy: isAssistantMode ? 'custom_variants' : form.values.selectedStrategy,
-          provider: (isAssistantMode || form.values.selectedStrategy !== 'native') && form.values.selectedProviderId && form.values.selectedModel ? {
-            id: form.values.selectedProviderId,
-            model_name: form.values.selectedModel,
-          } : null,
-        } : null,
+        // Note: Provider is NOT sent - uses the agent's primary LLM provider instead
+        enhancement_strategy: useKnowledgeExpert ? (isAssistantMode ? 'custom_variants' : form.values.selectedStrategy) : 'native',
         // Vector database configuration - only if Knowledge Expert is used
         vector_database: useKnowledgeExpert ? {
           collection_name: form.values.collectionName,
           top_k: form.values.topK,
+          // Embedding provider - auto-populated from collection, ensures query embeddings match document embeddings
+          embedding_provider: form.values.embeddingProviderId && form.values.embeddingModelName ? {
+            id: form.values.embeddingProviderId,
+            model_name: form.values.embeddingModelName,
+          } : null,
+          // Vector dimension - must match the collection's embeddings
+          vector_dimension: form.values.vectorDimension,
         } : null,
         // Reranker configuration - only if Knowledge Expert is used
         reranker: useKnowledgeExpert ? {
@@ -856,13 +939,8 @@ export function ConversationCreateWizard() {
           relevance_threshold: form.values.relevanceThreshold,
         } : null,
         // Answer generation configuration - only for RAG mode
-        answer_generation: !isAssistantMode ? {
-          enabled: form.values.enableLLMGeneration && form.values.selectedProviderId && form.values.selectedModel ? true : false,
-          provider: form.values.enableLLMGeneration && form.values.selectedProviderId && form.values.selectedModel ? {
-            id: form.values.selectedProviderId,
-            model_name: form.values.selectedModel,
-          } : null,
-        } : null,
+        // Note: Provider is NOT sent - uses the agent's primary LLM provider instead
+        is_llm_generation_enabled: !isAssistantMode ? form.values.enableLLMGeneration : false,
         // Complex nested assistant configuration
         // RAG mode: assistant_config = { enabled: false, tools: [] }
         // Assistant mode: assistant_config = { enabled: true, tools: [...tool_ids], instructions: "..." }
@@ -934,12 +1012,12 @@ export function ConversationCreateWizard() {
 
         if (editingAgentId) {
           // After editing agent, go back to agent's conversations
-        notifications.show({
-          title: 'Success',
+          notifications.show({
+            title: 'Success',
             message: 'Agent updated successfully',
-          color: 'green',
-          icon: <IconCheck size={16} />,
-        });
+            color: 'green',
+            icon: <IconCheck size={16} />,
+          });
           navigate(paths.dashboard.apps.agentConversations(editingAgentId));
         } else {
           // After creating new agent or editing conversation
@@ -950,7 +1028,7 @@ export function ConversationCreateWizard() {
             color: 'green',
             icon: <IconCheck size={16} />,
           });
-        navigate(paths.dashboard.apps.conversation(sessionId));
+          navigate(paths.dashboard.apps.conversation(sessionId));
         }
       } else {
         const errorData = await response.json().catch(() => ({}));
@@ -983,7 +1061,7 @@ export function ConversationCreateWizard() {
   const visibleSteps = useMemo(() => {
     const isRagMode = form.values.agentType === 'rag';
     let filteredSteps: typeof STEP_CONFIGS;
-    
+
     if (isRagMode) {
       // RAG mode: Remove Tools, then reorder: 0,2,1,3,4,5,7 (Agent LLM before Enhancement)
       filteredSteps = STEP_CONFIGS.filter((_, index) => index !== 6);
@@ -1180,7 +1258,7 @@ export function ConversationCreateWizard() {
                               const currentTools = form.values.selectedTools || [];
                               const isSelected = currentTools.includes(tool.id);
                               const newTools = isSelected
-                                  ? currentTools.filter((id: string) => id !== tool.id)
+                                ? currentTools.filter((id: string) => id !== tool.id)
                                 : [...currentTools, tool.id];
 
                               // Deduplicate to prevent duplicate tool IDs
@@ -1265,9 +1343,9 @@ export function ConversationCreateWizard() {
                     : 0;
 
                   return uniqueToolCount > 0 && (
-                  <Alert icon={<IconCheck size={16} />} color="blue" variant="light">
+                    <Alert icon={<IconCheck size={16} />} color="blue" variant="light">
                       <Text size="sm">{uniqueToolCount} tool(s) selected</Text>
-                  </Alert>
+                    </Alert>
                   );
                 })()}
               </Stack>
@@ -1732,45 +1810,98 @@ function StepKnowledgeExpertSettings({ form, collections, collectionsLoading, pr
           {isAssistantMode && <Divider my="sm" label="Vector Database Configuration" labelPosition="center" />}
 
           {!isAssistantMode && (
-      <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
-        <Text size="sm">
-          Select the knowledge base collection you want to search from. Configure how many relevant documents to retrieve.
-        </Text>
-      </Alert>
+            <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+              <Text size="sm">
+                Select the knowledge base collection you want to search from. Configure how many relevant documents to retrieve.
+              </Text>
+            </Alert>
           )}
 
           <Grid gutter="md">
             <Grid.Col span={6}>
-      <Select
-        label="Vector DB Collection"
-        placeholder={
-          collectionsLoading ? 'Loading collections...' : 'Select a collection'
-        }
-        data={
-          collections?.map((c) => ({
-            value: c.name,
-            label: `${c.name} (${c.record_count.toLocaleString()} records)`,
-          })) || []
-        }
-        {...form.getInputProps('collectionName')}
-        searchable
-        disabled={collectionsLoading}
-        required
+              <Select
+                label="Vector DB Collection"
+                placeholder={
+                  collectionsLoading ? 'Loading collections...' : 'Select a collection'
+                }
+                data={
+                  collections?.map((c) => ({
+                    value: c.name,
+                    label: `${c.name} (${c.record_count.toLocaleString()} records)`,
+                  })) || []
+                }
+                {...form.getInputProps('collectionName')}
+                onChange={(value) => {
+                  // Update collection name
+                  // The useEffect hook will automatically fetch and populate embedding details
+                  form.setFieldValue('collectionName', value || '');
+                }}
+                searchable
+                disabled={collectionsLoading}
+                required
                 description="Knowledge base to search from"
-      />
+              />
             </Grid.Col>
             <Grid.Col span={6}>
-      <NumberInput
-        label="Search Results Limit (Top K)"
+              <NumberInput
+                label="Search Results Limit (Top K)"
                 placeholder="Number of documents"
-        {...form.getInputProps('topK')}
-        min={5}
-        max={30}
-        required
+                {...form.getInputProps('topK')}
+                min={5}
+                max={30}
+                required
                 description="Documents to retrieve (5-30)"
               />
             </Grid.Col>
           </Grid>
+
+          {/* Embedding Provider Information - ALWAYS shown, derived from collection */}
+          <Divider my="md" />
+          <Alert
+            icon={<IconDatabase size={16} />}
+            color={form.values.embeddingProviderId ? "teal" : "gray"}
+            variant="light"
+          >
+            <Stack gap="xs">
+              <Group justify="space-between">
+                <Text fw={600} size="sm">Query Embedding Configuration</Text>
+                <Badge
+                  size="sm"
+                  color={form.values.embeddingProviderId ? "teal" : "gray"}
+                >
+                  {form.values.collectionName ? 'Derived from Collection' : 'Select collection to populate'}
+                </Badge>
+              </Group>
+              <Text size="sm" c="dimmed">
+                {form.values.collectionName
+                  ? 'Your queries will be embedded using the same model as your vector database collection to ensure accurate retrieval.'
+                  : 'Select a vector database collection above to see its embedding configuration.'}
+              </Text>
+
+              {form.values.collectionName && (
+                <Group gap="md" mt="xs">
+                  <div>
+                    <Text size="xs" fw={500} c="dark">Embedding Provider</Text>
+                    <Text size="sm" fw={600}>
+                      {form.values.embeddingProviderName || '⏳ Loading...'}
+                    </Text>
+                  </div>
+                  <div>
+                    <Text size="xs" fw={500} c="dark">Embedding Model</Text>
+                    <Text size="sm" fw={600}>
+                      {form.values.embeddingModelName || '⏳ Loading...'}
+                    </Text>
+                  </div>
+                  <div>
+                    <Text size="xs" fw={500} c="dark">Vector Dimension</Text>
+                    <Text size="sm" fw={600}>
+                      {form.values.vectorDimension || 1536}
+                    </Text>
+                  </div>
+                </Group>
+              )}
+            </Stack>
+          </Alert>
 
           {/* Enhancement Strategy for Assistant mode - locked to custom_variants */}
           {isAssistantMode && (
@@ -1793,54 +1924,23 @@ function StepKnowledgeExpertSettings({ form, collections, collectionsLoading, pr
                 description="Strategy is fixed to Custom Variants for Assistant mode"
               />
 
-              {/* Enhancement LLM selection - always required for custom_variants */}
-              <Grid gutter="md">
-                <Grid.Col span={6}>
-                  <Select
-                    label="Enhancement LLM Provider"
-                    placeholder={providersLoading ? 'Loading providers...' : 'Select a provider'}
-                    data={
-                      providers?.map((p: any) => ({
-                        value: p.id,
-                        label: `${p.name} (${p.provider_type})`,
-                      })) || []
-                    }
-                    {...form.getInputProps('selectedProviderId')}
-                    searchable
-                    disabled={providersLoading}
-                    required
-                    description="LLM for generating query variants"
-                  />
-                </Grid.Col>
-                <Grid.Col span={6}>
-                  {form.values.selectedProviderId && providers ? (
-                    <Select
-                      label="Enhancement Model"
-                      placeholder="Select a model"
-                      data={
-                        providers
-                          .find((p: any) => p.id === form.values.selectedProviderId)
-                          ?.generative?.models.map((m: string) => ({
-                            value: m,
-                            label: m,
-                          })) || []
-                      }
-                      {...form.getInputProps('selectedModel')}
-                      searchable
-                      required
-                      description={`Provider: ${providers.find((p: any) => p.id === form.values.selectedProviderId)?.name || 'Unknown'}`}
-                    />
-                  ) : (
-                    <Select
-                      label="Enhancement Model"
-                      placeholder="Select provider first"
-                      disabled
-                      required
-                      description="Select a provider first"
-                    />
-                  )}
-                </Grid.Col>
-              </Grid>
+              {/* Enhancement LLM - uses agent's primary LLM */}
+              <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+                <Stack gap="xs">
+                  <Text size="sm" fw={600}>Query Enhancement LLM</Text>
+                  <Group gap="md">
+                    <div>
+                      <Text size="xs" fw={500} c="dark">Provider</Text>
+                      <Text size="sm">{providers?.find((p: any) => p.id === form.values.agentLlmProviderId)?.name || form.values.agentLlmProviderId || 'Not selected'}</Text>
+                    </div>
+                    <div>
+                      <Text size="xs" fw={500} c="dark">Model</Text>
+                      <Text size="sm">{form.values.agentLlmModel || 'Not selected'}</Text>
+                    </div>
+                  </Group>
+                  <Text size="xs" c="dimmed">The agent's primary LLM is used to generate query variants for more comprehensive search results.</Text>
+                </Stack>
+              </Alert>
             </>
           )}
 
@@ -1856,53 +1956,91 @@ function StepKnowledgeExpertSettings({ form, collections, collectionsLoading, pr
 
               {form.values.enableReranking && (
                 <>
-                  <Grid gutter="md">
-                    <Grid.Col span={6}>
-                      <Select
-                        label="Reranker LLM Provider"
-                        placeholder={providersLoading ? 'Loading providers...' : 'Select a provider'}
-                        data={
-                          providers?.map((p: any) => ({
-                            value: p.id,
-                            label: `${p.name} (${p.provider_type})`,
-                          })) || []
-                        }
-                        {...form.getInputProps('selectedRerankerId')}
-                        searchable
-                        disabled={providersLoading}
-                        required
-                        description="LLM for reranking documents"
-                      />
-                    </Grid.Col>
-                    <Grid.Col span={6}>
-                      {form.values.selectedRerankerId && providers ? (
-                        <Select
-                          label="Reranker Model"
-                          placeholder="Select a model"
-                          data={
-                            providers
-                              .find((p: any) => p.id === form.values.selectedRerankerId)
-                              ?.generative?.models.map((m: string) => ({
-                                value: m,
-                                label: m,
+                  <Switch
+                    label="Use Agent LLM as Judge"
+                    description="Use the same LLM provider and model as the agent for reranking"
+                    {...form.getInputProps('useAgentLlmAsJudge', { type: 'checkbox' })}
+                    mb="md"
+                  />
+
+                  {form.values.useAgentLlmAsJudge && (
+                    <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light" mb="md">
+                      <Stack gap="xs">
+                        <Text size="sm" fw={600}>Reranker Configuration</Text>
+                        <Group gap="md">
+                          <div>
+                            <Text size="xs" fw={500} c="dark">Provider</Text>
+                            <Text size="sm">{providers?.find((p: any) => p.id === form.values.agentLlmProviderId)?.name || form.values.agentLlmProviderId || 'Not selected'}</Text>
+                          </div>
+                          <div>
+                            <Text size="xs" fw={500} c="dark">Model</Text>
+                            <Text size="sm">{form.values.agentLlmModel || 'Not selected'}</Text>
+                          </div>
+                        </Group>
+                        <Text size="xs" c="dimmed">Using the agent's LLM for reranking ensures consistent evaluation of document relevance.</Text>
+                      </Stack>
+                    </Alert>
+                  )}
+
+                  {!form.values.useAgentLlmAsJudge && (
+                    <>
+                      <Grid gutter="md">
+                        <Grid.Col span={6}>
+                          <Select
+                            label="Reranker LLM Provider"
+                            placeholder={providersLoading ? 'Loading providers...' : 'Select a provider'}
+                            data={
+                              providers?.map((p: any) => ({
+                                value: p.id,
+                                label: `${p.name} (${p.provider_type})`,
                               })) || []
-                          }
-                          {...form.getInputProps('selectedRerankerModel')}
-                          searchable
-                          required
-                          description={`Provider: ${providers.find((p: any) => p.id === form.values.selectedRerankerId)?.name || 'Unknown'}`}
-                        />
-                      ) : (
-                        <Select
-                          label="Reranker Model"
-                          placeholder="Select provider first"
-                          disabled
-                          required
-                          description="Select a provider first"
-                        />
-                      )}
-                    </Grid.Col>
-                  </Grid>
+                            }
+                            {...form.getInputProps('selectedRerankerId')}
+                            searchable
+                            disabled={providersLoading}
+                            required
+                            description="LLM for reranking documents"
+                          />
+                        </Grid.Col>
+                        <Grid.Col span={6}>
+                          {form.values.selectedRerankerId && providers ? (
+                            <Select
+                              label="Reranker Model"
+                              placeholder="Select a model"
+                              data={
+                                providers
+                                  .find((p: any) => p.id === form.values.selectedRerankerId)
+                                  ?.generative?.models
+                                  .filter((m: string) => {
+                                    // Exclude the agent's model if same provider is selected
+                                    if (form.values.selectedRerankerId === form.values.agentLlmProviderId && m === form.values.agentLlmModel) {
+                                      return false;
+                                    }
+                                    return true;
+                                  })
+                                  .map((m: string) => ({
+                                    value: m,
+                                    label: m,
+                                  })) || []
+                              }
+                              {...form.getInputProps('selectedRerankerModel')}
+                              searchable
+                              required
+                              description={`Provider: ${providers.find((p: any) => p.id === form.values.selectedRerankerId)?.name || 'Unknown'}`}
+                            />
+                          ) : (
+                            <Select
+                              label="Reranker Model"
+                              placeholder="Select provider first"
+                              disabled
+                              required
+                              description="Select a provider first"
+                            />
+                          )}
+                        </Grid.Col>
+                      </Grid>
+                    </>
+                  )}
 
                   <NumberInput
                     label="Relevance Threshold"
@@ -1912,7 +2050,7 @@ function StepKnowledgeExpertSettings({ form, collections, collectionsLoading, pr
                     step={0.05}
                     {...form.getInputProps('relevanceThreshold')}
                     description="Minimum relevance score (0-1) for filtering documents"
-      />
+                  />
                 </>
               )}
             </>
@@ -1920,30 +2058,30 @@ function StepKnowledgeExpertSettings({ form, collections, collectionsLoading, pr
 
           {/* Enhancement Strategy Info for RAG mode */}
           {!isAssistantMode && form.values.selectedStrategy !== 'native' &&
-        form.values.selectedStrategy !== 'hyde' && (
-          <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
-            <Stack gap="xs">
-              <Text size="xs">
-                <strong>{ENHANCEMENT_STRATEGIES.find((s) => s.value === form.values.selectedStrategy)?.label}:</strong> This strategy generates multiple query variations to comprehensively search your knowledge base.
-              </Text>
-              <List size="xs">
-                <List.Item>Generate {form.values.selectedStrategy === 'augmented' ? '4' : '3-5'} query variants ({form.values.selectedStrategy === 'augmented' ? 'via transformations' : 'via rephrasing'})</List.Item>
-                <List.Item>Search the knowledge base with each variant</List.Item>
-                <List.Item>Merge results using RRF algorithm (documents appearing in multiple searches rank higher)</List.Item>
-                <List.Item>Return your configured Top K documents (the best matches after merging)</List.Item>
-              </List>
-              <Text size="xs" c="dimmed">
-                Example: With {form.values.selectedStrategy === 'augmented' ? '4' : '5'} query variants and Top K={form.values.topK}, the system retrieves ~{Math.ceil((form.values.topK * 1.5) / 5) * 5} documents per variant, merges them via RRF, and returns your final {form.values.topK} best documents.
-              </Text>
-            </Stack>
-          </Alert>
-        )}
+            form.values.selectedStrategy !== 'hyde' && (
+              <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+                <Stack gap="xs">
+                  <Text size="xs">
+                    <strong>{ENHANCEMENT_STRATEGIES.find((s) => s.value === form.values.selectedStrategy)?.label}:</strong> This strategy generates multiple query variations to comprehensively search your knowledge base.
+                  </Text>
+                  <List size="xs">
+                    <List.Item>Generate {form.values.selectedStrategy === 'augmented' ? '4' : '3-5'} query variants ({form.values.selectedStrategy === 'augmented' ? 'via transformations' : 'via rephrasing'})</List.Item>
+                    <List.Item>Search the knowledge base with each variant</List.Item>
+                    <List.Item>Merge results using RRF algorithm (documents appearing in multiple searches rank higher)</List.Item>
+                    <List.Item>Return your configured Top K documents (the best matches after merging)</List.Item>
+                  </List>
+                  <Text size="xs" c="dimmed">
+                    Example: With {form.values.selectedStrategy === 'augmented' ? '4' : '5'} query variants and Top K={form.values.topK}, the system retrieves ~{Math.ceil((form.values.topK * 1.5) / 5) * 5} documents per variant, merges them via RRF, and returns your final {form.values.topK} best documents.
+                  </Text>
+                </Stack>
+              </Alert>
+            )}
 
           {!isAssistantMode && form.values.selectedStrategy === 'hyde' && (
-        <Alert icon={<IconInfoCircle size={16} />} color="gray" variant="light">
-          <Text size="xs">
-            <strong>{ENHANCEMENT_STRATEGIES.find((s) => s.value === 'hyde')?.label}:</strong> This strategy generates one enhanced query variant.
-            The system will search using this single enhanced query (no RRF merging needed).
+            <Alert icon={<IconInfoCircle size={16} />} color="gray" variant="light">
+              <Text size="xs">
+                <strong>{ENHANCEMENT_STRATEGIES.find((s) => s.value === 'hyde')?.label}:</strong> This strategy generates one enhanced query variant.
+                The system will search using this single enhanced query (no RRF merging needed).
               </Text>
             </Alert>
           )}
@@ -1965,7 +2103,7 @@ function StepKnowledgeExpertSettings({ form, collections, collectionsLoading, pr
 
 function StepAgentLlmProvider({ form, providers, providersLoading }: StepProps & { providers?: any; providersLoading?: boolean }) {
   const isAssistantMode = form.values.agentType === 'assistant';
-  
+
   return (
     <Stack gap="md">
       <Alert icon={<IconRobot size={16} />} color="grape" variant="light">
@@ -2093,65 +2231,14 @@ function StepEnhancementStrategy({ form, onLearnClick, providers, providersLoadi
         </>
       )}
 
-      {/* For RAG mode: show LLM provider selection for non-native strategies */}
+      {/* For RAG mode: show info that enhancement will use agent's primary LLM */}
       {/* For Assistant mode: skip LLM provider here - it's in Vector Database step (Step 3) */}
       {isNonNativeStrategy && !isAssistantMode && (
-            <>
-              <Alert icon={<IconInfoCircle size={16} />} color="cyan" variant="light">
-                <Text size="sm">
-                  <strong>LLM Required:</strong> Select an LLM provider &amp; model below (also used for answer generation if enabled in Step 5).
-                </Text>
-              </Alert>
-              <Divider my="sm" />
-
-          <Grid gutter="md">
-            <Grid.Col span={6}>
-          <Select
-                label="LLM Provider"
-            placeholder={providersLoading ? 'Loading providers...' : 'Select a provider'}
-            data={
-              providers?.map((p: any) => ({
-                value: p.id,
-                label: `${p.name} (${p.provider_type})`,
-              })) || []
-            }
-            {...form.getInputProps('selectedProviderId')}
-            searchable
-            disabled={providersLoading}
-            required
-                description="For query enhancement"
-          />
-            </Grid.Col>
-            <Grid.Col span={6}>
-          {form.values.selectedProviderId && providers ? (
-            <Select
-                  label="Model"
-              placeholder="Select a model"
-              data={
-                providers
-                  .find((p: any) => p.id === form.values.selectedProviderId)
-                  ?.generative?.models.map((m: string) => ({
-                    value: m,
-                    label: m,
-                  })) || []
-              }
-              {...form.getInputProps('selectedModel')}
-              searchable
-              required
-                  description={`Provider: ${providers?.find((p: any) => p.id === form.values.selectedProviderId)?.name || 'Not selected'}`}
-            />
-          ) : (
-            <Select
-                  label="Model"
-              placeholder="Select provider first"
-              disabled
-              required
-                  description="Select provider first"
-            />
-          )}
-            </Grid.Col>
-          </Grid>
-        </>
+        <Alert icon={<IconInfoCircle size={16} />} color="cyan" variant="light">
+          <Text size="sm">
+            <strong>Using Agent LLM:</strong> Query enhancement and answer generation will use the primary LLM provider selected in Step 2. No additional provider configuration needed here.
+          </Text>
+        </Alert>
       )}
 
       {/* For Assistant mode: show info that enhancement LLM will be configured in next step */}
@@ -2290,66 +2377,112 @@ function StepReranker({ form, providers, providersLoading }: StepProps) {
         <>
           <Divider my="sm" />
 
-          <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
-            <Text size="sm">
-              Select a specialized judge provider or use any LLM to evaluate document relevance. The judge will re-rank documents before they are used for answer generation.
-            </Text>
-          </Alert>
+          <Switch
+            label="Use Agent LLM as Judge"
+            description="Use the same LLM provider and model as the agent for document reranking"
+            {...form.getInputProps('useAgentLlmAsJudge', { type: 'checkbox' })}
+            mb="md"
+          />
 
-          <Grid gutter="md">
-            <Grid.Col span={{ base: 12, sm: 6 }}>
-              <Select
-                label="Judge Provider"
-                placeholder={providersLoading ? 'Loading providers...' : 'Select a provider'}
-                data={
-                  providers?.map((p) => ({
-                    value: p.id,
-                    label: p.name,
-                  })) || []
-                }
-                {...form.getInputProps('selectedRerankerId')}
-                searchable
-                disabled={providersLoading}
-                description="Choose a specialized judge or any LLM"
-              />
-            </Grid.Col>
-            <Grid.Col span={{ base: 12, sm: 6 }}>
-              {(() => {
-                const selectedProvider = providers?.find(
-                  (p) => p.id === form.values.selectedRerankerId
-                );
-                const rerankerModels = selectedProvider?.reranker?.models || [];
-                const generativeModels =
-                  selectedProvider?.generative?.models || [];
-                const hasRerankerModels = rerankerModels.length > 0;
+          {form.values.useAgentLlmAsJudge && (
+            <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light" mb="md">
+              <Stack gap="xs">
+                <Text size="sm" fw={600}>Judge Configuration</Text>
+                <Group gap="md">
+                  <div>
+                    <Text size="xs" fw={500} c="dark">Provider</Text>
+                    <Text size="sm">{providers?.find((p: any) => p.id === form.values.agentLlmProviderId)?.name || form.values.agentLlmProviderId || 'Not selected'}</Text>
+                  </div>
+                  <div>
+                    <Text size="xs" fw={500} c="dark">Model</Text>
+                    <Text size="sm">{form.values.agentLlmModel || 'Not selected'}</Text>
+                  </div>
+                </Group>
+                <Text size="xs" c="dimmed">Using the agent's LLM for document ranking ensures consistent evaluation of relevance.</Text>
+              </Stack>
+            </Alert>
+          )}
 
-                const modelData = hasRerankerModels
-                  ? rerankerModels.map((m: string) => ({
-                    value: m,
-                    label: m,
-                  }))
-                  : generativeModels.map((m: string) => ({
-                    value: m,
-                    label: m,
-                  }));
+          {!form.values.useAgentLlmAsJudge && (
+            <>
+              <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+                <Text size="sm">
+                  Select a specialized judge provider or use any LLM to evaluate document relevance. The judge will re-rank documents before they are used for answer generation.
+                </Text>
+              </Alert>
 
-                return (
+              <Grid gutter="md">
+                <Grid.Col span={{ base: 12, sm: 6 }}>
                   <Select
-                    label="Judge Model"
-                    placeholder="Select a model"
-                    data={modelData}
-                    {...form.getInputProps('selectedRerankerModel')}
-                    searchable
-                    description={
-                      hasRerankerModels
-                        ? "Specialized reranker model"
-                        : "Using generative LLM for ranking"
+                    label="Judge Provider"
+                    placeholder={providersLoading ? 'Loading providers...' : 'Select a provider'}
+                    data={
+                      providers?.map((p) => ({
+                        value: p.id,
+                        label: p.name,
+                      })) || []
                     }
+                    {...form.getInputProps('selectedRerankerId')}
+                    searchable
+                    disabled={providersLoading}
+                    description="Choose a specialized judge or any LLM"
                   />
-                );
-              })()}
-            </Grid.Col>
-          </Grid>
+                </Grid.Col>
+                <Grid.Col span={{ base: 12, sm: 6 }}>
+                  {(() => {
+                    const selectedProvider = providers?.find(
+                      (p) => p.id === form.values.selectedRerankerId
+                    );
+                    const rerankerModels = selectedProvider?.reranker?.models || [];
+                    const generativeModels =
+                      selectedProvider?.generative?.models || [];
+                    const hasRerankerModels = rerankerModels.length > 0;
+
+                    const modelData = hasRerankerModels
+                      ? rerankerModels
+                        .filter((m: string) => {
+                          // Exclude agent's model if same provider is selected
+                          if (form.values.selectedRerankerId === form.values.agentLlmProviderId && m === form.values.agentLlmModel) {
+                            return false;
+                          }
+                          return true;
+                        })
+                        .map((m: string) => ({
+                          value: m,
+                          label: m,
+                        }))
+                      : generativeModels
+                        .filter((m: string) => {
+                          // Exclude agent's model if same provider is selected
+                          if (form.values.selectedRerankerId === form.values.agentLlmProviderId && m === form.values.agentLlmModel) {
+                            return false;
+                          }
+                          return true;
+                        })
+                        .map((m: string) => ({
+                          value: m,
+                          label: m,
+                        }));
+
+                    return (
+                      <Select
+                        label="Judge Model"
+                        placeholder="Select a model"
+                        data={modelData}
+                        {...form.getInputProps('selectedRerankerModel')}
+                        searchable
+                        description={
+                          hasRerankerModels
+                            ? "Specialized reranker model"
+                            : "Using generative LLM for ranking"
+                        }
+                      />
+                    );
+                  })()}
+                </Grid.Col>
+              </Grid>
+            </>
+          )}
 
           <NumberInput
             label="Relevance Threshold"
@@ -2367,8 +2500,6 @@ function StepReranker({ form, providers, providersLoading }: StepProps) {
 
 function StepAdvancedSettings({
   form,
-  providers,
-  providersLoading,
   onPromptSelected,
   selectedSystemPrompt,
 }: StepProps) {
@@ -2416,90 +2547,11 @@ function StepAdvancedSettings({
         <>
           {form.values.enableLLMGeneration ? (
             <>
-              {form.values.selectedStrategy !== 'native' ? (
-                <>
-                  <Alert icon={<IconInfoCircle size={16} />} color="cyan" variant="light">
-                    <Text size="sm">
-                      <strong>Using Enhancement Strategy LLM:</strong> Since you selected a non-native enhancement strategy, the same LLM provider and model from Step 2 will be used for both query enhancement and answer generation. To use a different LLM, please go back to Step 2 and change the strategy to "Native" or select a different provider.
-                    </Text>
-                  </Alert>
-
-                  {form.values.selectedProviderId && form.values.selectedModel && (
-                    <Card withBorder p="md" bg="cyan.0">
-                      <Stack gap="xs">
-                        <Text size="sm" fw={600} c="cyan.9">
-                          LLM Configuration (from Enhancement Step)
-                        </Text>
-                        <Group gap="xs">
-                          <Badge size="lg" color="cyan" variant="filled">
-                            Provider: {providers?.find((p: any) => p.id === form.values.selectedProviderId)?.name || form.values.selectedProviderId}
-                          </Badge>
-                          <Badge size="lg" color="cyan" variant="filled">
-                            Model: {form.values.selectedModel}
-                          </Badge>
-                        </Group>
-                      </Stack>
-                    </Card>
-                  )}
-                </>
-              ) : (
-                <>
-                  <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
-                    <Text size="sm">
-                      AI will generate natural language answers based on retrieved documents. Uses tokens but provides polished responses.
-                    </Text>
-                  </Alert>
-
-                  <Divider my="sm" />
-
-                  <Grid gutter="md">
-                    <Grid.Col span={6}>
-                  <Select
-                    label="LLM Provider"
-                    placeholder={providersLoading ? 'Loading providers...' : 'Select a provider'}
-                    data={
-                      providers?.map((p) => ({
-                        value: p.id,
-                        label: `${p.name} (${p.provider_type})`,
-                      })) || []
-                    }
-                    {...form.getInputProps('selectedProviderId')}
-                    searchable
-                    disabled={providersLoading}
-                    required
-                        description="For answer generation"
-                  />
-                    </Grid.Col>
-                    <Grid.Col span={6}>
-                  {form.values.selectedProviderId && providers ? (
-                    <Select
-                      label="Model"
-                      placeholder="Select a model"
-                      data={
-                        providers
-                          .find((p) => p.id === form.values.selectedProviderId)
-                          ?.generative?.models.map((m: string) => ({
-                            value: m,
-                            label: m,
-                          })) || []
-                      }
-                      {...form.getInputProps('selectedModel')}
-                      searchable
-                      required
-                          description={`Provider: ${providers?.find((p: any) => p.id === form.values.selectedProviderId)?.name || 'Not selected'}`}
-                    />
-                  ) : (
-                        <Select
-                          label="Model"
-                          placeholder="Select provider first"
-                          disabled
-                          description="Select provider first"
-                        />
-                  )}
-                    </Grid.Col>
-                  </Grid>
-                </>
-              )}
+              <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+                <Text size="sm">
+                  <strong>Using Agent LLM:</strong> Answer generation will automatically use the primary LLM provider selected in Step 1. No additional provider configuration needed.
+                </Text>
+              </Alert>
             </>
           ) : (
             <>
@@ -2710,33 +2762,33 @@ function StepReviewAndCreate({ form, providers, collections, tools }: StepProps)
 
           {/* Vector DB config - show if RAG mode or (Assistant mode + Knowledge Expert enabled) */}
           {(form.values.agentType === 'rag' || form.values.useKnowledgeExpert) && (
-          <Grid gutter="md">
-            <Grid.Col span={{ base: 12, sm: 6 }}>
-              <Stack gap="xs">
-                <div>
-                  <Text size="xs" fw={500} c="dark">Collection Name</Text>
-                  <Text size="sm" fw={500} c="dark">{selectedCollection?.name || form.values.collectionName}</Text>
-                </div>
-                <div>
-                  <Text size="xs" fw={500} c="dark">Records</Text>
-                  <Text size="sm" fw={500} c="dark">{selectedCollection?.record_count.toLocaleString() || 'Unknown'}</Text>
-                </div>
-              </Stack>
-            </Grid.Col>
-            <Grid.Col span={{ base: 12, sm: 6 }}>
-              <Stack gap="xs">
-                <div>
-                  <Text size="xs" fw={500} c="dark">Top K (Retrieval Count)</Text>
-                  <Text size="sm" fw={500} c="dark">{form.values.topK} documents</Text>
-                </div>
+            <Grid gutter="md">
+              <Grid.Col span={{ base: 12, sm: 6 }}>
+                <Stack gap="xs">
+                  <div>
+                    <Text size="xs" fw={500} c="dark">Collection Name</Text>
+                    <Text size="sm" fw={500} c="dark">{selectedCollection?.name || form.values.collectionName}</Text>
+                  </div>
+                  <div>
+                    <Text size="xs" fw={500} c="dark">Records</Text>
+                    <Text size="sm" fw={500} c="dark">{selectedCollection?.record_count.toLocaleString() || 'Unknown'}</Text>
+                  </div>
+                </Stack>
+              </Grid.Col>
+              <Grid.Col span={{ base: 12, sm: 6 }}>
+                <Stack gap="xs">
+                  <div>
+                    <Text size="xs" fw={500} c="dark">Top K (Retrieval Count)</Text>
+                    <Text size="sm" fw={500} c="dark">{form.values.topK} documents</Text>
+                  </div>
                   {form.values.agentType === 'assistant' && (
                     <div>
                       <Text size="xs" fw={500} c="dark">Enhancement Strategy</Text>
                       <Text size="sm" fw={500} c="dark">Custom Variants (Fixed)</Text>
                     </div>
                   )}
-              </Stack>
-            </Grid.Col>
+                </Stack>
+              </Grid.Col>
 
               {/* Enhancement LLM (always shown for Assistant mode - uses custom_variants) */}
               {form.values.agentType === 'assistant' && (
@@ -2785,7 +2837,7 @@ function StepReviewAndCreate({ form, providers, collections, tools }: StepProps)
                   </Group>
                 </Grid.Col>
               )}
-          </Grid>
+            </Grid>
           )}
 
           {/* Message when Knowledge Expert is disabled */}
