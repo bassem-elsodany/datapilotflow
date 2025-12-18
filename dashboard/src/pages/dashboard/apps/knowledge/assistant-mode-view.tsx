@@ -357,7 +357,15 @@ export function AssistantModeView({
             setToolCalls((prev) =>
               prev.map((tc) =>
                 tc.name === data.data.name
-                  ? { ...tc, result: JSON.stringify(data.data.output), status: 'completed' }
+                  ? { ...tc, result: data.data.output, status: 'completed' }
+                  : tc
+              )
+            );
+          } else if (data.data.status === 'error') {
+            setToolCalls((prev) =>
+              prev.map((tc) =>
+                tc.name === data.data.name
+                  ? { ...tc, status: 'error', errorMessage: data.data.error || 'Tool execution failed' }
                   : tc
               )
             );

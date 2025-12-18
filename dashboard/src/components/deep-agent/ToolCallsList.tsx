@@ -108,8 +108,8 @@ function ToolCallItem({ toolCall }: ToolCallItemProps) {
                   📥 Input Parameters
                 </p>
               </div>
-              <div className="bg-gray-950 rounded-lg border-3 border-gray-700 overflow-x-auto">
-                <pre className="text-lg text-gray-100 font-mono leading-relaxed p-6" style={{ whiteSpace: 'pre', wordWrap: 'normal' }}>
+              <div className="bg-gray-950 rounded-lg border-3 border-gray-700 overflow-auto">
+                <pre className="text-sm text-gray-100 font-mono leading-relaxed p-6" style={{ whiteSpace: 'pre', wordWrap: 'normal', minHeight: '120px', maxHeight: '500px' }}>
                   <code>{JSON.stringify(toolCall.args, null, 2)}</code>
                 </pre>
               </div>
@@ -117,7 +117,7 @@ function ToolCallItem({ toolCall }: ToolCallItemProps) {
           )}
 
           {/* Result */}
-          {toolCall.result && (
+          {toolCall.result ? (
             <div>
               <div className="mb-4 flex items-center gap-2">
                 <div className="h-3 w-3 rounded-full bg-emerald-500" />
@@ -125,10 +125,25 @@ function ToolCallItem({ toolCall }: ToolCallItemProps) {
                   📤 Output Result
                 </p>
               </div>
-              <div className="bg-gray-950 rounded-lg border-3 border-gray-700 overflow-x-auto">
-                <pre className="text-lg text-gray-100 font-mono leading-relaxed p-6" style={{ whiteSpace: 'pre', wordWrap: 'normal' }}>
+              <div className="bg-gray-950 rounded-lg border-3 border-gray-700 overflow-auto">
+                <pre className="text-sm text-gray-100 font-mono leading-relaxed p-6" style={{ whiteSpace: 'pre', wordWrap: 'normal', minHeight: '120px', maxHeight: '500px' }}>
                   <code>{typeof toolCall.result === 'string' ? toolCall.result : JSON.stringify(toolCall.result, null, 2)}</code>
                 </pre>
+              </div>
+            </div>
+          ) : null}
+
+          {/* Error Message */}
+          {toolCall.status === 'error' && toolCall.errorMessage && (
+            <div>
+              <div className="mb-4 flex items-center gap-2">
+                <div className="h-3 w-3 rounded-full bg-rose-500" />
+                <p className="text-xl font-bold text-gray-900 uppercase tracking-wider">
+                  ⚠️ Error Details
+                </p>
+              </div>
+              <div className="bg-rose-950 rounded-lg border-3 border-rose-700 p-6">
+                <p className="text-base text-rose-100">{toolCall.errorMessage}</p>
               </div>
             </div>
           )}

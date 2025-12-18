@@ -9,9 +9,10 @@ export interface ToolCall {
   id: string;
   name: string;
   args: Record<string, unknown>;
-  result?: string;
+  result?: string | Record<string, unknown> | unknown[];  // Support string, object, or array
   status: 'pending' | 'running' | 'completed' | 'error' | 'interrupted';
   duration?: number;  // Execution duration in milliseconds
+  errorMessage?: string;  // Error message if status is 'error'
 }
 
 export interface SubAgent {

@@ -1,12 +1,12 @@
 /**
  * FilesGrid Component for Deep Agent
- * 
+ *
  * Displays agent's file system in a grid layout.
  * Adapted from: https://github.com/langchain-ai/deep-agents-ui
  */
 
 import type { FileContent, FileItem } from '@/types/deep-agent';
-import { FileText } from 'lucide-react';
+import { FileText, Download, FolderOpen } from 'lucide-react';
 import { useState } from 'react';
 import { FileViewer } from './FileViewer';
 
@@ -41,7 +41,13 @@ export function FilesGrid({ files, onSaveFile, editDisabled = false }: FilesGrid
   return (
     <>
       <div className="h-full overflow-y-auto p-4">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="mb-4 flex items-center gap-2 pb-2 border-b border-gray-200">
+          <FolderOpen size={18} className="text-gray-600" />
+          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest">
+            Files ({fileEntries.length})
+          </h3>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {fileEntries.map(([path, content]) => {
             // Handle different content formats from Deep Agents
             let fileContent: string;
@@ -105,12 +111,20 @@ export function FilesGrid({ files, onSaveFile, editDisabled = false }: FilesGrid
                 key={path}
                 type="button"
                 onClick={handleDownload}
-                className="flex flex-col items-center gap-2 p-4 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300 transition-all cursor-pointer shadow-sm"
+                className="group flex flex-col items-start gap-3 p-4 rounded-lg border border-gray-200 bg-white hover:bg-blue-50 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer"
               >
-                <FileText size={32} className="text-gray-400" />
-                <span className="text-sm text-center text-gray-700 truncate w-full">
-                  {path}
-                </span>
+                <div className="flex items-start justify-between w-full gap-2">
+                  <FileText size={32} className="text-blue-600 flex-shrink-0 group-hover:text-blue-700" />
+                  <Download size={18} className="text-gray-400 group-hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+                <div className="text-left w-full min-w-0">
+                  <span className="text-base font-bold text-gray-900 block break-words">
+                    {path.split('/').pop() || path}
+                  </span>
+                  <span className="text-sm text-gray-600 break-all block mt-2">
+                    {path}
+                  </span>
+                </div>
               </button>
             );
           })}
