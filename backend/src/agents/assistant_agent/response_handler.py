@@ -36,19 +36,7 @@ async def _extract_files_from_state(final_state: Dict[str, Any]) -> Dict[str, An
         files = final_state.get("files", {})
 
         if files:
-            logger.info(f"Extracted {len(files)} files from agent state")
-            # Log file details for debugging
-            for path, data in files.items():
-                if isinstance(data, dict) and "content" in data:
-                    content = data["content"]
-                    if isinstance(content, list):
-                        logger.debug(f"File: {path} ({len(content)} lines)")
-                    else:
-                        logger.debug(f"File: {path} ({len(str(content))} chars)")
-                else:
-                    logger.debug(f"File: {path} ({type(data)})")
-        else:
-            logger.info("No files found in agent state")
+            logger.debug(f"Extracted {len(files)} files from agent state")
 
         return files
 
@@ -97,7 +85,6 @@ async def _extract_persistent_files_from_store(agent_id: Optional[str]) -> Dict[
 
         # Query all files (namespace='filesystem' for all file documents)
         docs = list(collection.find({"namespace": ["filesystem"]}))
-        logger.info(f"Found {len(docs)} persistent file documents")
 
         files_dict: Dict[str, Any] = {}
         for doc in docs:
@@ -106,12 +93,8 @@ async def _extract_persistent_files_from_store(agent_id: Optional[str]) -> Dict[
 
             if file_path and isinstance(value, dict) and "content" in value:
                 files_dict[file_path] = value
-                logger.debug(f"Loaded persistent file: {file_path}")
 
-        if files_dict:
-            logger.info(f"Extracted {len(files_dict)} persistent files from MongoDBStore")
-        else:
-            logger.info("No persistent files found in MongoDBStore")
+        logger.debug(f"Loaded {len(files_dict)} persistent files")
 
         return files_dict
 
@@ -124,7 +107,7 @@ def set_checkpointer(checkpointer: Any) -> None:
     """Set the global checkpointer for deep agent (called during app startup)."""
     global _global_checkpointer
     _global_checkpointer = checkpointer
-    logger.info("Checkpointer set for assistant_agent")
+    logger.debug("Checkpointer initialized")
 
 
 async def get_assistant_agent_response(
@@ -155,7 +138,7 @@ async def get_assistant_agent_response(
     Returns:
         Tuple of (response_text, final_state)
     """
-    logger.info(f"Getting deep agent response for conversation {conversation_id}")
+    logger.debug(f"Getting agent response for conversation {conversation_id}")
 
     # Create conversation ID if needed
     local_conversation_id = conversation_id
@@ -190,7 +173,6 @@ async def get_assistant_agent_response(
     config: Dict[str, Any] = {"configurable": {"thread_id": local_conversation_id}}
 
     # Execute agent
-    logger.info("Invoking deep agent...")
     result = await agent.ainvoke(
         {"messages": [{"role": "user", "content": user_message}]}, config=config  # type: ignore
     )
@@ -198,13 +180,7 @@ async def get_assistant_agent_response(
     # Extract response
     response_text = result["messages"][-1].content if result.get("messages") else ""
 
-    # Log files in result for debugging
-    if result.get("files"):
-        logger.info(f"Agent created {len(result['files'])} files")
-    if result.get("todos"):
-        logger.info(f"Agent created {len(result['todos'])} todos")
-
-    logger.info(f"Deep agent completed. Response length: {len(response_text)} chars")
+    logger.debug(f"Agent response completed ({len(response_text)} chars)")
 
     return response_text, result
 
@@ -236,8 +212,8 @@ async def get_assistant_agent_streaming_response(
     Yields:
         Dict with streaming updates (type, content, metadata)
     """
-    logger.info(
-        f"Getting deep agent streaming response for conversation {conversation_id}"
+    logger.debug(
+        f"Starting agent stream for conversation {conversation_id}"
     )
 
     # Create conversation ID if needed
@@ -274,7 +250,6 @@ async def get_assistant_agent_streaming_response(
 
     # Stream agent execution
     try:
-        logger.info("Starting deep agent stream...")
         final_state: Dict[str, Any] = {}
 
         async for event in agent.astream_events(
@@ -331,21 +306,17 @@ async def get_assistant_agent_streaming_response(
                 continue
 
         # Extract files from both transient state and persistent store
-        logger.info("Extracting files from agent state and persistent store...")
-
         # Get transient files from final state
         transient_files = await _extract_files_from_state(final_state)
-        logger.info(f"Transient files from state: {len(transient_files)}")
 
         # Get persistent files from MongoDBStore
         persistent_files = await _extract_persistent_files_from_store(agent_id)
-        logger.info(f"Persistent files from store: {len(persistent_files)}")
 
         # Merge all files (persistent takes precedence if paths overlap)
         all_files = {**transient_files, **persistent_files}
 
         if all_files:
-            logger.info(f"Sending {len(all_files)} total files to UI (transient: {len(transient_files)}, persistent: {len(persistent_files)})")
+            logger.debug(f"Sending {len(all_files)} files (transient: {len(transient_files)}, persistent: {len(persistent_files)})")
             yield {
                 "type": "files",
                 "data": all_files,
@@ -357,8 +328,6 @@ async def get_assistant_agent_streaming_response(
                     "persistent_count": len(persistent_files),
                 },
             }
-        else:
-            logger.info("No files created during this execution")
 
         # Send completion
         yield {

@@ -8,11 +8,9 @@ Uses factory.py to create agents with user's LLM config and tools.
 import asyncio
 import json
 import time
-import traceback
-from typing import Any, Dict, Optional, cast
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Query, Request, WebSocket, WebSocketDisconnect
-from langchain_core.runnables import RunnableConfig
+from fastapi import APIRouter, Query, WebSocket
 from loguru import logger
 
 from src.agents.assistant_agent.factory import create_assistant_agent_for_conversation
@@ -64,7 +62,6 @@ async def _retrieve_persistent_files(agent_id: str) -> dict:
 
         # Query all files (namespace='filesystem' for all file documents)
         docs = list(collection.find({"namespace": ["filesystem"]}))
-        logger.info(f"Found {len(docs)} persistent file documents in {collection_name}")
 
         files_dict = {}
         for doc in docs:
@@ -73,17 +70,13 @@ async def _retrieve_persistent_files(agent_id: str) -> dict:
 
             if file_path and isinstance(value, dict) and "content" in value:
                 files_dict[file_path] = value
-                logger.debug(f"Loaded persistent file: {file_path}")
 
-        if files_dict:
-            logger.info(f"Retrieved {len(files_dict)} persistent files from MongoDBStore")
-        else:
-            logger.info("No persistent files found in MongoDBStore")
+        logger.debug(f"Retrieved {len(files_dict)} persistent files")
 
         return files_dict
 
     except Exception as e:
-        logger.error(f"Error retrieving persistent files from store: {e}")
+        logger.error(f"Error retrieving persistent files from store: {e}", exc_info=True)
         return {}
 
 
@@ -113,9 +106,7 @@ async def agent_query_assistant_websocket(
     }
     ```
     """
-    logger.info("=" * 80)
-    logger.info("ASSISTANT AGENT ENDPOINT INVOKED | /ws/agent/query/assistant")
-    logger.info("=" * 80)
+    logger.debug("WebSocket endpoint invoked: /ws/agent/query/assistant")
 
     # Accept connection FIRST
     await websocket.accept()
@@ -144,7 +135,7 @@ async def agent_query_assistant_websocket(
         await websocket.close(code=1008, reason="Authentication failed")
         return
 
-    logger.info(f"Assistant Agent WebSocket connected for user: {user_id}")
+    logger.debug(f"WebSocket connected for user: {user_id}")
 
     try:
         while True:
@@ -200,9 +191,9 @@ async def agent_query_assistant_websocket(
                     agent = agent_service.get_agent(conversation.agent_id, user_id)
 
                     if agent:
-                        logger.info(f"✅ Loaded agent '{agent.name}' configuration")
+                        logger.debug(f"Loaded agent '{agent.name}'")
                     else:
-                        logger.warning(f"⚠️ Agent {conversation.agent_id} not found")
+                        logger.warning(f"Agent {conversation.agent_id} not found")
 
                 if not agent:
                     await websocket.send_text(
@@ -234,7 +225,7 @@ async def agent_query_assistant_websocket(
                 llm_provider_id = agent.llm_provider.id
                 llm_model_name = agent.llm_provider.model_name
 
-                logger.info(
+                logger.debug(
                     f"Creating Assistant Agent: provider={llm_provider_id}, model={llm_model_name}"
                 )
 
@@ -257,8 +248,8 @@ async def agent_query_assistant_websocket(
                         continue
 
                     # DEBUG: Check what checkpoint data exists before agent creation
-                    logger.info(
-                        f"🔍 [CHECKPOINT DEBUG] Checking for existing checkpoint data for thread_id={conversation_id}"
+                    logger.debug(
+                        f"Checking for existing checkpoint data for thread_id={conversation_id}"
                     )
                     try:
                         checkpoint_mongo_client = (
@@ -297,18 +288,12 @@ async def agent_query_assistant_websocket(
                                 {"namespace": {"$exists": True}}
                             )
 
-                            logger.info(
-                                f"📊 [CHECKPOINT DEBUG] Found {checkpoint_count} checkpoint(s) for thread {conversation_id}"
-                            )
-                            logger.info(
-                                f"📊 [WRITES DEBUG] Found {writes_count} write(s) for thread {conversation_id}"
-                            )
-                            logger.info(
-                                f"📊 [MEMORY STORE DEBUG] Found {memory_count} memory item(s) in collection {memory_collection_name}"
+                            logger.debug(
+                                f"Found {checkpoint_count} checkpoint(s) for thread {conversation_id}"
                             )
                     except Exception as debug_error:
                         logger.warning(
-                            f"⚠️ [CHECKPOINT DEBUG ERROR] Could not check checkpoint data: {debug_error}",
+                            f"Could not check checkpoint data: {debug_error}",
                             exc_info=True,
                         )
                 else:
@@ -354,24 +339,9 @@ async def agent_query_assistant_websocket(
                 full_assistant_response = ""
 
                 # DEBUG: Log what we're sending to the agent
-                logger.info(f"📤 [AGENT INPUT] Sending to agent:")
-                logger.info(
-                    f"   Query: {query[:100]}{'...' if len(query) > 100 else ''}"
-                )
-                logger.info(
-                    f"   Thread ID (from config): {config['configurable']['thread_id']}"
-                )
-                logger.info(
-                    f"   Input format: messages=[{{'role': 'human', 'content': query}}]"
-                )
-                logger.info(
-                    f"   Note: Agent will automatically load checkpoint data from checkpoint storage if it exists"
-                )
+                logger.debug(f"Sending query to agent (thread_id={config['configurable']['thread_id']})")
 
                 # Stream events from agent
-                logger.info(
-                    f"⏳ [AGENT STREAM START] Beginning agent execution stream..."
-                )
                 stream_events_logged = False
                 async for event in agent.astream_events(
                     {"messages": [{"role": "human", "content": query}]},
@@ -385,24 +355,7 @@ async def agent_query_assistant_websocket(
                     # Log initial state on first event
                     if not stream_events_logged and event_type == "on_chain_start":
                         stream_events_logged = True
-                        logger.info(
-                            f"✅ [AGENT STATE AT START] First event received from agent"
-                        )
-                        logger.info(f"   Event name: {event_name}")
-                        if "input" in event_data:
-                            input_data = event_data["input"]
-                            logger.info(f"   Input type: {type(input_data)}")
-                            if (
-                                isinstance(input_data, dict)
-                                and "messages" in input_data
-                            ):
-                                logger.info(
-                                    f"   Messages in state: {len(input_data['messages'])}"
-                                )
-                                if input_data["messages"]:
-                                    logger.info(
-                                        f"   First message: role={input_data['messages'][0].get('role')}, content_len={len(str(input_data['messages'][0].get('content', '')))}"
-                                    )
+                        logger.debug(f"Agent stream started")
 
                     # Stream message chunks
                     if event_type == "on_chat_model_stream":
@@ -485,49 +438,16 @@ async def agent_query_assistant_websocket(
                         if "files" in output:
                             files_data = output["files"]
                             file_count = len(files_data) if files_data else 0
-                            logger.info(
-                                f"📁 Sending {file_count} file(s) to frontend: {list(files_data.keys()) if files_data else []}"
-                            )
+                            logger.debug(f"Sending {file_count} file(s) to frontend")
                             # Log file structure and content for debugging
                             if files_data:
                                 for file_path, file_obj in files_data.items():
-                                    logger.info(f"📄 File: {file_path}")
-                                    logger.info(f"   Type: {type(file_obj)}")
-
                                     # Extract content
                                     if (
                                         isinstance(file_obj, dict)
                                         and "content" in file_obj
                                     ):
                                         content = file_obj["content"]
-                                        if isinstance(content, list):
-                                            total_length = sum(
-                                                len(line) for line in content
-                                            )
-                                            logger.info(
-                                                f"   Content: {len(content)} lines, {total_length} chars total"
-                                            )
-                                            logger.info(
-                                                f"   First line: {content[0][:100] if content else 'EMPTY'}"
-                                            )
-                                            logger.info(
-                                                f"   Last line: {content[-1][:100] if content else 'EMPTY'}"
-                                            )
-                                        else:
-                                            logger.info(
-                                                f"   Content length: {len(str(content))} chars"
-                                            )
-                                    elif isinstance(file_obj, list):
-                                        total_length = sum(
-                                            len(line) for line in file_obj
-                                        )
-                                        logger.info(
-                                            f"   Content: {len(file_obj)} lines, {total_length} chars total"
-                                        )
-                                    else:
-                                        logger.info(
-                                            f"   Content length: {len(str(file_obj))} chars"
-                                        )
 
                             await websocket.send_text(
                                 json.dumps(
@@ -566,21 +486,19 @@ async def agent_query_assistant_websocket(
                             f"Saved assistant message to conversation {conversation_id}"
                         )
 
-                    logger.info("✅ Messages saved to database")
+                    logger.debug("Messages saved to database")
                 except Exception as e:
-                    logger.error(f"Failed to save messages: {e}")
-                    logger.error(f"Traceback: {traceback.format_exc()}")
+                    logger.error(f"Failed to save messages: {e}", exc_info=True)
 
                 # Extract and send persistent files from MongoDB store
-                logger.info("📁 Retrieving persistent files from MongoDB store...")
                 try:
                     if conversation.agent_id:
                         persistent_files = await _retrieve_persistent_files(
                             conversation.agent_id
                         )
                         if persistent_files:
-                            logger.info(
-                                f"📁 Sending {len(persistent_files)} persistent file(s) to frontend"
+                            logger.debug(
+                                f"Sending {len(persistent_files)} persistent file(s)"
                             )
                             await websocket.send_text(
                                 json.dumps(
@@ -591,12 +509,8 @@ async def agent_query_assistant_websocket(
                                     }
                                 )
                             )
-                        else:
-                            logger.info(
-                                "No persistent files to send (or agent has no saved files)"
-                            )
                     else:
-                        logger.info("No agent_id available, skipping file retrieval")
+                        logger.debug("No agent_id available, skipping file retrieval")
                 except Exception as file_error:
                     logger.error(
                         f"Error retrieving persistent files: {file_error}",
@@ -608,9 +522,7 @@ async def agent_query_assistant_websocket(
                     json.dumps({"type": "done", "data": {}, "timestamp": time.time()})
                 )
 
-                logger.info(
-                    "✅ [ASSISTANT AGENT COMPLETE] Query processed successfully"
-                )
+                logger.debug("Query processed successfully")
 
             except asyncio.TimeoutError:
                 logger.warning(f"WebSocket timeout after {timeout}s of inactivity")
@@ -618,7 +530,7 @@ async def agent_query_assistant_websocket(
                 break
 
             except WebSocketDisconnect:
-                logger.info("WebSocket disconnected by client")
+                logger.debug("WebSocket disconnected by client")
                 break
 
             except json.JSONDecodeError as e:
@@ -634,8 +546,7 @@ async def agent_query_assistant_websocket(
                 )
 
             except Exception as e:
-                logger.error(f"Error processing query: {e}")
-                logger.error(f"Traceback: {traceback.format_exc()}")
+                logger.error(f"Error processing query: {e}", exc_info=True)
                 try:
                     await websocket.send_text(
                         json.dumps(
@@ -650,11 +561,10 @@ async def agent_query_assistant_websocket(
                     pass
 
     except Exception as e:
-        logger.error(f"Fatal WebSocket error: {e}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
+        logger.error(f"Fatal WebSocket error: {e}", exc_info=True)
     finally:
         try:
             await websocket.close()
         except:
             pass
-        logger.info("Assistant Agent WebSocket connection closed")
+        logger.debug("WebSocket connection closed")

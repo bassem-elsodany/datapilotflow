@@ -24,8 +24,6 @@ async def _load_prompt_based_tools(
     tools: List[Any], user_id: str, provider_service: Any
 ) -> List[Any]:
     """Load prompt-based tools asynchronously."""
-    import traceback
-
     from langchain_core.tools import StructuredTool
 
     langchain_tools = []
@@ -87,10 +85,10 @@ async def _load_prompt_based_tools(
             )
 
             langchain_tools.append(lc_tool)
-            logger.info(f"Created prompt-based tool: {tool.name}")
+            logger.debug(f"Created prompt-based tool: {tool.name}")
 
         except Exception as e:
-            logger.error(f"Failed to create prompt tool {tool.name}: {e}\n{traceback.format_exc()}")
+            logger.error(f"Failed to create prompt tool {tool.name}: {e}", exc_info=True)
 
     return langchain_tools
 
@@ -99,7 +97,6 @@ async def _load_mcp_tools(
     tools: List[Any], user_id: str, mcp_server_service: Any
 ) -> List[Any]:
     """Load MCP remote tools asynchronously."""
-    import traceback
     from collections import defaultdict
 
     from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -124,7 +121,7 @@ async def _load_mcp_tools(
 
             _, mcp_server_config = result
 
-            logger.info(
+            logger.debug(
                 f"Loading {len(server_tools)} tools from MCP server '{mcp_server_config.name}'"
             )
 
@@ -175,8 +172,8 @@ async def _load_mcp_tools(
 
                 if matching_tool:
                     server_langchain_tools.append(matching_tool)
-                    logger.info(
-                        f"Added MCP tool: {tool.name} (server tool: {tool.mcp_tool_name})"
+                    logger.debug(
+                        f"Added MCP tool: {tool.name}"
                     )
                 else:
                     logger.warning(
@@ -188,7 +185,7 @@ async def _load_mcp_tools(
 
         except Exception as e:
             logger.error(
-                f"Failed to load MCP tools from server {server_id}: {e}\n{traceback.format_exc()}"
+                f"Failed to load MCP tools from server {server_id}: {e}", exc_info=True
             )
             return []
 
@@ -223,8 +220,6 @@ async def load_user_tools_for_assistant_agent(
         List of LangChain tool instances
     """
     try:
-        import traceback
-
         from src.domain.tool.models import ToolType
         from src.services.agent.agent_service import get_agent_service
         from src.services.conversation.conversation_history_service import (
@@ -256,10 +251,10 @@ async def load_user_tools_for_assistant_agent(
 
         tool_ids = agent.assistant_config.tools or []
         if not tool_ids:
-            logger.info("No tools configured in assistant config")
+            logger.debug("No tools configured")
             return []
 
-        logger.info(f"Loading {len(tool_ids)} tools for deep agent: {tool_ids}")
+        logger.debug(f"Loading {len(tool_ids)} tools")
 
         # Load tools from database
         tool_service = get_tool_service()
@@ -281,10 +276,8 @@ async def load_user_tools_for_assistant_agent(
                 logger.error(f"Failed to load tool {tool_id}: {e}")
 
         if not tools_from_db:
-            logger.warning("No active tools found")
+            logger.debug("No active tools found")
             return []
-
-        logger.info(f"Creating LangChain tools from {len(tools_from_db)} tool configs")
 
         # Separate tools by type
         prompt_based_tools = [
@@ -314,16 +307,11 @@ async def load_user_tools_for_assistant_agent(
 
         langchain_tools = prompt_langchain_tools + mcp_langchain_tools
 
-        logger.info(
-            f"Successfully created {len(langchain_tools)} LangChain tools for deep agent"
-        )
+        logger.debug(f"Created {len(langchain_tools)} LangChain tools")
         return langchain_tools
 
     except Exception as e:
-        logger.error(f"Error loading tools for deep agent: {e}")
-        import traceback
-
-        logger.error(f"Traceback: {traceback.format_exc()}")
+        logger.error(f"Error loading tools: {e}", exc_info=True)
         return []
 
 
@@ -362,8 +350,8 @@ async def create_assistant_agent_for_conversation(
     Raises:
         ValueError: If provider or configuration is invalid
     """
-    logger.info(
-        f"Creating deep agent for conversation {conversation_id}, user {user_id}"
+    logger.debug(
+        f"Creating deep agent for conversation {conversation_id}"
     )
 
     # Get LLM provider configuration
@@ -395,7 +383,7 @@ async def create_assistant_agent_for_conversation(
         streaming=True,
     )
 
-    logger.info(f"Created LLM client: {model_string}")
+    logger.debug(f"Created LLM client: {model_string}")
 
     # Import services (needed for system prompt and tool context)
     from src.services.agent.agent_service import get_agent_service
@@ -413,10 +401,10 @@ async def create_assistant_agent_for_conversation(
     # Load user-selected tools (unless custom tools provided)
     if custom_tools is not None:
         tools = custom_tools
-        logger.info(f"Using {len(tools)} custom tools")
+        logger.debug(f"Using {len(tools)} custom tools")
     else:
         tools = await load_user_tools_for_assistant_agent(user_id, conversation_id)
-        logger.info(f"Loaded {len(tools)} tools from conversation config")
+        logger.debug(f"Loaded {len(tools)} tools")
 
     # Get system prompt (from agent's assistant config or default)
     if not system_prompt:
@@ -506,25 +494,15 @@ Agent ID: {agent_id if agent_id else "default"}
     top_k_value = 5
 
     if agent_config:
-        logger.info(f"Agent config found for agent_id: {agent_id}")
-        logger.info(f"Agent config object: {agent_config}")
-        logger.debug(f"Agent config vector_database: {agent_config.vector_database}")
-        logger.debug(f"Agent config llm_provider: {agent_config.llm_provider}")
+        logger.debug(f"Agent config found for agent_id: {agent_id}")
 
         collection_name = (
             agent_config.vector_database.collection_name
             if agent_config.vector_database
             else "LongTermMemory"
         )
-        logger.debug(f"Collection name: {collection_name}")
 
         # Embedding provider configuration (from vector database collection)
-        if agent_config.vector_database:
-            logger.info(f"Vector DB config exists: {agent_config.vector_database}")
-            logger.info(f"Vector DB embedding_provider: {agent_config.vector_database.embedding_provider}")
-            if agent_config.vector_database.embedding_provider:
-                logger.info(f"Embedding provider ID: {agent_config.vector_database.embedding_provider.id}")
-                logger.info(f"Embedding provider model: {agent_config.vector_database.embedding_provider.model_name}")
 
         embedding_provider_id = (
             agent_config.vector_database.embedding_provider.id
@@ -538,36 +516,32 @@ Agent ID: {agent_id if agent_id else "default"}
             and agent_config.vector_database.embedding_provider
             else ""
         )
-        logger.info(f"Final embedding config - provider_id: '{embedding_provider_id}', model_name: '{embedding_model_name}'")
+        logger.debug(f"Embedding config - provider_id: '{embedding_provider_id}', model_name: '{embedding_model_name}'")
 
         vector_dimension = (
             agent_config.vector_database.vector_dimension
             if agent_config.vector_database
             else 1536
         )
-        logger.debug(f"Vector dimension: {vector_dimension}")
 
         # LLM provider configuration (from agent's primary LLM provider)
         llm_provider = agent_config.llm_provider.id if agent_config.llm_provider else ""
         llm_model = (
             agent_config.llm_provider.model_name if agent_config.llm_provider else ""
         )
-        logger.debug(f"LLM provider_id: '{llm_provider}', model: '{llm_model}'")
 
         # Reranking configuration (from agent.reranker.enabled)
         # This field explicitly controls whether reranking is enabled
         enable_reranking = (
             agent_config.reranker.enabled if agent_config.reranker else False
         )
-        logger.debug(f"Enable reranking: {enable_reranking}")
 
         top_k_value = (
             agent_config.vector_database.top_k if agent_config.vector_database else 5
         )
-        logger.debug(f"Top k value: {top_k_value}")
     else:
-        logger.warning(
-            f"No agent found for conversation {conversation_id}, using default context and empty parameters"
+        logger.debug(
+            f"No agent config found for conversation {conversation_id}, using defaults"
         )
 
     system_prompt += f"""
@@ -596,8 +570,7 @@ When calling the knowledge_expert tool or any RAG tools, you MUST use these EXAC
 - NEVER try to "improve" or guess values - use exactly what is shown above
 """
 
-    logger.info(f"Injected MCP Parameters - collection: {collection_name}, embedding_provider: {embedding_provider_id}, embedding_model: {embedding_model_name}, vector_dim: {vector_dimension}, top_k: {top_k_value}")
-    logger.debug(f"Using system prompt: {system_prompt[:200]}...")
+    logger.debug(f"MCP parameters - collection: {collection_name}, embedding_provider: {embedding_provider_id}, vector_dim: {vector_dimension}, top_k: {top_k_value}")
 
     # Create Store if not provided
     if store is None:
@@ -614,12 +587,11 @@ When calling the knowledge_expert tool or any RAG tools, you MUST use these EXAC
             collection_name
         ]
         store = MongoDBStore(collection=collection)
-        logger.info(
+        logger.debug(
             f"Using MongoDBStore for long-term memory (collection: {collection_name})"
         )
 
     # Create deep agent
-    logger.info("Creating assistant agent with create_deep_agent...")
     agent = create_deep_agent(
         model=llm_client,
         system_prompt=system_prompt,
@@ -632,5 +604,4 @@ When calling the knowledge_expert tool or any RAG tools, you MUST use these EXAC
         checkpointer=checkpointer if checkpointer else None,
     )
 
-    logger.info("Deep agent created successfully")
     return agent
