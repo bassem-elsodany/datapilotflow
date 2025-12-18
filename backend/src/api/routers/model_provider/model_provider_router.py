@@ -318,3 +318,60 @@ async def test_model_provider(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e),
         )
+
+
+@router.get(
+    "/{provider_id}/models",
+    response_model=List[str],
+    summary="Get supported models for a provider",
+    description="Get list of supported models for a specific provider. Filters by model type if provided.",
+)
+def get_provider_models(
+    provider_id: str,
+    model_type: Optional[ModelType] = Query(None, description="Filter by model type (embedding, generative, reranker)"),
+    current_user: User = Depends(get_current_user),
+    service: ModelProviderService = Depends(get_model_provider_service),
+):
+    """
+    Get supported models for a specific provider.
+
+    If model_type is provided, returns only models of that type.
+    If model_type is not provided, returns all models.
+    """
+    if not current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID is required"
+        )
+
+    try:
+        provider = service.get_model_provider(provider_id, current_user.id)
+        if not provider:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Model provider '{provider_id}' not found",
+            )
+
+        models = []
+
+        if model_type is None or model_type == ModelType.EMBEDDING:
+            if provider.embedding:
+                models.extend(provider.embedding.models)
+
+        if model_type is None or model_type == ModelType.GENERATIVE:
+            if provider.generative:
+                models.extend(provider.generative.models)
+
+        if model_type is None or model_type == ModelType.RERANKER:
+            if provider.reranker:
+                models.extend(provider.reranker.models)
+
+        return models
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching provider models: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
