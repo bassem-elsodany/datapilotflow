@@ -32,7 +32,7 @@ export const ModelProviderSchema = z.object({
   id: z.string(),
   name: z.string(),
   provider_type: z.string(),
-  endpoint: z.string(),
+  endpoint: z.string().optional(),
   api_key: z.string().nullable(),
   description: z.string().nullable(),
   is_active: z.boolean(),
@@ -50,7 +50,7 @@ export const ModelProviderResponseSchema = z.object({
   id: z.string(),
   name: z.string(),
   provider_type: z.string(),
-  endpoint: z.string(),
+  endpoint: z.string().optional(),
   api_key: z.string().nullable(),
   description: z.string().nullable(),
   is_active: z.boolean(),
@@ -67,7 +67,7 @@ export const ModelProviderResponseSchema = z.object({
 export const ModelProviderCreateSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   provider_type: z.string().min(1, 'Provider type is required'),
-  endpoint: z.string().url('Must be a valid URL'),
+  endpoint: z.string().optional().or(z.literal('')),
   api_key: z.string().optional(),
   description: z.string().optional(),
   is_active: z.boolean().default(true),
@@ -80,7 +80,7 @@ export const ModelProviderCreateSchema = z.object({
 export const ModelProviderUpdateSchema = z.object({
   name: z.string().min(1, 'Name is required').optional(),
   provider_type: z.string().min(1, 'Provider type is required').optional(),
-  endpoint: z.string().url('Must be a valid URL').optional(),
+  endpoint: z.string().optional().or(z.literal('')),
   api_key: z.string().optional(),
   description: z.string().optional(),
   is_active: z.boolean().optional(),
@@ -187,3 +187,19 @@ export const useTestModelProvider = createPostMutationHook({
   }),
   responseSchema: ModelProviderTestResponseSchema,
 });
+
+// Get supported models for a provider
+export const useGetSupportedModels = (providerId: string, modelType?: string) =>
+  createGetQueryHook({
+    endpoint: apiEndpoints.modelProviders.models(providerId, modelType),
+    responseSchema: z.array(z.string()),
+    rQueryParams: {
+      queryKey: ['model-providers', { providerId, modelType: modelType || '' }],
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
+      enabled: !!providerId,
+      retry: 2,
+      retryDelay: 1000,
+      refetchOnWindowFocus: false,
+    },
+  })();
