@@ -1253,10 +1253,23 @@ export function ConversationCreateWizard() {
                             );
                           }
 
-                          return filteredTools.map((tool: any) => (
-                            <Card key={tool.id} withBorder p="sm" style={{ cursor: 'pointer' }} onClick={() => {
+                          return filteredTools.map((tool: any) => {
+                            // Check if this is the knowledge_expert tool and if Knowledge Expert is enabled
+                            const isKnowledgeExpertTool = tool.name === 'knowledge_expert';
+                            const isKnowledgeExpertEnabled = form.values.useKnowledgeExpert;
+                            const isSelected = form.values.selectedTools?.includes(tool.id) || false;
+
+                            // knowledge_expert cannot be deselected if Knowledge Expert is enabled
+                            const isDeselectable = !(isKnowledgeExpertTool && isKnowledgeExpertEnabled);
+
+                            return (
+                            <Card key={tool.id} withBorder p="sm" style={{ cursor: isDeselectable ? 'pointer' : 'not-allowed', opacity: isDeselectable ? 1 : 0.9 }} onClick={() => {
+                              // Prevent deselection of knowledge_expert tool when Knowledge Expert is enabled
+                              if (isKnowledgeExpertTool && isKnowledgeExpertEnabled && isSelected) {
+                                return; // Cannot deselect
+                              }
+
                               const currentTools = form.values.selectedTools || [];
-                              const isSelected = currentTools.includes(tool.id);
                               const newTools = isSelected
                                 ? currentTools.filter((id: string) => id !== tool.id)
                                 : [...currentTools, tool.id];
@@ -1272,7 +1285,8 @@ export function ConversationCreateWizard() {
                                     type="checkbox"
                                     checked={form.values.selectedTools?.includes(tool.id) || false}
                                     onChange={() => { }} // Handled by card onClick
-                                    style={{ marginTop: '4px', cursor: 'pointer' }}
+                                    disabled={!isDeselectable && isSelected}
+                                    style={{ marginTop: '4px', cursor: isDeselectable ? 'pointer' : 'not-allowed' }}
                                   />
                                   <Stack gap="xs" style={{ flex: 1 }}>
                                     <div>
@@ -1281,6 +1295,11 @@ export function ConversationCreateWizard() {
                                         <Badge size="sm" color={tool.tool_type === 'prompt_based' ? 'blue' : 'green'}>
                                           {tool.tool_type === 'prompt_based' ? 'Prompt-Based' : 'MCP Remote'}
                                         </Badge>
+                                        {isKnowledgeExpertTool && isKnowledgeExpertEnabled && isSelected && (
+                                          <Badge size="sm" color="red" variant="filled">
+                                            Required
+                                          </Badge>
+                                        )}
                                       </Group>
                                       <Text size="xs" c="dimmed">ID: {tool.name}</Text>
                                     </div>
@@ -1300,7 +1319,8 @@ export function ConversationCreateWizard() {
                                 </Group>
                               </Group>
                             </Card>
-                          ));
+                            );
+                          });
                         })()}
                       </Stack>
                     </div>
@@ -1787,9 +1807,19 @@ function StepKnowledgeExpertSettings({ form, collections, collectionsLoading, pr
               const enabled = event.currentTarget.checked;
               form.setFieldValue('useKnowledgeExpert', enabled);
 
-              // If disabling Knowledge Expert, remove knowledge_expert tool from selected tools
-              if (!enabled && form.values.selectedTools?.includes('knowledge_expert')) {
-                // Also check by tool name in case ID is different
+              if (enabled) {
+                // If enabling Knowledge Expert, automatically add knowledge_expert tool if not already selected
+                const knowledgeExpertTool = tools?.find((t: any) => t.name === 'knowledge_expert');
+                if (knowledgeExpertTool) {
+                  const currentTools = form.values.selectedTools || [];
+                  if (!currentTools.includes(knowledgeExpertTool.id)) {
+                    const newTools = [...currentTools, knowledgeExpertTool.id];
+                    const uniqueTools = Array.from(new Set(newTools));
+                    form.setFieldValue('selectedTools', uniqueTools);
+                  }
+                }
+              } else {
+                // If disabling Knowledge Expert, remove knowledge_expert tool from selected tools
                 const currentTools = form.values.selectedTools || [];
                 const filteredTools = currentTools.filter((toolId: string) => {
                   const tool = tools?.find((t: any) => t.id === toolId);
