@@ -83,10 +83,10 @@ function CodeBlock({ content, label, color }: CodeBlockProps) {
             letterSpacing: '0.3px',
             margin: 0,
             padding: '16px',
-            whiteSpace: 'pre',
-            overflowX: 'auto',
-            overflowY: 'auto',
-            minWidth: '100%',
+            whiteSpace: 'pre-wrap',
+            wordWrap: 'break-word',
+            wordBreak: 'break-word',
+            overflowWrap: 'break-word',
           }}
         >
           {content}
