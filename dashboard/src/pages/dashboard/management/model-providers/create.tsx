@@ -1,4 +1,5 @@
-import { ModelType, useCreateModelProvider, useTestModelProvider } from '@/api/resources/model-providers';
+import { ModelType, useCreateModelProvider, useGetSupportedModels, useTestModelProvider } from '@/api/resources/model-providers';
+import { BrowseModelsModal } from '@/components/browse-models-modal';
 import { Page } from '@/components/page';
 import { PageHeader } from '@/components/page-header';
 import { paths } from '@/routes/paths';
@@ -21,6 +22,7 @@ import {
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
+import { IconBookmark } from '@tabler/icons-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -119,6 +121,14 @@ export default function CreateModelProvider() {
     body?: string;
   } | null>(null);
 
+  // Browse models modal state
+  const [browseModelsModalOpen, setBrowseModelsModalOpen] = useState(false);
+  const [browseModelsType, setBrowseModelsType] = useState<ModelType | null>(null);
+  const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
+
+  // Get supported models hook
+  const [providerId] = useState<string>(''); // Placeholder - not needed for browse feature
+
   const form = useForm({
     initialValues: {
       name: '',
@@ -176,6 +186,45 @@ export default function CreateModelProvider() {
       }
       : undefined,
   });
+
+  const handleBrowseModels = (modelType: ModelType) => {
+    setBrowseModelsType(modelType);
+    setSelectedModels(new Set());
+    setBrowseModelsModalOpen(true);
+  };
+
+  const handleAddSelectedModels = () => {
+    if (!browseModelsType || selectedModels.size === 0) {
+      notifications.show({
+        title: 'Error',
+        message: 'Please select at least one model',
+        color: 'red',
+      });
+      return;
+    }
+
+    const modelsToAdd = Array.from(selectedModels);
+
+    if (browseModelsType === ModelType.EMBEDDING) {
+      const newModels = [...form.values.embedding_models, ...modelsToAdd].filter((v, i, a) => a.indexOf(v) === i);
+      form.setFieldValue('embedding_models', newModels);
+    } else if (browseModelsType === ModelType.GENERATIVE) {
+      const newModels = [...form.values.generative_models, ...modelsToAdd].filter((v, i, a) => a.indexOf(v) === i);
+      form.setFieldValue('generative_models', newModels);
+    } else if (browseModelsType === ModelType.RERANKER) {
+      const newModels = [...form.values.reranker_models, ...modelsToAdd].filter((v, i, a) => a.indexOf(v) === i);
+      form.setFieldValue('reranker_models', newModels);
+    }
+
+    setBrowseModelsModalOpen(false);
+    setSelectedModels(new Set());
+
+    notifications.show({
+      title: 'Success',
+      message: `Added ${modelsToAdd.length} model(s)`,
+      color: 'green',
+    });
+  };
 
   const handleTest = async (testType: ModelType, modelName?: string) => {
     if (!modelName) {
@@ -470,17 +519,27 @@ export default function CreateModelProvider() {
                               Used for vector search and similarity.
                             </Text>
                           </div>
-                          <Button
-                            size="xs"
-                            variant="light"
-                            onClick={() => openTestModal(ModelType.EMBEDDING, form.values.embedding_models)}
-                            disabled={
-                              !form.values.embedding_models.length || testProviderMutation.isPending
-                            }
-                            loading={testProviderMutation.isPending}
-                          >
-                            Test embedding
-                          </Button>
+                          <Group gap="xs">
+                            <Button
+                              size="xs"
+                              variant="default"
+                              leftSection={<IconBookmark size={14} />}
+                              onClick={() => handleBrowseModels(ModelType.EMBEDDING)}
+                            >
+                              Browse Models
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="light"
+                              onClick={() => openTestModal(ModelType.EMBEDDING, form.values.embedding_models)}
+                              disabled={
+                                !form.values.embedding_models.length || testProviderMutation.isPending
+                              }
+                              loading={testProviderMutation.isPending}
+                            >
+                              Test embedding
+                            </Button>
+                          </Group>
                         </Group>
 
                         <TagsInput
@@ -522,18 +581,28 @@ export default function CreateModelProvider() {
                               Used for chat, completions, and reasoning.
                             </Text>
                           </div>
-                          <Button
-                            size="xs"
-                            variant="light"
-                            onClick={() => openTestModal(ModelType.GENERATIVE, form.values.generative_models)}
-                            disabled={
-                              !form.values.generative_models.length ||
-                              testProviderMutation.isPending
-                            }
-                            loading={testProviderMutation.isPending}
-                          >
-                            Test generative
-                          </Button>
+                          <Group gap="xs">
+                            <Button
+                              size="xs"
+                              variant="default"
+                              leftSection={<IconBookmark size={14} />}
+                              onClick={() => handleBrowseModels(ModelType.GENERATIVE)}
+                            >
+                              Browse Models
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="light"
+                              onClick={() => openTestModal(ModelType.GENERATIVE, form.values.generative_models)}
+                              disabled={
+                                !form.values.generative_models.length ||
+                                testProviderMutation.isPending
+                              }
+                              loading={testProviderMutation.isPending}
+                            >
+                              Test generative
+                            </Button>
+                          </Group>
                         </Group>
 
                         <TagsInput
@@ -587,18 +656,28 @@ export default function CreateModelProvider() {
                               Used to reorder documents by relevance.
                             </Text>
                           </div>
-                          <Button
-                            size="xs"
-                            variant="light"
-                            onClick={() => openTestModal(ModelType.RERANKER, form.values.reranker_models)}
-                            disabled={
-                              !form.values.reranker_models.length ||
-                              testProviderMutation.isPending
-                            }
-                            loading={testProviderMutation.isPending}
-                          >
-                            Test reranker
-                          </Button>
+                          <Group gap="xs">
+                            <Button
+                              size="xs"
+                              variant="default"
+                              leftSection={<IconBookmark size={14} />}
+                              onClick={() => handleBrowseModels(ModelType.RERANKER)}
+                            >
+                              Browse Models
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="light"
+                              onClick={() => openTestModal(ModelType.RERANKER, form.values.reranker_models)}
+                              disabled={
+                                !form.values.reranker_models.length ||
+                                testProviderMutation.isPending
+                              }
+                              loading={testProviderMutation.isPending}
+                            >
+                              Test reranker
+                            </Button>
+                          </Group>
                         </Group>
 
                         <TagsInput
@@ -733,6 +812,16 @@ export default function CreateModelProvider() {
           )}
         </Stack>
       </Modal>
+
+      {/* Browse Models Modal */}
+      <BrowseModelsModal
+        isOpen={browseModelsModalOpen}
+        modelType={browseModelsType}
+        selectedModels={selectedModels}
+        onSelectedModelsChange={setSelectedModels}
+        onClose={() => setBrowseModelsModalOpen(false)}
+        onAdd={handleAddSelectedModels}
+      />
     </Page>
   );
 }
