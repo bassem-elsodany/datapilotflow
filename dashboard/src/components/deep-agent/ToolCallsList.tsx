@@ -54,7 +54,7 @@ function CodeBlock({ content, label, color }: CodeBlockProps) {
   };
 
   return (
-    <Box style={{ overflow: 'hidden' }}>
+    <Box>
       <Group justify="space-between" p="md" style={{ backgroundColor: colorMap[color].bg, borderRadius: '8px 8px 0 0' }}>
         <Flex gap="xs" align="center">
           <Box style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: colorMap[color].text }} />
@@ -72,7 +72,7 @@ function CodeBlock({ content, label, color }: CodeBlockProps) {
           )}
         </CopyButton>
       </Group>
-      <Box style={{ backgroundColor: codeBgMap[color], borderRadius: '0 0 8px 8px', padding: '16px' }}>
+      <ScrollArea style={{ backgroundColor: codeBgMap[color], borderRadius: '0 0 8px 8px', height: 400, width: '100%' }} type="auto">
         <Box
           component="pre"
           style={{
@@ -82,6 +82,7 @@ function CodeBlock({ content, label, color }: CodeBlockProps) {
             lineHeight: 1.7,
             letterSpacing: '0.3px',
             margin: 0,
+            padding: '16px',
             whiteSpace: 'pre-wrap',
             wordWrap: 'break-word',
             wordBreak: 'break-word',
@@ -90,7 +91,7 @@ function CodeBlock({ content, label, color }: CodeBlockProps) {
         >
           {content}
         </Box>
-      </Box>
+      </ScrollArea>
     </Box>
   );
 }

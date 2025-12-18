@@ -20,6 +20,7 @@ import {
   Box,
   Button,
   Divider,
+  Drawer,
   Group,
   Paper,
   ScrollArea,
@@ -72,10 +73,13 @@ export function AssistantModeView({
   const [currentChunk, setCurrentChunk] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [modalOpened, setModalOpened] = useState(false);
-  const [sidebarVisible, setSidebarVisible] = useState(true);
+  const [sidebarVisible, setSidebarVisible] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(420);
+  const [isResizing, setIsResizing] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [connectionRetries, setConnectionRetries] = useState(0);
   const [agentId, setAgentId] = useState<string | null>(null);
+  const [autoHideTimer, setAutoHideTimer] = useState<NodeJS.Timeout | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -290,14 +294,48 @@ export function AssistantModeView({
     loadExistingMessages();
   }, [sessionId]);
 
-  // Cleanup WebSocket on unmount
+  // Cleanup WebSocket and timer on unmount
   useEffect(() => {
     return () => {
       if (wsRef.current) {
         wsRef.current.close();
       }
+      if (autoHideTimer) {
+        clearTimeout(autoHideTimer);
+      }
     };
-  }, []);
+  }, [autoHideTimer]);
+
+  // Sidebar resize handler
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      const newWidth = window.innerWidth - e.clientX;
+      // Constrain width between 300px and 800px
+      if (newWidth >= 300 && newWidth <= 800) {
+        setSidebarWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
 
   // WebSocket message handler
   const handleWebSocketMessage = (data: any) => {
@@ -383,6 +421,13 @@ export function AssistantModeView({
           }
           setIsLoading(false);
           setModalOpened(false); // Close modal when response is complete
+
+          // Auto-hide sidebar after agent finishes (5 second delay)
+          if (autoHideTimer) clearTimeout(autoHideTimer);
+          const timer = setTimeout(() => {
+            setSidebarVisible(false);
+          }, 5000);
+          setAutoHideTimer(timer);
           break;
 
         case 'error':
@@ -650,6 +695,33 @@ export function AssistantModeView({
 
       {/* Main Content */}
       <Box style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+        {/* Floating Workflow State Button - Visible when drawer is closed */}
+        {!sidebarVisible && (
+          <Tooltip label="Open Workflow State" position="left">
+            <ActionIcon
+              variant="gradient"
+              gradient={{ from: 'violet', to: 'purple', deg: 45 }}
+              size="lg"
+              radius="md"
+              onClick={() => {
+                setSidebarVisible(true);
+                // Clear auto-hide timer when manually opening
+                if (autoHideTimer) clearTimeout(autoHideTimer);
+                setAutoHideTimer(null);
+              }}
+              style={{
+                position: 'fixed',
+                bottom: 20,
+                right: 20,
+                zIndex: 100,
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              }}
+              title="Open Workflow State Panel"
+            >
+              <IconRobot size={20} />
+            </ActionIcon>
+          </Tooltip>
+        )}
         {/* Left: Chat */}
         <Box style={{ flex: 1, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--mantine-color-gray-3)' }}>
           <ScrollArea style={{ flex: 1 }} p="md">
@@ -877,140 +949,195 @@ export function AssistantModeView({
           </Paper>
         </Box>
 
-        {/* Right: Agent State - Enhanced UI */}
-        {sidebarVisible && (
-          <Paper
-            withBorder
-            radius="md"
-            style={{
-              width: '420px',
-              display: 'flex',
-              flexDirection: 'column',
-              background: 'linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)',
-              borderLeft: '3px solid #4c6ef5',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
-            }}
+        {/* Right: Agent State - Collapsible Panel with Auto-hide */}
+        <Paper
+          withBorder
+          radius="md"
+          style={{
+            width: sidebarVisible ? `${sidebarWidth}px` : '0px',
+            display: 'flex',
+            flexDirection: 'column',
+            background: 'linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)',
+            borderLeft: '3px solid #4c6ef5',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
+            transition: isResizing ? 'none' : 'width 0.3s ease',
+            overflow: 'hidden',
+            position: 'relative',
+          }}
+        >
+          {/* Resize Handle */}
+          {sidebarVisible && (
+            <div
+              onMouseDown={handleMouseDown}
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: '6px',
+                cursor: 'col-resize',
+                backgroundColor: isResizing ? '#4c6ef5' : 'transparent',
+                transition: 'background-color 0.2s ease',
+                zIndex: 1000,
+              }}
+              title="Drag to resize panel (300px - 800px)"
+              onMouseEnter={(e) => {
+                if (!isResizing) {
+                  e.currentTarget.style.backgroundColor = '#4c6ef5';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isResizing) {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }
+              }}
+            />
+          )}
+          <Tabs
+            defaultValue="tasks"
+            variant="pills"
+            style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
           >
-            <Tabs
-              defaultValue="tasks"
-              variant="pills"
-              style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
-            >
-              <Box p="md" pb="sm" style={{ borderBottom: '1px solid #e9ecef' }}>
-                <Group justify="space-between" mb="md">
-                  <Group gap="xs">
-                    <IconRobot size={18} color="#4c6ef5" />
-                    <Text size="sm" fw={700} c="gray.9">
-                      Workflow State
-                    </Text>
-                  </Group>
-                  <ActionIcon
-                    size="sm"
-                    variant="subtle"
-                    color="gray"
-                    onClick={() => setSidebarVisible(false)}
-                    title="Hide sidebar"
-                  >
-                    <IconChevronRight size={16} />
-                  </ActionIcon>
+            <Box p="md" pb="sm" style={{ borderBottom: '1px solid #e9ecef' }}>
+              <Group justify="space-between" mb="md">
+                <Group gap="xs">
+                  <IconRobot size={18} color="#4c6ef5" />
+                  <Text size="sm" fw={700} c="gray.9">
+                    Workflow State
+                  </Text>
                 </Group>
-                <Tabs.List grow>
-                  <Tabs.Tab
-                    value="tasks"
-                    leftSection={<IconCheckbox size={16} />}
-                    style={{
-                      fontWeight: 600,
-                      fontSize: '0.875rem',
-                    }}
-                  >
-                    Tasks
-                    {todos.length > 0 && (
-                      <Badge size="xs" ml="xs" variant="gradient" gradient={{ from: 'violet', to: 'grape' }}>
-                        {todos.length}
-                      </Badge>
-                    )}
-                  </Tabs.Tab>
-                  <Tabs.Tab
-                    value="files"
-                    leftSection={<IconFileText size={16} />}
-                    style={{
-                      fontWeight: 600,
-                      fontSize: '0.875rem',
-                    }}
-                  >
-                    Files
-                    {Object.keys(files).length > 0 && (
-                      <Badge size="xs" ml="xs" variant="gradient" gradient={{ from: 'teal', to: 'green' }}>
-                        {Object.keys(files).length}
-                      </Badge>
-                    )}
-                  </Tabs.Tab>
-                  <Tabs.Tab
-                    value="tools"
-                    leftSection={<IconTool size={16} />}
-                    style={{
-                      fontWeight: 600,
-                      fontSize: '0.875rem',
-                    }}
-                  >
-                    Tools
-                    {toolCalls.length > 0 && (
-                      <Badge size="xs" ml="xs" variant="gradient" gradient={{ from: 'cyan', to: 'blue' }}>
-                        {toolCalls.length}
-                      </Badge>
-                    )}
-                  </Tabs.Tab>
-                </Tabs.List>
-              </Box>
+                <ActionIcon
+                  size="sm"
+                  variant="subtle"
+                  color="gray"
+                  onClick={() => setSidebarVisible(false)}
+                  title="Hide sidebar"
+                >
+                  <IconChevronRight size={16} />
+                </ActionIcon>
+              </Group>
+              <Tabs.List grow>
+                <Tabs.Tab
+                  value="tasks"
+                  leftSection={<IconCheckbox size={16} />}
+                  style={{
+                    fontWeight: 600,
+                    fontSize: '0.875rem',
+                  }}
+                >
+                  Tasks
+                  {todos.length > 0 && (
+                    <Badge size="xs" ml="xs" variant="gradient" gradient={{ from: 'violet', to: 'grape' }}>
+                      {todos.length}
+                    </Badge>
+                  )}
+                </Tabs.Tab>
+                <Tabs.Tab
+                  value="files"
+                  leftSection={<IconFileText size={16} />}
+                  style={{
+                    fontWeight: 600,
+                    fontSize: '0.875rem',
+                  }}
+                >
+                  Files
+                  {Object.keys(files).length > 0 && (
+                    <Badge size="xs" ml="xs" variant="gradient" gradient={{ from: 'teal', to: 'green' }}>
+                      {Object.keys(files).length}
+                    </Badge>
+                  )}
+                </Tabs.Tab>
+                <Tabs.Tab
+                  value="tools"
+                  leftSection={<IconTool size={16} />}
+                  style={{
+                    fontWeight: 600,
+                    fontSize: '0.875rem',
+                  }}
+                >
+                  Tools
+                  {toolCalls.length > 0 && (
+                    <Badge size="xs" ml="xs" variant="gradient" gradient={{ from: 'cyan', to: 'blue' }}>
+                      {toolCalls.length}
+                    </Badge>
+                  )}
+                </Tabs.Tab>
+              </Tabs.List>
+            </Box>
 
-              <Box style={{ flex: 1, overflow: 'hidden' }} px="md" pb="md">
-                <Tabs.Panel value="tasks" style={{ height: '100%' }}>
-                  <ScrollArea h="100%">
-                    {todos.length > 0 ? (
-                      <TodoList todos={todos} />
-                    ) : (
-                      <Box ta="center" py="xl">
-                        <IconCheckbox size={32} color="gray" style={{ opacity: 0.3 }} />
-                        <Text size="sm" c="dimmed" mt="sm">
-                          No tasks yet
-                        </Text>
-                      </Box>
-                    )}
-                  </ScrollArea>
-                </Tabs.Panel>
+            <Box style={{ flex: 1, overflow: 'hidden' }} px="md" pb="md">
+              <Tabs.Panel value="tasks" style={{ height: '100%' }}>
+                <ScrollArea h="100%">
+                  {todos.length > 0 ? (
+                    <TodoList todos={todos} />
+                  ) : (
+                    <Box ta="center" py="xl">
+                      <IconCheckbox size={32} color="gray" style={{ opacity: 0.3 }} />
+                      <Text size="sm" c="dimmed" mt="sm">
+                        No tasks yet
+                      </Text>
+                    </Box>
+                  )}
+                </ScrollArea>
+              </Tabs.Panel>
 
-                <Tabs.Panel value="files" style={{ height: '100%' }}>
-                  <ScrollArea h="100%">
-                    {Object.keys(files).length > 0 ? (
-                      <FilesGrid files={files} editDisabled />
-                    ) : (
-                      <Box ta="center" py="xl">
-                        <IconFileText size={32} color="gray" style={{ opacity: 0.3 }} />
-                        <Text size="sm" c="dimmed" mt="sm">
-                          No files generated yet
-                        </Text>
-                      </Box>
-                    )}
-                  </ScrollArea>
-                </Tabs.Panel>
+              <Tabs.Panel value="files" style={{ height: '100%' }}>
+                <ScrollArea h="100%">
+                  {Object.keys(files).length > 0 ? (
+                    <FilesGrid files={files} editDisabled />
+                  ) : (
+                    <Box ta="center" py="xl">
+                      <IconFileText size={32} color="gray" style={{ opacity: 0.3 }} />
+                      <Text size="sm" c="dimmed" mt="sm">
+                        No files generated yet
+                      </Text>
+                    </Box>
+                  )}
+                </ScrollArea>
+              </Tabs.Panel>
 
-                <Tabs.Panel value="tools" style={{ height: '100%' }}>
-                  <ScrollArea h="100%">
-                    {toolCalls.length > 0 ? (
-                      <ToolCallsList toolCalls={toolCalls} />
-                    ) : (
-                      <Box ta="center" py="xl">
-                        <IconTool size={32} color="gray" style={{ opacity: 0.3 }} />
-                        <Text size="sm" c="dimmed" mt="sm">
-                          No tool calls yet
-                        </Text>
-                      </Box>
-                    )}
-                  </ScrollArea>
-                </Tabs.Panel>
-              </Box>
-            </Tabs>
-          </Paper>
+              <Tabs.Panel value="tools" style={{ height: '100%' }}>
+                <ScrollArea h="100%">
+                  {toolCalls.length > 0 ? (
+                    <ToolCallsList toolCalls={toolCalls} />
+                  ) : (
+                    <Box ta="center" py="xl">
+                      <IconTool size={32} color="gray" style={{ opacity: 0.3 }} />
+                      <Text size="sm" c="dimmed" mt="sm">
+                        No tool calls yet
+                      </Text>
+                    </Box>
+                  )}
+                </ScrollArea>
+              </Tabs.Panel>
+            </Box>
+          </Tabs>
+        </Paper>
+
+        {/* Toggle Button - Visible when sidebar is hidden */}
+        {!sidebarVisible && (
+          <Tooltip label="Show Workflow State" position="left">
+            <ActionIcon
+              variant="subtle"
+              color="gray"
+              onClick={() => {
+                setSidebarVisible(true);
+                // Clear auto-hide timer when manually opening
+                if (autoHideTimer) clearTimeout(autoHideTimer);
+                setAutoHideTimer(null);
+              }}
+              style={{
+                position: 'absolute',
+                right: 0,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                borderRadius: '8px 0 0 8px',
+              }}
+              title="Show Workflow State"
+            >
+              <IconChevronLeft size={20} />
+            </ActionIcon>
+          </Tooltip>
         )}
       </Box>
 
