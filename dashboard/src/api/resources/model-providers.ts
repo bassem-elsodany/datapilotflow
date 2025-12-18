@@ -203,3 +203,19 @@ export const useGetSupportedModels = (providerId: string, modelType?: string) =>
       refetchOnWindowFocus: false,
     },
   })();
+
+// Get available models for a provider type from LiteLLM SDK
+export const useGetAvailableModels = (providerType: string, modelType?: string) =>
+  createGetQueryHook({
+    endpoint: apiEndpoints.modelProviders.availableModels(providerType, modelType),
+    responseSchema: z.array(z.string()),
+    rQueryParams: {
+      queryKey: ['model-providers', { providerType, modelType: modelType || '', type: 'available' }],
+      staleTime: 30 * 60 * 1000, // 30 minutes (LiteLLM data changes infrequently)
+      gcTime: 60 * 60 * 1000, // 60 minutes (formerly cacheTime)
+      enabled: !!providerType,
+      retry: 2,
+      retryDelay: 1000,
+      refetchOnWindowFocus: false,
+    },
+  })();

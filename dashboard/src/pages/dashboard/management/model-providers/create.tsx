@@ -817,6 +817,7 @@ export default function CreateModelProvider() {
       <BrowseModelsModal
         isOpen={browseModelsModalOpen}
         modelType={browseModelsType}
+        providerType={form.values.provider_type}
         selectedModels={selectedModels}
         onSelectedModelsChange={setSelectedModels}
         onClose={() => setBrowseModelsModalOpen(false)}

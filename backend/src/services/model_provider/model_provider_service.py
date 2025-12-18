@@ -301,6 +301,42 @@ class ModelProviderService:
 
         return wrap_result({}, False, f"Unsupported test type: {test_type}", 400)
 
+    def get_available_models_for_provider(
+        self, provider_type: str, model_type: Optional[ModelType] = None
+    ) -> List[str]:
+        """
+        Get available models for a provider type using LiteLLM SDK.
+
+        This queries the LiteLLM SDK to get all supported models for a given provider.
+
+        Args:
+            provider_type: The provider type (e.g., 'openai', 'anthropic', 'groq')
+            model_type: Optional filter for model type (embedding, generative, reranker)
+
+        Returns:
+            List of available model names for the provider
+        """
+        try:
+            # Import litellm's get_available_models function
+            from litellm import get_available_models
+
+            logger.info(f"Fetching available models for provider: {provider_type}")
+
+            # Get all models for this provider from LiteLLM
+            available_models = get_available_models(provider=provider_type)
+
+            if not available_models:
+                logger.warning(f"No models found for provider: {provider_type}")
+                return []
+
+            logger.info(f"Found {len(available_models)} models for provider {provider_type}")
+            return available_models
+
+        except Exception as e:
+            logger.error(f"Error fetching available models for {provider_type}: {e}")
+            # Return empty list on error instead of raising
+            return []
+
 
 # Global service instance
 _model_provider_service: Optional[ModelProviderService] = None

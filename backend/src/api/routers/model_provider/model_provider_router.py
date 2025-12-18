@@ -375,3 +375,50 @@ def get_provider_models(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e),
         )
+
+
+@router.get(
+    "/available-models/{provider_type}",
+    response_model=List[str],
+    summary="Get available models for a provider type",
+    description="Get list of ALL available models from LiteLLM SDK for a specific provider type. This queries the LiteLLM database of supported models.",
+)
+def get_available_models(
+    provider_type: str,
+    model_type: Optional[ModelType] = Query(None, description="Filter by model type (embedding, generative, reranker)"),
+    current_user: User = Depends(get_current_user),
+    service: ModelProviderService = Depends(get_model_provider_service),
+):
+    """
+    Get available models for a provider type from LiteLLM SDK.
+
+    This endpoint queries the LiteLLM SDK to get all supported models for a given
+    provider type. This is useful for the UI to show users what models are available
+    for a provider before they configure it.
+
+    Args:
+        provider_type: The provider type (e.g., 'openai', 'anthropic', 'groq')
+        model_type: Optional filter for model type
+
+    Returns:
+        List of available model names for the provider
+    """
+    if not current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID is required"
+        )
+
+    try:
+        logger.info(f"Fetching available models for provider type: {provider_type}")
+
+        available_models = service.get_available_models_for_provider(provider_type, model_type)
+
+        logger.info(f"Returning {len(available_models)} available models for {provider_type}")
+        return available_models
+
+    except Exception as e:
+        logger.error(f"Error fetching available models: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch available models: {str(e)}",
+        )

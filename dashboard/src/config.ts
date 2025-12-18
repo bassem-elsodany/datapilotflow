@@ -175,6 +175,10 @@ export const apiEndpoints = {
       modelType
         ? `/model-providers/${providerId}/models?model_type=${modelType}`
         : `/model-providers/${providerId}/models`,
+    availableModels: (providerType: string, modelType?: string) =>
+      modelType
+        ? `/model-providers/available-models/${providerType}?model_type=${modelType}`
+        : `/model-providers/available-models/${providerType}`,
   },
 
   // Notifications
