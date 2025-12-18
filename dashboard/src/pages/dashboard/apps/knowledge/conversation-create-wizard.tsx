@@ -934,12 +934,12 @@ export function ConversationCreateWizard() {
 
         if (editingAgentId) {
           // After editing agent, go back to agent's conversations
-          notifications.show({
-            title: 'Success',
+        notifications.show({
+          title: 'Success',
             message: 'Agent updated successfully',
-            color: 'green',
-            icon: <IconCheck size={16} />,
-          });
+          color: 'green',
+          icon: <IconCheck size={16} />,
+        });
           navigate(paths.dashboard.apps.agentConversations(editingAgentId));
         } else {
           // After creating new agent or editing conversation
@@ -950,7 +950,7 @@ export function ConversationCreateWizard() {
             color: 'green',
             icon: <IconCheck size={16} />,
           });
-          navigate(paths.dashboard.apps.conversation(sessionId));
+        navigate(paths.dashboard.apps.conversation(sessionId));
         }
       } else {
         const errorData = await response.json().catch(() => ({}));
@@ -1180,7 +1180,7 @@ export function ConversationCreateWizard() {
                               const currentTools = form.values.selectedTools || [];
                               const isSelected = currentTools.includes(tool.id);
                               const newTools = isSelected
-                                ? currentTools.filter((id: string) => id !== tool.id)
+                                  ? currentTools.filter((id: string) => id !== tool.id)
                                 : [...currentTools, tool.id];
 
                               // Deduplicate to prevent duplicate tool IDs
@@ -1265,9 +1265,9 @@ export function ConversationCreateWizard() {
                     : 0;
 
                   return uniqueToolCount > 0 && (
-                    <Alert icon={<IconCheck size={16} />} color="blue" variant="light">
+                  <Alert icon={<IconCheck size={16} />} color="blue" variant="light">
                       <Text size="sm">{uniqueToolCount} tool(s) selected</Text>
-                    </Alert>
+                  </Alert>
                   );
                 })()}
               </Stack>
@@ -1732,41 +1732,41 @@ function StepKnowledgeExpertSettings({ form, collections, collectionsLoading, pr
           {isAssistantMode && <Divider my="sm" label="Vector Database Configuration" labelPosition="center" />}
 
           {!isAssistantMode && (
-            <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
-              <Text size="sm">
-                Select the knowledge base collection you want to search from. Configure how many relevant documents to retrieve.
-              </Text>
-            </Alert>
+      <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+        <Text size="sm">
+          Select the knowledge base collection you want to search from. Configure how many relevant documents to retrieve.
+        </Text>
+      </Alert>
           )}
 
           <Grid gutter="md">
             <Grid.Col span={6}>
-              <Select
-                label="Vector DB Collection"
-                placeholder={
-                  collectionsLoading ? 'Loading collections...' : 'Select a collection'
-                }
-                data={
-                  collections?.map((c) => ({
-                    value: c.name,
-                    label: `${c.name} (${c.record_count.toLocaleString()} records)`,
-                  })) || []
-                }
-                {...form.getInputProps('collectionName')}
-                searchable
-                disabled={collectionsLoading}
-                required
+      <Select
+        label="Vector DB Collection"
+        placeholder={
+          collectionsLoading ? 'Loading collections...' : 'Select a collection'
+        }
+        data={
+          collections?.map((c) => ({
+            value: c.name,
+            label: `${c.name} (${c.record_count.toLocaleString()} records)`,
+          })) || []
+        }
+        {...form.getInputProps('collectionName')}
+        searchable
+        disabled={collectionsLoading}
+        required
                 description="Knowledge base to search from"
-              />
+      />
             </Grid.Col>
             <Grid.Col span={6}>
-              <NumberInput
-                label="Search Results Limit (Top K)"
+      <NumberInput
+        label="Search Results Limit (Top K)"
                 placeholder="Number of documents"
-                {...form.getInputProps('topK')}
-                min={5}
-                max={30}
-                required
+        {...form.getInputProps('topK')}
+        min={5}
+        max={30}
+        required
                 description="Documents to retrieve (5-30)"
               />
             </Grid.Col>
@@ -1912,7 +1912,7 @@ function StepKnowledgeExpertSettings({ form, collections, collectionsLoading, pr
                     step={0.05}
                     {...form.getInputProps('relevanceThreshold')}
                     description="Minimum relevance score (0-1) for filtering documents"
-                  />
+      />
                 </>
               )}
             </>
@@ -1920,30 +1920,30 @@ function StepKnowledgeExpertSettings({ form, collections, collectionsLoading, pr
 
           {/* Enhancement Strategy Info for RAG mode */}
           {!isAssistantMode && form.values.selectedStrategy !== 'native' &&
-            form.values.selectedStrategy !== 'hyde' && (
-              <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
-                <Stack gap="xs">
-                  <Text size="xs">
-                    <strong>{ENHANCEMENT_STRATEGIES.find((s) => s.value === form.values.selectedStrategy)?.label}:</strong> This strategy generates multiple query variations to comprehensively search your knowledge base.
-                  </Text>
-                  <List size="xs">
-                    <List.Item>Generate {form.values.selectedStrategy === 'augmented' ? '4' : '3-5'} query variants ({form.values.selectedStrategy === 'augmented' ? 'via transformations' : 'via rephrasing'})</List.Item>
-                    <List.Item>Search the knowledge base with each variant</List.Item>
-                    <List.Item>Merge results using RRF algorithm (documents appearing in multiple searches rank higher)</List.Item>
-                    <List.Item>Return your configured Top K documents (the best matches after merging)</List.Item>
-                  </List>
-                  <Text size="xs" c="dimmed">
-                    Example: With {form.values.selectedStrategy === 'augmented' ? '4' : '5'} query variants and Top K={form.values.topK}, the system retrieves ~{Math.ceil((form.values.topK * 1.5) / 5) * 5} documents per variant, merges them via RRF, and returns your final {form.values.topK} best documents.
-                  </Text>
-                </Stack>
-              </Alert>
-            )}
+        form.values.selectedStrategy !== 'hyde' && (
+          <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+            <Stack gap="xs">
+              <Text size="xs">
+                <strong>{ENHANCEMENT_STRATEGIES.find((s) => s.value === form.values.selectedStrategy)?.label}:</strong> This strategy generates multiple query variations to comprehensively search your knowledge base.
+              </Text>
+              <List size="xs">
+                <List.Item>Generate {form.values.selectedStrategy === 'augmented' ? '4' : '3-5'} query variants ({form.values.selectedStrategy === 'augmented' ? 'via transformations' : 'via rephrasing'})</List.Item>
+                <List.Item>Search the knowledge base with each variant</List.Item>
+                <List.Item>Merge results using RRF algorithm (documents appearing in multiple searches rank higher)</List.Item>
+                <List.Item>Return your configured Top K documents (the best matches after merging)</List.Item>
+              </List>
+              <Text size="xs" c="dimmed">
+                Example: With {form.values.selectedStrategy === 'augmented' ? '4' : '5'} query variants and Top K={form.values.topK}, the system retrieves ~{Math.ceil((form.values.topK * 1.5) / 5) * 5} documents per variant, merges them via RRF, and returns your final {form.values.topK} best documents.
+              </Text>
+            </Stack>
+          </Alert>
+        )}
 
           {!isAssistantMode && form.values.selectedStrategy === 'hyde' && (
-            <Alert icon={<IconInfoCircle size={16} />} color="gray" variant="light">
-              <Text size="xs">
-                <strong>{ENHANCEMENT_STRATEGIES.find((s) => s.value === 'hyde')?.label}:</strong> This strategy generates one enhanced query variant.
-                The system will search using this single enhanced query (no RRF merging needed).
+        <Alert icon={<IconInfoCircle size={16} />} color="gray" variant="light">
+          <Text size="xs">
+            <strong>{ENHANCEMENT_STRATEGIES.find((s) => s.value === 'hyde')?.label}:</strong> This strategy generates one enhanced query variant.
+            The system will search using this single enhanced query (no RRF merging needed).
               </Text>
             </Alert>
           )}
@@ -2096,59 +2096,59 @@ function StepEnhancementStrategy({ form, onLearnClick, providers, providersLoadi
       {/* For RAG mode: show LLM provider selection for non-native strategies */}
       {/* For Assistant mode: skip LLM provider here - it's in Vector Database step (Step 3) */}
       {isNonNativeStrategy && !isAssistantMode && (
-        <>
-          <Alert icon={<IconInfoCircle size={16} />} color="cyan" variant="light">
-            <Text size="sm">
-              <strong>LLM Required:</strong> Select an LLM provider &amp; model below (also used for answer generation if enabled in Step 5).
-            </Text>
-          </Alert>
-          <Divider my="sm" />
+            <>
+              <Alert icon={<IconInfoCircle size={16} />} color="cyan" variant="light">
+                <Text size="sm">
+                  <strong>LLM Required:</strong> Select an LLM provider &amp; model below (also used for answer generation if enabled in Step 5).
+                </Text>
+              </Alert>
+              <Divider my="sm" />
 
           <Grid gutter="md">
             <Grid.Col span={6}>
-              <Select
+          <Select
                 label="LLM Provider"
-                placeholder={providersLoading ? 'Loading providers...' : 'Select a provider'}
-                data={
-                  providers?.map((p: any) => ({
-                    value: p.id,
-                    label: `${p.name} (${p.provider_type})`,
-                  })) || []
-                }
-                {...form.getInputProps('selectedProviderId')}
-                searchable
-                disabled={providersLoading}
-                required
+            placeholder={providersLoading ? 'Loading providers...' : 'Select a provider'}
+            data={
+              providers?.map((p: any) => ({
+                value: p.id,
+                label: `${p.name} (${p.provider_type})`,
+              })) || []
+            }
+            {...form.getInputProps('selectedProviderId')}
+            searchable
+            disabled={providersLoading}
+            required
                 description="For query enhancement"
-              />
+          />
             </Grid.Col>
             <Grid.Col span={6}>
-              {form.values.selectedProviderId && providers ? (
-                <Select
+          {form.values.selectedProviderId && providers ? (
+            <Select
                   label="Model"
-                  placeholder="Select a model"
-                  data={
-                    providers
-                      .find((p: any) => p.id === form.values.selectedProviderId)
-                      ?.generative?.models.map((m: string) => ({
-                        value: m,
-                        label: m,
-                      })) || []
-                  }
-                  {...form.getInputProps('selectedModel')}
-                  searchable
-                  required
+              placeholder="Select a model"
+              data={
+                providers
+                  .find((p: any) => p.id === form.values.selectedProviderId)
+                  ?.generative?.models.map((m: string) => ({
+                    value: m,
+                    label: m,
+                  })) || []
+              }
+              {...form.getInputProps('selectedModel')}
+              searchable
+              required
                   description={`Provider: ${providers?.find((p: any) => p.id === form.values.selectedProviderId)?.name || 'Not selected'}`}
-                />
-              ) : (
-                <Select
+            />
+          ) : (
+            <Select
                   label="Model"
-                  placeholder="Select provider first"
-                  disabled
-                  required
+              placeholder="Select provider first"
+              disabled
+              required
                   description="Select provider first"
-                />
-              )}
+            />
+          )}
             </Grid.Col>
           </Grid>
         </>
@@ -2454,48 +2454,48 @@ function StepAdvancedSettings({
 
                   <Grid gutter="md">
                     <Grid.Col span={6}>
-                      <Select
-                        label="LLM Provider"
-                        placeholder={providersLoading ? 'Loading providers...' : 'Select a provider'}
-                        data={
-                          providers?.map((p) => ({
-                            value: p.id,
-                            label: `${p.name} (${p.provider_type})`,
-                          })) || []
-                        }
-                        {...form.getInputProps('selectedProviderId')}
-                        searchable
-                        disabled={providersLoading}
-                        required
+                  <Select
+                    label="LLM Provider"
+                    placeholder={providersLoading ? 'Loading providers...' : 'Select a provider'}
+                    data={
+                      providers?.map((p) => ({
+                        value: p.id,
+                        label: `${p.name} (${p.provider_type})`,
+                      })) || []
+                    }
+                    {...form.getInputProps('selectedProviderId')}
+                    searchable
+                    disabled={providersLoading}
+                    required
                         description="For answer generation"
-                      />
+                  />
                     </Grid.Col>
                     <Grid.Col span={6}>
-                      {form.values.selectedProviderId && providers ? (
-                        <Select
-                          label="Model"
-                          placeholder="Select a model"
-                          data={
-                            providers
-                              .find((p) => p.id === form.values.selectedProviderId)
-                              ?.generative?.models.map((m: string) => ({
-                                value: m,
-                                label: m,
-                              })) || []
-                          }
-                          {...form.getInputProps('selectedModel')}
-                          searchable
-                          required
+                  {form.values.selectedProviderId && providers ? (
+                    <Select
+                      label="Model"
+                      placeholder="Select a model"
+                      data={
+                        providers
+                          .find((p) => p.id === form.values.selectedProviderId)
+                          ?.generative?.models.map((m: string) => ({
+                            value: m,
+                            label: m,
+                          })) || []
+                      }
+                      {...form.getInputProps('selectedModel')}
+                      searchable
+                      required
                           description={`Provider: ${providers?.find((p: any) => p.id === form.values.selectedProviderId)?.name || 'Not selected'}`}
-                        />
-                      ) : (
+                    />
+                  ) : (
                         <Select
                           label="Model"
                           placeholder="Select provider first"
                           disabled
                           description="Select provider first"
                         />
-                      )}
+                  )}
                     </Grid.Col>
                   </Grid>
                 </>
@@ -2710,33 +2710,33 @@ function StepReviewAndCreate({ form, providers, collections, tools }: StepProps)
 
           {/* Vector DB config - show if RAG mode or (Assistant mode + Knowledge Expert enabled) */}
           {(form.values.agentType === 'rag' || form.values.useKnowledgeExpert) && (
-            <Grid gutter="md">
-              <Grid.Col span={{ base: 12, sm: 6 }}>
-                <Stack gap="xs">
-                  <div>
-                    <Text size="xs" fw={500} c="dark">Collection Name</Text>
-                    <Text size="sm" fw={500} c="dark">{selectedCollection?.name || form.values.collectionName}</Text>
-                  </div>
-                  <div>
-                    <Text size="xs" fw={500} c="dark">Records</Text>
-                    <Text size="sm" fw={500} c="dark">{selectedCollection?.record_count.toLocaleString() || 'Unknown'}</Text>
-                  </div>
-                </Stack>
-              </Grid.Col>
-              <Grid.Col span={{ base: 12, sm: 6 }}>
-                <Stack gap="xs">
-                  <div>
-                    <Text size="xs" fw={500} c="dark">Top K (Retrieval Count)</Text>
-                    <Text size="sm" fw={500} c="dark">{form.values.topK} documents</Text>
-                  </div>
+          <Grid gutter="md">
+            <Grid.Col span={{ base: 12, sm: 6 }}>
+              <Stack gap="xs">
+                <div>
+                  <Text size="xs" fw={500} c="dark">Collection Name</Text>
+                  <Text size="sm" fw={500} c="dark">{selectedCollection?.name || form.values.collectionName}</Text>
+                </div>
+                <div>
+                  <Text size="xs" fw={500} c="dark">Records</Text>
+                  <Text size="sm" fw={500} c="dark">{selectedCollection?.record_count.toLocaleString() || 'Unknown'}</Text>
+                </div>
+              </Stack>
+            </Grid.Col>
+            <Grid.Col span={{ base: 12, sm: 6 }}>
+              <Stack gap="xs">
+                <div>
+                  <Text size="xs" fw={500} c="dark">Top K (Retrieval Count)</Text>
+                  <Text size="sm" fw={500} c="dark">{form.values.topK} documents</Text>
+                </div>
                   {form.values.agentType === 'assistant' && (
                     <div>
                       <Text size="xs" fw={500} c="dark">Enhancement Strategy</Text>
                       <Text size="sm" fw={500} c="dark">Custom Variants (Fixed)</Text>
                     </div>
                   )}
-                </Stack>
-              </Grid.Col>
+              </Stack>
+            </Grid.Col>
 
               {/* Enhancement LLM (always shown for Assistant mode - uses custom_variants) */}
               {form.values.agentType === 'assistant' && (
@@ -2785,7 +2785,7 @@ function StepReviewAndCreate({ form, providers, collections, tools }: StepProps)
                   </Group>
                 </Grid.Col>
               )}
-            </Grid>
+          </Grid>
           )}
 
           {/* Message when Knowledge Expert is disabled */}
