@@ -261,10 +261,6 @@ export default function CreateModelProvider() {
   };
   const openTestModal = (testType: ModelType, models: string[]) => {
     if (!models.length) return;
-    if (models.length === 1) {
-      void handleTest(testType, models[0]);
-      return;
-    }
     setTestModalType(testType);
     setTestModalModel(models[0]);
     setTestModalOpen(true);
