@@ -356,10 +356,10 @@ async def get_conversation_session(
                     "agent_type": agent.agent_type.value,
                     "description": agent.description,
                     # Include full configuration for frontend
-                    "enhancement": config_to_dict(agent.enhancement),
+                    "enhancement_strategy": agent.enhancement_strategy.value,
+                    "is_llm_generation_enabled": agent.is_llm_generation_enabled,
                     "vector_database": config_to_dict(agent.vector_database),
                     "reranker": config_to_dict(agent.reranker),
-                    "answer_generation": config_to_dict(agent.answer_generation),
                     "assistant_config": config_to_dict(agent.assistant_config),
                 }
 
