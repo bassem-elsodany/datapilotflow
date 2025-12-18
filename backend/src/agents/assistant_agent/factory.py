@@ -398,7 +398,7 @@ Files starting with `/memories/` persist across all conversations. All other fil
 
     system_prompt = system_prompt + memory_instructions
 
-    # Add conversation context for tools that need it (like knowledge_expert)
+    # Add conversation context for tools that need it (like knowledge_expert MCP tool)
     # NEW ARCHITECTURE: Get config from Agent, not ConversationSession
     if agent_config:
         collection_name = (
@@ -406,31 +406,71 @@ Files starting with `/memories/` persist across all conversations. All other fil
             if agent_config.vector_database
             else "LongTermMemory"
         )
+
+        # Embedding provider configuration (from vector database collection)
+        embedding_provider_id = (
+            agent_config.vector_database.embedding_provider.id
+            if agent_config.vector_database and agent_config.vector_database.embedding_provider
+            else ""
+        )
+        embedding_model_name = (
+            agent_config.vector_database.embedding_provider.model_name
+            if agent_config.vector_database and agent_config.vector_database.embedding_provider
+            else ""
+        )
+        vector_dimension = (
+            agent_config.vector_database.vector_dimension
+            if agent_config.vector_database
+            else 1536
+        )
+
+        # LLM provider configuration (from agent's primary LLM provider)
         llm_provider = (
-            agent_config.enhancement.provider.id
-            if agent_config.enhancement and agent_config.enhancement.provider
+            agent_config.llm_provider.id
+            if agent_config.llm_provider
             else ""
         )
         llm_model = (
-            agent_config.enhancement.provider.model_name
-            if agent_config.enhancement and agent_config.enhancement.provider
+            agent_config.llm_provider.model_name
+            if agent_config.llm_provider
             else ""
         )
+
+        # Reranking configuration (controlled by supervisor logic)
+        # Set to true if agent has LLM provider configured for reranking
+        enable_reranking = bool(llm_provider and llm_model)
+
         top_k_value = (
             agent_config.vector_database.top_k if agent_config.vector_database else 5
         )
 
         system_prompt += f"""
 
-## Conversation Context (Use these values when calling tools that require them):
+## MCP Tool Parameters (Required for knowledge_expert and similar tools):
+
+### Embedding Configuration (REQUIRED - from vector database):
 - collection_name: "{collection_name}"
-- user_id: "{user_id}"
-- conversation_id: "{conversation_id}"
+- embedding_provider_id: "{embedding_provider_id}"
+- embedding_model_name: "{embedding_model_name}"
+- vector_dimension: {vector_dimension}
+
+### Reranking Configuration:
+- enable_reranking: {str(enable_reranking).lower()}
+
+### LLM Configuration (for reranking - required if enable_reranking is True):
 - llm_provider_id: "{llm_provider}"
 - llm_model_name: "{llm_model}"
+
+### General Context:
+- user_id: "{user_id}"
+- conversation_id: "{conversation_id}"
 - top_k: {top_k_value}
 
-When calling knowledge_expert or similar tools, ALWAYS provide these parameters.
+When calling knowledge_expert or similar RAG tools, ALWAYS provide:
+1. embedding_provider_id, embedding_model_name, vector_dimension (REQUIRED)
+2. enable_reranking flag (set to {str(enable_reranking).lower()})
+3. llm_provider_id, llm_model_name (REQUIRED if enable_reranking is true)
+4. user_id, conversation_id, collection_name, top_k (REQUIRED)
 """
     else:
         logger.warning(
