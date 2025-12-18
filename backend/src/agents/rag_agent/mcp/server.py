@@ -109,25 +109,34 @@ async def knowledge_expert(
         )
 
         # ASSISTANT MODE: Configuration
-        # - Reranking: ENABLED (uses agent's primary LLM to rank documents by relevance)
-        # - LLM Generation: DISABLED (returns raw documents for agent to process)
         # - Strategy: custom_variants (supervisor provides pre-generated query variants)
-        enable_reranking = True  # ✅ ENABLED - Using agent's primary LLM for reranking
-        relevance_threshold = 0.5  # Threshold for marking documents as relevant
-        enable_llm_generation = False  # Assistant handles answer generation
+        # - LLM Generation: DISABLED (returns raw documents for agent to process)
+        # - Reranking: DETERMINED BY SUPERVISOR (enabled if llm_provider_id is passed)
         selected_strategy = "custom_variants"  # Supervisor provides variants
+        enable_llm_generation = False  # Assistant handles answer generation
+
+        # Determine reranking based on whether LLM provider is passed
+        # If supervisor passes llm_provider_id + llm_model_name, enable reranking
+        # If supervisor does NOT pass them, skip reranking (just retrieve documents)
+        enable_reranking = bool(query_input.llm_provider_id and query_input.llm_model_name)
+        relevance_threshold = 0.5 if enable_reranking else None
+
+        logger.info(
+            f"🔧 MCP Configuration: reranking={'ENABLED' if enable_reranking else 'DISABLED'} "
+            f"(supervisor {'provided' if enable_reranking else 'did not provide'} LLM provider)"
+        )
 
         # Build workflow configuration
         workflow_config = {
             "collection_name": query_input.collection_name,
             "user_id": query_input.user_id,
-            # Embedding configuration for vector search
+            # Embedding configuration for vector search (REQUIRED)
             "embedding_provider_id": query_input.embedding_provider_id,
             "embedding_model_name": query_input.embedding_model_name,
             "vector_dimension": query_input.vector_dimension,
-            # LLM configuration for reranking
-            "llm_provider_id": query_input.llm_provider_id,
-            "llm_model_name": query_input.llm_model_name,
+            # LLM configuration for reranking (OPTIONAL - only if supervisor enables it)
+            "llm_provider_id": query_input.llm_provider_id if enable_reranking else None,
+            "llm_model_name": query_input.llm_model_name if enable_reranking else None,
             # Conversation tracking
             "conversation_id": query_input.conversation_id,
             "conversation_description": query_input.conversation_description,
@@ -137,7 +146,7 @@ async def knowledge_expert(
             "reranking_config": {
                 "relevance_threshold": relevance_threshold,
                 "use_score_based": True,
-            },
+            } if enable_reranking else None,
             "enable_llm_generation": enable_llm_generation,
             "selected_strategy": selected_strategy,
             "retrieval_config": {
