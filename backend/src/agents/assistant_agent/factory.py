@@ -436,9 +436,13 @@ Files starting with `/memories/` persist across all conversations. All other fil
             else ""
         )
 
-        # Reranking configuration (controlled by supervisor logic)
-        # Set to true if agent has LLM provider configured for reranking
-        enable_reranking = bool(llm_provider and llm_model)
+        # Reranking configuration (from agent.reranker.enabled)
+        # This field explicitly controls whether reranking is enabled
+        enable_reranking = (
+            agent_config.reranker.enabled
+            if agent_config.reranker
+            else False
+        )
 
         top_k_value = (
             agent_config.vector_database.top_k if agent_config.vector_database else 5
