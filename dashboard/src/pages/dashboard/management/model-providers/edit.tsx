@@ -79,7 +79,7 @@ export default function EditModelProvider() {
     validate: {
       name: (value) => (!value ? 'Name is required' : null),
       provider_type: (value) => (!value ? 'Provider type is required' : null),
-      endpoint: (value) => (!value ? 'Endpoint is required' : null),
+      // Endpoint is optional - only required if using custom URL
     },
   });
 
@@ -407,8 +407,7 @@ export default function EditModelProvider() {
                   <TextInput
                     label="Endpoint"
                     placeholder="https://api.example.com/v1"
-                    description="Base API URL for the provider endpoint."
-                    required
+                    description="Base API URL for the provider endpoint (optional - only needed for custom URLs)"
                     {...form.getInputProps('endpoint')}
                   />
                   <TextInput
