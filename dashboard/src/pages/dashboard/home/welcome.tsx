@@ -274,7 +274,7 @@ export function Welcome() {
             leftSection={<IconSettings size={16} />}
             size="lg"
             variant="light"
-            onClick={() => navigate(paths.dashboard.apps.knowledgeSearch)}
+            onClick={() => navigate(paths.dashboard.apps.agents)}
           >
             Explore Knowledge Search
           </Button>
