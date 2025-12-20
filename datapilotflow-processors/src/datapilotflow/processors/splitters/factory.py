@@ -9,7 +9,7 @@ from typing import Optional, Union
 
 from loguru import logger
 
-from src.domain.knowledge.document_splitter import DocumentSplitter, SplitterType
+from datapilotflow.domain.knowledge.document_splitter import DocumentSplitter, SplitterType
 
 from .base import BaseSplitter
 from .html_splitter import HTMLSplitter

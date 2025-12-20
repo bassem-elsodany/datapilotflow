@@ -10,7 +10,11 @@ from .job_event_publisher import JobEventPublisher, get_job_event_publisher
 from .notification_event_publisher import NotificationEventPublisher, get_notification_event_publisher
 from .file_upload_event_publisher import FileUploadEventPublisher, get_file_upload_event_publisher
 
+# Export as "EventPublisher" for compatibility
+EventPublisher = BaseEventPublisher
+
 __all__ = [
+    "EventPublisher",
     "BaseEventPublisher",
     "JobEventPublisher",
     "get_job_event_publisher",

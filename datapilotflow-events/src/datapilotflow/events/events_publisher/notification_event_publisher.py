@@ -7,7 +7,7 @@ to RabbitMQ, extending the base event publisher.
 
 from typing import Dict, Any
 from loguru import logger
-from src.services.events import (
+from datapilotflow.services.events import (
     NOTIFICATION_EVENTS_EXCHANGE,
     NOTIFICATION_EVENTS_QUEUE,
     NOTIFICATION_EVENTS_ROUTING_KEY,

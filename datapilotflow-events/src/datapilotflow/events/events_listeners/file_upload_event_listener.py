@@ -11,7 +11,7 @@ import shutil
 from pathlib import Path
 from typing import Dict, Any
 from loguru import logger
-from src.services.events import (
+from datapilotflow.services.events import (
     FILE_UPLOAD_EVENTS_EXCHANGE,
     FILE_UPLOAD_EVENTS_QUEUE,
     FILE_UPLOAD_EVENTS_ROUTING_KEY,
@@ -19,7 +19,7 @@ from src.services.events import (
     FILE_UPLOAD_EVENTS_DLQ_QUEUE,
     EventTypes
 )
-from src.processors.file_upload.file_upload_processor import get_file_upload_event_processor
+from datapilotflow.processors.file_upload.file_upload_processor import get_file_upload_event_processor
 from .base_event_listener import BaseEventListener
 
 

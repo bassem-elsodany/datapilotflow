@@ -8,7 +8,7 @@ from RabbitMQ, extending the base event listener.
 import asyncio
 from typing import Dict, Any
 from loguru import logger
-from src.services.events import (
+from datapilotflow.services.events import (
     NOTIFICATION_EVENTS_EXCHANGE,
     NOTIFICATION_EVENTS_QUEUE,
     NOTIFICATION_EVENTS_ROUTING_KEY,
@@ -16,7 +16,7 @@ from src.services.events import (
     NOTIFICATION_EVENTS_DLQ_QUEUE,
     EventTypes
 )
-from src.processors.notifications.notification_processor import get_notification_event_processor
+from datapilotflow.processors.notifications.notification_processor import get_notification_event_processor
 from .base_event_listener import BaseEventListener
 
 

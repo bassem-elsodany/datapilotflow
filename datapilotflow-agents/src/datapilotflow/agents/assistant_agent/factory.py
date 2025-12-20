@@ -14,7 +14,7 @@ from deepagents.backends import CompositeBackend, StateBackend, StoreBackend
 from langchain_community.chat_models import ChatLiteLLM
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.store.memory import InMemoryStore
-from langgraph.store.mongodb import MongoDBStore
+# from langgraph.store.mongodb import MongoDBStore  # Not available in langgraph 1.0.5
 from loguru import logger
 
 from datapilotflow.domain.config import settings
@@ -220,16 +220,16 @@ async def load_user_tools_for_assistant_agent(
         List of LangChain tool instances
     """
     try:
-        from src.domain.tool.models import ToolType
-        from src.services.agent.agent_service import get_agent_service
-        from src.services.conversation.conversation_history_service import (
+        from datapilotflow.domain.tool.models import ToolType
+        from datapilotflow.services.agent.agent_service import get_agent_service
+        from datapilotflow.services.conversation.conversation_history_service import (
             conversation_history_service,
         )
-        from src.services.model_provider.model_provider_service import (
+        from datapilotflow.services.model_provider.model_provider_service import (
             get_model_provider_service,
         )
-        from src.services.tool.mcp_server_service import get_mcp_server_service
-        from src.services.tool.tool_service import get_tool_service
+        from datapilotflow.services.tool.mcp_server_service import get_mcp_server_service
+        from datapilotflow.services.tool.tool_service import get_tool_service
 
         # Get conversation and linked agent
         conversation = conversation_history_service.get_conversation(conversation_id)
@@ -355,7 +355,7 @@ async def create_assistant_agent_for_conversation(
     )
 
     # Get LLM provider configuration
-    from src.services.model_provider.model_provider_service import (
+    from datapilotflow.services.model_provider.model_provider_service import (
         get_model_provider_service,
     )
 
@@ -386,8 +386,8 @@ async def create_assistant_agent_for_conversation(
     logger.debug(f"Created LLM client: {model_string}")
 
     # Import services (needed for system prompt and tool context)
-    from src.services.agent.agent_service import get_agent_service
-    from src.services.conversation.conversation_history_service import (
+    from datapilotflow.services.agent.agent_service import get_agent_service
+    from datapilotflow.services.conversation.conversation_history_service import (
         conversation_history_service,
     )
 
@@ -574,21 +574,11 @@ When calling the knowledge_expert tool or any RAG tools, you MUST use these EXAC
 
     # Create Store if not provided
     if store is None:
-        from src.infrastructure.mongo.client import get_mongo_client
-
-        # MongoDBStore requires a collection object (not connection string like Postgres)
-        # Use agent-specific collection for multi-agent isolation
-        collection_name = (
-            f"persistent_storage_{agent_id}"
-            if agent_id
-            else "persistent_storage_default"
-        )
-        collection = get_mongo_client()[settings.MONGO_AGENT_STATE_CHECKPOINT_DB_NAME][
-            collection_name
-        ]
-        store = MongoDBStore(collection=collection)
+        # MongoDBStore not available in langgraph 1.0.5, using InMemoryStore
+        # TODO: Upgrade to langgraph with MongoDB store support when available
+        store = InMemoryStore()
         logger.debug(
-            f"Using MongoDBStore for long-term memory (collection: {collection_name})"
+            "Using InMemoryStore for long-term memory (note: not persistent across restarts)"
         )
 
     # Create deep agent

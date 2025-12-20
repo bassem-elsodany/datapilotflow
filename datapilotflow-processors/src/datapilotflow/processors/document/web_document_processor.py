@@ -14,13 +14,13 @@ from langchain_core.documents import Document
 from loguru import logger
 from tqdm import tqdm
 
-from src.application.data.storage.duplicate_detector import DuplicateDetector
-from src.application.data.storage.file_writer import write_enriched_documents_to_file
-from src.application.data.utils import process_chunks_with_cross_reference
-from src.config import settings
-from src.domain.knowledge import KnowledgeSourceConfig
-from src.domain.knowledge.knowledge_job import KnowledgeJob
-from src.processors.crawler import (
+from datapilotflow.application.data.storage.duplicate_detector import DuplicateDetector
+from datapilotflow.application.data.storage.file_writer import write_enriched_documents_to_file
+from datapilotflow.application.data.utils import process_chunks_with_cross_reference
+from datapilotflow.config import settings
+from datapilotflow.domain.knowledge import KnowledgeSourceConfig
+from datapilotflow.domain.knowledge.knowledge_job import KnowledgeJob
+from datapilotflow.processors.crawler import (
     CrawlerKnowledgeConfig,
     get_knowledge_source_documents,
 )
@@ -44,7 +44,7 @@ class WebDocumentProcessor(BaseDocumentProcessor):
         llm_content_filter_config = None
         if knowledge_source_config.llm_content_filter_id:
             try:
-                from src.services.knowledge.llm_content_filter_service import (
+                from datapilotflow.services.knowledge.llm_content_filter_service import (
                     get_llm_content_filter_service,
                 )
 
@@ -431,12 +431,12 @@ def get_extraction_generator(
                     all_chunks = []
                     for doc in all_docs:
                         # Step 1: Split document into chunks
-                        from src.domain.knowledge.document_splitter import SplitterType
-                        from src.processors.splitters import (
+                        from datapilotflow.domain.knowledge.document_splitter import SplitterType
+                        from datapilotflow.processors.splitters import (
                             create_splitter,
                             create_splitter_by_type,
                         )
-                        from src.services.knowledge.document_splitter_service import (
+                        from datapilotflow.services.knowledge.document_splitter_service import (
                             get_document_splitter_service,
                         )
 
@@ -496,12 +496,12 @@ def get_extraction_generator(
             all_chunks = []
             for doc in all_docs:
                 # Step 1: Split document into chunks
-                from src.domain.knowledge.document_splitter import SplitterType
-                from src.processors.splitters import (
+                from datapilotflow.domain.knowledge.document_splitter import SplitterType
+                from datapilotflow.processors.splitters import (
                     create_splitter,
                     create_splitter_by_type,
                 )
-                from src.services.knowledge.document_splitter_service import (
+                from datapilotflow.services.knowledge.document_splitter_service import (
                     get_document_splitter_service,
                 )
 

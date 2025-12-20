@@ -11,7 +11,7 @@ from typing import List
 from langchain_core.documents import Document
 from loguru import logger
 
-from src.domain.knowledge.document_splitter import DocumentSplitter
+from datapilotflow.domain.knowledge.document_splitter import DocumentSplitter
 
 
 class BaseSplitter(ABC):

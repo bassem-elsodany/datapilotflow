@@ -13,9 +13,9 @@ from crawl4ai import AsyncWebCrawler, BrowserConfig
 from langchain_core.documents import Document
 from loguru import logger
 
-from src.application.data.utils.url_loader import URLLoader
-from src.config import settings
-from src.domain.knowledge import KnowledgeJob, KnowledgeSourceConfig
+from datapilotflow.application.data.utils.url_loader import URLLoader
+from datapilotflow.config import settings
+from datapilotflow.domain.knowledge import KnowledgeJob, KnowledgeSourceConfig
 
 from .crawler_config import (
     CrawlerKnowledgeConfig,
@@ -277,12 +277,12 @@ async def get_knowledge_source_documents(
         duplicate_detector = None
         if knowledge_job and knowledge_job.check_duplicates_before_insert:
             try:
-                from src.application.data.storage.duplicate_detector import (
+                from datapilotflow.application.data.storage.duplicate_detector import (
                     DuplicateDetector,
                 )
-                from src.domain.rag.knowledge_chunk import KnowledgeChunk
-                from src.infrastructure.milvus.client import MilvusClientWrapper
-                from src.services.knowledge.vectordb_collection_service import (
+                from datapilotflow.domain.rag.knowledge_chunk import KnowledgeChunk
+                from datapilotflow.infrastructure.milvus.client import MilvusClientWrapper
+                from datapilotflow.services.knowledge.vectordb_collection_service import (
                     get_vectordb_collection_service,
                 )
 
@@ -330,7 +330,7 @@ async def get_knowledge_source_documents(
 
                 elif knowledge_source_config.scraping_mode == "multiple_pages":
                     # Get URL source configuration through the service
-                    from src.services.knowledge.knowledge_source_service import (
+                    from datapilotflow.services.knowledge.knowledge_source_service import (
                         get_knowledge_source_service,
                     )
 

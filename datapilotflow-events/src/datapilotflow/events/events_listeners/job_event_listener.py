@@ -10,13 +10,13 @@ from typing import Any, Dict
 
 from loguru import logger
 
-from src.domain.events.job_events import JobActionRequested
-from src.domain.knowledge.knowledge_job import JobStatus
-from src.processors.knowledge_job.refactored_knowledge_job_event_processor import (
+from datapilotflow.domain.events.job_events import JobActionRequested
+from datapilotflow.domain.knowledge.knowledge_job import JobStatus
+from datapilotflow.processors.knowledge_job.refactored_knowledge_job_event_processor import (
     RefactoredKnowledgeJobEventProcessor,
 )
-from src.processors.knowledge_job.feature_flags import get_feature_flags
-from src.services.events import (
+from datapilotflow.processors.knowledge_job.feature_flags import get_feature_flags
+from datapilotflow.services.events import (
     JOB_EVENTS_DLQ_EXCHANGE,
     JOB_EVENTS_DLQ_QUEUE,
     JOB_EVENTS_EXCHANGE,

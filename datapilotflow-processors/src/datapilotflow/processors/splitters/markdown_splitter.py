@@ -18,7 +18,7 @@ from langchain_text_splitters import (
 )
 from loguru import logger
 
-from src.domain.knowledge.document_splitter import DocumentSplitter
+from datapilotflow.domain.knowledge.document_splitter import DocumentSplitter
 
 from .base import BaseSplitter
 from .token_counter import TokenCounter
