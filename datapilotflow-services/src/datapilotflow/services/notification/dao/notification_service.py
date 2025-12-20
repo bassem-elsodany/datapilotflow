@@ -8,7 +8,7 @@ from datapilotflow.domain.notification import (
     NotificationResponse, NotificationListResponse, NotificationStats,
     NotificationStatus, NotificationType, NotificationPriority
 )
-from datapilotflow.infrastructure.mongo.client import MongoClientWrapper
+from datapilotflow.persistence.mongo.client import MongoClientWrapper
 
 
 class NotificationService(MongoClientWrapper[Notification]):

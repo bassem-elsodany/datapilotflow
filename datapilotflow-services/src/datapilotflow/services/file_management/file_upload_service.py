@@ -14,7 +14,7 @@ from typing import Optional
 from fastapi import UploadFile, status, Request
 from fastapi.responses import JSONResponse
 from loguru import logger
-from datapilotflow.config import settings
+from datapilotflow.domain.config import settings
 import asyncio
 import shutil
 from pathlib import Path

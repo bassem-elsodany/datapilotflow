@@ -13,7 +13,7 @@ from bson import ObjectId
 from loguru import logger
 from pymongo import MongoClient
 
-from datapilotflow.config import settings
+from datapilotflow.domain.config import settings
 from datapilotflow.domain.agent.models import Agent, AgentType, EnhancementStrategy
 from datapilotflow.domain.conversation.models import (
     AssistantConfig,
@@ -28,7 +28,7 @@ class AgentService:
 
     def __init__(self):
         """Initialize the agent service with MongoDB connection."""
-        from datapilotflow.infrastructure.mongo.client import get_mongo_client
+        from datapilotflow.persistence.mongo.client import get_mongo_client
 
         self.client = get_mongo_client()
         self.db = self.client[settings.MONGO_DB_NAME]
