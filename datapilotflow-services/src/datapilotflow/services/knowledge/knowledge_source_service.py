@@ -18,8 +18,7 @@ from datapilotflow.domain.knowledge.knowledge_source_config import (
     KnowledgeSourceConfigUpdate,
     UrlSourceConfig,
 )
-from datapilotflow.persistence.dao.knowledge_source_dao import KnowledgeSourceDAO
-from datapilotflow.persistence.dao.url_source_dao import UrlSourceDAO
+from datapilotflow.persistence.dao import KnowledgeSourceDAO, UrlSourceDAO
 
 
 class KnowledgeSourceService:

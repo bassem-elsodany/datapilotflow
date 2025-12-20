@@ -17,7 +17,7 @@ from datapilotflow.domain.config import settings
 from datapilotflow.domain.notification import (
     NotificationCreate, NotificationType, NotificationPriority, NotificationStatus
 )
-from datapilotflow.services.notification.dao.notification_service import NotificationService
+from datapilotflow.persistence.dao.notification_service import NotificationService
 
 # RabbitMQ Configuration for Notifications
 RABBITMQ_HOST = settings.RABBITMQ_HOST

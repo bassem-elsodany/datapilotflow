@@ -1,12 +1,11 @@
 """DataPilotFlow processors - Document processing and text splitting."""
 
-from .document import BaseProcessor, FileProcessor
-from .splitters import TextSplitter, MarkdownSplitter, HTMLSplitter
+from .document import BaseDocumentProcessor, FileProcessor
+from .splitters import TextSplitter, MarkdownSplitter
 
 __all__ = [
-    "BaseProcessor",
+    "BaseDocumentProcessor",
     "FileProcessor",
     "TextSplitter",
     "MarkdownSplitter",
-    "HTMLSplitter",
 ]

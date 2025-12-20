@@ -9,8 +9,8 @@ This package provides a FastAPI-based REST API that exposes:
 - Real-time streaming via WebSockets
 """
 
-from .app import create_app
+from .server import app
 
 __version__ = "1.0.0"
 
-__all__ = ["create_app"]
+__all__ = ["app"]

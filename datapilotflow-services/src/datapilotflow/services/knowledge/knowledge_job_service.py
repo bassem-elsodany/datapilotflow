@@ -23,7 +23,7 @@ from datapilotflow.domain.knowledge.vectordb_collection import (
     VectorDBCollectionCreate,
     VectorDBCollectionUpdate,
 )
-from datapilotflow.persistence.dao.knowledge_job_dao import KnowledgeJobDAO
+from datapilotflow.persistence.dao import KnowledgeJobDAO
 from datapilotflow.persistence.dao.job_timeline_dao import JobTimelineDAO
 from datapilotflow.services.knowledge.document_splitter_service import (
     get_document_splitter_service,

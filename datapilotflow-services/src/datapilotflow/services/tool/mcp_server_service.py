@@ -11,7 +11,7 @@ from typing import List, Optional
 from loguru import logger
 
 from datapilotflow.domain.tool import MCPServerConfig
-from datapilotflow.services.tool.dao.mcp_server_dao import MCPServerDAO
+from datapilotflow.persistence.dao.mcp_server_dao import MCPServerDAO
 
 
 class MCPServerService:

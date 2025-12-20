@@ -1,5 +1,10 @@
-"""User services - manage user accounts and authentication."""
+"""
+Users Services Package.
 
-# TODO: Implement user services
-# - users_service.py
-# - auth_service.py
+This package contains services for user management operations.
+"""
+
+from .roles_service import RolesService
+from .user_service import UserService
+
+__all__ = ["RolesService", "UserService"]

@@ -8,7 +8,6 @@ managing notification events, publishing, and listening.
 from .notification_event_service import *
 from .notification_listener_service import *
 from .notification_websocket_service import NotificationWebSocketService
-from .dao import *
 
 __all__ = [
     # Notification Event Service
@@ -20,16 +19,13 @@ __all__ = [
     "fire_resume_analysis_completed_event",
     "fire_job_analysis_completed_event",
     "fire_error_event",
-    
+
     # Notification Listener Service
     "setup_notification_queues",
     "process_notification_event",
     "notification_event_listener",
     "start_notification_listener",
-    
+
     # Notification WebSocket Service
     "NotificationWebSocketService",
-    
-    # Notification DAO
-    "NotificationService"
 ]

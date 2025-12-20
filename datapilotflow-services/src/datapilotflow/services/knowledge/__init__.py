@@ -1,15 +1,28 @@
-"""Knowledge services - manage knowledge sources, jobs, and vectordb collections."""
+"""
+Knowledge services.
 
-from .knowledge_source_service import KnowledgeSourceService
-from .vectordb_collection_service import VectorDBCollectionService
-from .knowledge_job_service import KnowledgeJobService
-from .job_timeline_service import JobTimelineService
-from .document_splitter_service import DocumentSplitterService
+This subpackage contains all knowledge-related services for
+managing knowledge ingestion and processing.
+"""
+
+try:
+    from .knowledge_ingestion_service import KnowledgeIngestionService
+except ImportError as e:
+    # Handle missing dependencies gracefully
+    import warnings
+    warnings.warn(f"KnowledgeIngestionService not available: {e}")
+    KnowledgeIngestionService = None
+from .knowledge_source_service import KnowledgeSourceService, get_knowledge_source_service
+from .knowledge_job_service import KnowledgeJobService, get_knowledge_job_service
+from .document_splitter_service import DocumentSplitterService, get_document_splitter_service
 
 __all__ = [
+    # Knowledge Services
+    "KnowledgeIngestionService",
     "KnowledgeSourceService",
-    "VectorDBCollectionService",
+    "get_knowledge_source_service",
     "KnowledgeJobService",
-    "JobTimelineService",
+    "get_knowledge_job_service",
     "DocumentSplitterService",
+    "get_document_splitter_service",
 ]

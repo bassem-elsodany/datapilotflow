@@ -11,7 +11,7 @@ from typing import List, Optional
 from loguru import logger
 
 from datapilotflow.domain.tool import PromptBasedToolConfig, Tool, ToolType
-from datapilotflow.services.tool.dao.tool_dao import ToolDAO
+from datapilotflow.persistence.dao.tool_dao import ToolDAO
 
 
 class ToolService:
