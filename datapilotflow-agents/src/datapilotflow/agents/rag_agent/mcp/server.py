@@ -16,10 +16,10 @@ from typing import Any, Dict, List, Union
 from fastmcp import FastMCP
 from loguru import logger
 
-from src.agents.rag_agent.graph import graph_dev as rag_workflow
-from src.agents.rag_agent.mcp.tools import RAGQueryInput, RAGQueryOutput
-from src.agents.rag_agent.state import create_initial_state
-from src.config import settings
+from datapilotflow.rag_mcp.rag_agent.graph import graph_dev as rag_workflow
+from datapilotflow.rag_mcp.rag_agent.mcp.tools import RAGQueryInput, RAGQueryOutput
+from datapilotflow.rag_mcp.rag_agent.state import create_initial_state
+from datapilotflow.domain.config import settings
 
 # Create FastMCP server with HTTP Transport (Streamable)
 # Transport is configured in run() method with transport="http"

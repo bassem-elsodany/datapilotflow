@@ -17,11 +17,11 @@ from langchain_core.retrievers import BaseRetriever
 from langchain_core.tools import create_retriever_tool
 from loguru import logger
 
-from src.infrastructure.milvus.client import MilvusClientWrapper
-from src.services.knowledge.vectordb_collection_service import (
+from datapilotflow.vectordb.milvus.client import MilvusClientWrapper
+# TODO: from datapilotflow.services.knowledge.vectordb_collection_service import (
     get_vectordb_collection_service,
 )
-from src.services.model_provider.model_provider_service import (
+# TODO: from datapilotflow.services.model_provider.model_provider_service import (
     get_model_provider_service,
 )
 
@@ -100,7 +100,7 @@ class MilvusRetriever(BaseRetriever):
                 )
 
             # Initialize Milvus client
-            from src.domain.rag.rag_file_upload import RagFileUpload
+            from datapilotflow.domain.rag.rag_file_upload import RagFileUpload
 
             milvus_client = MilvusClientWrapper(
                 model=RagFileUpload,
@@ -245,7 +245,7 @@ class MilvusRetriever(BaseRetriever):
                 )
 
             # Initialize Milvus client
-            from src.domain.rag.rag_file_upload import RagFileUpload
+            from datapilotflow.domain.rag.rag_file_upload import RagFileUpload
 
             milvus_client = MilvusClientWrapper(
                 model=RagFileUpload,

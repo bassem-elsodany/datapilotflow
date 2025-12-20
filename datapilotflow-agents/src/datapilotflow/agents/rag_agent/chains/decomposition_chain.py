@@ -1,7 +1,7 @@
 """
-Multi-Query Chain for Query Enhancement.
+Decomposition Chain for Query Enhancement.
 
-This chain generates multiple query variants for improved retrieval coverage.
+This chain breaks complex queries into simpler sub-questions.
 """
 
 from typing import Any, Dict, Optional
@@ -9,16 +9,16 @@ from typing import Any, Dict, Optional
 from langchain_core.prompts import ChatPromptTemplate
 from loguru import logger
 
-from src.config import settings
-from ..prompts import MULTI_QUERY_SYSTEM_PROMPT, MULTI_QUERY_USER_PROMPT
+from datapilotflow.domain.config import settings
+from ..prompts import DECOMPOSITION_SYSTEM_PROMPT, DECOMPOSITION_USER_PROMPT
 
 
-def get_multi_query_chain(llm_client: Any, config: Optional[Dict[str, Any]] = None):
+def get_decomposition_chain(llm_client: Any, config: Optional[Dict[str, Any]] = None):
     """
-    Create a multi-query expansion chain.
+    Create a query decomposition chain.
 
     This chain uses Opik tracking (via the Prompt class) to provide full
-    traceability of the multi-query expansion process.
+    traceability of the decomposition process.
 
     Args:
         llm_client (Any): LLM client for generation (already configured with temperature, max_tokens, etc.)
@@ -28,16 +28,16 @@ def get_multi_query_chain(llm_client: Any, config: Optional[Dict[str, Any]] = No
         Runnable chain (prompt | model)
 
     Example:
-        >>> chain = get_multi_query_chain(llm_client)
-        >>> result = await chain.ainvoke({"query": "How to deploy microservices?"})
+        >>> chain = get_decomposition_chain(llm_client)
+        >>> result = await chain.ainvoke({"query": "How to secure and rate-limit REST APIs?"})
         >>> print(result.content)
-        "1. What are microservices deployment strategies?\\n2. How to containerize..."
+        "COMPLEX\\n1. How to set up authentication?\\n2. How to configure rate limiting?"
     """
-    logger.debug(f"Creating Multi-Query Chain")
+    logger.debug(f"Creating Decomposition Chain")
 
     # Get prompts (Opik tracking happens in Prompt class if enabled)
-    system_prompt = MULTI_QUERY_SYSTEM_PROMPT.prompt
-    user_prompt_template = MULTI_QUERY_USER_PROMPT.prompt
+    system_prompt = DECOMPOSITION_SYSTEM_PROMPT.prompt
+    user_prompt_template = DECOMPOSITION_USER_PROMPT.prompt
 
     # Create prompt template
     prompt = ChatPromptTemplate.from_messages(

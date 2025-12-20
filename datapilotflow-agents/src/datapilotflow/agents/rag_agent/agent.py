@@ -5,9 +5,9 @@ from typing import Any, Dict, List, Optional
 from langchain_community.chat_models import ChatLiteLLM
 from loguru import logger
 
-from src.agents.common.agent_interface import AgentService
-from src.agents.common.agent_state import AgentState, RAGContext
-from src.agents.rag_agent.state import RAGWorkflowState, create_initial_state
+from datapilotflow.agents.common.agent_interface import AgentService
+from datapilotflow.agents.common.agent_state import AgentState, RAGContext
+from datapilotflow.rag_mcp.rag_agent.state import RAGWorkflowState, create_initial_state
 
 
 class RAGAgentService(AgentService):

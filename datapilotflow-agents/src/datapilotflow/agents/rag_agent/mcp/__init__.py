@@ -6,8 +6,8 @@ This allows the RAG agent to be consumed as a standalone service by
 any MCP client, including LangGraph supervisor agents.
 """
 
-from src.agents.rag_agent.mcp.server import create_rag_mcp_server
-from src.agents.rag_agent.mcp.tools import RAGToolDefinition
+from datapilotflow.rag_mcp.rag_agent.mcp.server import create_rag_mcp_server
+from datapilotflow.rag_mcp.rag_agent.mcp.tools import RAGToolDefinition
 
 __all__ = [
     "create_rag_mcp_server",
