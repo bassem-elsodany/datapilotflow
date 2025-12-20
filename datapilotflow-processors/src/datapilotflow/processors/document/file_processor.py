@@ -720,10 +720,10 @@ class FileProcessor(BaseDocumentProcessor):
                     f"Storing {len(processed_chunks)} chunks in Milvus vector database"
                 )
                 try:
-                    from datapilotflow.application.data.storage.milvus_processor import (
+                    from datapilotflow.processors.storage.milvus_processor import (
                         create_milvus_processor,
                     )
-                    from datapilotflow.config import settings
+                    from datapilotflow.domain.config import settings
                     from datapilotflow.domain.rag.knowledge_chunk import KnowledgeChunk
 
                     milvus_processor = create_milvus_processor(

@@ -24,10 +24,10 @@ from datapilotflow.agents.rag_agent.state import RAGWorkflowState as WorkflowSta
 from datapilotflow.agents.rag_agent.state import create_initial_state
 from datapilotflow.domain.config import settings
 from datapilotflow.domain.conversation import ConversationMessage
-# TODO: from datapilotflow.services.conversation.conversation_history_service import (
+from datapilotflow.services.conversation.conversation_history_service import (
     conversation_history_service,
 )
-# TODO: from datapilotflow.services.model_provider.model_provider_service import (
+from datapilotflow.services.model_provider.model_provider_service import (
     get_model_provider_service,
 )
 

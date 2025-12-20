@@ -1,6 +1,13 @@
 {
-  "include": ["src", "tests"],
-  "exclude": ["**/node_modules", "**/__pycache__", "**/.*"],
+  "include": [
+    "src",
+    "tests"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.*"
+  ],
   "pythonVersion": "3.13",
   "pythonPlatform": "Darwin",
   "venvPath": ".",

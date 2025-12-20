@@ -13,8 +13,8 @@ from crawl4ai import AsyncWebCrawler, BrowserConfig
 from langchain_core.documents import Document
 from loguru import logger
 
-from datapilotflow.application.data.utils.url_loader import URLLoader
-from datapilotflow.config import settings
+from datapilotflow.processors.utils.url_loader import URLLoader
+from datapilotflow.domain.config import settings
 from datapilotflow.domain.knowledge import KnowledgeJob, KnowledgeSourceConfig
 
 from .crawler_config import (
@@ -277,7 +277,7 @@ async def get_knowledge_source_documents(
         duplicate_detector = None
         if knowledge_job and knowledge_job.check_duplicates_before_insert:
             try:
-                from datapilotflow.application.data.storage.duplicate_detector import (
+                from datapilotflow.processors.storage.duplicate_detector import (
                     DuplicateDetector,
                 )
                 from datapilotflow.domain.rag.knowledge_chunk import KnowledgeChunk

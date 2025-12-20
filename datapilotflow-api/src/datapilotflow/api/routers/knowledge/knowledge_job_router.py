@@ -151,7 +151,7 @@ async def execute_knowledge_job(
             )
 
         # Check if job is in a valid state for execution by looking at the latest timeline entry
-        from datapilotflow.services.knowledge.dao.job_timeline_dao import JobTimelineDAO
+        from datapilotflow.persistence.dao.job_timeline_dao import JobTimelineDAO
 
         timeline_dao = JobTimelineDAO()
         latest_timeline = timeline_dao.get_latest_timeline_entry(
@@ -224,7 +224,7 @@ async def cancel_knowledge_job(
             )
 
         # Check if job is in a valid state for cancellation
-        from datapilotflow.services.knowledge.dao.job_timeline_dao import JobTimelineDAO
+        from datapilotflow.persistence.dao.job_timeline_dao import JobTimelineDAO
 
         timeline_dao = JobTimelineDAO()
         latest_timeline = timeline_dao.get_latest_timeline_entry(

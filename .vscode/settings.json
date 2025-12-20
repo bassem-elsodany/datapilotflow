@@ -1,34 +1,37 @@
 {
-    "python.defaultInterpreterPath": "/Users/bassem.elsodany/workspaces/datapilotflow/backend/.venv/bin/python",
-    "python.terminal.activateEnvironment": true,
-    "python.terminal.activateEnvInCurrentTerminal": true,
-    "python.venvPath": "/Users/bassem.elsodany/workspaces/datapilotflow/backend/.venv",
-    "python.venvFolders": [
-        "/Users/bassem.elsodany/workspaces/datapilotflow/backend/.venv"
-    ],
-    "python.analysis.extraPaths": [
-        "./backend/src"
-    ],
-    "python.analysis.autoImportCompletions": true,
-    "python.analysis.autoSearchPaths": true,
-    "python.analysis.diagnosticMode": "workspace",
-    "python.analysis.stubPath": "/Users/bassem.elsodany/workspaces/datapilotflow/backend/.venv/lib/python3.13/site-packages",
-    "python.linting.enabled": true,
-    "python.linting.pylintEnabled": false,
-    "python.linting.flake8Enabled": true,
-    "python.formatting.provider": "black",
-    "python.sortImports.args": ["--profile", "black"],
-    "files.exclude": {
-        "**/.git": true,
-        "**/.svn": true,
-        "**/.hg": true,
-        "**/CVS": true,
-        "**/.DS_Store": true,
-        "**/Thumbs.db": true,
-        "**/.classpath": true,
-        "**/.project": true,
-        "**/.settings": true,
-        "**/.factorypath": true,
-        ".mule": true
-    }
+  "python.defaultInterpreterPath": "${workspaceFolder}/datapilotflow-api/.venv/bin/python",
+  "python.linting.enabled": true,
+  "python.linting.pylintEnabled": false,
+  "python.linting.flake8Enabled": false,
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.python",
+    "editor.formatOnSave": false
+  },
+  "pylance.typeCheckingMode": "basic",
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/datapilotflow-api/src",
+    "${workspaceFolder}/datapilotflow-agents/src",
+    "${workspaceFolder}/datapilotflow-domain/src",
+    "${workspaceFolder}/datapilotflow-services/src",
+    "${workspaceFolder}/datapilotflow-persistence/src",
+    "${workspaceFolder}/datapilotflow-processors/src"
+  ],
+  "python.analysis.include": [
+    "${workspaceFolder}/datapilotflow-api/src",
+    "${workspaceFolder}/datapilotflow-agents/src",
+    "${workspaceFolder}/datapilotflow-domain/src",
+    "${workspaceFolder}/datapilotflow-services/src",
+    "${workspaceFolder}/datapilotflow-persistence/src",
+    "${workspaceFolder}/datapilotflow-processors/src"
+  ],
+  "python.analysis.exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.venv",
+    "**/.*"
+  ],
+  "python.analysis.diagnosticMode": "workspace",
+  "python.analysis.logLevel": "Warning",
+  "pyright.disableOrganizeImports": false
 }

@@ -7,16 +7,12 @@ managing user authentication, registration, and session management.
 
 from .auth_service import AuthService
 from .admin_initialization_service import AdminInitializationService, get_admin_initialization_service
-from .dao import *
 
 __all__ = [
     # Auth Service
     "AuthService",
-    
+
     # Admin Initialization Service
     "AdminInitializationService",
     "get_admin_initialization_service",
-    
-    # Auth DAOs
-    "AuthDAO"
 ]

@@ -14,10 +14,10 @@ from langchain_core.documents import Document
 from loguru import logger
 from tqdm import tqdm
 
-from datapilotflow.application.data.storage.duplicate_detector import DuplicateDetector
-from datapilotflow.application.data.storage.file_writer import write_enriched_documents_to_file
-from datapilotflow.application.data.utils import process_chunks_with_cross_reference
-from datapilotflow.config import settings
+from datapilotflow.processors.storage.duplicate_detector import DuplicateDetector
+from datapilotflow.processors.storage.file_writer import write_enriched_documents_to_file
+from datapilotflow.processors.utils import process_chunks_with_cross_reference
+from datapilotflow.domain.config import settings
 from datapilotflow.domain.knowledge import KnowledgeSourceConfig
 from datapilotflow.domain.knowledge.knowledge_job import KnowledgeJob
 from datapilotflow.processors.crawler import (
