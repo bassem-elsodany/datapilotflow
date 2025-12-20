@@ -9,8 +9,8 @@ from typing import Any, Dict
 
 from loguru import logger
 
-from src.domain.events.job_events import JobActionRequested
-from src.services.events import (
+from datapilotflow.domain.events.job_events import JobActionRequested
+from datapilotflow.services.events import (
     JOB_EVENTS_DLQ_EXCHANGE,
     JOB_EVENTS_DLQ_QUEUE,
     JOB_EVENTS_EXCHANGE,

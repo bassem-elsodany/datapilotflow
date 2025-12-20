@@ -11,10 +11,10 @@ from typing import Any, Generator, List, Optional
 from langchain_core.documents import Document
 from loguru import logger
 
-from src.application.data.storage.duplicate_detector import DuplicateDetector
-from src.application.data.storage.file_writer import write_enriched_documents_to_file
-from src.application.data.utils import process_chunks_with_cross_reference
-from src.config import settings
+from datapilotflow.application.data.storage.duplicate_detector import DuplicateDetector
+from datapilotflow.application.data.storage.file_writer import write_enriched_documents_to_file
+from datapilotflow.application.data.utils import process_chunks_with_cross_reference
+from datapilotflow.config import settings
 
 
 class BaseDocumentProcessor:
@@ -165,8 +165,8 @@ class BaseDocumentProcessor:
                         # Step 1: Split document into chunks
                         import re
 
-                        from src.processors.splitters import create_splitter
-                        from src.services.knowledge.document_splitter_service import (
+                        from datapilotflow.processors.splitters import create_splitter
+                        from datapilotflow.services.knowledge.document_splitter_service import (
                             get_document_splitter_service,
                         )
 
@@ -200,10 +200,10 @@ class BaseDocumentProcessor:
                             logger.debug(
                                 "No splitter configuration found, using default text splitter"
                             )
-                            from src.domain.knowledge.document_splitter import (
+                            from datapilotflow.domain.knowledge.document_splitter import (
                                 SplitterType,
                             )
-                            from src.processors.splitters import create_splitter_by_type
+                            from datapilotflow.processors.splitters import create_splitter_by_type
 
                             # Use provided chunk_size and chunk_overlap or defaults
                             if chunk_size is None:

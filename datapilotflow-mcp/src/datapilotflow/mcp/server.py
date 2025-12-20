@@ -23,7 +23,6 @@ from datapilotflow.mcp.tools.rag_tools import RAGQueryInput, RAGQueryOutput
 # Transport is configured in run() method with transport="http"
 mcp = FastMCP(
     settings.MCP_SERVER_NAME,
-    dependencies=["loguru", "langgraph"],
 )
 
 # Initialize adapters

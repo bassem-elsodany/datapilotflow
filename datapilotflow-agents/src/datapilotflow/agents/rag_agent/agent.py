@@ -7,7 +7,7 @@ from loguru import logger
 
 from datapilotflow.agents.common.agent_interface import AgentService
 from datapilotflow.agents.common.agent_state import AgentState, RAGContext
-from datapilotflow.rag_mcp.rag_agent.state import RAGWorkflowState, create_initial_state
+from datapilotflow.agents.rag_agent.state import RAGWorkflowState, create_initial_state
 
 
 class RAGAgentService(AgentService):

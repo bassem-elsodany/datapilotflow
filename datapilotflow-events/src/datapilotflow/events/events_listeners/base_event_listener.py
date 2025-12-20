@@ -15,7 +15,7 @@ import aio_pika
 from aio_pika.exceptions import ChannelPreconditionFailed
 from loguru import logger
 
-from src.config import settings
+from datapilotflow.domain.config import settings
 
 
 class BaseEventListener(ABC):

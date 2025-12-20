@@ -20,7 +20,7 @@ from crawl4ai import (
 )
 from loguru import logger
 
-from src.domain.knowledge.knowledge_source_config import OutputFormat, ScrapingMode
+from datapilotflow.domain.knowledge.knowledge_source_config import OutputFormat, ScrapingMode
 
 
 @dataclass

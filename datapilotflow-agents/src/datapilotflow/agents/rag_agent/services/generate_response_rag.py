@@ -19,9 +19,9 @@ from loguru import logger
 from opik.integrations.langchain import OpikTracer
 
 from datapilotflow.agents.common.agent_state import AgentState
-from datapilotflow.rag_mcp.rag_agent.graph import graph_dev as workflow
-from datapilotflow.rag_mcp.rag_agent.state import RAGWorkflowState as WorkflowState
-from datapilotflow.rag_mcp.rag_agent.state import create_initial_state
+from datapilotflow.agents.rag_agent.graph import graph_dev as workflow
+from datapilotflow.agents.rag_agent.state import RAGWorkflowState as WorkflowState
+from datapilotflow.agents.rag_agent.state import create_initial_state
 from datapilotflow.domain.config import settings
 from datapilotflow.domain.conversation import ConversationMessage
 # TODO: from datapilotflow.services.conversation.conversation_history_service import (

@@ -20,7 +20,7 @@ from langgraph.graph.state import (
 )
 from loguru import logger
 
-from datapilotflow.rag_mcp.rag_agent.nodes import (
+from datapilotflow.agents.rag_agent.nodes import (
     answer_generator,
     augmented_strategy_node,
     custom_variants_node,
@@ -31,7 +31,7 @@ from datapilotflow.rag_mcp.rag_agent.nodes import (
     multi_query_strategy_node,
     raw_response_formatter,
 )
-from datapilotflow.rag_mcp.rag_agent.state import RAGWorkflowState as WorkflowState
+from datapilotflow.agents.rag_agent.state import RAGWorkflowState as WorkflowState
 from datapilotflow.domain.config import settings
 
 

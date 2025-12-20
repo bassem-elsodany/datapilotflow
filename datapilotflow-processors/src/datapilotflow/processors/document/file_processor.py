@@ -15,8 +15,8 @@ from marker.config.parser import ConfigParser
 from marker.converters.pdf import PdfConverter
 from marker.models import create_model_dict
 
-from src.domain.knowledge import Knowledge
-from src.domain.knowledge.knowledge_source_config import KnowledgeSourceConfig
+from datapilotflow.domain.knowledge import Knowledge
+from datapilotflow.domain.knowledge.knowledge_source_config import KnowledgeSourceConfig
 
 from .base_processor import BaseDocumentProcessor
 
@@ -664,8 +664,8 @@ class FileProcessor(BaseDocumentProcessor):
             for doc in all_docs:
                 # Step 1: Split document into chunks
                 from config import settings
-                from src.domain.knowledge.document_splitter import SplitterType
-                from src.processors.splitters import create_splitter_by_type
+                from datapilotflow.domain.knowledge.document_splitter import SplitterType
+                from datapilotflow.processors.splitters import create_splitter_by_type
 
                 # Create a default text splitter
                 splitter = create_splitter_by_type(
@@ -720,11 +720,11 @@ class FileProcessor(BaseDocumentProcessor):
                     f"Storing {len(processed_chunks)} chunks in Milvus vector database"
                 )
                 try:
-                    from src.application.data.storage.milvus_processor import (
+                    from datapilotflow.application.data.storage.milvus_processor import (
                         create_milvus_processor,
                     )
-                    from src.config import settings
-                    from src.domain.rag.knowledge_chunk import KnowledgeChunk
+                    from datapilotflow.config import settings
+                    from datapilotflow.domain.rag.knowledge_chunk import KnowledgeChunk
 
                     milvus_processor = create_milvus_processor(
                         milvus_model=KnowledgeChunk,
