@@ -14,7 +14,7 @@ from loguru import logger
 
 from datapilotflow.services.auth.auth_service import AuthService
 from datapilotflow.domain.user import User
-from datapilotflow.config import settings
+from datapilotflow.domain.config import settings
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 security = HTTPBearer(auto_error=False)

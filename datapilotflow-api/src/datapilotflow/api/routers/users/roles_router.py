@@ -16,7 +16,7 @@ from datapilotflow.services.users.roles_service import RolesService
 from datapilotflow.services.users.user_service import UserService
 from datapilotflow.domain.user import User
 from datapilotflow.api.routers.auth.auth_router import get_current_user
-from datapilotflow.config import settings
+from datapilotflow.domain.config import settings
 
 router = APIRouter(prefix="/roles", tags=["User Roles Management"])
 auth_service = AuthService()

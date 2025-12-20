@@ -16,7 +16,7 @@ from loguru import logger
 
 from datapilotflow.agents.rag_agent.services.generate_response_rag import get_response_stream_rag
 from datapilotflow.api.routers.auth.auth_router import decode_access_token
-from datapilotflow.config import settings
+from datapilotflow.domain.config import settings
 from datapilotflow.services.conversation.conversation_history_service import (
     conversation_history_service,
 )
