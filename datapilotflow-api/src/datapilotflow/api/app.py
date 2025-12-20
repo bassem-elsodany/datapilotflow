@@ -11,7 +11,10 @@ from loguru import logger
 
 from datapilotflow.domain.config import settings
 
-from .routers import agents, conversations, knowledge, health
+from .routers import (
+    health, auth, agents, conversations, knowledge,
+    model_provider, notifications, tools, users, vectordb
+)
 
 
 def create_app() -> FastAPI:
@@ -40,10 +43,16 @@ def create_app() -> FastAPI:
     )
 
     # Include routers
-    app.include_router(health.router, prefix="/api/v1/health", tags=["health"])
-    app.include_router(agents.router, prefix="/api/v1/agents", tags=["agents"])
-    app.include_router(conversations.router, prefix="/api/v1/conversations", tags=["conversations"])
-    app.include_router(knowledge.router, prefix="/api/v1/knowledge", tags=["knowledge"])
+    app.include_router(health.router, prefix="/api/v1")
+    app.include_router(auth.router, prefix="/api/v1")
+    app.include_router(agents.router, prefix="/api/v1")
+    app.include_router(conversations.router, prefix="/api/v1")
+    app.include_router(knowledge.router, prefix="/api/v1")
+    app.include_router(model_provider.router, prefix="/api/v1")
+    app.include_router(notifications.router, prefix="/api/v1")
+    app.include_router(tools.router, prefix="/api/v1")
+    app.include_router(users.router, prefix="/api/v1")
+    app.include_router(vectordb.router, prefix="/api/v1")
 
     logger.info("DataPilotFlow API initialized successfully")
 
