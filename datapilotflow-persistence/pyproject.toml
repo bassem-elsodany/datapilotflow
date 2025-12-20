@@ -18,5 +18,5 @@ build-backend = "hatchling.build"
 packages = ["src/datapilotflow"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src", "../datapilotflow-domain/src"]
+pythonpath = ["src"]
 testpaths = ["tests"]
