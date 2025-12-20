@@ -24,7 +24,7 @@ from pymilvus import (
     utility,
 )
 
-from src.config import settings
+from datapilotflow.domain.config import settings
 
 T = TypeVar("T", bound=BaseModel)
 

@@ -29,6 +29,9 @@
         },
         {
             "path": "datapilotflow-agents"
+        },
+        {
+            "path": "datapilotflow-services"
         }
     ],
     "settings": {
