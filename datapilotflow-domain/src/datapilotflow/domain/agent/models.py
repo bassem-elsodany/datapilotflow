@@ -10,7 +10,7 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 
-from src.domain.conversation.models import (
+from datapilotflow.domain.conversation.models import (
     AssistantConfig,
     ProviderConfig,
     RerankerConfig,

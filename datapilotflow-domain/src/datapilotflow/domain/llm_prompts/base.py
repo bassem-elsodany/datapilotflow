@@ -8,7 +8,7 @@ in the LLM prompts subpackage.
 import opik
 from loguru import logger
 
-from src.config import settings
+# Note: settings removed from domain - it's only for local prompt fallback
 
 
 class Prompt:
@@ -23,11 +23,11 @@ class Prompt:
         prompt: The actual prompt text content
     """
 
-    def __init__(self, name: str, prompt: str) -> None:
+    def __init__(self, name: str, prompt: str, agent_tracing_enabled: bool = False) -> None:
         self.name = name
 
         try:
-            if settings.AGENT_TRACING_ENABLED:
+            if agent_tracing_enabled:
                 import opik
 
                 self.__prompt = opik.Prompt(name=name, prompt=prompt)
@@ -45,8 +45,7 @@ class Prompt:
     @property
     def prompt(self) -> str:
         if (
-            settings.AGENT_TRACING_ENABLED
-            and hasattr(opik, "Prompt")
+            hasattr(opik, "Prompt")
             and isinstance(self.__prompt, opik.Prompt)
         ):
             return self.__prompt.prompt

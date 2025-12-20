@@ -12,7 +12,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-from src.config import settings
+# Note: src.config removed - domain models should not depend on backend config
+# from src.config import settings
 
 
 class KnowledgeExtract(BaseModel):
