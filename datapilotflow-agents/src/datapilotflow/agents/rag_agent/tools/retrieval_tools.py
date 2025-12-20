@@ -10,8 +10,8 @@ from langchain_core.documents import Document
 from langchain_core.tools import tool
 from loguru import logger
 
-from src.config import settings
-from src.domain.core.exceptions import (
+from datapilotflow.domain.config import settings
+from datapilotflow.domain.core.exceptions import (
     DocumentRetrievalError,
     EntitySearchError,
     HybridSearchError,
@@ -22,8 +22,8 @@ from src.domain.core.exceptions import (
     VectorSearchError,
     WeaviateConnectionError,
 )
-from src.domain.rag.knowledge_chunk import KnowledgeChunk
-from src.infrastructure.milvus.client import MilvusClientWrapper
+from datapilotflow.domain.rag.knowledge_chunk import KnowledgeChunk
+from datapilotflow.vectordb.milvus.client import MilvusClientWrapper
 
 
 def _serialize_documents_for_llm(documents: List[Document]) -> str:

@@ -25,10 +25,10 @@
             "path": "datapilotflow-processors"
         },
         {
-            "path": "datapilotflow-rag-mcp"
+            "path": "datapilotflow-vectordb"
         },
         {
-            "path": "datapilotflow-vectordb"
+            "path": "datapilotflow-agents"
         }
     ],
     "settings": {

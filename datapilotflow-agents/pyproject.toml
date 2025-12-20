@@ -1,7 +1,7 @@
 [project]
-name = "datapilotflow-rag-mcp"
+name = "datapilotflow-agents"
 version = "1.0.0"
-description = "DataPilotFlow RAG MCP - Standalone retrieval service for semantic search over knowledge bases"
+description = "DataPilotFlow agents - Core RAG and Assistant agent implementations"
 license = { text = "MIT" }
 requires-python = ">=3.11"
 dependencies = [
@@ -12,7 +12,6 @@ dependencies = [
     "langchain-core>=1.0.0",
     "langchain-mongodb>=0.1.0",
     "langgraph-checkpoint-mongodb>=0.1.0",
-    "fastmcp>=0.4.0",
     "litellm>=1.79.0",
     "opik>=1.9.11",
     "loguru>=0.7.3",
@@ -25,5 +24,6 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/datapilotflow"]
 
-[project.scripts]
-rag-mcp-server = "datapilotflow.rag_mcp.server:run"
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

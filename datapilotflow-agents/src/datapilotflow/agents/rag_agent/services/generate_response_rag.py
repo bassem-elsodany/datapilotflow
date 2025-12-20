@@ -18,16 +18,16 @@ from langchain_community.chat_models import ChatLiteLLM
 from loguru import logger
 from opik.integrations.langchain import OpikTracer
 
-from src.agents.common.agent_state import AgentState
-from src.agents.rag_agent.graph import graph_dev as workflow
-from src.agents.rag_agent.state import RAGWorkflowState as WorkflowState
-from src.agents.rag_agent.state import create_initial_state
-from src.config import settings
-from src.domain.conversation import ConversationMessage
-from src.services.conversation.conversation_history_service import (
+from datapilotflow.agents.common.agent_state import AgentState
+from datapilotflow.rag_mcp.rag_agent.graph import graph_dev as workflow
+from datapilotflow.rag_mcp.rag_agent.state import RAGWorkflowState as WorkflowState
+from datapilotflow.rag_mcp.rag_agent.state import create_initial_state
+from datapilotflow.domain.config import settings
+from datapilotflow.domain.conversation import ConversationMessage
+# TODO: from datapilotflow.services.conversation.conversation_history_service import (
     conversation_history_service,
 )
-from src.services.model_provider.model_provider_service import (
+# TODO: from datapilotflow.services.model_provider.model_provider_service import (
     get_model_provider_service,
 )
 

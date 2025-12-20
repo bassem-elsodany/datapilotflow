@@ -5,7 +5,7 @@ These prompts are used to evaluate whether retrieved documents are relevant
 to answering the user's question.
 """
 
-from src.agents.common.base_prompt import Prompt
+from datapilotflow.agents.common.base_prompt import Prompt
 
 JUDGE_SYSTEM_PROMPT = Prompt(
     name="datapilotflow_rag_agent_judge_system_prompt",

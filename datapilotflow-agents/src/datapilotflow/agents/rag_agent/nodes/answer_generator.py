@@ -7,9 +7,9 @@ This node generates the final answer based on the user's question and relevant d
 import opik
 from loguru import logger
 
-from src.agents.rag_agent.chains import get_answer_generation_chain
-from src.agents.rag_agent.state import RAGWorkflowState as WorkflowState
-from src.config import settings
+from datapilotflow.rag_mcp.rag_agent.chains import get_answer_generation_chain
+from datapilotflow.rag_mcp.rag_agent.state import RAGWorkflowState as WorkflowState
+from datapilotflow.domain.config import settings
 
 
 def answer_generator(state: WorkflowState) -> WorkflowState:
