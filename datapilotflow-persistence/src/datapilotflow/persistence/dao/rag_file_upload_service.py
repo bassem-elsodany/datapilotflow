@@ -11,8 +11,8 @@ from typing import Optional, List, Dict, Any
 from loguru import logger
 from bson import ObjectId
 
-from src.infrastructure.mongo.client import MongoClientWrapper
-from src.domain.rag.rag_file_upload import (
+from datapilotflow.persistence.mongo.client import MongoClientWrapper
+from datapilotflow.domain.rag.rag_file_upload import (
     RagFileUpload, 
     RagFailedEvent, 
     FileUploadStatus, 
@@ -22,7 +22,7 @@ from src.domain.rag.rag_file_upload import (
     FileMetadata,
     FileLocations
 )
-from src.config import settings
+from datapilotflow.domain.config import settings
 
 
 class RagFileUploadService(MongoClientWrapper[RagFileUpload]):

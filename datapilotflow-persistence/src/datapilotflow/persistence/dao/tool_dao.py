@@ -9,8 +9,8 @@ from bson import ObjectId
 from loguru import logger
 from pymongo import ASCENDING
 
-from src.domain.tool import Tool, ToolType
-from src.infrastructure.mongo.client import MongoClientWrapper
+from datapilotflow.domain.tool import Tool, ToolType
+from datapilotflow.persistence.mongo.client import MongoClientWrapper
 
 
 class ToolDAO(MongoClientWrapper[Tool]):
@@ -169,7 +169,7 @@ class ToolDAO(MongoClientWrapper[Tool]):
 
     def _dict_to_tool(self, tool_dict: dict) -> Tool:
         """Convert database dictionary to Tool object (without _id)."""
-        from src.domain.tool import PromptBasedToolConfig, Tool, ToolType
+        from datapilotflow.domain.tool import PromptBasedToolConfig, Tool, ToolType
 
         prompt_config = None
         if tool_dict.get("prompt_config"):

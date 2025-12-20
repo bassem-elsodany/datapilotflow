@@ -6,7 +6,7 @@ from loguru import logger
 from pydantic import BaseModel
 from pymongo import MongoClient, errors
 
-from src.config import settings
+from datapilotflow.domain.config import settings
 
 
 T = TypeVar("T", bound=BaseModel)

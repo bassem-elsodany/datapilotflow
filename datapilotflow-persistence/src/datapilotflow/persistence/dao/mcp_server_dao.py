@@ -9,8 +9,8 @@ from bson import ObjectId
 from loguru import logger
 from pymongo import ASCENDING
 
-from src.domain.tool import MCPServerConfig
-from src.infrastructure.mongo.client import MongoClientWrapper
+from datapilotflow.domain.tool import MCPServerConfig
+from datapilotflow.persistence.mongo.client import MongoClientWrapper
 
 
 class MCPServerDAO(MongoClientWrapper[MCPServerConfig]):

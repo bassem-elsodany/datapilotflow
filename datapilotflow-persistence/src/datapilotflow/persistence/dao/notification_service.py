@@ -3,12 +3,12 @@ from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from bson import ObjectId
 
-from src.domain.notification import (
+from datapilotflow.domain.notification import (
     Notification, NotificationCreate, NotificationUpdate, 
     NotificationResponse, NotificationListResponse, NotificationStats,
     NotificationStatus, NotificationType, NotificationPriority
 )
-from src.infrastructure.mongo.client import MongoClientWrapper
+from datapilotflow.persistence.mongo.client import MongoClientWrapper
 
 
 class NotificationService(MongoClientWrapper[Notification]):

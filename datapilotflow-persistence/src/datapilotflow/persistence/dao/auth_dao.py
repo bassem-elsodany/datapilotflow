@@ -12,9 +12,9 @@ from bson import ObjectId
 from passlib.hash import bcrypt
 from loguru import logger
 
-from src.domain.user import User
-from src.infrastructure.mongo.client import MongoClientWrapper
-from src.config import settings
+from datapilotflow.domain.user import User
+from datapilotflow.persistence.mongo.client import MongoClientWrapper
+from datapilotflow.domain.config import settings
 
 
 class AuthDAO(MongoClientWrapper[User]):

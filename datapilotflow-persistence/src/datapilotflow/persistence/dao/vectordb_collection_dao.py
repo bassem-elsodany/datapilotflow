@@ -10,12 +10,12 @@ from typing import List, Optional
 from bson import ObjectId
 from loguru import logger
 
-from src.domain.knowledge.vectordb_collection import (
+from datapilotflow.domain.knowledge.vectordb_collection import (
     VectorDBCollection,
     VectorDBCollectionCreate,
     VectorDBCollectionUpdate,
 )
-from src.infrastructure.mongo.client import MongoClientWrapper
+from datapilotflow.persistence.mongo.client import MongoClientWrapper
 
 
 class VectorDBCollectionDAO(MongoClientWrapper[VectorDBCollection]):

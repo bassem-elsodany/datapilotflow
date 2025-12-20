@@ -10,13 +10,13 @@ from typing import List, Optional
 from bson import ObjectId
 from loguru import logger
 
-from src.domain.knowledge.knowledge_job import (
+from datapilotflow.domain.knowledge.knowledge_job import (
     JobStatus,
     KnowledgeJob,
     KnowledgeJobCreate,
     KnowledgeJobUpdate,
 )
-from src.infrastructure.mongo.client import MongoClientWrapper
+from datapilotflow.persistence.mongo.client import MongoClientWrapper
 
 
 class KnowledgeJobDAO(MongoClientWrapper[KnowledgeJob]):

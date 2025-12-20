@@ -9,13 +9,13 @@ from typing import Any, Dict, List, Optional
 
 from bson import ObjectId
 
-from src.domain.model_provider.model_provider import (
+from datapilotflow.domain.model_provider.model_provider import (
     ModelProvider,
     ModelProviderCreate,
     ModelProviderUpdate,
     ModelType,
 )
-from src.infrastructure.mongo.client import MongoClientWrapper
+from datapilotflow.persistence.mongo.client import MongoClientWrapper
 
 
 class ModelProviderDAO(MongoClientWrapper[ModelProvider]):

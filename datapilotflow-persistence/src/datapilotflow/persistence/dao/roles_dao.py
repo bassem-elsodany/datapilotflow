@@ -10,9 +10,9 @@ from loguru import logger
 from pymongo import MongoClient
 from bson import ObjectId
 
-from src.infrastructure.mongo.client import MongoClientWrapper
-from src.domain.user.role_model import Role, RoleType
-from src.config import settings
+from datapilotflow.persistence.mongo.client import MongoClientWrapper
+from datapilotflow.domain.user.role_model import Role, RoleType
+from datapilotflow.domain.config import settings
 
 class RolesDAO(MongoClientWrapper[Role]):
     """
