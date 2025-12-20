@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 from abc import ABC, abstractmethod
 from loguru import logger
-from datapilotflow.config import settings
+from datapilotflow.domain.config import settings
 
 
 class BaseEventPublisher(ABC):

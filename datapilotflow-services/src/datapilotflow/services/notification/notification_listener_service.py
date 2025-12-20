@@ -13,7 +13,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, Any
 from loguru import logger
 
-from datapilotflow.config import settings
+from datapilotflow.domain.config import settings
 from datapilotflow.domain.notification import (
     NotificationCreate, NotificationType, NotificationPriority, NotificationStatus
 )

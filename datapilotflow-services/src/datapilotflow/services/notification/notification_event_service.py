@@ -12,7 +12,7 @@ from typing import Optional, Dict, Any
 from loguru import logger
 import aio_pika
 
-from datapilotflow.config import settings
+from datapilotflow.domain.config import settings
 from datapilotflow.domain.notification import NotificationType, NotificationPriority
 from datapilotflow.services.events.constants import (
     NOTIFICATION_EVENTS_EXCHANGE,

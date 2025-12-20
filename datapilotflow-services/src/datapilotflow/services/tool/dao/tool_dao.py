@@ -10,7 +10,7 @@ from loguru import logger
 from pymongo import ASCENDING
 
 from datapilotflow.domain.tool import Tool, ToolType
-from datapilotflow.infrastructure.mongo.client import MongoClientWrapper
+from datapilotflow.persistence.mongo.client import MongoClientWrapper
 
 
 class ToolDAO(MongoClientWrapper[Tool]):

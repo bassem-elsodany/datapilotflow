@@ -11,7 +11,7 @@ from typing import Dict, List, Optional
 from loguru import logger
 from pymilvus import Collection, connections, utility
 
-from datapilotflow.config import settings
+from datapilotflow.domain.config import settings
 from datapilotflow.domain.vectordb import (
     CollectionInfo,
     CollectionSchema,

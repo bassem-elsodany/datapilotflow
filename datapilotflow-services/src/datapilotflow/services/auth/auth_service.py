@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 import jwt
 from loguru import logger
 
-from datapilotflow.config import settings
+from datapilotflow.domain.config import settings
 from datapilotflow.domain.user import User
 from datapilotflow.services.auth.dao.auth_dao import AuthDAO
 
