@@ -1,11 +1,21 @@
 """
 API routers package.
 
-Contains all REST endpoint routers for different domains:
-- health: Health check endpoints
-- agents: Agent query and management endpoints
-- conversations: Conversation management endpoints
-- knowledge: Knowledge base management endpoints
+Contains all REST endpoint routers for different domains organized by functionality.
 """
 
-__all__ = ["health", "agents", "conversations", "knowledge"]
+# Import all routers
+from . import health, auth, agents, conversations, knowledge, model_provider, notifications, tools, users, vectordb
+
+__all__ = [
+    "health",
+    "auth",
+    "agents",
+    "conversations",
+    "knowledge",
+    "model_provider",
+    "notifications",
+    "tools",
+    "users",
+    "vectordb",
+]

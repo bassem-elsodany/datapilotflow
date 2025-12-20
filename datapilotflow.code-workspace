@@ -32,6 +32,9 @@
         },
         {
             "path": "datapilotflow-mcp"
+        },
+        {
+            "path": "datapilotflow-api"
         }
     ],
     "settings": {
