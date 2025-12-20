@@ -478,7 +478,7 @@ class KnowledgeJobService:
                     splitter_config.chunk_overlap = job.custom_chunk_overlap
 
                 # Create splitter using the new modular system
-                from src.processors.splitters import create_splitter
+                from datapilotflow.processors.splitters import create_splitter
 
                 splitter = create_splitter(splitter_config)
 
