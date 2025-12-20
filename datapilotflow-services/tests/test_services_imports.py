@@ -55,8 +55,8 @@ class TestVectordbImports:
     """Test that vectordb layer can be imported."""
 
     def test_import_milvus_client(self):
-        """Test importing Milvus client wrapper."""
-        from datapilotflow.vectordb.milvus import MilvusClientWrapper
+        """Test importing Milvus client wrapper from persistence."""
+        from datapilotflow.persistence.vectordb.milvus import MilvusClientWrapper
         assert MilvusClientWrapper
 
 
@@ -203,7 +203,7 @@ class TestNamespacePackaging:
         # Import from different packages in the datapilotflow namespace
         from datapilotflow.domain.knowledge.knowledge_job import JobStatus
         from datapilotflow.persistence.mongo.client import MongoClientWrapper
-        from datapilotflow.vectordb.milvus import MilvusClientWrapper
+        from datapilotflow.persistence.vectordb.milvus import MilvusClientWrapper
         from datapilotflow.services.knowledge.knowledge_source_service import KnowledgeSourceService
 
         # All imports should succeed without conflicts

@@ -17,7 +17,7 @@ from langchain_core.retrievers import BaseRetriever
 from langchain_core.tools import create_retriever_tool
 from loguru import logger
 
-from datapilotflow.vectordb.milvus.client import MilvusClientWrapper
+from datapilotflow.persistence.vectordb.milvus.client import MilvusClientWrapper
 # TODO: from datapilotflow.services.knowledge.vectordb_collection_service import (
     get_vectordb_collection_service,
 )

@@ -23,7 +23,7 @@ from datapilotflow.domain.core.exceptions import (
     WeaviateConnectionError,
 )
 from datapilotflow.domain.rag.knowledge_chunk import KnowledgeChunk
-from datapilotflow.vectordb.milvus.client import MilvusClientWrapper
+from datapilotflow.persistence.vectordb.milvus.client import MilvusClientWrapper
 
 
 def _serialize_documents_for_llm(documents: List[Document]) -> str:
