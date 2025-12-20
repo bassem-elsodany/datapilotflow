@@ -11,12 +11,12 @@ from bson import ObjectId
 from loguru import logger
 from pymongo import ReturnDocument
 
-from src.domain.knowledge.knowledge_source_config import (
+from datapilotflow.domain.knowledge.knowledge_source_config import (
     KnowledgeSourceConfig,
     KnowledgeSourceConfigCreate,
     KnowledgeSourceConfigUpdate,
 )
-from src.infrastructure.mongo.client import MongoClientWrapper
+from datapilotflow.persistence.mongo.client import MongoClientWrapper
 
 
 class KnowledgeSourceDAO(MongoClientWrapper[KnowledgeSourceConfig]):

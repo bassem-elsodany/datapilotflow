@@ -10,13 +10,13 @@ from typing import List, Optional
 from bson import ObjectId
 from loguru import logger
 
-from src.domain.knowledge.document_splitter import (
+from datapilotflow.domain.knowledge.document_splitter import (
     DocumentSplitter,
     DocumentSplitterCreate,
     DocumentSplitterUpdate,
     SplitterType,
 )
-from src.infrastructure.mongo.client import MongoClientWrapper
+from datapilotflow.persistence.mongo.client import MongoClientWrapper
 
 
 class DocumentSplitterDAO(MongoClientWrapper[DocumentSplitter]):
@@ -195,7 +195,7 @@ class DocumentSplitterDAO(MongoClientWrapper[DocumentSplitter]):
         """Delete a document splitter configuration"""
         try:
             # Check if this splitter is being used by any jobs
-            from src.infrastructure.mongo.client import get_mongo_db
+            from datapilotflow.persistence.mongo.client import get_mongo_db
 
             db = get_mongo_db()
             jobs_using_splitter = db["knowledge_jobs"].count_documents(
@@ -244,7 +244,7 @@ class DocumentSplitterDAO(MongoClientWrapper[DocumentSplitter]):
     def count_jobs_using_splitter(self, splitter_id: str) -> int:
         """Count how many jobs are using this splitter"""
         try:
-            from src.infrastructure.mongo.client import get_mongo_db
+            from datapilotflow.persistence.mongo.client import get_mongo_db
 
             db = get_mongo_db()
             return db["knowledge_jobs"].count_documents({"splitter_id": splitter_id})

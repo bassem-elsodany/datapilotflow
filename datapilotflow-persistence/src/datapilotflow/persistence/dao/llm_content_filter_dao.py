@@ -11,12 +11,12 @@ from typing import List, Optional
 from bson import ObjectId
 from loguru import logger
 
-from src.domain.knowledge.llm_content_filter_config import (
+from datapilotflow.domain.knowledge.llm_content_filter_config import (
     LLMContentFilterConfig,
     LLMContentFilterConfigCreate,
     LLMContentFilterConfigUpdate,
 )
-from src.infrastructure.mongo.client import MongoClientWrapper
+from datapilotflow.persistence.mongo.client import MongoClientWrapper
 
 
 class LLMContentFilterDAO(MongoClientWrapper[LLMContentFilterConfig]):

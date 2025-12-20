@@ -10,9 +10,9 @@ from datetime import datetime
 from bson import ObjectId
 from loguru import logger
 
-from src.infrastructure.mongo.client import MongoClientWrapper
-from src.domain.knowledge.job_timeline import JobTimeline, JobTimelineCreate, JobTimelineUpdate
-from src.domain.knowledge.knowledge_job import JobStatus
+from datapilotflow.persistence.mongo.client import MongoClientWrapper
+from datapilotflow.domain.knowledge.job_timeline import JobTimeline, JobTimelineCreate, JobTimelineUpdate
+from datapilotflow.domain.knowledge.knowledge_job import JobStatus
 
 
 class JobTimelineDAO(MongoClientWrapper[JobTimeline]):

@@ -1,5 +1,5 @@
 """DataPilotFlow persistence layer - MongoDB data access."""
 
-from .mongo import MongoClientWrapper
+from .mongo.client import MongoClientWrapper
 
 __all__ = ["MongoClientWrapper"]
