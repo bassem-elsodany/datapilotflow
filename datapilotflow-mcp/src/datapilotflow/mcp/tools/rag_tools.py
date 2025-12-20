@@ -8,7 +8,7 @@ ASSISTANT MODE CONFIGURATION:
 - LLM generation: Disabled by default (returns raw documents)
 """
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
