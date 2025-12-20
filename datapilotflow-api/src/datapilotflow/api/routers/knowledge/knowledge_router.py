@@ -37,7 +37,7 @@ from datapilotflow.api.routers.auth.auth_router import (
 # LLM responder functionality removed - using LangGraph workflow instead
 # Note: LLM synthesis functionality has been removed from this router
 # Use the agent WebSocket endpoint (/ws/agent/query) for LLM-powered responses
-from datapilotflow.config import settings
+from datapilotflow.domain.config import settings
 from datapilotflow.domain.rag.knowledge_chunk import KnowledgeChunk
 from datapilotflow.domain.user import User
 from datapilotflow.infrastructure.milvus.client import MilvusClientWrapper

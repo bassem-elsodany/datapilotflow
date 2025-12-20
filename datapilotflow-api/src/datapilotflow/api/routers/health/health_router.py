@@ -10,7 +10,7 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter
 
-from datapilotflow.config import settings
+from datapilotflow.domain.config import settings
 
 router = APIRouter(prefix="/health", tags=["Health"])
 

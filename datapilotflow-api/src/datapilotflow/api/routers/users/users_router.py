@@ -13,7 +13,7 @@ from loguru import logger
 from pydantic import BaseModel, EmailStr
 
 from datapilotflow.api.routers.auth.auth_router import get_current_user
-from datapilotflow.config import settings
+from datapilotflow.domain.config import settings
 from datapilotflow.domain.user import User
 from datapilotflow.services.auth.auth_service import AuthService
 from datapilotflow.services.model_provider.model_provider_initialization_service import (

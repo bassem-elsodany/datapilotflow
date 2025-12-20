@@ -9,7 +9,7 @@ import asyncio
 
 from datapilotflow.api.routers.auth.auth_router import validate_jwt_token
 from datapilotflow.services.notification.notification_websocket_service import NotificationWebSocketService
-from datapilotflow.config import settings
+from datapilotflow.domain.config import settings
 
 router = APIRouter(prefix="/ws/notifications", tags=["Notifications WebSocket"])
 # Use singleton instance
