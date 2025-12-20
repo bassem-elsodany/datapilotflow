@@ -5,12 +5,17 @@
   "pythonPlatform": "Darwin",
   "venvPath": ".",
   "venv": ".venv",
+  "typeCheckingMode": "standard",
   "executionEnvironments": [
     {
       "root": ".",
       "pythonVersion": "3.13",
       "pythonPlatform": "Darwin",
-      "extraPaths": ["src", "../datapilotflow-domain/src"]
+      "extraPaths": [
+        "src",
+        "../datapilotflow-domain/src",
+        ".venv/lib/python3.13/site-packages"
+      ]
     }
   ]
 }
