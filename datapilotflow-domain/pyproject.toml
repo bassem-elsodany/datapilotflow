@@ -7,6 +7,9 @@ requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.10.6",
     "python-dateutil>=2.8.2",
+    "opik>=1.9.11",
+    "loguru>=0.7.3",
+    "email-validator>=2.3.0",
 ]
 
 [build-system]

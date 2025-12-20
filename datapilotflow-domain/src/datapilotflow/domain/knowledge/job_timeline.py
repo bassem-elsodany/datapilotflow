@@ -8,7 +8,7 @@ allowing multiple executions of the same job with detailed history.
 from datetime import datetime
 from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
-from src.domain.knowledge.knowledge_job import JobStatus
+from datapilotflow.domain.knowledge.knowledge_job import JobStatus
 
 
 class JobTimeline(BaseModel):
