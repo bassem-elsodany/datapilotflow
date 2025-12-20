@@ -11,9 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
-
-# Note: src.config removed - domain models should not depend on backend config
-# from src.config import settings
+from datapilotflow.domain.config import settings
 
 
 class KnowledgeExtract(BaseModel):

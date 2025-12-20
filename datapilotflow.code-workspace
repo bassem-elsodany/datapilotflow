@@ -11,6 +11,24 @@
         {
             "name": "docker",
             "path": "./docker"
+        },
+        {
+            "path": "datapilotflow-domain"
+        },
+        {
+            "path": "datapilotflow-events"
+        },
+        {
+            "path": "datapilotflow-persistence"
+        },
+        {
+            "path": "datapilotflow-processors"
+        },
+        {
+            "path": "datapilotflow-rag-mcp"
+        },
+        {
+            "path": "datapilotflow-vectordb"
         }
     ],
     "settings": {

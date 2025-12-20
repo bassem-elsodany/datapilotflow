@@ -6,6 +6,7 @@ license = { text = "MIT" }
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.10.6",
+    "pydantic-settings>=2.0.0",
     "python-dateutil>=2.8.2",
     "opik>=1.9.11",
     "loguru>=0.7.3",
