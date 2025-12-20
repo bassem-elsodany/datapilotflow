@@ -1,13 +1,15 @@
 [project]
 name = "datapilotflow-persistence"
 version = "1.0.0"
-description = "DataPilotFlow persistence layer - MongoDB connections and data access objects"
+description = "DataPilotFlow persistence layer - MongoDB, vectordb (Milvus), and data access objects"
 license = { text = "MIT" }
 requires-python = ">=3.11"
 dependencies = [
     "datapilotflow-domain>=1.0.0",
     "pymongo>=4.9.2",
     "pydantic>=2.10.6",
+    "pymilvus>=2.6.5",
+    "sentence-transformers>=5.2.0",
 ]
 
 [build-system]

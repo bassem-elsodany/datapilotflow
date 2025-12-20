@@ -7,7 +7,6 @@ requires-python = ">=3.11"
 dependencies = [
     "datapilotflow-domain>=1.0.0",
     "datapilotflow-persistence>=1.0.0",
-    "datapilotflow-vectordb>=1.0.0",
     "datapilotflow-events>=1.0.0",
     "langchain-core>=1.0.0",
     "litellm>=1.79.0",
