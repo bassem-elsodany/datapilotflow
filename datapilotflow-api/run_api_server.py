@@ -5,8 +5,8 @@ import sys
 import uvicorn
 from loguru import logger
 
+from datapilotflow.api.config import settings
 from datapilotflow.api.server import app
-from datapilotflow.domain.config import settings
 from datapilotflow.persistence.mongo.client import close_mongo_client
 
 

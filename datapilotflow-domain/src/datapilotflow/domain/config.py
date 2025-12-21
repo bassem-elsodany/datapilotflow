@@ -54,12 +54,40 @@ class Settings(BaseSettings):
         default=60, description="WebSocket timeout in seconds"
     )
 
-    # --- RAG MCP Server Configuration ---
-    RAG_MCP_HOST: str = Field(
-        default="0.0.0.0", description="RAG MCP server host", min_length=1
+    # --- MCP Server Configuration (Business Logic) ---
+    # RAG Agent MCP Server
+    MCP_SERVER_HOST: str = Field(
+        default="0.0.0.0", description="MCP server host", min_length=1
     )
-    RAG_MCP_PORT: int = Field(
-        default=65510, description="RAG MCP server port", ge=1, le=65535
+    MCP_SERVER_PORT: int = Field(
+        default=65510, description="MCP server port (RAG agent)", ge=1, le=65535
+    )
+    MCP_SERVER_NAME: str = Field(
+        default="datapilotflow-rag", description="MCP server name (RAG agent)", min_length=1
+    )
+    MCP_ENABLED_TOOLS: str = Field(
+        default="knowledge_expert",
+        description="Comma-separated list of enabled MCP tools (RAG agent)",
+        min_length=1,
+    )
+    MCP_LOG_LEVEL: str = Field(
+        default="INFO", description="MCP server log level", min_length=1
+    )
+    MCP_WORKER_THREADS: int = Field(
+        default=4, description="Number of MCP worker threads", ge=1, le=16
+    )
+
+    # Assistant Agent MCP Server (Optional - for future expansion)
+    ASSISTANT_MCP_SERVER_PORT: int = Field(
+        default=65511,
+        description="Assistant MCP server port (optional, for future use)",
+        ge=1,
+        le=65535,
+    )
+    ASSISTANT_MCP_ENABLED_TOOLS: str = Field(
+        default="assistant_tools",
+        description="Comma-separated list of enabled Assistant MCP tools (optional)",
+        min_length=1,
     )
 
     # --- JWT Configuration ---

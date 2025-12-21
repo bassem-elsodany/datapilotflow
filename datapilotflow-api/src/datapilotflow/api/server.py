@@ -19,7 +19,7 @@ from loguru import logger
 from opik.integrations.langchain import OpikTracer
 
 # CRITICAL: Import config FIRST to configure loguru with custom format
-from datapilotflow.domain.config import settings
+from datapilotflow.api.config import settings
 from datapilotflow.services.opik_utils import configure
 
 if settings.AGENT_TRACING_ENABLED:
