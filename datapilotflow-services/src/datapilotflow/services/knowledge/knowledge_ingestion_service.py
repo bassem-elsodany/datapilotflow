@@ -14,7 +14,7 @@ from pathlib import Path
 
 from datapilotflow.services.file_management.file_upload_service import handle_file_upload
 from datapilotflow.processors.document.file_processor import FileProcessor
-from datapilotflow.persistence.vectordb.processor import MilvusProcessor, create_milvus_processor
+from datapilotflow.infrastructure.vectordb.processor import MilvusProcessor, create_milvus_processor
 from datapilotflow.domain.rag.knowledge_chunk import KnowledgeChunk
 from datapilotflow.domain.config import settings
 

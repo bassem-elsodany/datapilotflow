@@ -16,7 +16,7 @@ from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from loguru import logger
 
-from datapilotflow.persistence.vectordb.processor import (
+from datapilotflow.infrastructure.vectordb.processor import (
     MilvusProcessor,
     create_milvus_processor,
 )
@@ -72,7 +72,7 @@ class KnowledgeJobProcessor:
             from datetime import datetime
 
             from datapilotflow.domain.knowledge.knowledge_job import JobStatus
-            from datapilotflow.persistence.dao.job_timeline_dao import JobTimelineDAO
+            from datapilotflow.infrastructure.dao.knowledge import JobTimelineDAO
 
             timeline_dao = JobTimelineDAO()
 

@@ -7,6 +7,7 @@ import {
   ActionIcon,
   Alert,
   Badge,
+  Box,
   Button,
   Card,
   Center,
@@ -330,10 +331,32 @@ function InteractiveCrawlingPipeline() {
 }
 
 export default function KnowledgeSourceConfigs() {
-  // Inject CSS animations
+  // Inject CSS animations and table cell alignment
   useEffect(() => {
     const styleElement = document.createElement('style');
-    styleElement.innerHTML = pipelineStyles;
+    styleElement.innerHTML = pipelineStyles + `
+      /* Ensure DataTable cells are top-left aligned */
+      table[data-striped] td,
+      table[data-striped] th,
+      .mantine-DataTable-table td,
+      .mantine-DataTable-table th,
+      [data-striped] td,
+      [data-striped] th {
+        vertical-align: top !important;
+        text-align: left !important;
+      }
+      /* Keep Actions column right-aligned */
+      table[data-striped] th:last-child,
+      .mantine-DataTable-table th:last-child,
+      [data-striped] th:last-child {
+        text-align: right !important;
+      }
+      table[data-striped] td:last-child,
+      .mantine-DataTable-table td:last-child,
+      [data-striped] td:last-child {
+        text-align: right !important;
+      }
+    `;
     document.head.appendChild(styleElement);
     return () => {
       document.head.removeChild(styleElement);
@@ -382,19 +405,25 @@ export default function KnowledgeSourceConfigs() {
         title: 'Name',
         width: 200,
         sortable: true,
+        textAlign: 'left',
         render: (record: Record<string, unknown>) => {
           const config = record as KnowledgeSourceConfig;
           const ScrapingIcon = (config.scraping_mode && scrapingModeIcons[config.scraping_mode]) || IconSettings;
           return (
-            <Group gap="sm">
-              <ScrapingIcon size={16} color="var(--mantine-color-blue-6)" />
+            <Group gap="sm" style={{ alignItems: 'flex-start' }}>
+              <ScrapingIcon size={16} color="var(--mantine-color-blue-6)" style={{ marginTop: 2 }} />
               <Text
                 fw={400}
                 size="sm"
                 component={Link}
                 to={paths.dashboard.management.knowledgeSources.config(config.id)}
                 c="blue"
-                style={{ textDecoration: 'none' }}
+                style={{ 
+                  textDecoration: 'none',
+                  wordWrap: 'break-word',
+                  overflowWrap: 'break-word',
+                  maxWidth: '160px'
+                }}
                 className="hover:underline"
               >
                 {config.name}
@@ -408,10 +437,11 @@ export default function KnowledgeSourceConfigs() {
         title: 'Description',
         width: 300,
         sortable: true,
+        textAlign: 'left',
         render: (record: Record<string, unknown>) => {
           const config = record as KnowledgeSourceConfig;
           return (
-            <Text size="sm" c="dimmed" lineClamp={2} maw={300}>
+            <Text size="sm" c="dimmed" lineClamp={2} maw={300} style={{ wordWrap: 'break-word', overflowWrap: 'break-word' }}>
               {config.description}
             </Text>
           );
@@ -422,10 +452,11 @@ export default function KnowledgeSourceConfigs() {
         title: 'URL',
         width: 250,
         sortable: true,
+        textAlign: 'left',
         render: (record: Record<string, unknown>) => {
           const config = record as KnowledgeSourceConfig;
           return (
-            <Text size="sm" lineClamp={1} maw={200}>
+            <Text size="sm" lineClamp={1} maw={200} style={{ wordWrap: 'break-word', overflowWrap: 'break-word' }}>
               {config.url}
             </Text>
           );
@@ -436,6 +467,7 @@ export default function KnowledgeSourceConfigs() {
         title: 'Mode',
         width: 150,
         sortable: true,
+        textAlign: 'left',
         render: (record: Record<string, unknown>) => {
           const config = record as KnowledgeSourceConfig;
           return (
@@ -461,11 +493,12 @@ export default function KnowledgeSourceConfigs() {
         title: 'Created',
         width: 150,
         sortable: true,
+        textAlign: 'left',
         render: (record: Record<string, unknown>) => {
           const config = record as KnowledgeSourceConfig;
           const date = new Date(config.created_at);
           return (
-            <Text size="sm" c="dimmed">
+            <Text size="sm" c="dimmed" style={{ wordWrap: 'break-word' }}>
               {isNaN(date.getTime()) ? 'Invalid Date' : date.toLocaleDateString()}
             </Text>
           );
@@ -480,7 +513,7 @@ export default function KnowledgeSourceConfigs() {
         render: (record: Record<string, unknown>) => {
           const config = record as KnowledgeSourceConfig;
           return (
-            <Group gap="xs" justify="flex-end">
+            <Group gap="xs" justify="flex-end" style={{ alignItems: 'flex-start' }}>
               <Tooltip label="Edit Configuration">
                 <ActionIcon
                   variant="subtle"
@@ -764,6 +797,16 @@ export default function KnowledgeSourceConfigs() {
               borderRadius="sm"
               shadow="sm"
               withTableBorder
+              styles={{
+                td: {
+                  verticalAlign: 'top',
+                  textAlign: 'left',
+                },
+                th: {
+                  verticalAlign: 'top',
+                  textAlign: 'left',
+                },
+              }}
             />
           )}
         </Stack>

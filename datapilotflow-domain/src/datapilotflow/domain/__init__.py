@@ -20,6 +20,7 @@ from . import rag
 from . import llm_prompts
 from . import user
 from . import events
+from .logging import setup_service_logging
 
 __all__ = [
     "core",
@@ -30,5 +31,6 @@ __all__ = [
     "rag",
     "llm_prompts",
     "user",
-    "events"
+    "events",
+    "setup_service_logging",
 ] 

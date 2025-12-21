@@ -1,0 +1,26 @@
+[project]
+name = "datapilotflow-infrastructure"
+version = "1.0.0"
+description = "DataPilotFlow infrastructure layer - MongoDB, message queue (RabbitMQ), vectordb (Milvus), and data access objects"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+dependencies = [
+    "datapilotflow-domain>=1.0.0",
+    "pymongo>=4.9.2",
+    "pydantic>=2.10.6",
+    "pymilvus>=2.6.5",
+    "sentence-transformers>=5.2.0",
+    "aio-pika>=9.3.0",
+    "loguru>=0.7.3",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/datapilotflow"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

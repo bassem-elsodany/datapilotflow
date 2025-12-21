@@ -10,7 +10,7 @@ from typing import Dict, List, Optional, Any
 from fastapi import WebSocket
 from loguru import logger
 
-from datapilotflow.persistence.dao.notification_service import NotificationService
+from datapilotflow.infrastructure.dao.notification import NotificationService
 
 
 class NotificationWebSocketService:

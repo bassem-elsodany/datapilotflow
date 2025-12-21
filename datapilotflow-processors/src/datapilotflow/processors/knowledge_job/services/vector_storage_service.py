@@ -120,7 +120,7 @@ class MilvusVectorStorageService(VectorStorageService):
 
     def _initialize_processor(self) -> None:
         """Initialize the Milvus processor."""
-        from datapilotflow.persistence.vectordb.processor import create_milvus_processor
+        from datapilotflow.infrastructure.vectordb.processor import create_milvus_processor
 
         try:
             self._milvus_processor = create_milvus_processor(

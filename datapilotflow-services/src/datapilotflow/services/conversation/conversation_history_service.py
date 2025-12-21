@@ -26,7 +26,7 @@ class ConversationHistoryService:
     """Service for managing conversations and messages."""
 
     def __init__(self):
-        from datapilotflow.persistence.mongo.client import get_mongo_client
+        from datapilotflow.infrastructure.mongo.client import get_mongo_client
 
         self.client = get_mongo_client()
         self.db = self.client[settings.MONGO_DB_NAME]

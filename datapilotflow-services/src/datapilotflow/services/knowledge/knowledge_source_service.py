@@ -18,7 +18,7 @@ from datapilotflow.domain.knowledge.knowledge_source_config import (
     KnowledgeSourceConfigUpdate,
     UrlSourceConfig,
 )
-from datapilotflow.persistence.dao import KnowledgeSourceDAO, UrlSourceDAO
+from datapilotflow.infrastructure.dao import KnowledgeSourceDAO, UrlSourceDAO
 
 
 class KnowledgeSourceService:
@@ -269,7 +269,7 @@ class KnowledgeSourceService:
         """
         try:
             # Local import to avoid wider coupling
-            from datapilotflow.persistence.dao.knowledge_job_dao import KnowledgeJobDAO
+            from datapilotflow.infrastructure.dao.knowledge import KnowledgeJobDAO
 
             job_dao = KnowledgeJobDAO()
             existing_jobs = job_dao.list_jobs(

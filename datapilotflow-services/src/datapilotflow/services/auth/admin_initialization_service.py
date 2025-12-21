@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from loguru import logger
 
-from datapilotflow.persistence.dao.auth_dao import AuthDAO
+from datapilotflow.infrastructure.dao.auth import AuthDAO
 from datapilotflow.services.users.roles_service import RolesService
 
 

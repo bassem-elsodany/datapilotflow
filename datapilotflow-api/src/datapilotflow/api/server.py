@@ -10,6 +10,7 @@ import signal
 import sys
 from contextlib import asynccontextmanager
 
+from datapilotflow.services.opik_utils import configure
 from fastapi import FastAPI, HTTPException, Query, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -20,7 +21,6 @@ from opik.integrations.langchain import OpikTracer
 
 # CRITICAL: Import config FIRST to configure loguru with custom format
 from datapilotflow.api.config import settings
-from datapilotflow.services.opik_utils import configure
 
 if settings.AGENT_TRACING_ENABLED:
     logger.info("Agent tracing is enabled, configuring Opik")
@@ -28,7 +28,7 @@ if settings.AGENT_TRACING_ENABLED:
 else:
     logger.info("Agent tracing is disabled, skipping Opik configuration")
 
-from datapilotflow.api.constants import API_CONFIG, API_PREFIX
+from datapilotflow.api.config import API_CONFIG, API_PREFIX
 from datapilotflow.api.routers import (
     assistant_router,
     auth_router,
@@ -149,7 +149,7 @@ async def lifespan(app: FastAPI):
             app.state.checkpointer = checkpointer
 
             # Set checkpointer for assistant_agent
-            from datapilotflow.agents.assistant_agent.response_handler import (
+            from datapilotflow.assistant_agent.response_handler import (
                 set_checkpointer as set_assistant_checkpointer,
             )
 

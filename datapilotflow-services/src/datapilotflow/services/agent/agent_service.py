@@ -28,7 +28,7 @@ class AgentService:
 
     def __init__(self):
         """Initialize the agent service with MongoDB connection."""
-        from datapilotflow.persistence.mongo.client import get_mongo_client
+        from datapilotflow.infrastructure.mongo.client import get_mongo_client
 
         self.client = get_mongo_client()
         self.db = self.client[settings.MONGO_DB_NAME]

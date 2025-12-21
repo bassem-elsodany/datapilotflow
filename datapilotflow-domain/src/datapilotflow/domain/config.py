@@ -9,12 +9,18 @@ from loguru import logger
 from pydantic import Field, computed_field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Default logging configuration for libraries that import config
+# Note: Run scripts should use setup_service_logging() from domain.logging
+# to configure service-specific logging BEFORE importing config
+# This default setup is for backward compatibility and library usage
+
 # Remove default handler if it exists
 try:
     logger.remove(0)
 except ValueError:
     pass  # Handler doesn't exist, which is fine
 
+# Set up default logging (run scripts will override this by calling setup_service_logging first)
 logger.add(
     sys.stderr,
     format="{time:MMMM D, YYYY > HH:mm:ss!UTC} | {level} | {name} | {file}:{line} | {message} | {extra}",

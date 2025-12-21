@@ -14,7 +14,7 @@ from datapilotflow.domain.knowledge.llm_content_filter_config import (
     LLMContentFilterConfigCreate,
     LLMContentFilterConfigUpdate,
 )
-from datapilotflow.persistence.dao.llm_content_filter_dao import LLMContentFilterDAO
+from datapilotflow.infrastructure.dao.knowledge import LLMContentFilterDAO
 from datapilotflow.services.model_provider.model_provider_service import ModelProviderService
 
 

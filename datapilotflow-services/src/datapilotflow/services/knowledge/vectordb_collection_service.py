@@ -13,7 +13,7 @@ from datapilotflow.domain.knowledge.vectordb_collection import (
     VectorDBCollectionCreate,
     VectorDBCollectionUpdate,
 )
-from datapilotflow.persistence.dao.vectordb_collection_dao import VectorDBCollectionDAO
+from datapilotflow.infrastructure.dao.vectordb import VectorDBCollectionDAO
 
 
 class VectorDBCollectionService:

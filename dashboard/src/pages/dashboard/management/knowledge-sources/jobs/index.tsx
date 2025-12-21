@@ -619,22 +619,27 @@ export default function KnowledgeSourceJobs() {
                 <Table>
                   <Table.Thead>
                     <Table.Tr>
-                      <Table.Th>Job Name</Table.Th>
-                      <Table.Th>Configuration</Table.Th>
-                      <Table.Th>Latest Execution</Table.Th>
-                      <Table.Th>Created</Table.Th>
-                      <Table.Th></Table.Th>
+                      <Table.Th style={{ maxWidth: '200px', textAlign: 'left', verticalAlign: 'top' }}>Job Name</Table.Th>
+                      <Table.Th style={{ textAlign: 'left', verticalAlign: 'top' }}>Configuration</Table.Th>
+                      <Table.Th style={{ textAlign: 'left', verticalAlign: 'top' }}>Latest Execution</Table.Th>
+                      <Table.Th style={{ textAlign: 'left', verticalAlign: 'top' }}>Created</Table.Th>
+                      <Table.Th style={{ textAlign: 'left', verticalAlign: 'top' }}></Table.Th>
                     </Table.Tr>
                   </Table.Thead>
                   <Table.Tbody>
                     {filteredJobs.map((job: KnowledgeJob) => (
                       <Table.Tr key={job.id}>
-                        <Table.Td>
+                        <Table.Td style={{ maxWidth: '200px', wordWrap: 'break-word', textAlign: 'left', verticalAlign: 'top' }}>
                           <Stack gap={4}>
                             <Text
                               fw={400}
                               size="sm"
-                              style={{ cursor: 'pointer', color: 'var(--mantine-color-blue-6)' }}
+                              style={{ 
+                                cursor: 'pointer', 
+                                color: 'var(--mantine-color-blue-6)',
+                                wordWrap: 'break-word',
+                                overflowWrap: 'break-word'
+                              }}
                               onClick={() => navigate(paths.dashboard.management.knowledgeSources.job(job.id))}
                             >
                               {job.name}
@@ -644,13 +649,13 @@ export default function KnowledgeSourceJobs() {
                             )}
                           </Stack>
                         </Table.Td>
-                        <Table.Td>
+                        <Table.Td style={{ textAlign: 'left', verticalAlign: 'top' }}>
                           <Text size="sm">{getConfigName(job.knowledge_source_config_id)}</Text>
                         </Table.Td>
-                        <Table.Td>
+                        <Table.Td style={{ textAlign: 'left', verticalAlign: 'top' }}>
                           <JobLastExecution jobId={job.id} refreshTrigger={refreshTrigger} />
                         </Table.Td>
-                        <Table.Td>
+                        <Table.Td style={{ textAlign: 'left', verticalAlign: 'top' }}>
                           <Text size="sm" c="dimmed">
                             {(() => {
                               const date = new Date(job.created_at);
@@ -658,7 +663,7 @@ export default function KnowledgeSourceJobs() {
                             })()}
                           </Text>
                         </Table.Td>
-                        <Table.Td>
+                        <Table.Td style={{ textAlign: 'left', verticalAlign: 'top' }}>
                           <JobActions
                             job={job}
                             onExecute={handleExecuteJob}

@@ -8,6 +8,8 @@ dependencies = [
     "datapilotflow-domain>=1.0.0",
     "aio-pika>=9.5.5",
     "pydantic>=2.10.6",
+    "pydantic-settings>=2.7.1",
+    "loguru>=0.7.3",
 ]
 
 [build-system]

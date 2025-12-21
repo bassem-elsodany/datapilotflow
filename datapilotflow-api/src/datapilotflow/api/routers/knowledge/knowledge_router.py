@@ -40,11 +40,11 @@ from datapilotflow.api.routers.auth.auth_router import (
 from datapilotflow.domain.config import settings
 from datapilotflow.domain.rag.knowledge_chunk import KnowledgeChunk
 from datapilotflow.domain.user import User
-from datapilotflow.persistence.vectordb import MilvusClientWrapper
+from datapilotflow.infrastructure.vectordb import MilvusClientWrapper
 from datapilotflow.services.conversation.conversation_history_service import (
     conversation_history_service,
 )
-from datapilotflow.persistence.dao.rag_file_upload_service import (
+from datapilotflow.infrastructure.dao.file_management import (
     RagFileUploadService,
 )
 from datapilotflow.services.file_management.file_upload_service import handle_file_upload

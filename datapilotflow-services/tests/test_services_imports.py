@@ -33,19 +33,19 @@ class TestPersistenceImports:
 
     def test_import_mongo_client(self):
         """Test importing MongoDB client wrapper."""
-        from datapilotflow.persistence.mongo.client import MongoClientWrapper
+        from datapilotflow.infrastructure.mongo.client import MongoClientWrapper
         assert MongoClientWrapper
 
     def test_import_knowledge_source_dao(self):
         """Test importing knowledge source DAO."""
-        from datapilotflow.persistence.dao.knowledge_source_dao import (
+        from datapilotflow.infrastructure.dao.knowledge import (
             KnowledgeSourceDAO
         )
         assert KnowledgeSourceDAO
 
     def test_import_knowledge_job_dao(self):
         """Test importing knowledge job DAO."""
-        from datapilotflow.persistence.dao.knowledge_job_dao import (
+        from datapilotflow.infrastructure.dao.knowledge import (
             KnowledgeJobDAO
         )
         assert KnowledgeJobDAO
@@ -56,7 +56,7 @@ class TestVectordbImports:
 
     def test_import_milvus_client(self):
         """Test importing Milvus client wrapper from persistence."""
-        from datapilotflow.persistence.vectordb.milvus import MilvusClientWrapper
+        from datapilotflow.infrastructure.vectordb.milvus import MilvusClientWrapper
         assert MilvusClientWrapper
 
 
@@ -202,8 +202,8 @@ class TestNamespacePackaging:
         """Test that datapilotflow namespace can import from multiple packages."""
         # Import from different packages in the datapilotflow namespace
         from datapilotflow.domain.knowledge.knowledge_job import JobStatus
-        from datapilotflow.persistence.mongo.client import MongoClientWrapper
-        from datapilotflow.persistence.vectordb.milvus import MilvusClientWrapper
+        from datapilotflow.infrastructure.mongo.client import MongoClientWrapper
+        from datapilotflow.infrastructure.vectordb.milvus import MilvusClientWrapper
         from datapilotflow.services.knowledge.knowledge_source_service import KnowledgeSourceService
 
         # All imports should succeed without conflicts

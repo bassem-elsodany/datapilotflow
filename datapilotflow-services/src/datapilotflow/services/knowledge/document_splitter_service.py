@@ -15,7 +15,7 @@ from datapilotflow.domain.knowledge.document_splitter import (
     DocumentSplitterUpdate,
     SplitterType,
 )
-from datapilotflow.persistence.dao.document_splitter_dao import DocumentSplitterDAO
+from datapilotflow.infrastructure.dao.knowledge import DocumentSplitterDAO
 
 
 class DocumentSplitterService:

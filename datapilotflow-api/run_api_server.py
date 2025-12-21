@@ -1,13 +1,18 @@
-# CRITICAL: Import config FIRST to configure loguru with custom format
+# CRITICAL: Configure service-specific logging BEFORE any other imports
 import signal
 import sys
 
+# Set up service-specific logging first
+from datapilotflow.domain.logging import setup_service_logging
+
+setup_service_logging("api")
+
 import uvicorn
+from datapilotflow.infrastructure.mongo.client import close_mongo_client
 from loguru import logger
 
 from datapilotflow.api.config import settings
 from datapilotflow.api.server import app
-from datapilotflow.persistence.mongo.client import close_mongo_client
 
 
 def signal_handler(signum, frame):

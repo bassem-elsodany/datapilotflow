@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from loguru import logger
 import uuid
 
-from datapilotflow.persistence.dao.roles_dao import RolesDAO
+from datapilotflow.infrastructure.dao.auth import RolesDAO
 from datapilotflow.domain.user.role_model import Role, RoleType
 
 class RolesService:

@@ -16,6 +16,7 @@ from aio_pika.exceptions import ChannelPreconditionFailed
 from loguru import logger
 
 from datapilotflow.domain.config import settings
+from datapilotflow.infrastructure.mq.client import RabbitMQClient, get_rabbitmq_client
 
 
 class BaseEventListener(ABC):
@@ -46,36 +47,26 @@ class BaseEventListener(ABC):
         self.dlq_queue_name = dlq_queue_name
 
         # RabbitMQ Configuration
-        self.rabbitmq_host = settings.RABBITMQ_HOST
-        self.rabbitmq_port = settings.RABBITMQ_PORT
-        self.rabbitmq_user = settings.RABBITMQ_USER
-        self.rabbitmq_pass = settings.RABBITMQ_PASS
-        self.rabbitmq_vhost = settings.RABBITMQ_VHOST
         self.rabbitmq_message_ttl = settings.RABBITMQ_MESSAGE_TTL
         self.rabbitmq_heartbeat = settings.RABBITMQ_HEARTBEAT
 
-        # Listener state
+        # Initialize MQ client (uses pooled connection)
+        self.mq_client = RabbitMQClient()
+
+        # Listener state (connection/channel maintained for listener lifecycle)
         self.is_running = False
         self.connection = None
         self.channel = None
-
-    def _get_connection_url(self) -> str:
-        """Get RabbitMQ connection URL."""
-        return f"amqp://{self.rabbitmq_user}:{self.rabbitmq_pass}@{self.rabbitmq_host}:{self.rabbitmq_port}/{self.rabbitmq_vhost.lstrip('/')}"
 
     async def setup_queues(self) -> None:
         """
         Setup RabbitMQ exchanges and queues for this event listener.
         This should be called before starting to listen.
+        Uses pooled connection from MQ client.
         """
         try:
-            # Build RabbitMQ connection URL
-            url = self._get_connection_url()
-
-            # Connect to RabbitMQ
-            self.connection = await aio_pika.connect_robust(
-                url, heartbeat=self.rabbitmq_heartbeat
-            )
+            # Get pooled connection from MQ client
+            self.connection = await get_rabbitmq_client()
             self.channel = await self.connection.channel()
 
             # Set QoS
