@@ -1,0 +1,41 @@
+[project]
+name = "datapilotflow-rag-agent"
+version = "1.0.0"
+description = "DataPilotFlow RAG Agent - Retrieval-Augmented Generation agent"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+dependencies = [
+    "datapilotflow-domain>=1.0.0",
+    "datapilotflow-persistence>=1.0.0",
+    "datapilotflow-services>=1.0.0",
+    "langgraph>=1.0.2",
+    "langchain-core>=1.0.0",
+    "langchain-community>=0.0.1",
+    "litellm>=1.79.0",
+    "opik>=1.9.11",
+    "loguru>=0.7.3",
+    "fastmcp>=0.4.0",
+    "pydantic>=2.10.6",
+    "pydantic-settings>=2.0.0",
+]
+
+[project.optional-dependencies]
+mcp = [
+    "fastmcp>=0.4.0",
+    "pydantic>=2.10.6",
+    "pydantic-settings>=2.0.0",
+]
+
+[project.scripts]
+datapilotflow-rag-mcp = "datapilotflow.rag_agent.mcp.cli.run_server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/datapilotflow"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

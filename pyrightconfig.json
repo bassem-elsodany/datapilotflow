@@ -5,7 +5,8 @@
   "venvPath": ".",
   "include": [
     "datapilotflow-api/src",
-    "datapilotflow-agents/src",
+    "datapilotflow-rag-agent/src",
+    "datapilotflow-assistant-agent/src",
     "datapilotflow-domain/src",
     "datapilotflow-services/src",
     "datapilotflow-persistence/src",
@@ -18,7 +19,8 @@
   ],
   "extraPaths": [
     "${workspaceRoot}/datapilotflow-api/src",
-    "${workspaceRoot}/datapilotflow-agents/src",
+    "${workspaceRoot}/datapilotflow-rag-agent/src",
+    "${workspaceRoot}/datapilotflow-assistant-agent/src",
     "${workspaceRoot}/datapilotflow-domain/src",
     "${workspaceRoot}/datapilotflow-services/src",
     "${workspaceRoot}/datapilotflow-persistence/src",

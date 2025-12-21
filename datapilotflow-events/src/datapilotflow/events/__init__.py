@@ -1,10 +1,28 @@
-"""DataPilotFlow events - RabbitMQ event system."""
+"""
+DataPilotFlow Events - Event Listening Exposure Layer.
 
-from .events_publisher import EventPublisher
-# EventListener disabled - individual listener modules depend on backend processors package
-# from .events_listeners import EventListener
+This package provides event listeners for the DataPilotFlow event-driven architecture.
+Listeners consume RabbitMQ events and trigger corresponding actions.
+
+Architecture:
+  datapilotflow-events (this package)
+    ├── config.py - Event infrastructure configuration
+    └── events_listeners/ - Event listener implementations
+
+  datapilotflow-services
+    └── events_publisher/ - Event publisher implementations
+"""
+
+from .events_listeners import (
+    BaseEventListener,
+    FileUploadEventListener,
+    JobEventListener,
+    NotificationEventListener,
+)
 
 __all__ = [
-    "EventPublisher",
-    # "EventListener",
+    "BaseEventListener",
+    "FileUploadEventListener",
+    "JobEventListener",
+    "NotificationEventListener",
 ]
