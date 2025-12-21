@@ -15,7 +15,7 @@ from fastapi.websockets import WebSocketDisconnect
 from langchain_core.runnables import RunnableConfig
 from loguru import logger
 
-from datapilotflow.agents.assistant_agent.factory import create_assistant_agent_for_conversation
+from datapilotflow.assistant_agent import create_assistant_agent_for_conversation
 from datapilotflow.api.routers.auth.auth_router import decode_access_token
 from datapilotflow.domain.config import settings
 from datapilotflow.services.conversation.conversation_history_service import (
