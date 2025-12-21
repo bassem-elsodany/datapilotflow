@@ -19,7 +19,7 @@ from datapilotflow.domain.notification.notification import (
     NotificationUpdate,
 )
 from datapilotflow.domain.user import User
-from datapilotflow.persistence.dao.notification_service import NotificationService
+from datapilotflow.infrastructure.dao.notification import NotificationService
 
 logger = logging.getLogger(__name__)
 

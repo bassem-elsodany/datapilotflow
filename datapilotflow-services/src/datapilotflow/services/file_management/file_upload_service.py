@@ -18,7 +18,7 @@ from datapilotflow.domain.config import settings
 import asyncio
 import shutil
 from pathlib import Path
-from datapilotflow.persistence.dao.rag_file_upload_service import RagFileUploadService
+from datapilotflow.infrastructure.dao.file_management import RagFileUploadService
 from datapilotflow.services.events_publisher import get_file_upload_event_publisher
 
 UPLOAD_INBOUND_DIR = settings.RAG_FILE_UPLOAD_INBOUND_DIR

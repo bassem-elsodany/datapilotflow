@@ -288,7 +288,7 @@ async def get_splitter_usage(
             )
 
         # Get additional usage metrics from the database
-        from datapilotflow.persistence.mongo.client import MongoClientWrapper
+        from datapilotflow.infrastructure.mongo.client import MongoClientWrapper
 
         mongo_wrapper = MongoClientWrapper()
         db = mongo_wrapper.db

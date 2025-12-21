@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from loguru import logger
 from datapilotflow.processors.document.file_processor import FileProcessor
-from datapilotflow.persistence.dao.rag_file_upload_service import RagFileUploadService
+from datapilotflow.infrastructure.dao.file_management import RagFileUploadService
 from datapilotflow.domain.config import settings
 from datapilotflow.services.events import RetryConfig
 

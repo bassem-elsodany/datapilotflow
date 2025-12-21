@@ -9,7 +9,7 @@
     "datapilotflow-assistant-agent/src",
     "datapilotflow-domain/src",
     "datapilotflow-services/src",
-    "datapilotflow-persistence/src",
+    "datapilotflow-infrastructure/src",
     "datapilotflow-processors/src"
   ],
   "exclude": [

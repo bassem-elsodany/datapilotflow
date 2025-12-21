@@ -36,6 +36,10 @@ class APISettings(BaseSettings):
         default=60, description="WebSocket timeout in seconds"
     )
 
+    # API Version configuration
+    # To change API version, simply update this value (e.g., "v2", "v3")
+    API_VERSION: str = Field(default="v1", description="API version")
+
     # ============================================================================
     # MongoDB Infrastructure (Duplicated for Independence)
     # ============================================================================
@@ -157,7 +161,8 @@ class APISettings(BaseSettings):
         default="./upload/output", description="Output upload directory"
     )
     RAG_INGESTION_JOBS_OUTPUT_DATA_DIR: str = Field(
-        default="./ingestion_jobs_output_data", description="Ingestion jobs output directory"
+        default="./ingestion_jobs_output_data",
+        description="Ingestion jobs output directory",
     )
 
     # Knowledge Base
@@ -168,3 +173,13 @@ class APISettings(BaseSettings):
 
 # Global API settings instance
 settings = APISettings()
+
+# API Constants derived from settings
+API_PREFIX = f"/api/{settings.API_VERSION}"
+API_CONFIG = {
+    "version": settings.API_VERSION,
+    "prefix": API_PREFIX,
+    "title": "DataPilotFlow API",
+    "description": "API for DataPilotFlow interview management system",
+    "version_info": "1.0.0",
+}

@@ -11,7 +11,7 @@ from loguru import logger
 
 from datapilotflow.domain.knowledge.job_timeline import JobTimeline, JobTimelineCreate, JobTimelineUpdate
 from datapilotflow.domain.knowledge.knowledge_job import JobStatus
-from datapilotflow.persistence.dao.job_timeline_dao import JobTimelineDAO
+from datapilotflow.infrastructure.dao.knowledge import JobTimelineDAO
 
 
 class JobTimelineService:

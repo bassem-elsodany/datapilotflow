@@ -20,7 +20,7 @@ from datapilotflow.domain.model_provider.model_provider import (
     ModelProviderUpdate,
     ModelType,
 )
-from datapilotflow.persistence.dao.model_provider_dao import ModelProviderDAO
+from datapilotflow.infrastructure.dao.model_provider import ModelProviderDAO
 
 
 class ModelProviderService:

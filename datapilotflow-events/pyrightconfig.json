@@ -1,0 +1,43 @@
+{
+  "include": [
+    "src",
+    "tests",
+    "run_*.py"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.*"
+  ],
+  "pythonVersion": "3.13",
+  "pythonPlatform": "Darwin",
+  "venvPath": ".",
+  "venv": ".venv",
+  "typeCheckingMode": "standard",
+  "reportMissingImports": true,
+  "extraPaths": [
+    "src",
+    "../datapilotflow-domain/src",
+    "../datapilotflow-infrastructure/src",
+    "../datapilotflow-services/src",
+    "../datapilotflow-agents/src",
+    "../datapilotflow-processors/src",
+    ".venv/lib/python3.13/site-packages"
+  ],
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "pythonVersion": "3.13",
+      "pythonPlatform": "Darwin",
+      "extraPaths": [
+        "src",
+        "../datapilotflow-domain/src",
+        "../datapilotflow-infrastructure/src",
+        "../datapilotflow-services/src",
+        "../datapilotflow-agents/src",
+        "../datapilotflow-processors/src",
+        ".venv/lib/python3.13/site-packages"
+      ]
+    }
+  ]
+}

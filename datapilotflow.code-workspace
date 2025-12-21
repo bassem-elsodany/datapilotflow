@@ -37,18 +37,6 @@
             "path": "datapilotflow-events"
         },
         {
-            "name": "datapilotflow-persistence",
-            "path": "datapilotflow-persistence",
-            "settings": {
-                "python.defaultInterpreterPath": "/Users/bassem.elsodany/workspaces/datapilotflow/datapilotflow-persistence/.venv/bin/python",
-                "python.venvPath": "/Users/bassem.elsodany/workspaces/datapilotflow/datapilotflow-persistence",
-                "python.venvFolders": [
-                    "/Users/bassem.elsodany/workspaces/datapilotflow/datapilotflow-persistence"
-                ],
-                "python.terminal.activateEnvironment": true
-            }
-        },
-        {
             "name": "datapilotflow-processors",
             "path": "datapilotflow-processors"
         },
@@ -77,7 +65,7 @@
                 "python.terminal.activateEnvInCurrentTerminal": true,
                 "python.analysis.extraPaths": [
                     "${workspaceFolder}/datapilotflow-domain/src",
-                    "${workspaceFolder}/datapilotflow-persistence/src",
+                    "${workspaceFolder}/datapilotflow-infrastructure/src",
                     "${workspaceFolder}/datapilotflow-services/src",
                     "${workspaceFolder}/datapilotflow-agents/src",
                     "${workspaceFolder}/datapilotflow-events/src"
@@ -88,10 +76,22 @@
             }
         },
         {
-            "path": "datapilotflow-rag-agent"
+            "name": "datapilotflow-rag-agent",
+            "path": "datapilotflow-rag-agent",
+            "settings": {
+                "python.defaultInterpreterPath": "/Users/bassem.elsodany/workspaces/datapilotflow/datapilotflow-rag-agent/.venv/bin/python",
+                "python.venvPath": "/Users/bassem.elsodany/workspaces/datapilotflow/datapilotflow-rag-agent",
+                "python.venvFolders": [
+                    "/Users/bassem.elsodany/workspaces/datapilotflow/datapilotflow-rag-agent"
+                ],
+                "python.terminal.activateEnvironment": true
+            }
         },
         {
             "path": "datapilotflow-assistant-agent"
+        },
+        {
+            "path": "datapilotflow-infrastructure"
         }
     ],
     "settings": {
@@ -102,7 +102,7 @@
         "python.analysis.extraPaths": [
             "./backend/src",
             "./datapilotflow-domain/src",
-            "./datapilotflow-persistence/src",
+            "./datapilotflow-infrastructure/src",
             "./datapilotflow-services/src",
             "./datapilotflow-agents/src",
             "./datapilotflow-events/src",

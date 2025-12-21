@@ -21,7 +21,7 @@
       "extraPaths": [
         "src",
         "../datapilotflow-domain/src",
-        "../datapilotflow-persistence/src",
+        "../datapilotflow-infrastructure/src",
         "../datapilotflow-vectordb/src",
         "../datapilotflow-events/src",
         ".venv/lib/python3.13/site-packages"

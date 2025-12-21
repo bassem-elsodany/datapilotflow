@@ -233,7 +233,7 @@ async def agent_query_assistant_websocket(
 
                 if settings.MONGO_AGENT_STATE_CHECKPOINT_ENABLED:
                     # Get global checkpointer (set during app startup)
-                    from datapilotflow.agents.assistant_agent.response_handler import (
+                    from datapilotflow.assistant_agent.response_handler import (
                         _global_checkpointer,
                     )
 

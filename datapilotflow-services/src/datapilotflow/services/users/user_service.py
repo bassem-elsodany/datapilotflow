@@ -9,8 +9,8 @@ from typing import Optional, List, Set, Dict, Any
 from datetime import datetime, timezone
 from loguru import logger
 
-from datapilotflow.persistence.dao.auth_dao import AuthDAO
-from datapilotflow.persistence.dao.roles_dao import RolesDAO
+from datapilotflow.infrastructure.dao.auth import AuthDAO
+from datapilotflow.infrastructure.dao.auth import RolesDAO
 from datapilotflow.domain.user import User
 from datapilotflow.domain.user.role_model import Role, UserRoleAssignment
 

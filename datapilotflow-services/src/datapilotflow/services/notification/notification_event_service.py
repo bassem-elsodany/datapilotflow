@@ -8,19 +8,19 @@ notification system. It decouples notification creation from the main applicatio
 import json
 import uuid
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any
-from loguru import logger
-import aio_pika
+from typing import Any, Dict, Optional
 
+import aio_pika
 from datapilotflow.domain.config import settings
-from datapilotflow.domain.notification import NotificationType, NotificationPriority
-from datapilotflow.services.events.constants import (
+from datapilotflow.domain.events.constants import (
+    NOTIFICATION_EVENTS_DLQ_EXCHANGE,
+    NOTIFICATION_EVENTS_DLQ_QUEUE,
     NOTIFICATION_EVENTS_EXCHANGE,
     NOTIFICATION_EVENTS_QUEUE,
     NOTIFICATION_EVENTS_ROUTING_KEY,
-    NOTIFICATION_EVENTS_DLQ_EXCHANGE,
-    NOTIFICATION_EVENTS_DLQ_QUEUE
 )
+from datapilotflow.domain.notification import NotificationPriority, NotificationType
+from loguru import logger
 
 # RabbitMQ Configuration for Notifications
 RABBITMQ_HOST = settings.RABBITMQ_HOST
@@ -45,27 +45,29 @@ async def publish_notification_event(event_payload: dict):
         async with connection:
             channel = await connection.channel()
             exchange = await channel.declare_exchange(
-                RABBITMQ_NOTIFICATION_EXCHANGE, 
-                aio_pika.ExchangeType.DIRECT, 
-                durable=True
+                RABBITMQ_NOTIFICATION_EXCHANGE,
+                aio_pika.ExchangeType.DIRECT,
+                durable=True,
             )
-            
+
             await exchange.publish(
                 aio_pika.Message(
                     body=json.dumps(event_payload).encode(),
                     content_type="application/json",
                     delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
                     message_id=str(uuid.uuid4()),
-                    timestamp=datetime.now(timezone.utc)
+                    timestamp=datetime.now(timezone.utc),
                 ),
-                routing_key=RABBITMQ_ROUTING_KEY
+                routing_key=RABBITMQ_ROUTING_KEY,
             )
-            
-            logger.info(f"Published notification event: {event_payload.get('event_type')} for user {event_payload.get('user_id')}")
-            
+
+            logger.info(
+                f"Published notification event: {event_payload.get('event_type')} for user {event_payload.get('user_id')}"
+            )
+
             # WebSocket broadcasting will be handled by the notification listener service
             # which will create the notification in MongoDB and broadcast via the API server's WebSocket service
-            
+
     except Exception as e:
         logger.error(f"Error publishing notification event: {e}")
         # Publish to DLQ
@@ -80,34 +82,33 @@ async def publish_to_notification_dlq(event_payload: dict):
         async with connection:
             channel = await connection.channel()
             exchange = await channel.declare_exchange(
-                RABBITMQ_NOTIFICATION_DLQ_EXCHANGE, 
-                aio_pika.ExchangeType.DIRECT, 
-                durable=True
+                RABBITMQ_NOTIFICATION_DLQ_EXCHANGE,
+                aio_pika.ExchangeType.DIRECT,
+                durable=True,
             )
-            
+
             await exchange.publish(
                 aio_pika.Message(
                     body=json.dumps(event_payload).encode(),
                     content_type="application/json",
                     delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
                     message_id=str(uuid.uuid4()),
-                    timestamp=datetime.now(timezone.utc)
+                    timestamp=datetime.now(timezone.utc),
                 ),
-                routing_key=RABBITMQ_ROUTING_KEY
+                routing_key=RABBITMQ_ROUTING_KEY,
             )
-            
-            logger.warning(f"Published notification event to DLQ: {event_payload.get('event_type')}")
-            
+
+            logger.warning(
+                f"Published notification event to DLQ: {event_payload.get('event_type')}"
+            )
+
     except Exception as e:
         logger.error(f"Error publishing to notification DLQ: {e}")
 
 
 # Event-specific publishing functions
 async def fire_session_created_event(
-    user_id: str, 
-    session_id: str, 
-    session_name: str, 
-    job_title: Optional[str] = None
+    user_id: str, session_id: str, session_name: str, job_title: Optional[str] = None
 ):
     """Fire session created notification event."""
     event_payload = {
@@ -121,22 +122,19 @@ async def fire_session_created_event(
         "notification_type": NotificationType.SESSION_CREATED,
         "priority": NotificationPriority.LOW,
         "title": "New Interview Session Created",
-        "message": f"Session '{session_name}' has been created successfully." + (f" Job: {job_title}" if job_title else ""),
+        "message": f"Session '{session_name}' has been created successfully."
+        + (f" Job: {job_title}" if job_title else ""),
         "metadata": {
             "session_name": session_name,
             "job_title": job_title,
-            "event": "session_created"
-        }
+            "event": "session_created",
+        },
     }
-    
+
     await publish_notification_event(event_payload)
 
 
-async def fire_session_deleted_event(
-    user_id: str, 
-    session_id: str, 
-    session_name: str
-):
+async def fire_session_deleted_event(user_id: str, session_id: str, session_name: str):
     """Fire session deleted notification event."""
     event_payload = {
         "event_type": "session_deleted",
@@ -149,26 +147,23 @@ async def fire_session_deleted_event(
         "priority": NotificationPriority.LOW,
         "title": "Interview Session Deleted",
         "message": f"Session '{session_name}' has been deleted successfully.",
-        "metadata": {
-            "session_name": session_name,
-            "event": "session_deleted"
-        }
+        "metadata": {"session_name": session_name, "event": "session_deleted"},
     }
-    
+
     await publish_notification_event(event_payload)
 
 
 async def fire_interview_started_event(
-    user_id: str, 
-    session_id: str, 
-    session_name: str, 
-    candidate_name: Optional[str] = None
+    user_id: str,
+    session_id: str,
+    session_name: str,
+    candidate_name: Optional[str] = None,
 ):
     """Fire interview started notification event."""
     message = f"Interview for session '{session_name}' has begun."
     if candidate_name:
         message += f" Candidate: {candidate_name}"
-    
+
     event_payload = {
         "event_type": "interview_started",
         "event_id": str(uuid.uuid4()),
@@ -184,24 +179,24 @@ async def fire_interview_started_event(
         "metadata": {
             "session_name": session_name,
             "candidate_name": candidate_name,
-            "event": "interview_started"
-        }
+            "event": "interview_started",
+        },
     }
-    
+
     await publish_notification_event(event_payload)
 
 
 async def fire_resume_analysis_completed_event(
-    user_id: str, 
-    session_id: str, 
-    candidate_name: str, 
-    analysis_summary: Optional[str] = None
+    user_id: str,
+    session_id: str,
+    candidate_name: str,
+    analysis_summary: Optional[str] = None,
 ):
     """Fire resume analysis completed notification event."""
     message = f"Resume analysis for {candidate_name} has been completed successfully."
     if analysis_summary:
         message += f" Summary: {analysis_summary}"
-    
+
     event_payload = {
         "event_type": "resume_analysis_completed",
         "event_id": str(uuid.uuid4()),
@@ -217,24 +212,21 @@ async def fire_resume_analysis_completed_event(
         "metadata": {
             "candidate_name": candidate_name,
             "analysis_summary": analysis_summary,
-            "event": "resume_analysis_completed"
-        }
+            "event": "resume_analysis_completed",
+        },
     }
-    
+
     await publish_notification_event(event_payload)
 
 
 async def fire_job_analysis_completed_event(
-    user_id: str, 
-    session_id: str, 
-    job_title: str, 
-    company_name: Optional[str] = None
+    user_id: str, session_id: str, job_title: str, company_name: Optional[str] = None
 ):
     """Fire job analysis completed notification event."""
     message = f"Job analysis for '{job_title}' has been completed successfully."
     if company_name:
         message += f" Company: {company_name}"
-    
+
     event_payload = {
         "event_type": "job_analysis_completed",
         "event_id": str(uuid.uuid4()),
@@ -250,19 +242,19 @@ async def fire_job_analysis_completed_event(
         "metadata": {
             "job_title": job_title,
             "company_name": company_name,
-            "event": "job_analysis_completed"
-        }
+            "event": "job_analysis_completed",
+        },
     }
-    
+
     await publish_notification_event(event_payload)
 
 
 async def fire_error_event(
-    user_id: str, 
-    session_id: Optional[str], 
-    error_type: str, 
-    error_message: str, 
-    context: Optional[Dict[str, Any]] = None
+    user_id: str,
+    session_id: Optional[str],
+    error_type: str,
+    error_message: str,
+    context: Optional[Dict[str, Any]] = None,
 ):
     """Fire error notification event."""
     event_payload = {
@@ -281,18 +273,14 @@ async def fire_error_event(
         "metadata": {
             "error_type": error_type,
             "context": context or {},
-            "event": "error"
-        }
+            "event": "error",
+        },
     }
-    
+
     await publish_notification_event(event_payload)
 
 
-async def fire_job_deleted_event(
-    user_id: str, 
-    job_title: str, 
-    job_id: str
-):
+async def fire_job_deleted_event(user_id: str, job_title: str, job_id: str):
     """Fire job deleted notification event."""
     event_payload = {
         "event_type": "job_deleted",
@@ -305,20 +293,14 @@ async def fire_job_deleted_event(
         "priority": NotificationPriority.MEDIUM,
         "title": "Job Description Deleted",
         "message": f"Job description '{job_title}' has been deleted successfully.",
-        "metadata": {
-            "job_id": job_id,
-            "job_title": job_title,
-            "event": "job_deleted"
-        }
+        "metadata": {"job_id": job_id, "job_title": job_title, "event": "job_deleted"},
     }
-    
+
     await publish_notification_event(event_payload)
 
 
 async def fire_resume_deleted_event(
-    user_id: str, 
-    candidate_name: str, 
-    candidate_id: str
+    user_id: str, candidate_name: str, candidate_id: str
 ):
     """Fire resume deleted notification event."""
     event_payload = {
@@ -335,8 +317,8 @@ async def fire_resume_deleted_event(
         "metadata": {
             "candidate_id": candidate_id,
             "candidate_name": candidate_name,
-            "event": "resume_deleted"
-        }
+            "event": "resume_deleted",
+        },
     }
-    
+
     await publish_notification_event(event_payload)

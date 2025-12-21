@@ -13,7 +13,7 @@ from loguru import logger
 
 from datapilotflow.domain.config import settings
 from datapilotflow.domain.user import User
-from datapilotflow.persistence.dao.auth_dao import AuthDAO
+from datapilotflow.infrastructure.dao.auth import AuthDAO
 
 
 class AuthService:

@@ -23,8 +23,8 @@ from datapilotflow.domain.knowledge.vectordb_collection import (
     VectorDBCollectionCreate,
     VectorDBCollectionUpdate,
 )
-from datapilotflow.persistence.dao import KnowledgeJobDAO
-from datapilotflow.persistence.dao.job_timeline_dao import JobTimelineDAO
+from datapilotflow.infrastructure.dao import KnowledgeJobDAO
+from datapilotflow.infrastructure.dao.knowledge import JobTimelineDAO
 from datapilotflow.services.knowledge.document_splitter_service import (
     get_document_splitter_service,
 )
@@ -271,7 +271,7 @@ class KnowledgeJobService:
 
         if "execution_stats" in expand:
             # Calculate execution statistics
-            from datapilotflow.persistence.dao.job_timeline_dao import JobTimelineDAO
+            from datapilotflow.infrastructure.dao.knowledge import JobTimelineDAO
 
             timeline_dao = JobTimelineDAO()
             latest_timeline = timeline_dao.get_latest_timeline_entry(job_id, user_id)
