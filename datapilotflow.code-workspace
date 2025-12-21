@@ -53,10 +53,6 @@
             "path": "datapilotflow-processors"
         },
         {
-            "name": "datapilotflow-agents",
-            "path": "datapilotflow-agents"
-        },
-        {
             "name": "datapilotflow-services",
             "path": "datapilotflow-services",
             "settings": {
@@ -67,10 +63,6 @@
                 ],
                 "python.terminal.activateEnvironment": true
             }
-        },
-        {
-            "name": "datapilotflow-mcp",
-            "path": "datapilotflow-mcp"
         },
         {
             "name": "datapilotflow-api",
@@ -95,6 +87,12 @@
                 "python.analysis.diagnosticMode": "workspace"
             }
         },
+        {
+            "path": "datapilotflow-rag-agent"
+        },
+        {
+            "path": "datapilotflow-assistant-agent"
+        }
     ],
     "settings": {
         // Python Configuration
