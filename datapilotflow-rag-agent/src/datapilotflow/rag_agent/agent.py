@@ -2,12 +2,13 @@
 
 from typing import Any, Dict, List, Optional
 
-from langchain_community.chat_models import ChatLiteLLM
+from langchain_litellm import ChatLiteLLM
 from loguru import logger
+
+from datapilotflow.rag_agent.state import RAGWorkflowState, create_initial_state
 
 from .agent_interface import AgentService
 from .agent_state import AgentState, RAGContext
-from datapilotflow.rag_agent.state import RAGWorkflowState, create_initial_state
 
 
 class RAGAgentService(AgentService):

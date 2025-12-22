@@ -50,17 +50,17 @@ export function StreamingMessage({
   const [isTyping, setIsTyping] = useState(false);
 
   // Detect text direction based on content
-  const textDirection = useMemo(() => detectTextDirection(displayContent), [displayContent]);
+  const textDirection = useMemo(() => detectTextDirection(displayContent || ''), [displayContent]);
 
   useEffect(() => {
     if (isStreaming) {
       setIsTyping(true);
 
       // For real-time streaming, show content immediately as it comes
-      setDisplayContent(content);
+      setDisplayContent(content || '');
     } else {
       // When streaming is complete, ensure full content is shown
-      setDisplayContent(content);
+      setDisplayContent(content || '');
       setIsTyping(false);
 
       // Add completion animation
@@ -135,9 +135,9 @@ export function StreamingMessage({
             </Box>
           ) : (
             <EnhancedMessageRenderer
-              content={displayContent}
+              content={displayContent || ''}
               metadata={metadata}
-              isRawMode={displayContent.includes('**Raw Results Mode**')}
+              isRawMode={displayContent?.includes('**Raw Results Mode**') || false}
             />
           )}
         </Box>

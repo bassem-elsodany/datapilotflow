@@ -14,14 +14,6 @@ from datetime import datetime, timezone
 from typing import Any, AsyncGenerator, Dict, Optional
 
 import litellm
-from langchain_community.chat_models import ChatLiteLLM
-from loguru import logger
-from opik.integrations.langchain import OpikTracer
-
-from ..agent_state import AgentState
-from datapilotflow.rag_agent.graph import graph_dev as workflow
-from datapilotflow.rag_agent.state import RAGWorkflowState as WorkflowState
-from datapilotflow.rag_agent.state import create_initial_state
 from datapilotflow.domain.config import settings
 from datapilotflow.domain.conversation import ConversationMessage
 from datapilotflow.services.conversation.conversation_history_service import (
@@ -30,6 +22,15 @@ from datapilotflow.services.conversation.conversation_history_service import (
 from datapilotflow.services.model_provider.model_provider_service import (
     get_model_provider_service,
 )
+from langchain_litellm import ChatLiteLLM
+from loguru import logger
+from opik.integrations.langchain import OpikTracer
+
+from datapilotflow.rag_agent.graph import graph_dev as workflow
+from datapilotflow.rag_agent.state import RAGWorkflowState as WorkflowState
+from datapilotflow.rag_agent.state import create_initial_state
+
+from ..agent_state import AgentState
 
 # Enable dropping unsupported params for different LLM providers
 # (e.g., GPT-5 only supports temperature=1, not 0.7)
@@ -184,16 +185,35 @@ async def get_response_stream_rag(
             max_tokens = generative_config.get("max_tokens", 4096)
 
             # Create primary LLM client using ChatLiteLLM with provider's config
-            model_string = f"{provider.provider_type}/{llm_model_name}"
-            llm_client = ChatLiteLLM(
-                model=model_string,
-                api_key=provider.api_key,
-                api_base=provider.endpoint if provider.endpoint else None,
-                timeout=provider.timeout if provider.timeout else 60,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                streaming=True,  # Enable streaming for real-time response chunks
-            )
+            # If provider_type is "custom", use model name directly without prefix
+            if provider.provider_type.lower() == "custom":
+                model_string = llm_model_name
+            else:
+                model_string = f"{provider.provider_type}/{llm_model_name}"
+
+            # Prepare ChatLiteLLM parameters with custom API key field name support
+            llm_params = {
+                "model": model_string,
+                "api_base": provider.endpoint if provider.endpoint else None,
+                "timeout": provider.timeout if provider.timeout else 60,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "streaming": True,  # Enable streaming for real-time response chunks
+            }
+
+            # Handle API key and custom header name
+            if provider.api_key:
+                llm_params["api_key"] = provider.api_key
+                # If custom API key field name is specified, add it to extra_headers
+                if (
+                    provider.api_key_field_name
+                    and provider.api_key_field_name != "api_key"
+                ):
+                    llm_params["extra_headers"] = {
+                        provider.api_key_field_name: provider.api_key
+                    }
+
+            llm_client = ChatLiteLLM(**llm_params)
 
             logger.info(
                 f"✅ Created primary LLM client: {model_string} (temperature={temperature}, max_tokens={max_tokens})"
@@ -224,9 +244,7 @@ async def get_response_stream_rag(
             )
 
             if not reranker_provider:
-                raise ValueError(
-                    f"Reranker provider not found: {reranker_provider_id}"
-                )
+                raise ValueError(f"Reranker provider not found: {reranker_provider_id}")
 
             if not reranker_provider.is_active:
                 raise ValueError(
@@ -250,20 +268,41 @@ async def get_response_stream_rag(
             reranker_max_tokens = reranker_generative_config.get("max_tokens", 4096)
 
             # Create reranker LLM client
-            reranker_model_string = (
-                f"{reranker_provider.provider_type}/{reranker_model_name}"
-            )
-            reranker_client = ChatLiteLLM(
-                model=reranker_model_string,
-                api_key=reranker_provider.api_key,
-                api_base=reranker_provider.endpoint
-                if reranker_provider.endpoint
-                else None,
-                timeout=reranker_provider.timeout if reranker_provider.timeout else 60,
-                temperature=reranker_temperature,
-                max_tokens=reranker_max_tokens,
-                streaming=True,
-            )
+            # If provider_type is "custom", use model name directly without prefix
+            if reranker_provider.provider_type.lower() == "custom":
+                reranker_model_string = reranker_model_name
+            else:
+                reranker_model_string = (
+                    f"{reranker_provider.provider_type}/{reranker_model_name}"
+                )
+
+            # Prepare ChatLiteLLM parameters with custom API key field name support
+            reranker_params = {
+                "model": reranker_model_string,
+                "api_base": (
+                    reranker_provider.endpoint if reranker_provider.endpoint else None
+                ),
+                "timeout": (
+                    reranker_provider.timeout if reranker_provider.timeout else 60
+                ),
+                "temperature": reranker_temperature,
+                "max_tokens": reranker_max_tokens,
+                "streaming": True,
+            }
+
+            # Handle API key and custom header name
+            if reranker_provider.api_key:
+                reranker_params["api_key"] = reranker_provider.api_key
+                # If custom API key field name is specified, add it to extra_headers
+                if (
+                    reranker_provider.api_key_field_name
+                    and reranker_provider.api_key_field_name != "api_key"
+                ):
+                    reranker_params["extra_headers"] = {
+                        reranker_provider.api_key_field_name: reranker_provider.api_key
+                    }
+
+            reranker_client = ChatLiteLLM(**reranker_params)
 
             logger.info(
                 f"✅ Created reranker LLM client: {reranker_model_string} (temperature={reranker_temperature}, max_tokens={reranker_max_tokens})"
@@ -879,7 +918,7 @@ async def get_response_stream_rag(
             # SAVE messages to conversation history
             try:
                 # Extract the final response from state
-                final_response = last_state.get("final_answer", "")
+                final_response = last_state.get("final_answer", "") or ""
 
                 # Save user query message
                 conversation_history_service.add_message(
@@ -905,7 +944,7 @@ async def get_response_stream_rag(
                     document_count=len(retrieved_docs),
                 )
                 logger.info(
-                    f"✅ [RAG] Saved assistant message to conversation {conversation_id} (response length: {len(final_response)} chars)"
+                    f"✅ [RAG] Saved assistant message to conversation {conversation_id} (response length: {len(final_response) if final_response else 0} chars)"
                 )
 
             except Exception as e:
