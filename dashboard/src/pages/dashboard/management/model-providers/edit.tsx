@@ -1,4 +1,5 @@
-import { ModelType, useGetModelProvider, useTestModelProvider, useUpdateModelProvider } from '@/api/resources/model-providers';
+import { ModelType, useGetAvailableProviderTypes, useGetModelProvider, useTestModelProviderById, useUpdateModelProvider } from '@/api/resources/model-providers';
+import { BrowseModelsModal } from '@/components/browse-models-modal';
 import { Page } from '@/components/page';
 import { PageHeader } from '@/components/page-header';
 import { paths } from '@/routes/paths';
@@ -24,6 +25,7 @@ import {
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
+import { IconBookmark } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
@@ -41,7 +43,8 @@ export default function EditModelProvider() {
 
   const { data: provider, isLoading, error } = useGetModelProvider(providerId || '');
   const updateProviderMutation = useUpdateModelProvider(providerId || '');
-  const testProviderMutation = useTestModelProvider();
+  const testProviderMutation = useTestModelProviderById(providerId || '');
+  const { data: providerTypes = [], isLoading: isLoadingProviderTypes } = useGetAvailableProviderTypes();
 
   const [isEditingApiKey, setIsEditingApiKey] = useState(false);
   const [originalApiKey, setOriginalApiKey] = useState<string>('');
@@ -56,12 +59,18 @@ export default function EditModelProvider() {
     body?: string;
   } | null>(null);
 
+  // Browse models modal state
+  const [browseModelsModalOpen, setBrowseModelsModalOpen] = useState(false);
+  const [browseModelsType, setBrowseModelsType] = useState<ModelType | null>(null);
+  const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
+
   const form = useForm({
     initialValues: {
       name: '',
       provider_type: '',
       endpoint: '',
       api_key: '',
+      api_key_field_name: 'api_key',
       description: '',
       is_active: true,
       timeout: 60,
@@ -88,6 +97,7 @@ export default function EditModelProvider() {
     provider_type: values.provider_type,
     endpoint: values.endpoint,
     api_key: values.api_key || undefined,
+    api_key_field_name: values.api_key_field_name || 'api_key',
     description: values.description || undefined,
     is_active: values.is_active,
     timeout: values.timeout,
@@ -125,8 +135,7 @@ export default function EditModelProvider() {
     }
 
     try {
-      const providerPayload = buildProviderPayload(form.values);
-      const payload = { provider: providerPayload, test_type: testType, model: modelName };
+      const payload = { test_type: testType, model: modelName };
 
       const result = await testProviderMutation.mutateAsync({ variables: payload } as any);
 
@@ -138,23 +147,73 @@ export default function EditModelProvider() {
         body: result.body,
       });
     } catch (error: any) {
+      // Extract detailed error message from API response
+      let errorMessage = 'Failed to run test';
+      
+      if (error?.response?.data?.detail) {
+        // FastAPI standard error format
+        errorMessage = typeof error.response.data.detail === 'string' 
+          ? error.response.data.detail 
+          : JSON.stringify(error.response.data.detail);
+      } else if (error?.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error?.message) {
+        errorMessage = error.message;
+      } else if (error?.detail) {
+        errorMessage = error.detail;
+      }
+
       setTestResult({
         success: false,
-        status_code: undefined,
+        status_code: error?.response?.status || error?.status,
         duration_ms: undefined,
-        message: error?.message || 'Failed to run test',
-        body: undefined,
+        message: errorMessage,
+        body: error?.response?.data ? JSON.stringify(error.response.data, null, 2) : undefined,
       });
     }
   };
 
-  const openTestModal = (testType: ModelType, models: string[]) => {
-    if (!models.length) return;
-    if (models.length === 1) {
-      // Only one model → test directly
-      void handleTest(testType, models[0]);
+  const handleBrowseModels = (modelType: ModelType) => {
+    setBrowseModelsType(modelType);
+    setSelectedModels(new Set());
+    setBrowseModelsModalOpen(true);
+  };
+
+  const handleAddSelectedModels = () => {
+    if (!browseModelsType || selectedModels.size === 0) {
+      notifications.show({
+        title: 'Error',
+        message: 'Please select at least one model',
+        color: 'red',
+      });
       return;
     }
+
+    const modelsToAdd = Array.from(selectedModels);
+
+    if (browseModelsType === ModelType.EMBEDDING) {
+      const newModels = [...form.values.embedding_models, ...modelsToAdd].filter((v, i, a) => a.indexOf(v) === i);
+      form.setFieldValue('embedding_models', newModels);
+    } else if (browseModelsType === ModelType.GENERATIVE) {
+      const newModels = [...form.values.generative_models, ...modelsToAdd].filter((v, i, a) => a.indexOf(v) === i);
+      form.setFieldValue('generative_models', newModels);
+    } else if (browseModelsType === ModelType.RERANKER) {
+      const newModels = [...form.values.reranker_models, ...modelsToAdd].filter((v, i, a) => a.indexOf(v) === i);
+      form.setFieldValue('reranker_models', newModels);
+    }
+
+    setBrowseModelsModalOpen(false);
+    setSelectedModels(new Set());
+
+    notifications.show({
+      title: 'Success',
+      message: `Added ${modelsToAdd.length} model(s)`,
+      color: 'green',
+    });
+  };
+
+  const openTestModal = (testType: ModelType, models: string[]) => {
+    if (!models.length) return;
     setTestModalType(testType);
     setTestModalModel(models[0]);
     setTestModalOpen(true);
@@ -180,6 +239,7 @@ export default function EditModelProvider() {
         provider_type: provider.provider_type,
         endpoint: provider.endpoint,
         api_key: provider.api_key || '',
+        api_key_field_name: provider.api_key_field_name ?? 'api_key',
         description: provider.description || '',
         is_active: provider.is_active,
         timeout: provider.timeout,
@@ -204,6 +264,7 @@ export default function EditModelProvider() {
         provider_type: values.provider_type,
         endpoint: values.endpoint,
         api_key: values.api_key || undefined,
+        api_key_field_name: values.api_key_field_name || 'api_key',
         description: values.description || undefined,
         is_active: values.is_active,
         timeout: values.timeout,
@@ -316,89 +377,12 @@ export default function EditModelProvider() {
                   />
                   <Select
                     label="Provider Type"
-                    placeholder="Select the provider type"
+                    placeholder={isLoadingProviderTypes ? "Loading provider types..." : "Select the provider type"}
                     description="Choose the provider type from the list."
                     required
                     searchable
-                    data={[
-                      { value: 'openai', label: 'OpenAI' },
-                      { value: 'azure', label: 'Azure OpenAI' },
-                      { value: 'azure_ai', label: 'Azure AI' },
-                      { value: 'openrouter', label: 'OpenRouter' },
-                      { value: 'fireworks_ai', label: 'Fireworks AI' },
-                      { value: 'groq', label: 'Groq' },
-                      { value: 'together_ai', label: 'Together AI' },
-                      { value: 'perplexity', label: 'Perplexity AI' },
-                      { value: 'anyscale', label: 'Anyscale' },
-                      { value: 'deepinfra', label: 'DeepInfra' },
-                      { value: 'deepseek', label: 'Deepseek' },
-                      { value: 'mistral', label: 'Mistral AI API' },
-                      { value: 'codestral', label: 'Codestral API (Mistral AI)' },
-                      { value: 'cohere', label: 'Cohere' },
-                      { value: 'ai21', label: 'AI21' },
-                      { value: 'bedrock', label: 'AWS Bedrock (compat)' },
-                      { value: 'vertex_ai', label: 'Vertex AI (compat)' },
-                      { value: 'google_ai_studio', label: 'Google AI Studio' },
-                      { value: 'gcp_vertex', label: 'GCP Vertex (compat)' },
-                      { value: 'snowflake', label: 'Snowflake Cortex (compat)' },
-                      { value: 'qwen_dashscope', label: 'Dashscope (Qwen API)' },
-                      { value: 'voyage', label: 'Voyage AI' },
-                      { value: 'replicate', label: 'Replicate' },
-                      { value: 'sambanova', label: 'SambaNova' },
-                      { value: 'huggingface', label: 'HuggingFace Inference' },
-                      { value: 'ollama', label: 'Ollama' },
-                      { value: 'hyperbolic', label: 'Hyperbolic' },
-                      { value: 'nscale', label: 'Nscale (EU Sovereign)' },
-                      { value: 'datarobot', label: 'DataRobot' },
-                      { value: 'predibase', label: 'Predibase' },
-                      { value: 'baseten', label: 'Baseten' },
-                      { value: 'cerebras', label: 'Cerebras' },
-                      { value: 'clarifai', label: 'Clarifai' },
-                      { value: 'cloudflare_workers_ai', label: 'Cloudflare Workers AI' },
-                      { value: 'comet', label: 'CometAPI' },
-                      { value: 'dashscope', label: 'Dashscope' },
-                      { value: 'databricks', label: 'Databricks' },
-                      { value: 'docker', label: 'Docker Model Runner' },
-                      { value: 'elevenlabs', label: 'ElevenLabs' },
-                      { value: 'fal', label: 'Fal AI' },
-                      { value: 'friendliai', label: 'FriendliAI' },
-                      { value: 'gradient', label: 'GradientAI' },
-                      { value: 'helicone', label: 'Helicone' },
-                      { value: 'hyperbolic_api', label: 'Hyperbolic API' },
-                      { value: 'infinity', label: 'Infinity' },
-                      { value: 'jina', label: 'Jina AI' },
-                      { value: 'lambda', label: 'Lambda AI' },
-                      { value: 'langgraph', label: 'LangGraph' },
-                      { value: 'lepton', label: 'Lepton' },
-                      { value: 'lmarena', label: 'LM Arena' },
-                      { value: 'maritaca', label: 'Maritaca' },
-                      { value: 'modal', label: 'Modal' },
-                      { value: 'nemotron', label: 'Nemotron' },
-                      { value: 'neuroflash', label: 'Neuroflash' },
-                      { value: 'nlp_cloud', label: 'NLP Cloud' },
-                      { value: 'octoai', label: 'OctoAI' },
-                      { value: 'ollama_compatible', label: 'Ollama Compatible' },
-                      { value: 'one_ai', label: 'One AI' },
-                      { value: 'openai_compatible', label: 'OpenAI Compatible (Generic)' },
-                      { value: 'openllm', label: 'OpenLLM' },
-                      { value: 'paradigm', label: 'Paradigm' },
-                      { value: 'pebblo', label: 'Pebblo' },
-                      { value: 'petals', label: 'Petals' },
-                      { value: 'prowler', label: 'Prowler' },
-                      { value: 'ray', label: 'Ray Serve' },
-                      { value: 'sagemaker', label: 'SageMaker' },
-                      { value: 'samba', label: 'Samba' },
-                      { value: 'sap_btp', label: 'SAP BTP' },
-                      { value: 'skylark', label: 'Skylark' },
-                      { value: 'stochastic', label: 'Stochastic' },
-                      { value: 'textcortex', label: 'TextCortex' },
-                      { value: 'together', label: 'Together (legacy)' },
-                      { value: 'upstage', label: 'Upstage' },
-                      { value: 'vllm', label: 'vLLM' },
-                      { value: 'voyage_ai', label: 'Voyage AI (alt)' },
-                      { value: 'writer', label: 'Writer' },
-                      { value: 'xai', label: 'xAI' },
-                    ]}
+                    disabled={isLoadingProviderTypes}
+                    data={providerTypes.map((type: string) => ({ value: type, label: type }))}
                     {...form.getInputProps('provider_type')}
                   />
                 </SimpleGrid>
@@ -438,47 +422,56 @@ export default function EditModelProvider() {
                   </div>
                 </Group>
 
-                <div>
+                <Group grow align="flex-start">
                   <TextInput
-                    label="API Key"
-                    placeholder="Your API key (optional)"
-                    description="Secret key sent to the provider (kept encrypted)."
-                    value={isEditingApiKey ? form.values.api_key : maskApiKey(form.values.api_key)}
-                    onChange={(e) => {
-                      if (!isEditingApiKey) {
-                        setIsEditingApiKey(true);
-                        form.setFieldValue('api_key', '');
-                      } else {
-                        form.setFieldValue('api_key', e.currentTarget.value);
-                      }
-                    }}
-                    onFocus={() => {
-                      if (!isEditingApiKey) {
-                        setIsEditingApiKey(true);
-                        form.setFieldValue('api_key', '');
-                      }
-                    }}
-                    rightSection={
-                      isEditingApiKey && (
-                        <Button
-                          size="xs"
-                          variant="subtle"
-                          onClick={() => {
-                            setIsEditingApiKey(false);
-                            form.setFieldValue('api_key', originalApiKey);
-                          }}
-                        >
-                          Cancel
-                        </Button>
-                      )
-                    }
+                    label="API Key Field Name"
+                    placeholder="api_key"
+                    description="HTTP header name for the API key (e.g., 'api_key', 'Api-Key', 'X-API-Key', 'Authorization'). Defaults to 'api_key'."
+                    value={form.values.api_key_field_name}
+                    onChange={(e) => form.setFieldValue('api_key_field_name', e.currentTarget.value)}
                   />
-                  {!isEditingApiKey && (
-                    <Text size="xs" c="dimmed" mt={4}>
-                      Click to change API key
-                    </Text>
-                  )}
-                </div>
+                  <div>
+                    <TextInput
+                      label="API Key"
+                      placeholder="Your API key (optional)"
+                      description="Secret key sent to the provider (kept encrypted)."
+                      value={isEditingApiKey ? form.values.api_key : maskApiKey(form.values.api_key)}
+                      onChange={(e) => {
+                        if (!isEditingApiKey) {
+                          setIsEditingApiKey(true);
+                          form.setFieldValue('api_key', '');
+                        } else {
+                          form.setFieldValue('api_key', e.currentTarget.value);
+                        }
+                      }}
+                      onFocus={() => {
+                        if (!isEditingApiKey) {
+                          setIsEditingApiKey(true);
+                          form.setFieldValue('api_key', '');
+                        }
+                      }}
+                      rightSection={
+                        isEditingApiKey && (
+                          <Button
+                            size="xs"
+                            variant="subtle"
+                            onClick={() => {
+                              setIsEditingApiKey(false);
+                              form.setFieldValue('api_key', originalApiKey);
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        )
+                      }
+                    />
+                    {!isEditingApiKey && (
+                      <Text size="xs" c="dimmed" mt={4}>
+                        Click to change API key
+                      </Text>
+                    )}
+                  </div>
+                </Group>
 
               </Stack>
             </Paper>
@@ -516,17 +509,27 @@ export default function EditModelProvider() {
                               Used for vector search and similarity.
                             </Text>
                           </div>
-                          <Button
-                            size="xs"
-                            variant="light"
-                            onClick={() => openTestModal(ModelType.EMBEDDING, form.values.embedding_models)}
-                            disabled={
-                              !form.values.embedding_models.length || testProviderMutation.isPending
-                            }
-                            loading={testProviderMutation.isPending}
-                          >
-                            Test embedding
-                          </Button>
+                          <Group gap="xs">
+                            <Button
+                              size="xs"
+                              variant="default"
+                              leftSection={<IconBookmark size={14} />}
+                              onClick={() => handleBrowseModels(ModelType.EMBEDDING)}
+                            >
+                              Browse Models
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="light"
+                              onClick={() => openTestModal(ModelType.EMBEDDING, form.values.embedding_models)}
+                              disabled={
+                                !form.values.embedding_models.length || testProviderMutation.isPending
+                              }
+                              loading={testProviderMutation.isPending}
+                            >
+                              Test embedding
+                            </Button>
+                          </Group>
                         </Group>
 
                         <TagsInput
@@ -568,18 +571,28 @@ export default function EditModelProvider() {
                               Used for chat, completions, and reasoning.
                             </Text>
                           </div>
-                          <Button
-                            size="xs"
-                            variant="light"
-                            onClick={() => openTestModal(ModelType.GENERATIVE, form.values.generative_models)}
-                            disabled={
-                              !form.values.generative_models.length ||
-                              testProviderMutation.isPending
-                            }
-                            loading={testProviderMutation.isPending}
-                          >
-                            Test generative
-                          </Button>
+                          <Group gap="xs">
+                            <Button
+                              size="xs"
+                              variant="default"
+                              leftSection={<IconBookmark size={14} />}
+                              onClick={() => handleBrowseModels(ModelType.GENERATIVE)}
+                            >
+                              Browse Models
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="light"
+                              onClick={() => openTestModal(ModelType.GENERATIVE, form.values.generative_models)}
+                              disabled={
+                                !form.values.generative_models.length ||
+                                testProviderMutation.isPending
+                              }
+                              loading={testProviderMutation.isPending}
+                            >
+                              Test generative
+                            </Button>
+                          </Group>
                         </Group>
 
                         <TagsInput
@@ -633,18 +646,28 @@ export default function EditModelProvider() {
                               Used to reorder documents by relevance.
                             </Text>
                           </div>
-                          <Button
-                            size="xs"
-                            variant="light"
-                            onClick={() => openTestModal(ModelType.RERANKER, form.values.reranker_models)}
-                            disabled={
-                              !form.values.reranker_models.length ||
-                              testProviderMutation.isPending
-                            }
-                            loading={testProviderMutation.isPending}
-                          >
-                            Test reranker
-                          </Button>
+                          <Group gap="xs">
+                            <Button
+                              size="xs"
+                              variant="default"
+                              leftSection={<IconBookmark size={14} />}
+                              onClick={() => handleBrowseModels(ModelType.RERANKER)}
+                            >
+                              Browse Models
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="light"
+                              onClick={() => openTestModal(ModelType.RERANKER, form.values.reranker_models)}
+                              disabled={
+                                !form.values.reranker_models.length ||
+                                testProviderMutation.isPending
+                              }
+                              loading={testProviderMutation.isPending}
+                            >
+                              Test reranker
+                            </Button>
+                          </Group>
                         </Group>
 
                         <TagsInput
@@ -702,30 +725,36 @@ export default function EditModelProvider() {
           setTestModalOpen(false);
           setTestResult(null);
         }}
-        title="Test provider"
-        size="xl"
+        title={`Test ${testModalType ? testModalType.charAt(0).toUpperCase() + testModalType.slice(1) : 'Model'}`}
+        size="lg"
         centered
       >
-        <Stack gap="md">
-          <Text size="sm">
-            {testModalType
-              ? `Select a ${testModalType} model to run a live health check and inspect the response payload.`
-              : 'Select a model to test.'}
-          </Text>
-          <Select
-            label="Model"
-            placeholder="Select model"
-            data={
-              testModalType === ModelType.EMBEDDING
-                ? form.values.embedding_models
-                : testModalType === ModelType.GENERATIVE
-                  ? form.values.generative_models
-                  : form.values.reranker_models
-            }
-            value={testModalModel}
-            onChange={(value) => setTestModalModel(value || '')}
-          />
-          <Group justify="flex-end">
+        <Stack gap="lg">
+          {/* Model Selection Section */}
+          <Stack gap="sm">
+            <Text size="sm" c="dimmed">
+              {testModalType
+                ? `Select a ${testModalType} model to run a live health check and inspect the response payload.`
+                : 'Select a model to test.'}
+            </Text>
+            <Select
+              label="Model"
+              placeholder="Select model"
+              data={
+                testModalType === ModelType.EMBEDDING
+                  ? form.values.embedding_models
+                  : testModalType === ModelType.GENERATIVE
+                    ? form.values.generative_models
+                    : form.values.reranker_models
+              }
+              value={testModalModel}
+              onChange={(value) => setTestModalModel(value || '')}
+              searchable
+            />
+          </Stack>
+
+          {/* Action Buttons */}
+          <Group justify="flex-end" gap="sm">
             <Button
               variant="default"
               onClick={() => {
@@ -747,38 +776,67 @@ export default function EditModelProvider() {
             </Button>
           </Group>
 
+          {/* Test Results Section */}
           {testResult && (
-            <Stack gap="xs">
-              <Text size="sm" fw={500}>
-                Result
-              </Text>
-              <Text size="sm">
-                Status: {testResult.status_code ?? 'N/A'} | Duration: {testResult.duration_ms ?? 'N/A'}ms
-              </Text>
-              <Text size="sm">Message: {testResult.message ?? 'N/A'}</Text>
-              <Text size="sm" fw={500} mt="sm">
-                Response body (JSON)
-              </Text>
-              <Paper withBorder radius="md" p="xs">
-                <Textarea
-                  value={testResult.body ?? ''}
-                  minRows={8}
-                  maxRows={12}
-                  autosize
-                  readOnly
-                  spellCheck={false}
-                  styles={{
-                    input: {
-                      fontFamily: 'Menlo, Monaco, Consolas, monospace',
-                      fontSize: 12,
-                    },
-                  }}
-                />
-              </Paper>
+            <Stack gap="md" p="md" style={{ backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
+              <div>
+                <Text size="sm" fw={600} mb="xs">
+                  Test Result
+                </Text>
+                <Stack gap="xs" style={{ fontSize: '0.875rem' }}>
+                  <Group justify="space-between">
+                    <Text c="dimmed">Status Code:</Text>
+                    <Text fw={500}>{testResult.status_code ?? 'N/A'}</Text>
+                  </Group>
+                  <Group justify="space-between">
+                    <Text c="dimmed">Duration:</Text>
+                    <Text fw={500}>{testResult.duration_ms ?? 'N/A'} ms</Text>
+                  </Group>
+                  <Group justify="space-between">
+                    <Text c="dimmed">Message:</Text>
+                    <Text fw={500} c={testResult.success ? 'green' : 'red'}>
+                      {testResult.message ?? 'N/A'}
+                    </Text>
+                  </Group>
+                </Stack>
+              </div>
+
+              <div>
+                <Text size="sm" fw={600} mb="xs">
+                  Response Body (JSON)
+                </Text>
+                <Paper withBorder radius="md" p="xs" style={{ backgroundColor: 'white' }}>
+                  <Textarea
+                    value={testResult.body ?? ''}
+                    minRows={8}
+                    maxRows={12}
+                    autosize
+                    readOnly
+                    spellCheck={false}
+                    styles={{
+                      input: {
+                        fontFamily: 'Menlo, Monaco, Consolas, monospace',
+                        fontSize: 12,
+                      },
+                    }}
+                  />
+                </Paper>
+              </div>
             </Stack>
           )}
         </Stack>
       </Modal>
+
+      {/* Browse Models Modal */}
+      <BrowseModelsModal
+        isOpen={browseModelsModalOpen}
+        modelType={browseModelsType}
+        providerType={form.values.provider_type}
+        selectedModels={selectedModels}
+        onSelectedModelsChange={setSelectedModels}
+        onClose={() => setBrowseModelsModalOpen(false)}
+        onAdd={handleAddSelectedModels}
+      />
 
     </Page>
   );

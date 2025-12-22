@@ -61,6 +61,13 @@ class ModelProvider(BaseModel):
         default=None,
         description="API key for authentication (can be None for providers like Ollama)",
     )
+    api_key_field_name: str = Field(
+        default="api_key",
+        description=(
+            "HTTP header name for the API key (e.g., 'api_key', 'Api-Key', 'X-API-Key', 'Authorization'). "
+            "Defaults to 'api_key'. LiteLLM will use this as the header name when making requests."
+        ),
+    )
     description: Optional[str] = Field(
         default=None, description="Description of the model provider"
     )
@@ -141,6 +148,13 @@ class ModelProviderCreate(BaseModel):
         default=None,
         description="API key for authentication (can be None for providers like Ollama)",
     )
+    api_key_field_name: str = Field(
+        default="api_key",
+        description=(
+            "HTTP header name for the API key (e.g., 'api_key', 'Api-Key', 'X-API-Key', 'Authorization'). "
+            "Defaults to 'api_key'. LiteLLM will use this as the header name when making requests."
+        ),
+    )
     description: Optional[str] = Field(
         default=None, description="Description of the model provider"
     )
@@ -185,6 +199,13 @@ class ModelProviderResponse(BaseModel):
     api_key: Optional[str] = Field(
         default=None,
         description="API key for authentication (full key, UI will mask it for display)",
+    )
+    api_key_field_name: str = Field(
+        default="api_key",
+        description=(
+            "HTTP header name for the API key (e.g., 'api_key', 'Api-Key', 'X-API-Key', 'Authorization'). "
+            "Defaults to 'api_key'."
+        ),
     )
     description: Optional[str] = Field(
         default=None, description="Description of the model provider"

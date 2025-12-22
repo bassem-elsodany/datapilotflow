@@ -14,26 +14,109 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # to configure service-specific logging BEFORE importing config
 # This default setup is for backward compatibility and library usage
 
-# Remove default handler if it exists
-try:
-    logger.remove(0)
-except ValueError:
-    pass  # Handler doesn't exist, which is fine
 
-# Set up default logging (run scripts will override this by calling setup_service_logging first)
-logger.add(
-    sys.stderr,
-    format="{time:MMMM D, YYYY > HH:mm:ss!UTC} | {level} | {name} | {file}:{line} | {message} | {extra}",
-    level="INFO",
-)
-logger.add(
-    "logs/datapilotflow.log",
-    format="{time:MMMM D, YYYY > HH:mm:ss!UTC} | {level} | {name} | {file}:{line} | {message} | {extra}",
-    level="DEBUG",
-    rotation="00:00",
-    retention="30 days",
-    compression="zip",
-)
+# Check if we're running in a service context (e.g., run_api_server.py, run_processor.py)
+# If so, don't create the default log file - setup_service_logging will handle it
+def _is_service_context() -> bool:
+    """Check if we're running in a service context."""
+    try:
+        # Check if the main script is a service runner (starts with 'run_')
+        if len(sys.argv) > 0:
+            script_name = Path(sys.argv[0]).name
+            if script_name.startswith("run_") or "uvicorn" in script_name.lower():
+                return True
+        # Check if we're being imported by uvicorn or any service module
+        import inspect
+
+        for frame in inspect.stack():
+            frame_file = str(frame.filename).lower()
+            if any(
+                keyword in frame_file
+                for keyword in ["uvicorn", "run_", "api_server", "server.py"]
+            ):
+                return True
+    except Exception:
+        pass
+    return False
+
+
+# Check if logging has already been configured by setup_service_logging()
+# by checking the module-level flag in domain.logging
+_logging_already_configured = False
+
+# First, try to import and check the flag
+try:
+    from datapilotflow.domain.logging import _service_logging_configured
+
+    _logging_already_configured = _service_logging_configured
+except (ImportError, AttributeError):
+    # Flag doesn't exist or can't be imported - will check handlers below
+    pass
+
+# If we're in a service context, don't create the default log file
+if _is_service_context():
+    _logging_already_configured = True
+
+# ALWAYS check handlers as a fallback (even if flag check passed)
+# This prevents file creation when domain.config is imported before setup_service_logging
+if not _logging_already_configured:
+    try:
+        handlers = logger._core.handlers  # type: ignore
+        if handlers:
+            # Check if any handler is writing to a file (not just stderr)
+            for handler_id, handler in handlers.items():
+                sink = getattr(handler, "sink", None)
+                # Check if sink is a file path (string or Path)
+                if isinstance(sink, (str, Path)):
+                    sink_str = str(sink)
+                    # If it's a file path (contains 'log' or ends with .log) and not stderr
+                    if "log" in sink_str.lower() and sink != sys.stderr:
+                        _logging_already_configured = True
+                        break
+                # Check if sink is a file object (has 'name' attribute)
+                elif hasattr(sink, "name") and sink != sys.stderr:
+                    sink_name = str(getattr(sink, "name", ""))
+                    if "log" in sink_name.lower():
+                        _logging_already_configured = True
+                        break
+    except (AttributeError, TypeError, Exception):
+        pass
+
+# Also check if service-specific log files already exist in logs directory
+# This prevents creating datapilotflow.log when we're in a service context
+# (e.g., api.log, processor.log, etc. already exist)
+if not _logging_already_configured:
+    try:
+        logs_dir = Path("logs")
+        if logs_dir.exists():
+            # Check for service-specific log files (api.log, processor.log, etc.)
+            for log_file in logs_dir.glob("*.log"):
+                # If any service-specific log file exists, don't create default one
+                if log_file.name != "datapilotflow.log":
+                    _logging_already_configured = True
+                    break
+    except (OSError, Exception):
+        pass
+
+# Only set up default logging if logging hasn't been configured yet
+# This prevents duplicate loggers when setup_service_logging() has already been called
+# OR when any file handler already exists OR when service-specific log files exist
+if not _logging_already_configured:
+    # Remove default handler if it exists
+    try:
+        logger.remove(0)
+    except ValueError:
+        pass  # Handler doesn't exist, which is fine
+
+    # Set up default logging - ONLY stderr, NO FILE HANDLERS
+    # Services (API, events, MCP server, etc.) MUST use setup_service_logging()
+    # to create their own service-specific log files (api.log, processor.log, etc.)
+    # domain.config should NEVER create datapilotflow.log
+    logger.add(
+        sys.stderr,
+        format="{time:MMMM D, YYYY > HH:mm:ss!UTC} | {level} | {name} | {file}:{line} | {message} | {extra}",
+        level="INFO",
+    )
 
 
 class Settings(BaseSettings):
@@ -69,7 +152,9 @@ class Settings(BaseSettings):
         default=65510, description="MCP server port (RAG agent)", ge=1, le=65535
     )
     MCP_SERVER_NAME: str = Field(
-        default="datapilotflow-rag", description="MCP server name (RAG agent)", min_length=1
+        default="datapilotflow-rag",
+        description="MCP server name (RAG agent)",
+        min_length=1,
     )
     MCP_ENABLED_TOOLS: str = Field(
         default="knowledge_expert",

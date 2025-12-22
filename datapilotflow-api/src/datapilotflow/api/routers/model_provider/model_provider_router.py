@@ -6,11 +6,8 @@ This router handles HTTP requests for unified model provider configurations.
 
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from loguru import logger
-from pydantic import BaseModel
-
-from datapilotflow.api.routers.auth.auth_router import get_current_user
+from bson import ObjectId
+from bson.errors import InvalidId
 from datapilotflow.domain.model_provider.model_provider import (
     ModelProviderCreate,
     ModelProviderResponse,
@@ -22,8 +19,13 @@ from datapilotflow.services.model_provider.model_provider_service import (
     ModelProviderService,
     get_model_provider_service,
 )
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from loguru import logger
+from pydantic import BaseModel
 
-router = APIRouter(prefix="/model-providers", tags=["Model Providers"])
+from datapilotflow.api.routers.auth.auth_router import get_current_user
+
+router = APIRouter(prefix="/providers", tags=["Model Providers"])
 
 
 @router.post(
@@ -31,7 +33,7 @@ router = APIRouter(prefix="/model-providers", tags=["Model Providers"])
     response_model=ModelProviderResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a new model provider",
-    description="Create a new custom model provider configuration. Users can only create CUSTOM providers. SYSTEM providers are managed by the system.",
+    description="Create a new model provider configuration.",
 )
 def create_model_provider(
     provider_data: ModelProviderCreate,
@@ -40,8 +42,6 @@ def create_model_provider(
 ):
     """
     Create a new model provider configuration.
-
-    All providers are user-created; provider types must be OpenAI-compatible.
     """
     if not current_user.id:
         raise HTTPException(
@@ -119,6 +119,200 @@ def list_model_providers(
         )
 
 
+class ModelProviderTestRequest(BaseModel):
+    """Request payload for testing model providers."""
+
+    test_type: ModelType
+    model: str
+
+
+class ModelProviderTestBeforeCreateRequest(BaseModel):
+    """Request payload for testing model providers before creation."""
+
+    provider: ModelProviderCreate
+    test_type: ModelType
+    model: str
+
+
+@router.post(
+    "/test",
+    summary="Test model provider before creation",
+    description="Perform a live test call against a provider configuration before saving it (embedding/generative/reranker).",
+)
+async def test_model_provider_before_create(
+    request: ModelProviderTestBeforeCreateRequest,
+    current_user: User = Depends(get_current_user),
+    service: ModelProviderService = Depends(get_model_provider_service),
+):
+    """Run a quick live check against a provider configuration before saving."""
+    if not current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID is required"
+        )
+
+    try:
+        result = await service.test_model_provider(
+            provider_data=request.provider,
+            user_id=current_user.id,
+            test_type=request.test_type,
+            model_name=request.model,
+        )
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result.get("message", "Provider test failed"),
+            )
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error testing model provider: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+
+@router.post(
+    "/{provider_id}/test",
+    summary="Test model provider",
+    description="Perform a live test call against an existing provider (embedding/generative/reranker).",
+)
+async def test_model_provider(
+    provider_id: str,
+    request: ModelProviderTestRequest,
+    current_user: User = Depends(get_current_user),
+    service: ModelProviderService = Depends(get_model_provider_service),
+):
+    """Run a quick live check against an existing provider configuration."""
+    if not current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID is required"
+        )
+
+    # Validate that provider_id is a valid MongoDB ObjectId
+    try:
+        ObjectId(provider_id)
+    except (InvalidId, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Model provider not found"
+        )
+
+    try:
+        # Get the provider configuration
+        provider = service.get_model_provider(provider_id, current_user.id)
+        if not provider:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Model provider not found"
+            )
+
+        # Convert provider to ModelProviderCreate for testing
+        from datapilotflow.domain.model_provider.model_provider import (
+            ModelProviderCreate,
+        )
+
+        provider_data = ModelProviderCreate(
+            name=provider.name,
+            provider_type=provider.provider_type,
+            endpoint=provider.endpoint,
+            api_key=provider.api_key,
+            api_key_field_name=provider.api_key_field_name or "api_key",
+            description=provider.description,
+            is_active=provider.is_active,
+            timeout=provider.timeout,
+            embedding=provider.embedding,
+            generative=provider.generative,
+            reranker=provider.reranker,
+        )
+
+        result = await service.test_model_provider(
+            provider_data=provider_data,
+            user_id=current_user.id,
+            test_type=request.test_type,
+            model_name=request.model,
+        )
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result.get("message", "Provider test failed"),
+            )
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error testing model provider: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+
+@router.get(
+    "/{provider_id}/models",
+    response_model=List[str],
+    summary="Get available models for a provider",
+    description="Get list of ALL available models from LiteLLM SDK for the provider's type. Filters by model type if provided.",
+)
+def get_provider_models(
+    provider_id: str,
+    model_type: Optional[ModelType] = Query(
+        None, description="Filter by model type (embedding, generative, reranker)"
+    ),
+    current_user: User = Depends(get_current_user),
+    service: ModelProviderService = Depends(get_model_provider_service),
+):
+    """
+    Get available models for a specific provider from LiteLLM SDK.
+
+    This endpoint retrieves the provider configuration to get the provider_type,
+    then queries LiteLLM SDK to get all available models for that provider type.
+
+    If model_type is provided, returns only models of that type.
+    If model_type is not provided, returns all models.
+    """
+    if not current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID is required"
+        )
+
+    # Validate that provider_id is a valid MongoDB ObjectId
+    try:
+        ObjectId(provider_id)
+    except (InvalidId, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Model provider '{provider_id}' not found",
+        )
+
+    try:
+        # Get provider to retrieve provider_type
+        provider = service.get_model_provider(provider_id, current_user.id)
+        if not provider:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Model provider '{provider_id}' not found",
+            )
+
+        # Get available models from LiteLLM SDK for this provider type
+        available_models = service.get_available_models_for_provider(
+            provider.provider_type, model_type
+        )
+
+        logger.info(
+            f"Returning {len(available_models)} available models for provider {provider_id} (type: {provider.provider_type})"
+        )
+        return available_models
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching provider models: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+
 @router.get(
     "/{provider_id}",
     response_model=ModelProviderResponse,
@@ -134,6 +328,15 @@ def get_model_provider(
     if not current_user.id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID is required"
+        )
+
+    # Validate that provider_id is a valid MongoDB ObjectId
+    # This prevents routes like "/available-models" from being matched
+    try:
+        ObjectId(provider_id)
+    except (InvalidId, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Model provider not found"
         )
 
     try:
@@ -176,6 +379,14 @@ def update_model_provider(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID is required"
         )
 
+    # Validate that provider_id is a valid MongoDB ObjectId
+    try:
+        ObjectId(provider_id)
+    except (InvalidId, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Model provider not found"
+        )
+
     try:
         logger.info(
             f"Updating model provider: {provider_id} for user: {current_user.id}"
@@ -201,224 +412,4 @@ def update_model_provider(
         logger.error(f"Error updating model provider: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
-
-
-@router.get(
-    "/active/list",
-    response_model=List[ModelProviderResponse],
-    summary="List active model providers",
-    description="List all active model provider configurations for the current user",
-)
-def list_active_model_providers(
-    current_user: User = Depends(get_current_user),
-    service: ModelProviderService = Depends(get_model_provider_service),
-):
-    """List all active model provider configurations."""
-    if not current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID is required"
-        )
-
-    try:
-        logger.info(f"Listing active model providers for user: {current_user.id}")
-
-        providers = service.list_model_providers(current_user.id, is_active=True)
-        return providers
-
-    except Exception as e:
-        logger.error(f"Error listing active model providers: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
-
-
-@router.get(
-    "/by-type/{model_type}",
-    response_model=List[ModelProviderResponse],
-    summary="Get providers by model type",
-    description="Get model providers that support a specific model type (embedding or generative)",
-)
-def get_providers_by_type(
-    model_type: ModelType,
-    current_user: User = Depends(get_current_user),
-    service: ModelProviderService = Depends(get_model_provider_service),
-):
-    """Get model providers that support a specific model type."""
-    if not current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID is required"
-        )
-
-    try:
-        logger.info(
-            f"Getting providers for model type: {model_type} for user: {current_user.id}"
-        )
-
-        providers = service.get_providers_by_type(current_user.id, model_type)
-
-        # Convert to response models using service method (includes all fields)
-        response_providers = []
-        for provider in providers:
-            response = service.get_model_provider_response(provider.id, current_user.id)
-            if response:
-                response_providers.append(response)
-
-        return response_providers
-
-    except Exception as e:
-        logger.error(f"Error getting providers by type: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
-
-
-class ModelProviderTestRequest(BaseModel):
-    """Request payload for testing model providers without saving them."""
-
-    provider: ModelProviderCreate
-    test_type: ModelType
-    model: str
-
-
-@router.post(
-    "/test",
-    summary="Test model provider before saving",
-    description="Perform a live test call against a provider (embedding/generative/reranker) before saving the configuration.",
-)
-async def test_model_provider(
-    request: ModelProviderTestRequest,
-    current_user: User = Depends(get_current_user),
-    service: ModelProviderService = Depends(get_model_provider_service),
-):
-    """Run a quick live check against the provided model configuration."""
-    if not current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID is required"
-        )
-
-    try:
-        result = await service.test_model_provider(
-            provider_data=request.provider,
-            user_id=current_user.id,
-            test_type=request.test_type,
-            model_name=request.model,
-        )
-        if not result.get("success"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=result.get("message", "Provider test failed"),
-            )
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error testing model provider: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
-        )
-
-
-@router.get(
-    "/{provider_id}/models",
-    response_model=List[str],
-    summary="Get supported models for a provider",
-    description="Get list of supported models for a specific provider. Filters by model type if provided.",
-)
-def get_provider_models(
-    provider_id: str,
-    model_type: Optional[ModelType] = Query(None, description="Filter by model type (embedding, generative, reranker)"),
-    current_user: User = Depends(get_current_user),
-    service: ModelProviderService = Depends(get_model_provider_service),
-):
-    """
-    Get supported models for a specific provider.
-
-    If model_type is provided, returns only models of that type.
-    If model_type is not provided, returns all models.
-    """
-    if not current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID is required"
-        )
-
-    try:
-        provider = service.get_model_provider(provider_id, current_user.id)
-        if not provider:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Model provider '{provider_id}' not found",
-            )
-
-        models = []
-
-        if model_type is None or model_type == ModelType.EMBEDDING:
-            if provider.embedding:
-                models.extend(provider.embedding.models)
-
-        if model_type is None or model_type == ModelType.GENERATIVE:
-            if provider.generative:
-                models.extend(provider.generative.models)
-
-        if model_type is None or model_type == ModelType.RERANKER:
-            if provider.reranker:
-                models.extend(provider.reranker.models)
-
-        return models
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error fetching provider models: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
-        )
-
-
-@router.get(
-    "/available-models/{provider_type}",
-    response_model=List[str],
-    summary="Get available models for a provider type",
-    description="Get list of ALL available models from LiteLLM SDK for a specific provider type. This queries the LiteLLM database of supported models.",
-)
-def get_available_models(
-    provider_type: str,
-    model_type: Optional[ModelType] = Query(None, description="Filter by model type (embedding, generative, reranker)"),
-    current_user: User = Depends(get_current_user),
-    service: ModelProviderService = Depends(get_model_provider_service),
-):
-    """
-    Get available models for a provider type from LiteLLM SDK.
-
-    This endpoint queries the LiteLLM SDK to get all supported models for a given
-    provider type. This is useful for the UI to show users what models are available
-    for a provider before they configure it.
-
-    Args:
-        provider_type: The provider type (e.g., 'openai', 'anthropic', 'groq')
-        model_type: Optional filter for model type
-
-    Returns:
-        List of available model names for the provider
-    """
-    if not current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID is required"
-        )
-
-    try:
-        logger.info(f"Fetching available models for provider type: {provider_type}")
-
-        available_models = service.get_available_models_for_provider(provider_type, model_type)
-
-        logger.info(f"Returning {len(available_models)} available models for {provider_type}")
-        return available_models
-
-    except Exception as e:
-        logger.error(f"Error fetching available models: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch available models: {str(e)}",
         )

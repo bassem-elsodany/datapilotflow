@@ -39,3 +39,9 @@ packages = ["src/datapilotflow"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.uv.sources]
+# Define local package sources relative to this package
+datapilotflow-domain = { path = "../datapilotflow-domain" }
+datapilotflow-infrastructure = { path = "../datapilotflow-infrastructure" }
+datapilotflow-services = { path = "../datapilotflow-services" }

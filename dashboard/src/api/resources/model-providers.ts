@@ -52,6 +52,7 @@ export const ModelProviderResponseSchema = z.object({
   provider_type: z.string(),
   endpoint: z.string().optional(),
   api_key: z.string().nullable(),
+  api_key_field_name: z.string().default('api_key'),
   description: z.string().nullable(),
   is_active: z.boolean(),
   timeout: z.number(),
@@ -69,6 +70,7 @@ export const ModelProviderCreateSchema = z.object({
   provider_type: z.string().min(1, 'Provider type is required'),
   endpoint: z.string().optional().or(z.literal('')),
   api_key: z.string().optional(),
+  api_key_field_name: z.string().default('api_key'),
   description: z.string().optional(),
   is_active: z.boolean().default(true),
   timeout: z.number().min(1).max(300).default(60),
@@ -82,6 +84,7 @@ export const ModelProviderUpdateSchema = z.object({
   provider_type: z.string().min(1, 'Provider type is required').optional(),
   endpoint: z.string().optional().or(z.literal('')),
   api_key: z.string().optional(),
+  api_key_field_name: z.string().optional(),
   description: z.string().optional(),
   is_active: z.boolean().optional(),
   timeout: z.number().min(1).max(300).optional(),
@@ -141,9 +144,9 @@ export const useGetModelProvider = (providerId: string) =>
     },
   })();
 
-// Get active model providers
+// Get active model providers (uses query param on main list endpoint)
 export const useGetActiveModelProviders = createGetQueryHook({
-  endpoint: apiEndpoints.modelProviders.active,
+  endpoint: `${apiEndpoints.modelProviders.list}?is_active=true`,
   responseSchema: z.array(ModelProviderResponseSchema),
   rQueryParams: {
     queryKey: ['model-providers', { status: 'active' }],
@@ -154,10 +157,10 @@ export const useGetActiveModelProviders = createGetQueryHook({
   },
 });
 
-// Get providers by model type
+// Get providers by model type (uses query param on main list endpoint)
 export const useGetProvidersByType = (modelType: ModelType) =>
   createGetQueryHook({
-    endpoint: apiEndpoints.modelProviders.byType(modelType),
+    endpoint: `${apiEndpoints.modelProviders.list}?supported_model_type=${modelType}`,
     responseSchema: z.array(ModelProviderResponseSchema),
     rQueryParams: { queryKey: ['model-providers', { type: 'by-type', modelType }] },
   })();
@@ -177,7 +180,7 @@ export const useUpdateModelProvider = (providerId: string) =>
     responseSchema: ModelProviderResponseSchema,
   })();
 
-// Test model provider (live call) without saving
+// Test model provider before creation (live call without saving)
 export const useTestModelProvider = createPostMutationHook({
   endpoint: apiEndpoints.modelProviders.test,
   bodySchema: z.object({
@@ -187,6 +190,17 @@ export const useTestModelProvider = createPostMutationHook({
   }),
   responseSchema: ModelProviderTestResponseSchema,
 });
+
+// Test existing model provider by ID
+export const useTestModelProviderById = (providerId: string) =>
+  createPostMutationHook({
+    endpoint: apiEndpoints.modelProviders.testById(providerId),
+    bodySchema: z.object({
+      test_type: z.enum(['embedding', 'generative', 'reranker']),
+      model: z.string(),
+    }),
+    responseSchema: ModelProviderTestResponseSchema,
+  })();
 
 // Get supported models for a provider
 export const useGetSupportedModels = (providerId: string, modelType?: string) =>
@@ -204,18 +218,37 @@ export const useGetSupportedModels = (providerId: string, modelType?: string) =>
     },
   })();
 
-// Get available models for a provider type from LiteLLM SDK
-export const useGetAvailableModels = (providerType: string, modelType?: string) =>
-  createGetQueryHook({
-    endpoint: apiEndpoints.modelProviders.availableModels(providerType, modelType),
+// Get available models for a provider name from LiteLLM SDK
+export const useGetAvailableModels = (providerName: string, modelType?: string) => {
+  // Normalize and validate provider name
+  const validProviderName = (providerName || '').trim();
+  const isEnabled = validProviderName.length > 0;
+
+  return createGetQueryHook({
+    endpoint: apiEndpoints.litellmProviders.models(validProviderName, modelType),
     responseSchema: z.array(z.string()),
     rQueryParams: {
-      queryKey: ['model-providers', { providerType, modelType: modelType || '', type: 'available' }],
+      queryKey: ['litellm-providers', { providerName: validProviderName, modelType: modelType || '', type: 'models' }],
       staleTime: 30 * 60 * 1000, // 30 minutes (LiteLLM data changes infrequently)
       gcTime: 60 * 60 * 1000, // 60 minutes (formerly cacheTime)
-      enabled: !!providerType,
+      enabled: isEnabled,
       retry: 2,
       retryDelay: 1000,
       refetchOnWindowFocus: false,
     },
   })();
+};
+
+// Get all available provider names from LiteLLM SDK
+export const useGetAvailableProviderTypes = createGetQueryHook({
+  endpoint: apiEndpoints.litellmProviders.list,
+  responseSchema: z.array(z.string()),
+  rQueryParams: {
+    queryKey: ['litellm-providers', { type: 'list' }],
+    staleTime: 30 * 60 * 1000, // 30 minutes (LiteLLM data changes infrequently)
+    gcTime: 60 * 60 * 1000, // 60 minutes
+    retry: 2,
+    retryDelay: 1000,
+    refetchOnWindowFocus: false,
+  },
+});

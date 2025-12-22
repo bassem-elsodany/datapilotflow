@@ -1,4 +1,4 @@
-import { ModelType, useCreateModelProvider, useGetSupportedModels, useTestModelProvider } from '@/api/resources/model-providers';
+import { ModelType, useCreateModelProvider, useGetAvailableProviderTypes, useTestModelProvider } from '@/api/resources/model-providers';
 import { BrowseModelsModal } from '@/components/browse-models-modal';
 import { Page } from '@/components/page';
 import { PageHeader } from '@/components/page-header';
@@ -34,67 +34,6 @@ const maskApiKey = (key: string | undefined): string => {
   return key.substring(0, 8) + '•'.repeat(Math.min(key.length - 8, 20));
 };
 
-const PROVIDER_TYPE_OPTIONS = [
-  // Core / OpenAI-compatible
-  { value: 'ai21', label: 'AI21' },
-  { value: 'anthropic', label: 'Anthropic' },
-  { value: 'anyscale', label: 'Anyscale' },
-  { value: 'azure', label: 'Azure OpenAI' },
-  { value: 'azure_ai', label: 'Azure AI' },
-  { value: 'baseten', label: 'Baseten' },
-  { value: 'bedrock', label: 'AWS Bedrock' },
-  { value: 'cerebras', label: 'Cerebras' },
-  { value: 'clarifai', label: 'Clarifai' },
-  { value: 'cloudflare_workers_ai', label: 'Cloudflare Workers AI' },
-  { value: 'codestral', label: 'Codestral API (Mistral AI)' },
-  { value: 'cohere', label: 'Cohere' },
-  { value: 'comet', label: 'CometAPI' },
-  { value: 'datarobot', label: 'DataRobot' },
-  { value: 'databricks', label: 'Databricks' },
-  { value: 'dashscope', label: 'Dashscope' },
-  { value: 'deepinfra', label: 'DeepInfra' },
-  { value: 'deepseek', label: 'Deepseek' },
-  { value: 'docker', label: 'Docker Model Runner' },
-  { value: 'elevenlabs', label: 'ElevenLabs' },
-  { value: 'fal', label: 'Fal AI' },
-  { value: 'fireworks_ai', label: 'Fireworks AI' },
-  { value: 'friendliai', label: 'FriendliAI' },
-  { value: 'gcp_vertex', label: 'GCP Vertex' },
-  { value: 'google_ai_studio', label: 'Google AI Studio' },
-  { value: 'gradient', label: 'GradientAI' },
-  { value: 'groq', label: 'Groq' },
-  { value: 'helicone', label: 'Helicone' },
-  { value: 'huggingface', label: 'HuggingFace Inference' },
-  { value: 'hyperbolic', label: 'Hyperbolic' },
-  { value: 'hyperbolic_api', label: 'Hyperbolic API' },
-  { value: 'infinity', label: 'Infinity' },
-  { value: 'jina', label: 'Jina AI' },
-  { value: 'lambda', label: 'Lambda AI' },
-  { value: 'langgraph', label: 'LangGraph' },
-  { value: 'lemonade', label: 'Lemonade' },
-  { value: 'llamafile', label: 'Llamafile' },
-  { value: 'lmstudio', label: 'LM Studio' },
-  { value: 'milvus', label: 'Milvus Vector Store' },
-  { value: 'mistral', label: 'Mistral AI API' },
-  { value: 'nscale', label: 'Nscale (EU Sovereign)' },
-  { value: 'oci', label: 'Oracle OCI' },
-  { value: 'ollama', label: 'Ollama' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'openrouter', label: 'OpenRouter' },
-  { value: 'perplexity', label: 'Perplexity AI' },
-  { value: 'predibase', label: 'Predibase' },
-  { value: 'qwen_dashscope', label: 'Dashscope (Qwen API)' },
-  { value: 'replicate', label: 'Replicate' },
-  { value: 'sagemaker', label: 'AWS Sagemaker' },
-  { value: 'sambanova', label: 'SambaNova' },
-  { value: 'snowflake', label: 'Snowflake Cortex' },
-  { value: 'together_ai', label: 'Together AI' },
-  { value: 'vertex_ai', label: 'Vertex AI' },
-  { value: 'vercel', label: 'Vercel AI Gateway' },
-  { value: 'vllm', label: 'vLLM' },
-  { value: 'voyage', label: 'Voyage AI' },
-  { value: 'xai', label: 'xAI' },
-].sort((a, b) => a.label.localeCompare(b.label));
 
 const breadcrumbs = [
   { label: 'Dashboard', href: paths.dashboard.root },
@@ -108,6 +47,7 @@ export default function CreateModelProvider() {
   const navigate = useNavigate();
   const createProviderMutation = useCreateModelProvider();
   const testProviderMutation = useTestModelProvider();
+  const { data: providerTypes = [], isLoading: isLoadingProviderTypes } = useGetAvailableProviderTypes();
 
   const [isEditingApiKey, setIsEditingApiKey] = useState(false);
   const [testModalOpen, setTestModalOpen] = useState(false);
@@ -135,6 +75,7 @@ export default function CreateModelProvider() {
       provider_type: '',
       endpoint: '',
       api_key: '',
+      api_key_field_name: 'api_key',
       description: '',
       is_active: true,
       timeout: 60,
@@ -161,6 +102,7 @@ export default function CreateModelProvider() {
     provider_type: values.provider_type,
     endpoint: values.endpoint,
     api_key: values.api_key || undefined,
+    api_key_field_name: values.api_key_field_name || 'api_key',
     description: values.description || undefined,
     is_active: values.is_active,
     timeout: values.timeout,
@@ -250,12 +192,28 @@ export default function CreateModelProvider() {
         body: result.body,
       });
     } catch (error: any) {
+      // Extract detailed error message from API response
+      let errorMessage = 'Failed to run test';
+      
+      if (error?.response?.data?.detail) {
+        // FastAPI standard error format
+        errorMessage = typeof error.response.data.detail === 'string' 
+          ? error.response.data.detail 
+          : JSON.stringify(error.response.data.detail);
+      } else if (error?.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error?.message) {
+        errorMessage = error.message;
+      } else if (error?.detail) {
+        errorMessage = error.detail;
+      }
+
       setTestResult({
         success: false,
-        status_code: undefined,
+        status_code: error?.response?.status || error?.status,
         duration_ms: undefined,
-        message: error?.message || 'Failed to run test',
-        body: undefined,
+        message: errorMessage,
+        body: error?.response?.data ? JSON.stringify(error.response.data, null, 2) : undefined,
       });
     }
   };
@@ -327,89 +285,12 @@ export default function CreateModelProvider() {
                   />
                   <Select
                     label="Provider Type"
-                    placeholder="Select the provider type"
+                    placeholder={isLoadingProviderTypes ? "Loading provider types..." : "Select the provider type"}
                     description="Choose the provider type from the list."
                     required
                     searchable
-                    data={[
-                      { value: 'ai21', label: 'AI21' },
-                      { value: 'anyscale', label: 'Anyscale' },
-                      { value: 'anthropic', label: 'Anthropic' },
-                      { value: 'azure', label: 'Azure OpenAI' },
-                      { value: 'azure_ai', label: 'Azure AI' },
-                      { value: 'baseten', label: 'Baseten' },
-                      { value: 'bedrock', label: 'AWS Bedrock' },
-                      { value: 'cerebras', label: 'Cerebras' },
-                      { value: 'clarifai', label: 'Clarifai' },
-                      { value: 'cloudflare_workers_ai', label: 'Cloudflare Workers AI' },
-                      { value: 'codestral', label: 'Codestral API (Mistral AI)' },
-                      { value: 'cohere', label: 'Cohere' },
-                      { value: 'comet', label: 'CometAPI' },
-                      { value: 'dashscope', label: 'Dashscope' },
-                      { value: 'databricks', label: 'Databricks' },
-                      { value: 'datarobot', label: 'DataRobot' },
-                      { value: 'deepinfra', label: 'DeepInfra' },
-                      { value: 'deepseek', label: 'Deepseek' },
-                      { value: 'docker', label: 'Docker Model Runner' },
-                      { value: 'elevenlabs', label: 'ElevenLabs' },
-                      { value: 'fal', label: 'Fal AI' },
-                      { value: 'fireworks_ai', label: 'Fireworks AI' },
-                      { value: 'friendliai', label: 'FriendliAI' },
-                      { value: 'gcp_vertex', label: 'GCP Vertex' },
-                      { value: 'google_ai_studio', label: 'Google AI Studio' },
-                      { value: 'gradient', label: 'GradientAI' },
-                      { value: 'groq', label: 'Groq' },
-                      { value: 'helicone', label: 'Helicone' },
-                      { value: 'huggingface', label: 'HuggingFace Inference' },
-                      { value: 'hyperbolic', label: 'Hyperbolic' },
-                      { value: 'hyperbolic_api', label: 'Hyperbolic API' },
-                      { value: 'infinity', label: 'Infinity' },
-                      { value: 'jina', label: 'Jina AI' },
-                      { value: 'lambda', label: 'Lambda AI' },
-                      { value: 'langgraph', label: 'LangGraph' },
-                      { value: 'lemonade', label: 'Lemonade' },
-                      { value: 'llamafile', label: 'Llamafile' },
-                      { value: 'lmstudio', label: 'LM Studio' },
-                      { value: 'milvus', label: 'Milvus Vector Store' },
-                      { value: 'mistral', label: 'Mistral AI API' },
-                      { value: 'moonshot', label: 'Moonshot AI' },
-                      { value: 'morph', label: 'Morph' },
-                      { value: 'nebius', label: 'Nebius AI Studio' },
-                      { value: 'nlpcloud', label: 'NLP Cloud' },
-                      { value: 'novita', label: 'Novita AI' },
-                      { value: 'nscale', label: 'Nscale (EU Sovereign)' },
-                      { value: 'nvidia_nim', label: 'Nvidia NIM' },
-                      { value: 'oci', label: 'Oracle OCI' },
-                      { value: 'ollama', label: 'Ollama' },
-                      { value: 'openai', label: 'OpenAI' },
-                      { value: 'openrouter', label: 'OpenRouter' },
-                      { value: 'perplexity', label: 'Perplexity AI' },
-                      { value: 'petals', label: 'Petals' },
-                      { value: 'predibase', label: 'Predibase' },
-                      { value: 'publicai', label: 'PublicAI' },
-                      { value: 'qwen_dashscope', label: 'Dashscope (Qwen API)' },
-                      { value: 'ragflow', label: 'RAGFlow' },
-                      { value: 'recraft', label: 'Recraft' },
-                      { value: 'replicate', label: 'Replicate' },
-                      { value: 'runwayml', label: 'RunwayML' },
-                      { value: 'sagemaker', label: 'AWS Sagemaker' },
-                      { value: 'sambanova', label: 'SambaNova' },
-                      { value: 'sap_generative_ai', label: 'SAP Generative AI Hub' },
-                      { value: 'snowflake', label: 'Snowflake Cortex' },
-                      { value: 'topaz', label: 'Topaz' },
-                      { value: 'together_ai', label: 'Together AI' },
-                      { value: 'triton', label: 'Triton Inference Server' },
-                      { value: 'vercel', label: 'Vercel AI Gateway' },
-                      { value: 'vertex_ai', label: 'Vertex AI' },
-                      { value: 'vllm', label: 'vLLM' },
-                      { value: 'volcengine', label: 'Volcano Engine' },
-                      { value: 'voyage', label: 'Voyage AI' },
-                      { value: 'wandb', label: 'Weights & Biases Inference' },
-                      { value: 'watsonx', label: 'WatsonX' },
-                      { value: 'xai', label: 'xAI' },
-                      { value: 'xinference', label: 'Xinference' },
-                      { value: 'zai', label: 'Z.AI (Zhipu AI)' },
-                    ]}
+                    disabled={isLoadingProviderTypes}
+                    data={providerTypes.map((type: string) => ({ value: type, label: type }))}
                     {...form.getInputProps('provider_type')}
                   />
                 </SimpleGrid>
@@ -449,28 +330,37 @@ export default function CreateModelProvider() {
                   </div>
                 </Group>
 
-                <div>
+                <Group grow align="flex-start">
                   <TextInput
-                    label="API Key"
-                    placeholder="Your API key (optional for custom providers)"
-                    description="Secret key sent to the provider (kept encrypted)."
-                    value={isEditingApiKey ? form.values.api_key : maskApiKey(form.values.api_key)}
-                    onChange={(e) => {
-                      if (!isEditingApiKey) {
-                        setIsEditingApiKey(true);
-                        form.setFieldValue('api_key', '');
-                      } else {
-                        form.setFieldValue('api_key', e.currentTarget.value);
-                      }
-                    }}
-                    onFocus={() => {
-                      if (!isEditingApiKey) {
-                        setIsEditingApiKey(true);
-                        form.setFieldValue('api_key', '');
-                      }
-                    }}
+                    label="API Key Field Name"
+                    placeholder="api_key"
+                    description="HTTP header name for the API key (e.g., 'api_key', 'Api-Key', 'X-API-Key', 'Authorization'). Defaults to 'api_key'."
+                    value={form.values.api_key_field_name}
+                    onChange={(e) => form.setFieldValue('api_key_field_name', e.currentTarget.value)}
                   />
-                </div>
+                  <div>
+                    <TextInput
+                      label="API Key"
+                      placeholder="Your API key (optional for custom providers)"
+                      description="Secret key sent to the provider (kept encrypted)."
+                      value={isEditingApiKey ? form.values.api_key : maskApiKey(form.values.api_key)}
+                      onChange={(e) => {
+                        if (!isEditingApiKey) {
+                          setIsEditingApiKey(true);
+                          form.setFieldValue('api_key', '');
+                        } else {
+                          form.setFieldValue('api_key', e.currentTarget.value);
+                        }
+                      }}
+                      onFocus={() => {
+                        if (!isEditingApiKey) {
+                          setIsEditingApiKey(true);
+                          form.setFieldValue('api_key', '');
+                        }
+                      }}
+                    />
+                  </div>
+                </Group>
               </Stack>
             </Paper>
 
