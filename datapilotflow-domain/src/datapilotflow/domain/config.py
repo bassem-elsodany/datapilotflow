@@ -32,7 +32,7 @@ def _is_service_context() -> bool:
             frame_file = str(frame.filename).lower()
             if any(
                 keyword in frame_file
-                for keyword in ["uvicorn", "run_", "api_server", "server.py"]
+                for keyword in ["uvicorn", "run_", "api_server", "server.py", "run_api_server"]
             ):
                 return True
     except Exception:
@@ -102,21 +102,42 @@ if not _logging_already_configured:
 # This prevents duplicate loggers when setup_service_logging() has already been called
 # OR when any file handler already exists OR when service-specific log files exist
 if not _logging_already_configured:
-    # Remove default handler if it exists
-    try:
-        logger.remove(0)
-    except ValueError:
-        pass  # Handler doesn't exist, which is fine
-
     # Set up default logging - ONLY stderr, NO FILE HANDLERS
     # Services (API, events, MCP server, etc.) MUST use setup_service_logging()
     # to create their own service-specific log files (api.log, processor.log, etc.)
     # domain.config should NEVER create datapilotflow.log
-    logger.add(
-        sys.stderr,
-        format="{time:MMMM D, YYYY > HH:mm:ss!UTC} | {level} | {name} | {file}:{line} | {message} | {extra}",
-        level="INFO",
-    )
+
+    # Remove ALL existing handlers to ensure clean slate (but preserve any file handlers)
+    handlers_to_keep = []
+    try:
+        handlers = logger._core.handlers  # type: ignore
+        # Keep track of any file handlers that are writing to logs directory
+        for handler_id, handler in handlers.items():
+            sink = getattr(handler, "sink", None)
+            # If this is already a file handler in logs dir, keep it
+            if isinstance(sink, (str, Path)):
+                sink_str = str(sink)
+                if "logs" in sink_str and sink_str.endswith(".log"):
+                    handlers_to_keep.append(handler_id)
+            elif hasattr(sink, "name"):
+                sink_name = str(getattr(sink, "name", ""))
+                if "logs" in sink_name and sink_name.endswith(".log"):
+                    handlers_to_keep.append(handler_id)
+    except (AttributeError, TypeError, Exception):
+        pass
+
+    # Only remove and re-add if we don't have file handlers already
+    if not handlers_to_keep:
+        try:
+            logger.remove()
+        except ValueError:
+            pass  # No handlers exist, which is fine
+
+        logger.add(
+            sys.stderr,
+            format="{time:MMMM D, YYYY > HH:mm:ss!UTC} | {level} | {name} | {file}:{line} | {message} | {extra}",
+            level="INFO",
+        )
 
 
 class Settings(BaseSettings):
