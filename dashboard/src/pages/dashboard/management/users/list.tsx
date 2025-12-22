@@ -1,7 +1,8 @@
-import { useDeleteUser, useGetUsers, UserProfile } from '@/api/resources/users';
+import { useDeleteUser, useGetCurrentUser, useGetUsers, UserProfile } from '@/api/resources/users';
 import { paths } from '@/routes/paths';
 import {
   ActionIcon,
+  Alert,
   Badge,
   Button,
   Card,
@@ -16,8 +17,8 @@ import {
   Title
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconEdit, IconEye, IconPlus, IconTrash } from '@tabler/icons-react';
-import { useState } from 'react';
+import { IconEdit, IconEye, IconLock, IconPlus, IconTrash } from '@tabler/icons-react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 export default function UserListPage() {
@@ -27,14 +28,24 @@ export default function UserListPage() {
   const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const { data: usersData, isLoading, refetch } = useGetUsers();
+  // Get current user to check admin permissions
+  const { data: currentUser, isLoading: isLoadingCurrentUser } = useGetCurrentUser();
+  const isAdmin = useMemo(() => {
+    return currentUser?.roles?.includes('admin') || false;
+  }, [currentUser?.roles]);
+
+  // Only fetch users if current user is admin
+  const { data: usersData, isLoading: isLoadingUsers, error, refetch } = useGetUsers({ enabled: isAdmin && !isLoadingCurrentUser });
   const deleteUserMutation = useDeleteUser();
 
   const handleDeleteUser = async () => {
     if (!userToDelete?.id) return;
 
     try {
-      await deleteUserMutation.mutateAsync({ userId: userToDelete.id });
+      await deleteUserMutation.mutateAsync({
+        model: userToDelete as any,
+        route: { userId: userToDelete.id }
+      });
       notifications.show({
         title: 'Success',
         message: 'User deleted successfully',
@@ -124,6 +135,49 @@ export default function UserListPage() {
     </Table.Tr>
   ));
 
+  // Show loading state while checking permissions
+  if (isLoadingCurrentUser) {
+    return (
+      <Card>
+        <LoadingOverlay visible />
+      </Card>
+    );
+  }
+
+  // Show permission error if user is not admin
+  if (!isAdmin) {
+    return (
+      <Card>
+        <Alert
+          icon={<IconLock size={16} />}
+          title="Access Denied"
+          color="red"
+          variant="light"
+        >
+          <Text>You don't have permission to access this page. Admin role is required.</Text>
+        </Alert>
+      </Card>
+    );
+  }
+
+  // Show error message if query failed
+  if (error && !isLoadingUsers) {
+    return (
+      <Card>
+        <Alert
+          title="Error Loading Users"
+          color="red"
+          variant="light"
+        >
+          <Text>Failed to load users. Please try again.</Text>
+          <Button mt="md" onClick={() => refetch()}>
+            Retry
+          </Button>
+        </Alert>
+      </Card>
+    );
+  }
+
   return (
     <>
       <Card>
@@ -149,7 +203,7 @@ export default function UserListPage() {
           />
         </Group>
 
-        <LoadingOverlay visible={isLoading} />
+        <LoadingOverlay visible={isLoadingUsers} />
 
         <Table>
           <Table.Thead>

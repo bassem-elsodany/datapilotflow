@@ -188,7 +188,8 @@ export function createGetQueryHook<
       ...rQueryParams,
       queryKey: getQueryKey(rQueryParams.queryKey, params?.route, params?.query),
       queryFn: () => queryFn(params),
-      enabled: params?.enabled !== false, // Default to true unless explicitly set to false
+      // Use enabled from params if provided, otherwise use rQueryParams.enabled, otherwise default to true
+      enabled: params?.enabled !== undefined ? params.enabled : (rQueryParams.enabled !== undefined ? rQueryParams.enabled : true),
     }) as UseQueryResult<z.infer<ResponseSchema>>;
 }
 

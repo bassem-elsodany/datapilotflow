@@ -103,7 +103,18 @@ export const useDeleteCurrentUser = createDeleteMutationHook({
 export const useGetUsers = createGetQueryHook({
   endpoint: apiEndpoints.users.list,
   responseSchema: UserListSchema,
-  rQueryParams: { queryKey: ['users'] },
+  rQueryParams: { 
+    queryKey: ['users'],
+    retry: (failureCount, error: any) => {
+      // Don't retry on 403 (Forbidden) errors - user doesn't have permissions
+      if (error?.response?.status === 403) {
+        return false;
+      }
+      // Retry other errors up to 3 times
+      return failureCount < 3;
+    },
+    retryDelay: 1000,
+  },
 });
 
 // Create new user (admin only)
