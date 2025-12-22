@@ -1,5 +1,5 @@
 import { client } from '@/api/axios';
-import { ModelProviderResponse, useCreateModelProvider, useGetModelProviders, useTestModelProvider, useUpdateModelProvider } from '@/api/resources/model-providers';
+import { ModelProviderResponse, useCreateModelProvider, useDeleteModelProvider, useGetModelProviders, useTestModelProvider, useUpdateModelProvider } from '@/api/resources/model-providers';
 import { Page } from '@/components/page';
 import { PageHeader } from '@/components/page-header';
 import { paths } from '@/routes/paths';
@@ -41,7 +41,8 @@ import {
   IconServer,
   IconSettings,
   IconToggleLeft,
-  IconToggleRight
+  IconToggleRight,
+  IconTrash
 } from '@tabler/icons-react';
 import sortBy from 'lodash/sortBy';
 import { DataTable, DataTableColumn, DataTableSortStatus } from 'mantine-datatable';
@@ -77,26 +78,6 @@ const getProviderIcon = (providerType: string) => {
   }
 };
 
-const getModelTypeBadge = (provider: ModelProviderResponse) => {
-  const badges = [];
-
-  if (provider.embedding) {
-    badges.push(<Badge key="embedding" color="green" size="sm">Embedding</Badge>);
-  }
-  if (provider.generative) {
-    badges.push(<Badge key="generative" color="purple" size="sm">Generative</Badge>);
-  }
-  if (provider.reranker) {
-    badges.push(<Badge key="reranker" color="orange" size="sm">Reranker</Badge>);
-  }
-
-  if (badges.length === 0) {
-    return <Badge color="gray" size="sm">Unknown</Badge>;
-  }
-
-  return badges;
-};
-
 // Helper function to mask API key for display
 const maskApiKey = (key: string | null | undefined): string => {
   if (!key) return '';
@@ -114,6 +95,7 @@ export default function ModelProviders() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<ModelProviderResponse | null>(null);
   const [isEditingApiKey, setIsEditingApiKey] = useState(false);
   const [originalApiKey, setOriginalApiKey] = useState<string>('');
@@ -135,6 +117,7 @@ export default function ModelProviders() {
   const updateProviderMutation = useUpdateModelProvider(selectedProvider?.id || '');
   const createProviderMutation = useCreateModelProvider();
   const testProviderMutation = useTestModelProvider();
+  const deleteProviderMutation = useDeleteModelProvider(selectedProvider?.id || '');
 
   // Form for editing
   const editForm = useForm({
@@ -357,6 +340,33 @@ export default function ModelProviders() {
   };
 
 
+  const handleDelete = (provider: ModelProviderResponse) => {
+    setSelectedProvider(provider);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!selectedProvider) return;
+
+    try {
+      await deleteProviderMutation.mutateAsync({ model: selectedProvider as any, route: { providerId: selectedProvider.id } });
+      notifications.show({
+        title: 'Success',
+        message: `Model provider "${selectedProvider.name}" deleted successfully`,
+        color: 'green',
+      });
+      setDeleteModalOpen(false);
+      setSelectedProvider(null);
+      refetch();
+    } catch (error: any) {
+      notifications.show({
+        title: 'Error',
+        message: error?.message || 'Failed to delete model provider',
+        color: 'red',
+      });
+    }
+  };
+
   const handleTestProvider = async (type: 'embedding' | 'generative' | 'reranker') => {
     try {
       const payload = buildProviderPayload(createForm.values);
@@ -433,34 +443,6 @@ export default function ModelProviders() {
       ),
     },
     {
-      accessor: 'model_types',
-      title: 'Model Types',
-      render: (provider) => (
-        <Group gap="xs">
-          {getModelTypeBadge(provider)}
-        </Group>
-      ),
-    },
-    {
-      accessor: 'embedding_models',
-      title: 'Embedding Models',
-      render: (provider) => (
-        <Stack gap="xs">
-          <Text size="sm" fw={500}>{provider.embedding?.models.length || 0} models</Text>
-          {provider.embedding && (
-            <Stack gap={4}>
-              <Text size="xs" c="dimmed">
-                Max tokens: {provider.embedding.config?.max_input_tokens || 'N/A'}
-              </Text>
-              <Text size="xs" c="dimmed">
-                Batch size: {provider.embedding.config?.batch_size || 'N/A'}
-              </Text>
-            </Stack>
-          )}
-        </Stack>
-      ),
-    },
-    {
       accessor: 'generative_models',
       title: 'Generative Models',
       render: (provider) => (
@@ -476,6 +458,25 @@ export default function ModelProviders() {
               </Text>
               <Text size="xs" c="dimmed">
                 Top P: {provider.generative.config?.top_p || 'N/A'}
+              </Text>
+            </Stack>
+          )}
+        </Stack>
+      ),
+    },
+    {
+      accessor: 'embedding_models',
+      title: 'Embedding Models',
+      render: (provider) => (
+        <Stack gap="xs">
+          <Text size="sm" fw={500}>{provider.embedding?.models.length || 0} models</Text>
+          {provider.embedding && (
+            <Stack gap={4}>
+              <Text size="xs" c="dimmed">
+                Max tokens: {provider.embedding.config?.max_input_tokens || 'N/A'}
+              </Text>
+              <Text size="xs" c="dimmed">
+                Batch size: {provider.embedding.config?.batch_size || 'N/A'}
               </Text>
             </Stack>
           )}
@@ -539,6 +540,14 @@ export default function ModelProviders() {
             title="Edit"
           >
             <IconEdit size={16} />
+          </ActionIcon>
+          <ActionIcon
+            variant="subtle"
+            color="red"
+            onClick={() => handleDelete(provider)}
+            title="Delete"
+          >
+            <IconTrash size={16} />
           </ActionIcon>
         </Group>
       ),
@@ -1436,6 +1445,50 @@ export default function ModelProviders() {
             </Group>
           </Stack>
         )}
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        opened={deleteModalOpen}
+        onClose={() => {
+          setDeleteModalOpen(false);
+          setSelectedProvider(null);
+        }}
+        title={
+          <Group gap="sm">
+            <IconTrash size={20} color="var(--mantine-color-red-6)" />
+            <Text fw={600} size="lg" c="red">Delete Model Provider</Text>
+          </Group>
+        }
+        centered
+      >
+        <Stack gap="md">
+          <Text>
+            Are you sure you want to delete the model provider{' '}
+            <Text component="span" fw={600}>
+              "{selectedProvider?.name}"
+            </Text>
+            ? This action cannot be undone.
+          </Text>
+          <Group justify="flex-end" gap="sm">
+            <Button
+              variant="light"
+              onClick={() => {
+                setDeleteModalOpen(false);
+                setSelectedProvider(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              onClick={handleConfirmDelete}
+              loading={deleteProviderMutation.isPending}
+            >
+              Delete
+            </Button>
+          </Group>
+        </Stack>
       </Modal>
 
     </Page>

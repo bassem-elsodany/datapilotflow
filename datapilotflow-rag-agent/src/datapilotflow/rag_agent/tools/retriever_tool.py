@@ -8,6 +8,13 @@ for relevant context to enrich the agent's responses.
 import asyncio
 from typing import Any, Dict
 
+from datapilotflow.infrastructure.vectordb.milvus.client import MilvusClientWrapper
+from datapilotflow.services.knowledge.vectordb_collection_service import (
+    get_vectordb_collection_service,
+)
+from datapilotflow.services.model_provider.model_provider_service import (
+    get_model_provider_service,
+)
 from langchain_core.callbacks import (
     AsyncCallbackManagerForRetrieverRun,
     CallbackManagerForRetrieverRun,
@@ -16,14 +23,6 @@ from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.tools import create_retriever_tool
 from loguru import logger
-
-from datapilotflow.infrastructure.vectordb.milvus.client import MilvusClientWrapper
-# TODO: from datapilotflow.services.knowledge.vectordb_collection_service import (
-    get_vectordb_collection_service,
-)
-# TODO: from datapilotflow.services.model_provider.model_provider_service import (
-    get_model_provider_service,
-)
 
 
 class MilvusRetriever(BaseRetriever):
@@ -57,12 +56,18 @@ class MilvusRetriever(BaseRetriever):
 
             # Determine embedding configuration
             # Priority: Use provided config from MCP tool, otherwise fetch from collection
-            if self.embedding_provider_id and self.embedding_model_name and self.vector_dimension:
+            if (
+                self.embedding_provider_id
+                and self.embedding_model_name
+                and self.vector_dimension
+            ):
                 # Use provided embedding config from workflow
                 embedding_provider_id = self.embedding_provider_id
                 embedding_model_name = self.embedding_model_name
                 vector_dimension = self.vector_dimension
-                logger.info(f"   ℹ️  Using embedding config from workflow (MCP tool parameters)")
+                logger.info(
+                    f"   ℹ️  Using embedding config from workflow (MCP tool parameters)"
+                )
             else:
                 # Fallback: Fetch from collection configuration
                 logger.info(f"   ℹ️  Fetching embedding config from collection...")
@@ -111,16 +116,34 @@ class MilvusRetriever(BaseRetriever):
             # Generate query embedding
             import litellm
 
-            litellm_model = f"{provider.provider_type}/{embedding_model_name}"
+            # If provider_type is "custom", use model name directly without prefix
+            if provider.provider_type.lower() == "custom":
+                litellm_model = embedding_model_name
+            else:
+                litellm_model = f"{provider.provider_type}/{embedding_model_name}"
             logger.info(f"   🧮 Generating embedding vector using {litellm_model}...")
 
-            embedding_response = litellm.embedding(
-                model=litellm_model,
-                input=[query],
-                api_key=provider.api_key,
-                api_base=provider.endpoint if provider.endpoint else None,
-                dimensions=vector_dimension,
-            )
+            # Prepare embedding parameters with custom API key field name support
+            embedding_params = {
+                "model": litellm_model,
+                "input": [query],
+                "api_base": provider.endpoint if provider.endpoint else None,
+                "dimensions": vector_dimension,
+            }
+
+            # Handle API key and custom header name
+            if provider.api_key:
+                embedding_params["api_key"] = provider.api_key
+                # If custom API key field name is specified, add it to extra_headers
+                if (
+                    provider.api_key_field_name
+                    and provider.api_key_field_name != "api_key"
+                ):
+                    embedding_params["extra_headers"] = {
+                        provider.api_key_field_name: provider.api_key
+                    }
+
+            embedding_response = litellm.embedding(**embedding_params)
 
             query_vector = embedding_response.data[0]["embedding"]
             logger.info(
@@ -201,12 +224,18 @@ class MilvusRetriever(BaseRetriever):
 
             # Determine embedding configuration
             # Priority: Use provided config from MCP tool, otherwise fetch from collection
-            if self.embedding_provider_id and self.embedding_model_name and self.vector_dimension:
+            if (
+                self.embedding_provider_id
+                and self.embedding_model_name
+                and self.vector_dimension
+            ):
                 # Use provided embedding config from workflow
                 embedding_provider_id = self.embedding_provider_id
                 embedding_model_name = self.embedding_model_name
                 vector_dimension = self.vector_dimension
-                logger.info(f"   ℹ️  Using embedding config from workflow (MCP tool parameters)")
+                logger.info(
+                    f"   ℹ️  Using embedding config from workflow (MCP tool parameters)"
+                )
             else:
                 # Fallback: Fetch from collection configuration
                 logger.info(f"   ℹ️  Fetching embedding config from collection...")
@@ -256,17 +285,38 @@ class MilvusRetriever(BaseRetriever):
             # Generate query embedding (API call - wrap in thread)
             import litellm
 
-            litellm_model = f"{provider.provider_type}/{embedding_model_name}"
+            # If provider_type is "custom", use model name directly without prefix
+            if provider.provider_type.lower() == "custom":
+                litellm_model = embedding_model_name
+            else:
+                litellm_model = f"{provider.provider_type}/{embedding_model_name}"
             logger.info(f"   🧮 Generating embedding vector using {litellm_model}...")
 
-            embedding_response = await asyncio.to_thread(
-                litellm.embedding,
-                model=litellm_model,
-                input=[query],
-                api_key=provider.api_key,
-                api_base=provider.endpoint if provider.endpoint else None,
-                dimensions=vector_dimension,
-            )
+            # Prepare embedding parameters with custom API key field name support
+            embedding_params = {
+                "model": litellm_model,
+                "input": [query],
+                "api_base": provider.endpoint if provider.endpoint else None,
+                "dimensions": vector_dimension,
+            }
+
+            # Handle API key and custom header name
+            if provider.api_key:
+                embedding_params["api_key"] = provider.api_key
+                # If custom API key field name is specified, add it to extra_headers
+                if (
+                    provider.api_key_field_name
+                    and provider.api_key_field_name != "api_key"
+                ):
+                    embedding_params["extra_headers"] = {
+                        provider.api_key_field_name: provider.api_key
+                    }
+
+            # Call litellm.embedding in a thread since it's a blocking call
+            def call_embedding():
+                return litellm.embedding(**embedding_params)
+
+            embedding_response = await asyncio.to_thread(call_embedding)
 
             query_vector = embedding_response.data[0]["embedding"]
             logger.info(

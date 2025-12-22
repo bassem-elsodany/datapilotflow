@@ -37,7 +37,7 @@ export function EnhancedMessageRenderer({
   const clipboard = useClipboard({ timeout: 2000 });
 
   // Detect text direction based on content
-  const textDirection = useMemo(() => detectTextDirection(content), [content]);
+  const textDirection = useMemo(() => detectTextDirection(content || ''), [content]);
 
   // Memoize markdown components to prevent infinite re-renders
   const markdownComponents = useMemo(() => ({
@@ -242,11 +242,11 @@ export function EnhancedMessageRenderer({
   }, [metadata?.source_links]);
 
   // Check if this is raw results mode by examining content
-  const isActualRawMode = isRawMode || content.includes('**Raw Results Mode**');
+  const isActualRawMode = isRawMode || (content?.includes('**Raw Results Mode**') || false);
 
   // Parse documents - memoized to prevent infinite re-renders
   const documents = useMemo(() => {
-    if (!isActualRawMode) {
+    if (!isActualRawMode || !content) {
       return [];
     }
 
@@ -412,7 +412,7 @@ export function EnhancedMessageRenderer({
             remarkPlugins={[remarkGfm]}
             components={markdownComponents}
           >
-            {content}
+            {content || ''}
           </ReactMarkdown>
         </Box>
       </Card>
