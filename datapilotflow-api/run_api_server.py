@@ -5,7 +5,8 @@ import sys
 # Set up service-specific logging first
 from datapilotflow.domain.logging import setup_service_logging
 
-setup_service_logging("api")
+# Set console level to DEBUG to see all tracing logs
+setup_service_logging("api", console_level="DEBUG")
 
 import uvicorn
 from datapilotflow.infrastructure.mongo.client import close_mongo_client

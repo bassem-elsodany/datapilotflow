@@ -1,5 +1,5 @@
-import { Button, Center, Checkbox, Group, Loader, Modal, ScrollArea, Stack, Text } from '@mantine/core';
 import { ModelType, useGetAvailableModels } from '@/api/resources/model-providers';
+import { Button, Center, Checkbox, Group, Loader, Modal, ScrollArea, Stack, Text } from '@mantine/core';
 
 export interface BrowseModelsModalProps {
   isOpen: boolean;
@@ -21,7 +21,9 @@ export function BrowseModelsModal({
   onAdd,
 }: BrowseModelsModalProps) {
   // Fetch available models from backend using LiteLLM SDK
-  const { data: availableModels = [], isLoading, error } = useGetAvailableModels(providerType, modelType || undefined);
+  // Only fetch if providerType is valid (non-empty and trimmed)
+  const validProviderType = providerType?.trim() || '';
+  const { data: availableModels = [], isLoading, error } = useGetAvailableModels(validProviderType, modelType || undefined);
 
   const handleToggleModel = (model: string) => {
     const newSelected = new Set(selectedModels);
@@ -45,13 +47,17 @@ export function BrowseModelsModal({
     <Modal
       opened={isOpen}
       onClose={onClose}
-      title={`Browse ${modelType ? modelType.charAt(0).toUpperCase() + modelType.slice(1) : 'Model'} Models - ${providerType}`}
+      title={`Browse ${modelType ? modelType.charAt(0).toUpperCase() + modelType.slice(1) : 'Model'} Models${validProviderType ? ` - ${validProviderType}` : ''}`}
       size="lg"
       centered
     >
       <Stack gap="md">
         <Text size="sm" c="dimmed">
-          Select {modelType} models to add to your {providerType} provider. These models are supported by LiteLLM SDK.
+          {validProviderType ? (
+            <>Select {modelType} models to add to your {validProviderType} provider. These models are supported by LiteLLM SDK.</>
+          ) : (
+            <>Please select a provider type first before browsing models.</>
+          )}
         </Text>
 
         {isLoading ? (
@@ -63,6 +69,15 @@ export function BrowseModelsModal({
               </Text>
             </Stack>
           </Center>
+        ) : !validProviderType ? (
+          <Stack gap="sm">
+            <Text size="sm" c="yellow">
+              Please select a provider type first before browsing models.
+            </Text>
+            <Button size="sm" variant="light" onClick={onClose}>
+              Close
+            </Button>
+          </Stack>
         ) : error ? (
           <Stack gap="sm">
             <Text size="sm" c="red">

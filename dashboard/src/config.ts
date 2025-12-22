@@ -164,21 +164,31 @@ export const apiEndpoints = {
 
   // Unified Model Providers Management
   modelProviders: {
-    list: '/model-providers',
-    create: '/model-providers',
-    get: (providerId: string) => `/model-providers/${providerId}`,
-    update: (providerId: string) => `/model-providers/${providerId}`,
-    active: '/model-providers/active/list',
-    byType: (modelType: string) => `/model-providers/by-type/${modelType}`,
-    test: '/model-providers/test',
+    list: '/providers',
+    create: '/providers',
+    get: (providerId: string) => `/providers/${providerId}`,
+    update: (providerId: string) => `/providers/${providerId}`,
+    test: '/providers/test',
+    testById: (providerId: string) => `/providers/${providerId}/test`,
     models: (providerId: string, modelType?: string) =>
       modelType
-        ? `/model-providers/${providerId}/models?model_type=${modelType}`
-        : `/model-providers/${providerId}/models`,
-    availableModels: (providerType: string, modelType?: string) =>
-      modelType
-        ? `/model-providers/available-models/${providerType}?model_type=${modelType}`
-        : `/model-providers/available-models/${providerType}`,
+        ? `/providers/${providerId}/models?model_type=${modelType}`
+        : `/providers/${providerId}/models`,
+  },
+  // LiteLLM Metadata
+  litellmProviders: {
+    list: '/litellm-providers',
+    models: (providerName: string, modelType?: string) => {
+      // Safety check: prevent double slashes from empty provider names
+      const validProviderName = (providerName || '').trim();
+      if (!validProviderName) {
+        // Return a placeholder that will result in 404, but won't cause routing issues
+        return '/litellm-providers/_invalid_/models';
+      }
+      return modelType
+        ? `/litellm-providers/${validProviderName}/models?model_type=${modelType}`
+        : `/litellm-providers/${validProviderName}/models`;
+    },
   },
 
   // Notifications

@@ -6,7 +6,7 @@ to its own log file while maintaining consistent formatting across all services.
 
 Usage:
     from datapilotflow.domain.logging import setup_service_logging
-    
+
     # In your run script, before any other imports that use logger
     setup_service_logging("api")  # Creates logs/api.log
     setup_service_logging("rag-agent")  # Creates logs/rag-agent.log
@@ -17,6 +17,10 @@ from pathlib import Path
 from typing import Optional
 
 from loguru import logger
+
+# Module-level flag to track if service-specific logging has been configured
+# This prevents domain.config from adding default logging when setup_service_logging was called
+_service_logging_configured = False
 
 
 def setup_service_logging(
@@ -60,6 +64,10 @@ def setup_service_logging(
     # Create log directory if it doesn't exist
     log_dir.mkdir(parents=True, exist_ok=True)
 
+    # Set global flag to indicate service logging is being configured
+    global _service_logging_configured
+    _service_logging_configured = True
+
     # Remove ALL existing handlers to prevent cross-contamination
     logger.remove()  # Remove all handlers
 
@@ -95,4 +103,3 @@ def setup_service_logging(
 
     # Log that logging has been configured
     logger.debug(f"Logging configured for service '{service_name}' -> {log_file}")
-

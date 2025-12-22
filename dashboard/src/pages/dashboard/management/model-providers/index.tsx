@@ -393,9 +393,25 @@ export default function ModelProviders() {
         color: success ? 'green' : 'red',
       });
     } catch (error: any) {
+      // Extract detailed error message from API response
+      let errorMessage = 'Failed to test provider';
+      
+      if (error?.response?.data?.detail) {
+        // FastAPI standard error format
+        errorMessage = typeof error.response.data.detail === 'string' 
+          ? error.response.data.detail 
+          : JSON.stringify(error.response.data.detail);
+      } else if (error?.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error?.message) {
+        errorMessage = error.message;
+      } else if (error?.detail) {
+        errorMessage = error.detail;
+      }
+
       notifications.show({
         title: 'Error',
-        message: error?.message || 'Failed to test provider',
+        message: errorMessage,
         color: 'red',
       });
     }

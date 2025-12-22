@@ -51,6 +51,7 @@ from datapilotflow.api.routers.agent.agent_router import router as agent_router
 from datapilotflow.api.routers.knowledge.knowledge_source_preview_router import (
     router as knowledge_source_preview_router,
 )
+from datapilotflow.api.routers.model_provider import litellm_router
 from datapilotflow.api.routers.tools import mcp_servers_router
 
 # Job timeline endpoints are now part of the knowledge job router
@@ -282,6 +283,11 @@ app.include_router(
     model_provider_router,
     prefix=API_PREFIX,
     tags=["Unified Model Providers Management"],
+)
+app.include_router(
+    litellm_router,
+    prefix=API_PREFIX,
+    tags=["LiteLLM Metadata"],
 )
 app.include_router(users_router, prefix=API_PREFIX, tags=["User Management"])
 app.include_router(roles_router, prefix=API_PREFIX, tags=["User Roles Management"])

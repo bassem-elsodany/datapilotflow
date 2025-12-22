@@ -35,6 +35,7 @@ class ModelProviderDAO(MongoClientWrapper[ModelProvider]):
             "provider_type": provider_data.provider_type,
             "endpoint": provider_data.endpoint,
             "api_key": provider_data.api_key,
+            "api_key_field_name": provider_data.api_key_field_name,
             "description": provider_data.description,
             "is_active": provider_data.is_active,
             "timeout": provider_data.timeout,

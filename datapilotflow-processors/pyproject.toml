@@ -11,6 +11,7 @@ dependencies = [
     "marker-pdf[full]",
     "crawl4ai>=0.6.3",
     "html2text>=2025.4.15",
+    "huggingface-hub>=0.34.0,<1.0",  # Required by transformers (via marker-pdf)
 ]
 
 [build-system]
@@ -19,3 +20,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/datapilotflow"]
+
+[tool.uv.sources]
+# Define local package sources relative to this package
+datapilotflow-domain = { path = "../datapilotflow-domain" }

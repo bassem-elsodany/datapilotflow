@@ -1,18 +1,6 @@
 {
     "folders": [
         {
-            "name": "backend",
-            "path": "backend",
-            "settings": {
-                "python.defaultInterpreterPath": "/Users/bassem.elsodany/workspaces/datapilotflow/backend/.venv/bin/python",
-                "python.venvPath": "/Users/bassem.elsodany/workspaces/datapilotflow/backend",
-                "python.venvFolders": [
-                    "/Users/bassem.elsodany/workspaces/datapilotflow/backend"
-                ],
-                "python.terminal.activateEnvironment": true
-            }
-        },
-        {
             "name": "dashboard",
             "path": "dashboard"
         },

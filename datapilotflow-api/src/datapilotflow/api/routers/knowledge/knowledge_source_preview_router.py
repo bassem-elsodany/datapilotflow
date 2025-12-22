@@ -7,18 +7,21 @@ import traceback
 from typing import List, Optional
 
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode
-from fastapi import APIRouter, Depends, HTTPException
-from loguru import logger
-from pydantic import BaseModel, Field
-
-from datapilotflow.api.routers.auth.auth_router import get_current_user
-from datapilotflow.domain.knowledge.knowledge_source_config import OutputFormat, ScrapingMode
+from datapilotflow.domain.knowledge.knowledge_source_config import (
+    OutputFormat,
+    ScrapingMode,
+)
 from datapilotflow.domain.user.user import User
 from datapilotflow.processors.crawler.crawler_config import (
     CrawlerKnowledgeConfig,
     get_crawler_config,
     get_deep_crawler_strategy,
 )
+from fastapi import APIRouter, Depends, HTTPException
+from loguru import logger
+from pydantic import BaseModel, Field
+
+from datapilotflow.api.routers.auth.auth_router import get_current_user
 
 router = APIRouter()
 
@@ -109,6 +112,10 @@ async def preview_content(
                 model_provider_service = get_model_provider_service()
 
                 # Get the provider using the authenticated user ID
+                if not current_user.id:
+                    raise HTTPException(
+                        status_code=400, detail="User ID is required but not found"
+                    )
                 logger.debug(
                     f"Looking up provider with ID: {request.llm_provider_id} for user: {current_user.id}"
                 )
@@ -166,7 +173,7 @@ async def preview_content(
         async with AsyncWebCrawler(config=browser_config) as crawler:
             try:
                 # Run the crawler
-                async for result in await crawler.arun(
+                async for result in await crawler.arun(  # type: ignore[attr-defined]
                     request.url, config=crawler_run_config
                 ):
                     logger.debug(f"Crawler result: {result.url}")
