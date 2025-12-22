@@ -50,6 +50,8 @@ def get_available_provider_names(
         provider_names = service.get_available_provider_types()
 
         logger.info(f"Returning {len(provider_names)} provider names")
+        logger.debug(f"Provider list: {sorted(provider_names)}")
+        logger.debug(f"EPAM-DIAL in response: {'epam-dial' in provider_names}")
         return provider_names
 
     except Exception as e:
