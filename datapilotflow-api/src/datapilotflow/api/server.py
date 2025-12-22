@@ -15,7 +15,7 @@ from fastapi import FastAPI, HTTPException, Query, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
-from langgraph.checkpoint.mongodb.aio import AsyncMongoDBSaver
+from langgraph.checkpoint.mongodb import MongoDBSaver
 from loguru import logger
 from opik.integrations.langchain import OpikTracer
 
@@ -140,7 +140,7 @@ async def lifespan(app: FastAPI):
         logger.info(
             "MongoDB agent state checkpointing is enabled, configuring MongoDB checkpointer"
         )
-        async with AsyncMongoDBSaver.from_conn_string(
+        with MongoDBSaver.from_conn_string(
             conn_string=agent_mongo_uri,
             db_name=settings.MONGO_AGENT_STATE_CHECKPOINT_DB_NAME,
             checkpoint_collection_name=settings.MONGO_AGENT_STATE_CHECKPOINT_COLLECTION,
@@ -211,7 +211,12 @@ async def global_exception_handler(request: Request, exc: Exception):
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     """HTTP exception handler."""
-    logger.warning(f"HTTP exception: {exc.status_code} - {exc.detail}")
+    # Log 403 (Forbidden) errors at debug level since they're expected for non-admin users
+    # Log other HTTP exceptions at warning level
+    if exc.status_code == 403:
+        logger.debug(f"HTTP exception: {exc.status_code} - {exc.detail} (path: {request.url.path})")
+    else:
+        logger.warning(f"HTTP exception: {exc.status_code} - {exc.detail}")
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 
