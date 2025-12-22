@@ -572,6 +572,8 @@ class ModelProviderService:
             provider_types.sort()
 
             logger.info(f"Found {len(provider_types)} provider types")
+            logger.debug(f"Provider types list: {provider_types}")
+            logger.debug(f"EPAM-DIAL in models_by_provider: {'epam-dial' in provider_types}")
             return provider_types
 
         except Exception as e:
