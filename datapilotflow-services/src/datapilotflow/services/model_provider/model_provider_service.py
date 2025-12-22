@@ -27,7 +27,9 @@ from datapilotflow.services.model_provider.json_loader import (
     register_json_providers_with_litellm,
 )
 
+logger.info("MODEL_PROVIDER_SERVICE: About to call register_json_providers_with_litellm()")
 register_json_providers_with_litellm()
+logger.info("MODEL_PROVIDER_SERVICE: Finished calling register_json_providers_with_litellm()")
 
 
 class ModelProviderService:

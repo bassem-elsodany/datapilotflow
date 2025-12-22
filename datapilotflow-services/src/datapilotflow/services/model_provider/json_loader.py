@@ -37,20 +37,27 @@ class JSONProviderRegistry:
             return
 
         json_path = Path(__file__).parent / "providers.json"
+        logger.info(f"Loading JSON providers from: {json_path}")
+        logger.info(f"JSON file exists: {json_path.exists()}")
 
         if not json_path.exists():
             # No JSON file yet, that's okay
             cls._loaded = True
+            logger.warning(f"No providers.json found at {json_path}")
             return
 
         try:
             with open(json_path) as f:
                 data = json.load(f)
 
+            logger.info(f"Loaded providers from JSON: {list(data.keys())}")
+
             for slug, config in data.items():
                 cls._providers[slug] = SimpleProviderConfig(slug, config)
+                logger.info(f"Registered provider '{slug}' in JSONProviderRegistry")
 
             cls._loaded = True
+            logger.info(f"JSONProviderRegistry load complete. Total providers: {len(cls._providers)}")
         except Exception as e:
             logger.warning(f"Warning: Failed to load JSON provider configs: {e}")
             cls._loaded = True
@@ -83,15 +90,19 @@ def register_json_providers_with_litellm():
     try:
         from litellm import models_by_provider
 
+        logger.info(f"Starting JSON provider registration. Providers to register: {JSONProviderRegistry.list_providers()}")
+
         for provider_slug in JSONProviderRegistry.list_providers():
             # Add provider to models_by_provider using the provider slug (not base_class)
             # This is how LiteLLM's routing logic finds the provider
+            logger.info(f"Registering provider '{provider_slug}'")
             if provider_slug not in models_by_provider:
                 models_by_provider[provider_slug] = set()
+                logger.info(f"Successfully registered provider '{provider_slug}' with LiteLLM")
+            else:
+                logger.info(f"Provider '{provider_slug}' already registered")
 
-            logger.info(
-                f"Registered provider '{provider_slug}' with LiteLLM"
-            )
+        logger.info(f"JSON provider registration complete. Total providers: {len(models_by_provider)}")
     except ImportError:
         logger.warning("LiteLLM not available, skipping provider registration")
     except Exception as e:
