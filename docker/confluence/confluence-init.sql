@@ -1,0 +1,3 @@
+-- Initialize Confluence database
+-- This runs on first startup of the postgres container
+-- The actual schema will be created by Confluence on first startup

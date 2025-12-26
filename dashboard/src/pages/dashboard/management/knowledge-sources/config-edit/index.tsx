@@ -1,5 +1,5 @@
 import { useCreateContentFilter, useGetContentFilters } from '@/api/resources/content-filters';
-import { useGetKnowledgeSourceConfig, useGetUrlSourceConfig, useUpdateKnowledgeSourceConfig } from '@/api/resources/knowledge-sources';
+import { useGetKnowledgeSourceConfig, useGetUrlSourceConfig, useUpdateKnowledgeSourceConfig, useTestConfluenceCredentials } from '@/api/resources/knowledge-sources';
 import { useGetActiveModelProviders } from '@/api/resources/model-providers';
 import { ColorfulVerticalStepper, StepConfig } from '@/components/colorful-vertical-stepper';
 import { Page } from '@/components/page';
@@ -38,6 +38,7 @@ import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import {
   IconArrowLeft,
+  IconBook,
   IconCheck,
   IconChevronRight,
   IconClipboardCheck,
@@ -66,6 +67,7 @@ const breadcrumbs = [
   { label: 'Edit Configuration' },
 ];
 
+
 export default function EditKnowledgeSourceConfig() {
   const { configId } = useParams<{ configId: string }>();
   const navigate = useNavigate();
@@ -81,6 +83,9 @@ export default function EditKnowledgeSourceConfig() {
   const [isContentFilterTestVisible, setIsContentFilterTestVisible] = useState(false);
   const [testOutputFormat, setTestOutputFormat] = useState<'html' | 'markdown'>('html');
   const [newUploadedFiles, setNewUploadedFiles] = useState<File[]>([]);
+  const [confluenceTestResult, setConfluenceTestResult] = useState<{ success: boolean; message: string; spaces?: any[] } | null>(null);
+  const [isTestingConfluenceCredentials, setIsTestingConfluenceCredentials] = useState(false);
+  const [availableSpaces, setAvailableSpaces] = useState<any[]>([]);
 
   // Copy function for test results
   const handleCopyResult = async () => {
@@ -113,6 +118,7 @@ export default function EditKnowledgeSourceConfig() {
   const createFilterMutation = useCreateContentFilter();
   const updateConfigMutation = useUpdateKnowledgeSourceConfig();
   const testSelectorsMutation = useTestCssSelectors();
+  const testConfluenceCredentialsMutation = useTestConfluenceCredentials();
 
   // Filter for generative providers
   const generativeProviders = allProviders?.filter((provider: any) =>
@@ -163,6 +169,18 @@ export default function EditKnowledgeSourceConfig() {
       markdown_generation: 'standard' as 'standard' | 'llm',
       local_files: [] as any[],
       file_types: [] as string[],
+      confluence_config: {
+        is_cloud_instance: true,
+        cloud_url: '',
+        username_or_email: '',
+        api_token: '',
+        space_keys: [] as string[],
+        page_ids: [] as string[],
+        labels: [] as string[],
+        include_attachments: false,
+        include_comments: false,
+        expand_child_pages: false
+      },
       new_llm_filter: null as {
         name: string;
         description: string;
@@ -214,6 +232,18 @@ export default function EditKnowledgeSourceConfig() {
         llm_content_filter_id: config.llm_content_filter_id || null,
         local_files: config.local_files || [],
         file_types: config.file_types || [],
+        confluence_config: {
+          is_cloud_instance: (config as any).confluence_config?.is_cloud_instance ?? true,
+          cloud_url: (config as any).confluence_config?.cloud_url || '',
+          username_or_email: (config as any).confluence_config?.username_or_email || '',
+          api_token: (config as any).confluence_config?.api_token || '',
+          space_keys: (config as any).confluence_config?.space_keys || [],
+          page_ids: (config as any).confluence_config?.page_ids || [],
+          labels: (config as any).confluence_config?.labels || [],
+          include_attachments: (config as any).confluence_config?.include_attachments ?? false,
+          include_comments: (config as any).confluence_config?.include_comments ?? false,
+          expand_child_pages: (config as any).confluence_config?.expand_child_pages ?? false
+        },
         new_llm_filter: null as any
       };
 
@@ -431,6 +461,20 @@ export default function EditKnowledgeSourceConfig() {
         return step0Valid && filesValid;
       }
 
+      // For Confluence, check that credentials and mode are provided
+      if (form.values.content_source_type === 'confluence') {
+        if (!form.values.confluence_config?.cloud_url || !form.values.confluence_config?.username_or_email || !form.values.confluence_config?.api_token) {
+          console.log('❌ Form invalid: Confluence credentials not complete');
+          return false;
+        }
+        if (!form.values.scraping_mode) {
+          console.log('❌ Form invalid: No scraping mode selected');
+          return false;
+        }
+        console.log('✅ Confluence validation passed');
+        return step0Valid;
+      }
+
       // Validate scraping config for web scraping
       console.log('[ValidateStep] web_scraping - url:', form.values.url, 'scraping_mode:', form.values.scraping_mode);
 
@@ -482,13 +526,14 @@ export default function EditKnowledgeSourceConfig() {
   const getStepConfigs = (): StepConfig[] => {
     const isWebScraping = form.values.content_source_type === 'web_scraping';
     const isLocalFiles = form.values.content_source_type === 'local_files';
+    const isConfluence = form.values.content_source_type === 'confluence';
     const scrapingMode = form.values.scraping_mode;
 
     // Step 1: Basic Info (always shown)
     const steps: StepConfig[] = [
       {
-        label: isLocalFiles ? 'Basic Info & Upload' : 'Basic Info & Scraping',
-        description: isLocalFiles ? 'Name, description, files' : 'Name, description, URL',
+        label: isLocalFiles ? 'Basic Info & Upload' : isConfluence ? 'Basic Info & Confluence' : 'Basic Info & Scraping',
+        description: isLocalFiles ? 'Name, description, files' : isConfluence ? 'Name, credential, mode' : 'Name, description, URL',
         icon: <IconSettings size={20} strokeWidth={2} />,
         color: '#45c9bb',
         gradientFrom: '#45c9bb',
@@ -525,7 +570,9 @@ export default function EditKnowledgeSourceConfig() {
     // Step 4: Generation (only for file types that need conversion)
     // Markdown files are already in final format, so they skip generation
     // HTML, PDF, DOCX, TXT need generation to decide output format
+    // Confluence documents also need generation for format conversion
     const needsGeneration = isWebScraping ||
+      isConfluence ||
       scrapingMode === 'html_files' ||
       scrapingMode === 'pdf_files' ||
       scrapingMode === 'docx_files' ||
@@ -584,6 +631,47 @@ export default function EditKnowledgeSourceConfig() {
 
   const prevStep = () => {
     setActiveStep((current) => (current > 0 ? current - 1 : current));
+  };
+
+  // Test Confluence credentials
+  const handleTestConfluenceCredentials = async () => {
+    const { cloud_url, username_or_email, api_token } = form.values.confluence_config;
+
+    if (!cloud_url || !username_or_email || !api_token) {
+      notifications.show({
+        title: 'Missing Credentials',
+        message: 'Please fill in all Confluence credential fields',
+        color: 'red',
+      });
+      return;
+    }
+
+    setIsTestingConfluenceCredentials(true);
+    setConfluenceTestResult(null);
+
+    try {
+      const result = await testConfluenceCredentialsMutation.mutateAsync({
+        cloud_url,
+        username_or_email,
+        api_token,
+        is_cloud_instance: form.values.confluence_config.is_cloud_instance,
+      });
+
+      setConfluenceTestResult(result);
+
+      if (result.success && result.spaces && result.spaces.length > 0) {
+        setAvailableSpaces(result.spaces);
+      }
+    } catch (error) {
+      console.error('Confluence credentials test failed:', error);
+      setConfluenceTestResult({
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to test credentials. Please check your credentials and try again.',
+        spaces: []
+      });
+    } finally {
+      setIsTestingConfluenceCredentials(false);
+    }
   };
 
   const handleCreateFilter = (values: any) => {
@@ -784,6 +872,25 @@ export default function EditKnowledgeSourceConfig() {
         cleanedValues.target_elements = [];
       }
 
+      // Add Confluence specific fields
+      if (cleanedValues.content_source_type === 'confluence') {
+        (cleanedValues as any).confluence_config = {
+          cloud_url: cleanedValues.confluence_config.cloud_url,
+          username_or_email: cleanedValues.confluence_config.username_or_email,
+          api_token: cleanedValues.confluence_config.api_token,
+          space_keys: cleanedValues.confluence_config.space_keys.filter((k: string) => k.trim()),
+          page_ids: cleanedValues.confluence_config.page_ids.filter((id: string) => id.trim()),
+          labels: cleanedValues.confluence_config.labels.filter((l: string) => l.trim()),
+          include_attachments: cleanedValues.confluence_config.include_attachments,
+          include_comments: cleanedValues.confluence_config.include_comments,
+          expand_child_pages: cleanedValues.confluence_config.expand_child_pages,
+        };
+        // Set scraping_mode at root level for Confluence
+        (cleanedValues as any).scraping_mode = cleanedValues.scraping_mode;
+        // Remove the is_cloud_instance as it's not part of the API schema, just used for UI
+        delete (cleanedValues as any).confluence_config.is_cloud_instance;
+      }
+
       // Remove any undefined or null values
       Object.keys(cleanedValues).forEach(key => {
         if (cleanedValues[key as keyof typeof cleanedValues] === undefined ||
@@ -889,7 +996,8 @@ export default function EditKnowledgeSourceConfig() {
                     value={form.values.content_source_type}
                     data={[
                       { value: 'web_scraping', label: 'Web Scraping' },
-                      { value: 'local_files', label: 'Local Files' }
+                      { value: 'local_files', label: 'Local Files' },
+                      { value: 'confluence', label: 'Confluence' }
                     ]}
                     disabled
                     description="Cannot be changed after creation"
@@ -912,6 +1020,7 @@ export default function EditKnowledgeSourceConfig() {
               </Card>
 
               {/* Web Scraping / Local Files Configuration Section */}
+              {(form.values.content_source_type === 'web_scraping' || form.values.content_source_type === 'local_files') && (
               <Card withBorder p="md" style={{ backgroundColor: 'var(--mantine-color-gray-0)' }}>
                 <Stack gap="md">
                   <Group gap="xs" align="center">
@@ -1209,7 +1318,391 @@ export default function EditKnowledgeSourceConfig() {
                   )}
                 </Stack>
               </Card>
+              )}
 
+              {/* Confluence Configuration Section */}
+              {form.values.content_source_type === 'confluence' && (
+                <Card withBorder p="md" style={{ backgroundColor: 'var(--mantine-color-gray-0)' }}>
+                  <Stack gap="md">
+                    <Group gap="xs" align="center">
+                      <IconBook size={18} color="var(--mantine-color-cyan-6)" />
+                      <Text size="sm" fw={600} c="cyan">Confluence Configuration</Text>
+                    </Group>
+
+                    {/* Confluence Type Toggle */}
+                    <Group justify="space-between" align="center">
+                      <Stack gap="xs" style={{ flex: 1 }}>
+                        <Text size="sm" fw={500}>Confluence Type</Text>
+                        <Group gap="sm">
+                          <Button
+                            variant={form.values.confluence_config.is_cloud_instance !== false ? "filled" : "light"}
+                            color="cyan"
+                            size="sm"
+                            onClick={() => form.setFieldValue('confluence_config.is_cloud_instance', true)}
+                          >
+                            Atlassian Cloud
+                          </Button>
+                          <Button
+                            variant={form.values.confluence_config.is_cloud_instance === false ? "filled" : "light"}
+                            color="cyan"
+                            size="sm"
+                            onClick={() => form.setFieldValue('confluence_config.is_cloud_instance', false)}
+                          >
+                            Local / Self-Hosted
+                          </Button>
+                        </Group>
+                        <Text size="xs" c="dimmed">
+                          {form.values.confluence_config.is_cloud_instance !== false
+                            ? "Uses Atlassian Cloud API (atlassian.net URLs)"
+                            : "Uses Server/Data Center API (localhost, self-hosted)"}
+                        </Text>
+                      </Stack>
+                    </Group>
+
+                    {/* Confluence Credentials */}
+                    <Stack gap="xs">
+                      <Text size="sm" fw={500}>Confluence Connection Details</Text>
+                      <TextInput
+                        label="URL"
+                        placeholder={form.values.confluence_config.is_cloud_instance !== false ? "https://company.atlassian.net/wiki" : "http://localhost:8090"}
+                        required
+                        {...form.getInputProps('confluence_config.cloud_url')}
+                        description={form.values.confluence_config.is_cloud_instance !== false
+                          ? "Your Atlassian Cloud Confluence URL"
+                          : "Your local or self-hosted Confluence URL (e.g., http://localhost:8090)"}
+                      />
+                      <Group grow>
+                        <TextInput
+                          label="Username or Email"
+                          placeholder="user@company.com"
+                          required
+                          description="Your Confluence account username or email address"
+                          {...form.getInputProps('confluence_config.username_or_email')}
+                        />
+                        <TextInput
+                          label="API Token"
+                          placeholder="Paste your Confluence API token"
+                          type="password"
+                          required
+                          description="Your API token will be encrypted when saved"
+                          {...form.getInputProps('confluence_config.api_token')}
+                        />
+                      </Group>
+                      <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light" title="API Token">
+                        <Text size="sm">
+                          Get your API token from {' '}
+                          <Anchor href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank">
+                            Atlassian API tokens
+                          </Anchor>
+                        </Text>
+                      </Alert>
+
+                      {/* Test Credentials Button */}
+                      <Button
+                        onClick={handleTestConfluenceCredentials}
+                        loading={isTestingConfluenceCredentials}
+                        variant="light"
+                        color="cyan"
+                        leftSection={<IconClipboardCheck size={16} />}
+                        fullWidth
+                      >
+                        Test Credentials
+                      </Button>
+
+                      {/* Test Result Alert */}
+                      {confluenceTestResult && (
+                        <Alert
+                          icon={confluenceTestResult.success ? <IconClipboardCheck size={16} /> : <IconX size={16} />}
+                          color={confluenceTestResult.success ? 'green' : 'red'}
+                          variant="light"
+                          title={confluenceTestResult.success ? 'Credentials Valid' : 'Credentials Invalid'}
+                        >
+                          <Stack gap="xs">
+                            <Text size="sm">{confluenceTestResult.message}</Text>
+                            {confluenceTestResult.success && confluenceTestResult.spaces && confluenceTestResult.spaces.length > 0 && (
+                              <Stack gap="xs">
+                                <Text size="sm" fw={500}>Available Spaces:</Text>
+                                <Stack gap="xs" style={{ paddingLeft: '12px' }}>
+                                  {confluenceTestResult.spaces.map((space: any, idx: number) => (
+                                    <Group key={idx} gap="xs">
+                                      <Text size="sm" c="dimmed" style={{ fontFamily: 'monospace' }}>
+                                        [{space.key}]
+                                      </Text>
+                                      <Text size="sm">{space.name}</Text>
+                                    </Group>
+                                  ))}
+                                </Stack>
+                              </Stack>
+                            )}
+                          </Stack>
+                        </Alert>
+                      )}
+                    </Stack>
+
+                    {/* Confluence Scraping Mode */}
+                    <Select
+                      label="Scraping Mode"
+                      placeholder="Select scraping mode"
+                      required
+                      data={[
+                        { value: 'space_pages', label: 'Space Pages', description: 'Extract all pages from specific spaces' },
+                        { value: 'specific_pages', label: 'Specific Pages', description: 'Extract individual pages by ID' },
+                        { value: 'pages_with_label', label: 'Pages with Labels', description: 'Extract pages matching labels' },
+                        { value: 'recently_modified', label: 'Recently Modified', description: 'Extract recently changed pages' },
+                      ].map(mode => ({
+                        value: mode.value,
+                        label: mode.label,
+                        description: mode.description
+                      }))}
+                      description={
+                        [
+                          { value: 'space_pages', label: 'Space Pages', description: 'Extract all pages from specific spaces' },
+                          { value: 'specific_pages', label: 'Specific Pages', description: 'Extract individual pages by ID' },
+                          { value: 'pages_with_label', label: 'Pages with Labels', description: 'Extract pages matching labels' },
+                          { value: 'recently_modified', label: 'Recently Modified', description: 'Extract recently changed pages' },
+                        ].find(m => m.value === form.values.scraping_mode)?.description || 'Select a mode'
+                      }
+                      {...form.getInputProps('scraping_mode')}
+                    />
+
+                    {/* Mode-specific fields */}
+                    {form.values.scraping_mode === 'space_pages' && (
+                      <Stack gap="xs">
+                        <Text size="sm" fw={500}>Confluence Spaces</Text>
+
+                        {/* Show available spaces if loaded */}
+                        {availableSpaces.length > 0 && (
+                          <Stack gap="xs" style={{
+                            border: '1px solid #e9ecef',
+                            borderRadius: '8px',
+                            padding: '12px',
+                            backgroundColor: '#f8f9fa'
+                          }}>
+                            <Text size="xs" fw={500}>Available Spaces - Click to Add:</Text>
+                            <Stack gap="xs">
+                              {availableSpaces.map((space, idx) => (
+                                <Group
+                                  key={idx}
+                                  style={{
+                                    padding: '8px 12px',
+                                    borderRadius: '6px',
+                                    backgroundColor: form.values.confluence_config.space_keys.includes(space.key)
+                                      ? '#c5f015'
+                                      : '#ffffff',
+                                    border: '1px solid #dee2e6',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                  }}
+                                  onClick={() => {
+                                    const newKeys = form.values.confluence_config.space_keys.includes(space.key)
+                                      ? form.values.confluence_config.space_keys.filter(k => k !== space.key)
+                                      : [...form.values.confluence_config.space_keys, space.key];
+                                    form.setFieldValue('confluence_config', {
+                                      ...form.values.confluence_config,
+                                      space_keys: newKeys
+                                    });
+                                  }}
+                                >
+                                  <Badge color={form.values.confluence_config.space_keys.includes(space.key) ? 'green' : 'gray'}>
+                                    {space.key}
+                                  </Badge>
+                                  <Text size="sm" style={{ flex: 1 }}>{space.name}</Text>
+                                  {form.values.confluence_config.space_keys.includes(space.key) && (
+                                    <IconClipboardCheck size={16} color="green" />
+                                  )}
+                                </Group>
+                              ))}
+                            </Stack>
+                          </Stack>
+                        )}
+
+                        {/* Manual entry section */}
+                        <Text size="xs" c="dimmed">Or manually enter space keys:</Text>
+                        {form.values.confluence_config.space_keys.map((key, index) => (
+                          <Group key={index} mb="xs">
+                            <TextInput
+                              value={key}
+                              onChange={(e) => {
+                                const newKeys = [...form.values.confluence_config.space_keys];
+                                newKeys[index] = e.target.value;
+                                form.setFieldValue('confluence_config', {
+                                  ...form.values.confluence_config,
+                                  space_keys: newKeys
+                                });
+                              }}
+                              placeholder="Enter space key"
+                              style={{ flex: 1 }}
+                            />
+                            <ActionIcon
+                              color="red"
+                              variant="subtle"
+                              size="sm"
+                              type="button"
+                              onClick={() => {
+                                const newKeys = form.values.confluence_config.space_keys.filter((_, i) => i !== index);
+                                form.setFieldValue('confluence_config', {
+                                  ...form.values.confluence_config,
+                                  space_keys: newKeys
+                                });
+                              }}
+                            >
+                              <IconX size={14} />
+                            </ActionIcon>
+                          </Group>
+                        ))}
+                        <Button
+                          variant="light"
+                          leftSection={<IconPlus size={16} />}
+                          type="button"
+                          onClick={() => {
+                            form.setFieldValue('confluence_config', {
+                              ...form.values.confluence_config,
+                              space_keys: [...form.values.confluence_config.space_keys, '']
+                            });
+                          }}
+                          fullWidth
+                          size="sm"
+                        >
+                          Add Space
+                        </Button>
+                      </Stack>
+                    )}
+
+                    {form.values.scraping_mode === 'specific_pages' && (
+                      <Stack gap="xs">
+                        <Text size="sm" fw={500}>Page IDs</Text>
+                        <Text size="xs" c="dimmed">Enter Confluence page IDs to extract</Text>
+                        {form.values.confluence_config.page_ids.map((id, index) => (
+                          <Group key={index} mb="xs">
+                            <TextInput
+                              value={id}
+                              onChange={(e) => {
+                                const newIds = [...form.values.confluence_config.page_ids];
+                                newIds[index] = e.target.value;
+                                form.setFieldValue('confluence_config', {
+                                  ...form.values.confluence_config,
+                                  page_ids: newIds
+                                });
+                              }}
+                              placeholder="Enter page ID"
+                              style={{ flex: 1 }}
+                            />
+                            <ActionIcon
+                              color="red"
+                              variant="subtle"
+                              size="sm"
+                              type="button"
+                              onClick={() => {
+                                const newIds = form.values.confluence_config.page_ids.filter((_, i) => i !== index);
+                                form.setFieldValue('confluence_config', {
+                                  ...form.values.confluence_config,
+                                  page_ids: newIds
+                                });
+                              }}
+                            >
+                              <IconX size={14} />
+                            </ActionIcon>
+                          </Group>
+                        ))}
+                        <Button
+                          variant="light"
+                          leftSection={<IconPlus size={16} />}
+                          type="button"
+                          onClick={() => {
+                            form.setFieldValue('confluence_config', {
+                              ...form.values.confluence_config,
+                              page_ids: [...form.values.confluence_config.page_ids, '']
+                            });
+                          }}
+                          fullWidth
+                          size="sm"
+                        >
+                          Add Page ID
+                        </Button>
+                      </Stack>
+                    )}
+
+                    {form.values.scraping_mode === 'pages_with_label' && (
+                      <Stack gap="xs">
+                        <Text size="sm" fw={500}>Labels</Text>
+                        <Text size="xs" c="dimmed">Enter labels to extract pages with</Text>
+                        {form.values.confluence_config.labels.map((label, index) => (
+                          <Group key={index} mb="xs">
+                            <TextInput
+                              value={label}
+                              onChange={(e) => {
+                                const newLabels = [...form.values.confluence_config.labels];
+                                newLabels[index] = e.target.value;
+                                form.setFieldValue('confluence_config', {
+                                  ...form.values.confluence_config,
+                                  labels: newLabels
+                                });
+                              }}
+                              placeholder="Enter label"
+                              style={{ flex: 1 }}
+                            />
+                            <ActionIcon
+                              color="red"
+                              variant="subtle"
+                              size="sm"
+                              type="button"
+                              onClick={() => {
+                                const newLabels = form.values.confluence_config.labels.filter((_, i) => i !== index);
+                                form.setFieldValue('confluence_config', {
+                                  ...form.values.confluence_config,
+                                  labels: newLabels
+                                });
+                              }}
+                            >
+                              <IconX size={14} />
+                            </ActionIcon>
+                          </Group>
+                        ))}
+                        <Button
+                          variant="light"
+                          leftSection={<IconPlus size={16} />}
+                          type="button"
+                          onClick={() => {
+                            form.setFieldValue('confluence_config', {
+                              ...form.values.confluence_config,
+                              labels: [...form.values.confluence_config.labels, '']
+                            });
+                          }}
+                          fullWidth
+                          size="sm"
+                        >
+                          Add Label
+                        </Button>
+                      </Stack>
+                    )}
+
+                    {/* Optional settings */}
+                    <Divider label={<Text size="xs" c="dimmed">Optional Settings</Text>} labelPosition="center" />
+                    <Group grow>
+                      <Switch
+                        label="Include Attachments"
+                        checked={form.values.confluence_config.include_attachments}
+                        onChange={(e) => {
+                          form.setFieldValue('confluence_config', {
+                            ...form.values.confluence_config,
+                            include_attachments: e.currentTarget.checked
+                          });
+                        }}
+                      />
+                      <Switch
+                        label="Include Comments"
+                        checked={form.values.confluence_config.include_comments}
+                        onChange={(e) => {
+                          form.setFieldValue('confluence_config', {
+                            ...form.values.confluence_config,
+                            include_comments: e.currentTarget.checked
+                          });
+                        }}
+                      />
+                    </Group>
+                  </Stack>
+                </Card>
+              )}
 
             </Stack>
           )}

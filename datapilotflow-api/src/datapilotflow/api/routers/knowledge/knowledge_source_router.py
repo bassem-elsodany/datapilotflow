@@ -600,3 +600,98 @@ def get_source_content_filter(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve content filter for source config: {str(e)}",
         )
+
+
+@router.post("/confluence/credentials/test")
+async def test_confluence_credentials(
+    credentials: dict,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Test Confluence credentials without storing them.
+
+    This endpoint verifies that the provided Confluence credentials are valid
+    by making a test API call to Confluence and returning available spaces.
+
+    Args:
+        credentials: Dict with cloud_url, username_or_email, api_token
+        current_user: Currently authenticated user (required for authorization)
+
+    Returns:
+        success: True if credentials are valid
+        message: Human-readable message
+        spaces: List of available spaces with key and name
+    """
+    from datapilotflow.domain.knowledge.knowledge_source_config import (
+        ConfluenceConfig,
+    )
+    from datapilotflow.processors.confluence.confluence_api_client import (
+        ConfluenceApiClient,
+        ConfluenceAuthenticationError,
+        ConfluenceServerError,
+        ConfluencePageNotFoundError,
+    )
+
+    try:
+        # Validate required fields
+        required_fields = ["cloud_url", "username_or_email", "api_token"]
+        missing_fields = [f for f in required_fields if not credentials.get(f)]
+        if missing_fields:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Missing required fields: {', '.join(missing_fields)}",
+            )
+
+        # Create ConfluenceConfig from credentials
+        confluence_config = ConfluenceConfig(
+            cloud_url=credentials["cloud_url"],
+            username_or_email=credentials["username_or_email"],
+            api_token=credentials["api_token"],
+            is_cloud_instance=credentials.get("is_cloud_instance"),
+        )
+
+        # Log the Confluence URL being tested and instance type
+        instance_type = "Cloud" if credentials.get("is_cloud_instance") else "Local/Self-Hosted" if credentials.get("is_cloud_instance") is False else "Auto-detect"
+        logger.info(f"Testing Confluence credentials for URL: {credentials['cloud_url']} (Instance Type: {instance_type})")
+
+        # Test credentials and get spaces
+        async with ConfluenceApiClient(confluence_config) as client:
+            await client.verify_credentials()
+            logger.debug("Credentials verified, fetching available spaces...")
+            spaces = await client.get_spaces()
+
+        logger.info(f"Successfully tested credentials and found {len(spaces)} spaces")
+
+        return {
+            "success": True,
+            "message": f"Confluence credentials are valid. Found {len(spaces)} accessible space(s).",
+            "spaces": spaces,
+        }
+
+    except ConfluenceAuthenticationError as e:
+        error_msg = str(e)
+        logger.warning(f"Confluence authentication failed for URL {credentials.get('cloud_url')}: {error_msg}")
+        raise HTTPException(
+            status_code=401,
+            detail=error_msg,
+        )
+    except ConfluenceServerError as e:
+        logger.error(f"Confluence server error for URL {credentials.get('cloud_url')}: {e}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Confluence server error: {str(e)}",
+        )
+    except ConfluencePageNotFoundError as e:
+        logger.warning(f"Confluence API not accessible for URL {credentials.get('cloud_url')}: {e}")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Confluence API not accessible: {str(e)}",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error testing Confluence credentials for URL {credentials.get('cloud_url')}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to test Confluence credentials: {str(e)}",
+        )

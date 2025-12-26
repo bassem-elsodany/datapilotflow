@@ -212,15 +212,6 @@ export const apiEndpoints = {
     },
   },
 
-  // Confluence Credentials Management
-  confluence: {
-    credentials: '/confluence/credentials',
-    credential: (credentialId: string) => `/confluence/credentials/${credentialId}`,
-    credentialVerify: (credentialId: string) => `/confluence/credentials/${credentialId}/verify`,
-    credentialDeactivate: (credentialId: string) => `/confluence/credentials/${credentialId}/deactivate`,
-    credentialActivate: (credentialId: string) => `/confluence/credentials/${credentialId}/activate`,
-  },
-
   // Legacy WebSocket endpoints (deprecated - use structured endpoints above)
   websocket: {
     knowledgeSearch: '/ws/knowledge/search',

@@ -26,7 +26,7 @@ export const UrlSourceConfigCreateSchema = z.object({
 // Content Source Type Schema
 export const ContentSourceTypeSchema = z.enum(['web_scraping', 'local_files', 'confluence']);
 
-// Scraping Mode Schema (updated with local files modes)
+// Scraping Mode Schema (includes web, local files, and Confluence modes)
 export const ScrapingModeSchema = z.enum([
   'single_page',
   'multiple_pages',
@@ -35,11 +35,7 @@ export const ScrapingModeSchema = z.enum([
   'markdown_files',
   'pdf_files',
   'docx_files',
-  'txt_files'
-]);
-
-// Confluence Mode Schema
-export const ConfluenceScrapingModeSchema = z.enum([
+  'txt_files',
   'specific_pages',
   'space_pages',
   'pages_with_label',
@@ -51,7 +47,7 @@ export const ConfluenceConfigSchema = z.object({
   cloud_url: z.string().url('Invalid Confluence URL'),
   username_or_email: z.string().email('Invalid email'),
   api_token: z.string().min(1, 'API token required'),
-  confluence_mode: ConfluenceScrapingModeSchema,
+  is_cloud_instance: z.boolean().nullable().optional(),
   space_keys: z.array(z.string()).nullable().optional(),
   page_ids: z.array(z.string()).nullable().optional(),
   labels: z.array(z.string()).nullable().optional(),
@@ -102,7 +98,6 @@ export const KnowledgeSourceConfigSchema = z.object({
 
 export type ContentSourceType = z.infer<typeof ContentSourceTypeSchema>;
 export type ScrapingMode = z.infer<typeof ScrapingModeSchema>;
-export type ConfluenceScrapingMode = z.infer<typeof ConfluenceScrapingModeSchema>;
 export type ConfluenceConfig = z.infer<typeof ConfluenceConfigSchema>;
 export type LocalFile = z.infer<typeof LocalFileSchema>;
 export type UrlSourceConfig = z.infer<typeof UrlSourceConfigSchema>;
@@ -412,6 +407,26 @@ export const useDeleteKnowledgeSourceConfig = createDeleteMutationHook({
     },
   },
 });
+
+// Test inline Confluence credentials (without storing them)
+export const useTestConfluenceCredentials = () => {
+  return useMutation({
+    mutationFn: async (credentials: {
+      cloud_url: string;
+      username_or_email: string;
+      api_token: string;
+    }) => {
+      const token = localStorage.getItem('jwt_token');
+      if (!token || !token.trim()) {
+        throw new Error('Authentication required');
+      }
+
+      const { client } = await import('../axios');
+      const response = await client.post('/knowledge/sources/confluence/credentials/test', credentials);
+      return response.data;
+    },
+  });
+};
 
 // Get URL source configuration
 export const useGetUrlSourceConfig = (configId: string, urlSourceId: string, options?: { enabled?: boolean }) => createGetQueryHook<typeof UrlSourceConfigSchema, {}, {}>({
