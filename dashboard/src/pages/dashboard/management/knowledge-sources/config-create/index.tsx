@@ -1,7 +1,7 @@
 import { useCreateContentFilter, useGetEnabledContentFilters } from '@/api/resources/content-filters';
 import { useCreateKnowledgeSourceConfig } from '@/api/resources/knowledge-sources';
 import { useGetActiveModelProviders } from '@/api/resources/model-providers';
-import { useListConfluenceCredentials } from '@/api/resources/confluence-credentials';
+import { useCreateConfluenceCredential, useListConfluenceCredentials } from '@/api/resources/confluence-credentials';
 import { ColorfulVerticalStepper, StepConfig } from '@/components/colorful-vertical-stepper';
 import { Page } from '@/components/page';
 import { PageHeader } from '@/components/page-header';
@@ -10,6 +10,7 @@ import { paths } from '@/routes/paths';
 import {
   ActionIcon,
   Alert,
+  Anchor,
   Badge,
   Button,
   Card,
@@ -101,6 +102,35 @@ export default function CreateKnowledgeSourceConfig() {
   const [testOutputFormat, setTestOutputFormat] = useState<'html' | 'markdown'>('html');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
 
+  // Confluence credential creation modal state
+  const [createCredentialModalOpened, setCreateCredentialModalOpened] = useState(false);
+  const [isCreatingCredential, setIsCreatingCredential] = useState(false);
+  const createCredentialMutation = useCreateConfluenceCredential();
+
+  // Form for creating new Confluence credential
+  const credentialForm = useForm({
+    initialValues: {
+      name: '',
+      cloud_url: '',
+      username_or_email: '',
+      api_token: '',
+    },
+    validate: {
+      name: (value) => (!value ? 'Credential name is required' : null),
+      cloud_url: (value) => {
+        if (!value) return 'Confluence URL is required';
+        try {
+          new URL(value);
+          return null;
+        } catch {
+          return 'Please enter a valid URL';
+        }
+      },
+      username_or_email: (value) => (!value ? 'Username or email is required' : null),
+      api_token: (value) => (!value ? 'API token is required' : null),
+    },
+  });
+
   // Copy function for test results
   const handleCopyResult = async () => {
     if (testResult) {
@@ -118,6 +148,51 @@ export default function CreateKnowledgeSourceConfig() {
           color: 'red',
         });
       }
+    }
+  };
+
+  // Handle Confluence credential creation
+  const handleCreateConfluenceCredential = async (values: any) => {
+    if (!credentialForm.isValid()) return;
+
+    setIsCreatingCredential(true);
+    try {
+      const mutation = createCredentialMutation();
+      mutation.mutate(
+        { variables: values },
+        {
+          onSuccess: (newCredential: any) => {
+            notifications.show({
+              title: 'Success!',
+              message: `Credential "${newCredential.name}" created successfully`,
+              color: 'green',
+            });
+
+            // Auto-select the newly created credential
+            form.setFieldValue('confluence_credential_id', newCredential.id);
+
+            // Close modal and reset form
+            setCreateCredentialModalOpened(false);
+            credentialForm.reset();
+
+            // Refetch credentials
+            setTimeout(() => {
+              // The list will be refetched by React Query
+            }, 500);
+          },
+          onError: (error: any) => {
+            notifications.show({
+              title: 'Error',
+              message: error?.message || 'Failed to create credential',
+              color: 'red',
+            });
+          },
+        }
+      );
+    } catch (error) {
+      console.error('Error creating credential:', error);
+    } finally {
+      setIsCreatingCredential(false);
     }
   };
 
@@ -1374,20 +1449,38 @@ Format the output as clean markdown with proper code blocks and headers.`,
                 </Group>
 
                 {/* Credential Selection */}
-                <Select
-                  label="Confluence Credential"
-                  placeholder="Select existing credential or create new"
-                  required
-                  clearable
-                  searchable
-                  data={confluenceCredentials?.map((cred: any) => ({
-                    value: cred.id,
-                    label: cred.name,
-                    description: `${cred.cloud_url} (${cred.username_or_email})`
-                  })) || []}
-                  description="Select a previously created Confluence credential"
-                  {...form.getInputProps('confluence_credential_id')}
-                />
+                <Group gap="md" grow>
+                  <Select
+                    label="Confluence Credential"
+                    placeholder="Select existing credential or create new"
+                    required
+                    clearable
+                    searchable
+                    data={confluenceCredentials?.map((cred: any) => ({
+                      value: cred.id,
+                      label: cred.name,
+                      description: `${cred.cloud_url} (${cred.username_or_email})`
+                    })) || []}
+                    description={
+                      !confluenceCredentials || confluenceCredentials.length === 0
+                        ? "No credentials found. Click 'Create New' to add one"
+                        : "Select a credential or create a new one"
+                    }
+                    style={{ flex: 1 }}
+                    {...form.getInputProps('confluence_credential_id')}
+                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                    <Button
+                      variant="light"
+                      color="blue"
+                      size="sm"
+                      leftSection={<IconPlus size={16} />}
+                      onClick={() => setCreateCredentialModalOpened(true)}
+                    >
+                      Create New
+                    </Button>
+                  </div>
+                </Group>
 
                 {/* Confluence Extraction Mode */}
                 <Select
@@ -3456,6 +3549,83 @@ Extract troubleshooting and FAQ content with clear markdown structure.
               </Button>
               <Button type="submit" loading={isCreatingFilter}>
                 Create Filter
+              </Button>
+            </Group>
+          </Stack>
+        </form>
+      </Modal>
+
+      {/* Confluence Credential Creation Modal */}
+      <Modal
+        opened={createCredentialModalOpened}
+        onClose={() => {
+          setCreateCredentialModalOpened(false);
+          credentialForm.reset();
+        }}
+        title="Create Confluence Credential"
+        size="md"
+        centered
+      >
+        <form
+          onSubmit={credentialForm.onSubmit((values) => handleCreateConfluenceCredential(values))}
+        >
+          <Stack gap="md">
+            <TextInput
+              label="Credential Name"
+              placeholder="e.g., Company Confluence"
+              required
+              {...credentialForm.getInputProps('name')}
+            />
+
+            <TextInput
+              label="Confluence Cloud URL"
+              placeholder="https://company.atlassian.net/wiki"
+              required
+              {...credentialForm.getInputProps('cloud_url')}
+            />
+
+            <TextInput
+              label="Username or Email"
+              placeholder="user@company.com"
+              required
+              {...credentialForm.getInputProps('username_or_email')}
+            />
+
+            <TextInput
+              label="API Token"
+              placeholder="Paste your Confluence API token"
+              type="password"
+              required
+              {...credentialForm.getInputProps('api_token')}
+              description="Your API token is encrypted and never stored in plain text"
+            />
+
+            <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light">
+              <Text size="sm">
+                Need a token? Visit {' '}
+                <Anchor href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank">
+                  Atlassian API tokens
+                </Anchor>
+                {' '} to create one.
+              </Text>
+            </Alert>
+
+            <Group justify="flex-end" mt="lg">
+              <Button
+                variant="default"
+                onClick={() => {
+                  setCreateCredentialModalOpened(false);
+                  credentialForm.reset();
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                loading={isCreatingCredential}
+                disabled={!credentialForm.isValid()}
+              >
+                Create Credential
               </Button>
             </Group>
           </Stack>
