@@ -214,11 +214,11 @@ export default function EditKnowledgeSourceConfig() {
         llm_content_filter_id: config.llm_content_filter_id || null,
         local_files: config.local_files || [],
         file_types: config.file_types || [],
-        new_llm_filter: null
+        new_llm_filter: null as any
       };
 
       console.log('[ConfigEdit] Setting form values:', formValues);
-      form.setValues(formValues);
+      form.setValues(formValues as any);
     }
   }, [config, urlSourceData]);
 
