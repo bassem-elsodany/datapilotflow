@@ -1,6 +1,7 @@
 import { useCreateContentFilter, useGetEnabledContentFilters } from '@/api/resources/content-filters';
 import { useCreateKnowledgeSourceConfig } from '@/api/resources/knowledge-sources';
 import { useGetActiveModelProviders } from '@/api/resources/model-providers';
+import { useListConfluenceCredentials } from '@/api/resources/confluence-credentials';
 import { ColorfulVerticalStepper, StepConfig } from '@/components/colorful-vertical-stepper';
 import { Page } from '@/components/page';
 import { PageHeader } from '@/components/page-header';
@@ -44,7 +45,8 @@ import {
   IconSettings,
   IconWand,
   IconWorld,
-  IconX
+  IconX,
+  IconBrandConfluence
 } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -59,6 +61,7 @@ const breadcrumbs = [
 const contentSourceTypes = [
   { value: 'web_scraping', label: 'Web Scraping', description: 'Crawl websites and web pages' },
   { value: 'local_files', label: 'Local Files', description: 'Upload HTML and Markdown files' },
+  { value: 'confluence', label: 'Confluence', description: 'Extract from Confluence Cloud API' },
 ];
 
 const webScrapingModes = [
@@ -73,6 +76,13 @@ const localFileModes = [
   { value: 'pdf_files', label: 'PDF Files' },
   { value: 'docx_files', label: 'DOCX Files' },
   { value: 'txt_files', label: 'TXT Files' },
+];
+
+const confluenceModes = [
+  { value: 'space_pages', label: 'Space Pages', description: 'Extract all pages from specific spaces' },
+  { value: 'specific_pages', label: 'Specific Pages', description: 'Extract individual pages by ID' },
+  { value: 'pages_with_label', label: 'Pages with Labels', description: 'Extract pages matching labels' },
+  { value: 'recently_modified', label: 'Recently Modified', description: 'Extract recently changed pages' },
 ];
 
 export default function CreateKnowledgeSourceConfig() {
@@ -118,6 +128,7 @@ export default function CreateKnowledgeSourceConfig() {
   const testSelectorsMutation = useTestCssSelectors();
   const { data: allProviders, isLoading: providersLoading } = useGetActiveModelProviders();
   const createFilterMutation = useCreateContentFilter();
+  const { data: confluenceCredentials, isLoading: confluenceCredentialsLoading } = useListConfluenceCredentials();
 
   // Filter for generative providers
   const generativeProviders = allProviders?.filter((provider: any) =>
@@ -128,9 +139,9 @@ export default function CreateKnowledgeSourceConfig() {
     initialValues: {
       name: '',
       description: '',
-      content_source_type: 'web_scraping' as 'web_scraping' | 'local_files',
+      content_source_type: 'web_scraping' as 'web_scraping' | 'local_files' | 'confluence',
       url: '',
-      scraping_mode: 'website' as 'single_page' | 'multiple_pages' | 'website' | 'html_files' | 'markdown_files' | 'pdf_files' | 'docx_files' | 'txt_files',
+      scraping_mode: 'website' as 'single_page' | 'multiple_pages' | 'website' | 'html_files' | 'markdown_files' | 'pdf_files' | 'docx_files' | 'txt_files' | 'space_pages' | 'specific_pages' | 'pages_with_label' | 'recently_modified',
       url_source: {
         file_name: undefined as string | undefined,
         urls: [] as string[],
@@ -146,6 +157,19 @@ export default function CreateKnowledgeSourceConfig() {
       markdown_generation: 'standard' as 'standard' | 'llm',
       local_files: [] as any[],
       file_types: [] as string[],
+      confluence_credential_id: null as string | null,
+      confluence_mode: 'space_pages' as 'space_pages' | 'specific_pages' | 'pages_with_label' | 'recently_modified',
+      confluence_config: {
+        cloud_url: '',
+        username_or_email: '',
+        api_token: '',
+        space_keys: [] as string[],
+        page_ids: [] as string[],
+        labels: [] as string[],
+        include_attachments: false,
+        include_comments: false,
+        expand_child_pages: true,
+      }
     },
     validate: {
       name: (value) => (!value ? 'Name is required' : null),
@@ -245,6 +269,18 @@ export default function CreateKnowledgeSourceConfig() {
       }
     }
 
+    // For Confluence, check that credential is selected
+    if (form.values.content_source_type === 'confluence') {
+      if (!form.values.confluence_credential_id) {
+        console.log('❌ Form invalid: No Confluence credential selected');
+        return false;
+      }
+      if (!form.values.confluence_mode) {
+        console.log('❌ Form invalid: No Confluence mode selected');
+        return false;
+      }
+    }
+
     console.log('✅ Form is valid');
     return true;
   };
@@ -312,6 +348,21 @@ export default function CreateKnowledgeSourceConfig() {
           console.log('❌ Validation failed: No files uploaded');
           return false;
         }
+      } else if (form.values.content_source_type === 'confluence') {
+        // For Confluence, check if credential and mode are selected
+        console.log('Confluence validation:', {
+          content_source_type: form.values.content_source_type,
+          confluence_credential_id: form.values.confluence_credential_id,
+          confluence_mode: form.values.confluence_mode
+        });
+        if (!form.values.confluence_credential_id) {
+          console.log('❌ Validation failed: No Confluence credential selected');
+          return false;
+        }
+        if (!form.values.confluence_mode) {
+          console.log('❌ Validation failed: No Confluence mode selected');
+          return false;
+        }
       }
 
       console.log('✅ Basic Info step valid');
@@ -350,13 +401,14 @@ export default function CreateKnowledgeSourceConfig() {
   const getStepConfigs = (): StepConfig[] => {
     const isWebScraping = form.values.content_source_type === 'web_scraping';
     const isLocalFiles = form.values.content_source_type === 'local_files';
+    const isConfluence = form.values.content_source_type === 'confluence';
     const scrapingMode = form.values.scraping_mode;
 
     // Step 1: Basic Info & Configuration (always first)
     const steps: StepConfig[] = [
       {
-        label: isLocalFiles ? 'Basic Info & Upload' : 'Basic Info & Scraping',
-        description: isLocalFiles ? 'Name, description, files' : 'Name, description, URL',
+        label: isLocalFiles ? 'Basic Info & Upload' : isConfluence ? 'Basic Info & Confluence' : 'Basic Info & Scraping',
+        description: isLocalFiles ? 'Name, description, files' : isConfluence ? 'Name, credential, mode' : 'Name, description, URL',
         icon: <IconSettings size={20} strokeWidth={2} />,
         color: '#45c9bb',
         gradientFrom: '#45c9bb',
@@ -550,6 +602,23 @@ export default function CreateKnowledgeSourceConfig() {
       if (isLocalFiles) {
         // file_types will be auto-detected by backend from uploaded files
         // No other fields needed for local files
+      }
+
+      // Add Confluence specific fields
+      if (values.content_source_type === 'confluence') {
+        configData.confluence_credential_id = values.confluence_credential_id;
+        configData.confluence_config = {
+          cloud_url: values.confluence_config.cloud_url,
+          username_or_email: values.confluence_config.username_or_email,
+          api_token: values.confluence_config.api_token,
+          confluence_mode: values.confluence_mode,
+          space_keys: values.confluence_config.space_keys.filter(k => k.trim()),
+          page_ids: values.confluence_config.page_ids.filter(id => id.trim()),
+          labels: values.confluence_config.labels.filter(l => l.trim()),
+          include_attachments: values.confluence_config.include_attachments,
+          include_comments: values.confluence_config.include_comments,
+          expand_child_pages: values.confluence_config.expand_child_pages,
+        };
       }
 
       console.log('📤 Prepared config data:', configData);
@@ -1000,7 +1069,9 @@ Format the output as clean markdown with proper code blocks and headers.`,
           <Text c="dimmed">
             {form.values.content_source_type === 'web_scraping'
               ? 'Configure your knowledge source and how to scrape content from the target website.'
-              : 'Configure your knowledge source and upload local files.'
+              : form.values.content_source_type === 'local_files'
+              ? 'Configure your knowledge source and upload local files.'
+              : 'Configure your knowledge source and extract from Confluence API.'
             }
           </Text>
 
@@ -1015,12 +1086,18 @@ Format the output as clean markdown with proper code blocks and headers.`,
               <Radio.Group
                 value={form.values.content_source_type}
                 onChange={(value) => {
-                  form.setFieldValue('content_source_type', value as 'web_scraping' | 'local_files');
+                  form.setFieldValue('content_source_type', value as 'web_scraping' | 'local_files' | 'confluence');
                   // Reset related fields when changing source type
                   if (value === 'local_files') {
                     form.setFieldValue('url', '');
-                    form.setFieldValue('scraping_mode', 'multiple_pages');
+                    form.setFieldValue('scraping_mode', 'html_files');
                     form.setFieldValue('output_format', 'markdown');
+                  } else if (value === 'confluence') {
+                    form.setFieldValue('url', '');
+                    form.setFieldValue('local_files', []);
+                    form.setFieldValue('file_types', []);
+                    form.setFieldValue('scraping_mode', 'space_pages');
+                    form.setFieldValue('confluence_mode', 'space_pages');
                   } else {
                     form.setFieldValue('local_files', []);
                     form.setFieldValue('file_types', []);
@@ -1281,6 +1358,238 @@ Format the output as clean markdown with proper code blocks and headers.`,
                     </ScrollArea>
                   </Stack>
                 )}
+              </Stack>
+            </Card>
+          )}
+
+          {/* Confluence Configuration Section */}
+          {form.values.content_source_type === 'confluence' && (
+            <Card withBorder p="md" style={{ backgroundColor: 'var(--mantine-color-gray-0)' }}>
+              <Stack gap="md">
+                <Group gap="xs" align="center">
+                  <IconBrandConfluence size={18} color="var(--mantine-color-cyan-6)" />
+                  <Text size="sm" fw={600} c="cyan">Confluence Configuration</Text>
+                </Group>
+
+                {/* Credential Selection */}
+                <Select
+                  label="Confluence Credential"
+                  placeholder="Select existing credential or create new"
+                  required
+                  clearable
+                  searchable
+                  data={confluenceCredentials?.map((cred: any) => ({
+                    value: cred.id,
+                    label: cred.name,
+                    description: `${cred.cloud_url} (${cred.username_or_email})`
+                  })) || []}
+                  description="Select a previously created Confluence credential"
+                  {...form.getInputProps('confluence_credential_id')}
+                />
+
+                {/* Confluence Extraction Mode */}
+                <Select
+                  label="Extraction Mode"
+                  placeholder="Select extraction mode"
+                  required
+                  data={confluenceModes.map(mode => ({
+                    value: mode.value,
+                    label: mode.label,
+                    description: mode.description
+                  }))}
+                  description={
+                    confluenceModes.find(m => m.value === form.values.confluence_mode)?.description || 'Select a mode'
+                  }
+                  {...form.getInputProps('confluence_mode')}
+                />
+
+                {/* Mode-specific fields */}
+                {form.values.confluence_mode === 'space_pages' && (
+                  <Stack gap="xs">
+                    <Text size="sm" fw={500}>Confluence Spaces</Text>
+                    <Text size="xs" c="dimmed">Enter space keys to extract pages from (e.g., TECH, DOCS)</Text>
+                    {form.values.confluence_config.space_keys.map((key, index) => (
+                      <Group key={index} mb="xs">
+                        <TextInput
+                          value={key}
+                          onChange={(e) => {
+                            const newKeys = [...form.values.confluence_config.space_keys];
+                            newKeys[index] = e.target.value;
+                            form.setFieldValue('confluence_config', {
+                              ...form.values.confluence_config,
+                              space_keys: newKeys
+                            });
+                          }}
+                          placeholder="Enter space key"
+                          style={{ flex: 1 }}
+                        />
+                        <ActionIcon
+                          color="red"
+                          variant="subtle"
+                          size="sm"
+                          type="button"
+                          onClick={() => {
+                            const newKeys = form.values.confluence_config.space_keys.filter((_, i) => i !== index);
+                            form.setFieldValue('confluence_config', {
+                              ...form.values.confluence_config,
+                              space_keys: newKeys
+                            });
+                          }}
+                        >
+                          <IconX size={14} />
+                        </ActionIcon>
+                      </Group>
+                    ))}
+                    <Button
+                      variant="light"
+                      leftSection={<IconPlus size={16} />}
+                      type="button"
+                      onClick={() => {
+                        form.setFieldValue('confluence_config', {
+                          ...form.values.confluence_config,
+                          space_keys: [...form.values.confluence_config.space_keys, '']
+                        });
+                      }}
+                      fullWidth
+                      size="sm"
+                    >
+                      Add Space
+                    </Button>
+                  </Stack>
+                )}
+
+                {form.values.confluence_mode === 'specific_pages' && (
+                  <Stack gap="xs">
+                    <Text size="sm" fw={500}>Page IDs</Text>
+                    <Text size="xs" c="dimmed">Enter Confluence page IDs to extract</Text>
+                    {form.values.confluence_config.page_ids.map((id, index) => (
+                      <Group key={index} mb="xs">
+                        <TextInput
+                          value={id}
+                          onChange={(e) => {
+                            const newIds = [...form.values.confluence_config.page_ids];
+                            newIds[index] = e.target.value;
+                            form.setFieldValue('confluence_config', {
+                              ...form.values.confluence_config,
+                              page_ids: newIds
+                            });
+                          }}
+                          placeholder="Enter page ID"
+                          style={{ flex: 1 }}
+                        />
+                        <ActionIcon
+                          color="red"
+                          variant="subtle"
+                          size="sm"
+                          type="button"
+                          onClick={() => {
+                            const newIds = form.values.confluence_config.page_ids.filter((_, i) => i !== index);
+                            form.setFieldValue('confluence_config', {
+                              ...form.values.confluence_config,
+                              page_ids: newIds
+                            });
+                          }}
+                        >
+                          <IconX size={14} />
+                        </ActionIcon>
+                      </Group>
+                    ))}
+                    <Button
+                      variant="light"
+                      leftSection={<IconPlus size={16} />}
+                      type="button"
+                      onClick={() => {
+                        form.setFieldValue('confluence_config', {
+                          ...form.values.confluence_config,
+                          page_ids: [...form.values.confluence_config.page_ids, '']
+                        });
+                      }}
+                      fullWidth
+                      size="sm"
+                    >
+                      Add Page ID
+                    </Button>
+                  </Stack>
+                )}
+
+                {form.values.confluence_mode === 'pages_with_label' && (
+                  <Stack gap="xs">
+                    <Text size="sm" fw={500}>Labels</Text>
+                    <Text size="xs" c="dimmed">Enter labels to extract pages with</Text>
+                    {form.values.confluence_config.labels.map((label, index) => (
+                      <Group key={index} mb="xs">
+                        <TextInput
+                          value={label}
+                          onChange={(e) => {
+                            const newLabels = [...form.values.confluence_config.labels];
+                            newLabels[index] = e.target.value;
+                            form.setFieldValue('confluence_config', {
+                              ...form.values.confluence_config,
+                              labels: newLabels
+                            });
+                          }}
+                          placeholder="Enter label"
+                          style={{ flex: 1 }}
+                        />
+                        <ActionIcon
+                          color="red"
+                          variant="subtle"
+                          size="sm"
+                          type="button"
+                          onClick={() => {
+                            const newLabels = form.values.confluence_config.labels.filter((_, i) => i !== index);
+                            form.setFieldValue('confluence_config', {
+                              ...form.values.confluence_config,
+                              labels: newLabels
+                            });
+                          }}
+                        >
+                          <IconX size={14} />
+                        </ActionIcon>
+                      </Group>
+                    ))}
+                    <Button
+                      variant="light"
+                      leftSection={<IconPlus size={16} />}
+                      type="button"
+                      onClick={() => {
+                        form.setFieldValue('confluence_config', {
+                          ...form.values.confluence_config,
+                          labels: [...form.values.confluence_config.labels, '']
+                        });
+                      }}
+                      fullWidth
+                      size="sm"
+                    >
+                      Add Label
+                    </Button>
+                  </Stack>
+                )}
+
+                {/* Optional settings */}
+                <Divider label={<Text size="xs" c="dimmed">Optional Settings</Text>} labelPosition="center" />
+                <Group grow>
+                  <Switch
+                    label="Include Attachments"
+                    checked={form.values.confluence_config.include_attachments}
+                    onChange={(e) => {
+                      form.setFieldValue('confluence_config', {
+                        ...form.values.confluence_config,
+                        include_attachments: e.currentTarget.checked
+                      });
+                    }}
+                  />
+                  <Switch
+                    label="Include Comments"
+                    checked={form.values.confluence_config.include_comments}
+                    onChange={(e) => {
+                      form.setFieldValue('confluence_config', {
+                        ...form.values.confluence_config,
+                        include_comments: e.currentTarget.checked
+                      });
+                    }}
+                  />
+                </Group>
               </Stack>
             </Card>
           )}
