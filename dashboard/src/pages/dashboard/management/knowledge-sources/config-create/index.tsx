@@ -46,7 +46,7 @@ import {
   IconWand,
   IconWorld,
   IconX,
-  IconBrandConfluence
+  IconBook
 } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -1367,7 +1367,7 @@ Format the output as clean markdown with proper code blocks and headers.`,
             <Card withBorder p="md" style={{ backgroundColor: 'var(--mantine-color-gray-0)' }}>
               <Stack gap="md">
                 <Group gap="xs" align="center">
-                  <IconBrandConfluence size={18} color="var(--mantine-color-cyan-6)" />
+                  <IconBook size={18} color="var(--mantine-color-cyan-6)" />
                   <Text size="sm" fw={600} c="cyan">Confluence Configuration</Text>
                 </Group>
 
