@@ -145,7 +145,7 @@ export default function EditKnowledgeSourceConfig() {
     initialValues: {
       name: '',
       description: '',
-      content_source_type: 'web_scraping' as 'web_scraping' | 'local_files',
+      content_source_type: 'web_scraping' as 'web_scraping' | 'local_files' | 'confluence',
       url: '',
       scraping_mode: 'website' as 'single_page' | 'multiple_pages' | 'website' | 'html_files' | 'markdown_files' | 'pdf_files' | 'docx_files' | 'txt_files',
       url_source: {
