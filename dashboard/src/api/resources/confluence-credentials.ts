@@ -58,10 +58,14 @@ export const useCreateConfluenceCredential = createPostMutationHook({
 /**
  * Hook to get a Confluence credential by ID
  */
-export const useGetConfluenceCredential = createGetQueryHook({
-  endpoint: apiEndpoints.confluence.credential(':id'),
-  responseSchema: ConfluenceCredentialSchema,
-});
+export const useGetConfluenceCredential = (credentialId: string) => {
+  const endpoint = apiEndpoints.confluence.credential(':id').replace(':id', credentialId);
+  return createGetQueryHook({
+    endpoint,
+    responseSchema: ConfluenceCredentialSchema,
+    rQueryParams: { queryKey: ['confluence-credentials', credentialId] },
+  })();
+};
 
 /**
  * Hook to list all Confluence credentials
@@ -69,6 +73,7 @@ export const useGetConfluenceCredential = createGetQueryHook({
 export const useListConfluenceCredentials = createGetQueryHook({
   endpoint: apiEndpoints.confluence.credentials,
   responseSchema: z.array(ConfluenceCredentialSchema),
+  rQueryParams: { queryKey: ['confluence-credentials'] },
 });
 
 /**
