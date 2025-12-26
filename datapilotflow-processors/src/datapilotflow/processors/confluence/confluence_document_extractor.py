@@ -13,7 +13,7 @@ from loguru import logger
 from datapilotflow.domain.knowledge.knowledge_job import KnowledgeJob
 from datapilotflow.domain.knowledge.knowledge_source_config import (
     ConfluenceConfig,
-    ConfluenceScrapingMode,
+    ScrapingMode,
     KnowledgeSourceConfig,
 )
 
@@ -70,9 +70,10 @@ class ConfluenceDocumentExtractor:
             )
 
         config = knowledge_source_config.confluence_config
+        scraping_mode = knowledge_source_config.scraping_mode
         logger.info(
             f"[GENERATOR] Starting Confluence document extraction "
-            f"(job: {knowledge_job.id}, mode: {config.confluence_mode}, "
+            f"(job: {knowledge_job.id}, mode: {scraping_mode}, "
             f"url: {config.cloud_url})"
         )
 
@@ -85,25 +86,25 @@ class ConfluenceDocumentExtractor:
                 raise
 
             # Route based on extraction mode
-            if config.confluence_mode == ConfluenceScrapingMode.SPECIFIC_PAGES:
+            if scraping_mode == ScrapingMode.SPECIFIC_PAGES:
                 async for batch in self._extract_specific_pages(
                     client, config, batch_size
                 ):
                     yield batch
 
-            elif config.confluence_mode == ConfluenceScrapingMode.SPACE_PAGES:
+            elif scraping_mode == ScrapingMode.SPACE_PAGES:
                 async for batch in self._extract_space_pages(
                     client, config, batch_size
                 ):
                     yield batch
 
-            elif config.confluence_mode == ConfluenceScrapingMode.PAGES_WITH_LABEL:
+            elif scraping_mode == ScrapingMode.PAGES_WITH_LABEL:
                 async for batch in self._extract_pages_with_label(
                     client, config, batch_size
                 ):
                     yield batch
 
-            elif config.confluence_mode == ConfluenceScrapingMode.RECENTLY_MODIFIED:
+            elif scraping_mode == ScrapingMode.RECENTLY_MODIFIED:
                 async for batch in self._extract_recently_modified(
                     client, config, batch_size
                 ):
@@ -111,7 +112,7 @@ class ConfluenceDocumentExtractor:
 
             else:
                 raise ValueError(
-                    f"Unknown Confluence mode: {config.confluence_mode}"
+                    f"Unknown Confluence mode: {scraping_mode}"
                 )
 
         logger.info(
@@ -151,7 +152,7 @@ class ConfluenceDocumentExtractor:
                     page_id,
                     expand_children=config.expand_child_pages,
                 )
-                doc = self._confluence_page_to_document(page, config)
+                doc = self._confluence_page_to_document(page, config, ScrapingMode.SPECIFIC_PAGES)
                 batch.append(doc)
 
                 if len(batch) >= batch_size:
@@ -210,7 +211,7 @@ class ConfluenceDocumentExtractor:
                 )
 
                 for page in pages:
-                    doc = self._confluence_page_to_document(page, config)
+                    doc = self._confluence_page_to_document(page, config, ScrapingMode.SPACE_PAGES)
                     batch.append(doc)
 
                     if len(batch) >= batch_size:
@@ -262,7 +263,7 @@ class ConfluenceDocumentExtractor:
 
             batch = []
             for page in pages:
-                doc = self._confluence_page_to_document(page, config)
+                doc = self._confluence_page_to_document(page, config, ScrapingMode.PAGES_WITH_LABEL)
                 batch.append(doc)
 
                 if len(batch) >= batch_size:
@@ -308,7 +309,7 @@ class ConfluenceDocumentExtractor:
 
             batch = []
             for page in pages:
-                doc = self._confluence_page_to_document(page, config)
+                doc = self._confluence_page_to_document(page, config, ScrapingMode.RECENTLY_MODIFIED)
                 batch.append(doc)
 
                 if len(batch) >= batch_size:
@@ -333,7 +334,7 @@ class ConfluenceDocumentExtractor:
 
     @staticmethod
     def _confluence_page_to_document(
-        page, config: ConfluenceConfig
+        page, config: ConfluenceConfig, scraping_mode: Optional[ScrapingMode] = None
     ) -> Document:
         """
         Convert a ConfluencePage to a LangChain Document.
@@ -341,6 +342,7 @@ class ConfluenceDocumentExtractor:
         Args:
             page: ConfluencePage object
             config: Confluence configuration
+            scraping_mode: The scraping mode used for extraction
 
         Returns:
             Document: LangChain Document with metadata
@@ -371,7 +373,7 @@ class ConfluenceDocumentExtractor:
             "labels": page.labels,
             "version": page.version,
             "last_modified": page.last_modified,
-            "confluence_mode": config.confluence_mode.value,
+            "confluence_mode": scraping_mode.value if scraping_mode else "unknown",
             "knowledge_source": config.cloud_url,
             "extraction_method": "confluence_api",
             "output_format": output_format,

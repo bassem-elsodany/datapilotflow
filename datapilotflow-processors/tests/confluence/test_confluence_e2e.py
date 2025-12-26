@@ -11,8 +11,9 @@ from unittest.mock import Mock, AsyncMock, patch, MagicMock
 from uuid import uuid4
 
 from datapilotflow.domain.knowledge import (
-    ConfluenceScrapingMode,
+    ScrapingMode,
     ConfluenceConfig,
+    KnowledgeSourceConfig,
 )
 from datapilotflow.processors.confluence.confluence_api_client import (
     ConfluencePage,
@@ -38,7 +39,6 @@ def confluence_config():
         cloud_url="https://test.atlassian.net/wiki",
         username_or_email="test@example.com",
         api_token="test-token",
-        confluence_mode=ConfluenceScrapingMode.SPACE_PAGES,
         space_keys=["TECH", "DOCS"],
         include_attachments=False,
         include_comments=False,
@@ -168,7 +168,7 @@ class TestConfluencePipelineE2E:
     ):
         """Test that metadata is consistent across batches."""
         config = confluence_config.copy(
-            update={"confluence_mode": ConfluenceScrapingMode.SPECIFIC_PAGES, "page_ids": [p.page_id for p in sample_pages]}
+            update={"confluence_mode": ScrapingMode.SPECIFIC_PAGES, "page_ids": [p.page_id for p in sample_pages]}
         )
         extractor = ConfluenceDocumentExtractor(config, batch_size=1)
 
@@ -199,19 +199,19 @@ class TestConfluencePipelineE2E:
         """Test that extraction mode is correctly recorded in metadata."""
         modes = [
             (
-                ConfluenceScrapingMode.SPECIFIC_PAGES,
+                ScrapingMode.SPECIFIC_PAGES,
                 {"page_ids": ["page-1"]},
             ),
             (
-                ConfluenceScrapingMode.SPACE_PAGES,
+                ScrapingMode.SPACE_PAGES,
                 {"space_keys": ["TEST"]},
             ),
             (
-                ConfluenceScrapingMode.PAGES_WITH_LABEL,
+                ScrapingMode.PAGES_WITH_LABEL,
                 {"labels": ["test"]},
             ),
             (
-                ConfluenceScrapingMode.RECENTLY_MODIFIED,
+                ScrapingMode.RECENTLY_MODIFIED,
                 {},
             ),
         ]
@@ -227,7 +227,7 @@ class TestConfluencePipelineE2E:
             extractor = ConfluenceDocumentExtractor(config)
 
             # Mock different API methods based on mode
-            if mode == ConfluenceScrapingMode.SPECIFIC_PAGES:
+            if mode == ScrapingMode.SPECIFIC_PAGES:
                 with patch.object(
                     extractor.api_client, "get_page_by_id", new_callable=AsyncMock
                 ) as mock_get:
@@ -235,7 +235,7 @@ class TestConfluencePipelineE2E:
                     async for batch in extractor.extract_documents():
                         doc = batch[0]
                         assert doc.metadata["confluence_mode"] == mode.value
-            elif mode == ConfluenceScrapingMode.SPACE_PAGES:
+            elif mode == ScrapingMode.SPACE_PAGES:
                 with patch.object(
                     extractor.api_client, "get_space_pages", new_callable=AsyncMock
                 ) as mock_get:
@@ -243,7 +243,7 @@ class TestConfluencePipelineE2E:
                     async for batch in extractor.extract_documents():
                         doc = batch[0]
                         assert doc.metadata["confluence_mode"] == mode.value
-            elif mode == ConfluenceScrapingMode.PAGES_WITH_LABEL:
+            elif mode == ScrapingMode.PAGES_WITH_LABEL:
                 with patch.object(
                     extractor.api_client, "get_pages_by_label", new_callable=AsyncMock
                 ) as mock_get:
@@ -251,7 +251,7 @@ class TestConfluencePipelineE2E:
                     async for batch in extractor.extract_documents():
                         doc = batch[0]
                         assert doc.metadata["confluence_mode"] == mode.value
-            elif mode == ConfluenceScrapingMode.RECENTLY_MODIFIED:
+            elif mode == ScrapingMode.RECENTLY_MODIFIED:
                 with patch.object(
                     extractor.api_client,
                     "get_recently_modified_pages",
