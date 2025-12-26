@@ -213,7 +213,8 @@ export default function EditKnowledgeSourceConfig() {
         markdown_generation: (config.output_format === 'llm_markdown' ? 'llm' : 'standard') as 'standard' | 'llm',
         llm_content_filter_id: config.llm_content_filter_id || null,
         local_files: config.local_files || [],
-        file_types: config.file_types || []
+        file_types: config.file_types || [],
+        new_llm_filter: null
       };
 
       console.log('[ConfigEdit] Setting form values:', formValues);
