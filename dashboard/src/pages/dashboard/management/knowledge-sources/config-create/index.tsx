@@ -2938,6 +2938,62 @@ Format the output as clean markdown with proper code blocks and headers.`,
                 </Group>
               )}
 
+              {/* Confluence Configuration Summary */}
+              {form.values.content_source_type === 'confluence' && (
+                <>
+                  <Divider />
+                  <Group>
+                    <Text fw={500}>Confluence Credential:</Text>
+                    <Text>
+                      {confluenceCredentials?.find((c: any) => c.id === form.values.confluence_credential_id)?.name || 'Not selected'}
+                    </Text>
+                  </Group>
+
+                  <Group>
+                    <Text fw={500}>Extraction Mode:</Text>
+                    <Text>{form.values.confluence_mode}</Text>
+                  </Group>
+
+                  {form.values.confluence_mode === 'space_pages' && form.values.confluence_config.space_keys.length > 0 && (
+                    <Group>
+                      <Text fw={500}>Spaces:</Text>
+                      <Text>{form.values.confluence_config.space_keys.join(', ')}</Text>
+                    </Group>
+                  )}
+
+                  {form.values.confluence_mode === 'specific_pages' && form.values.confluence_config.page_ids.length > 0 && (
+                    <Group>
+                      <Text fw={500}>Pages:</Text>
+                      <Text>{form.values.confluence_config.page_ids.join(', ')}</Text>
+                    </Group>
+                  )}
+
+                  {form.values.confluence_mode === 'pages_with_label' && form.values.confluence_config.labels.length > 0 && (
+                    <Group>
+                      <Text fw={500}>Labels:</Text>
+                      <Text>{form.values.confluence_config.labels.join(', ')}</Text>
+                    </Group>
+                  )}
+
+                  {(form.values.confluence_config.include_attachments || form.values.confluence_config.include_comments) && (
+                    <Stack gap="xs">
+                      {form.values.confluence_config.include_attachments && (
+                        <Group>
+                          <Text fw={500}>Include Attachments:</Text>
+                          <Badge color="blue" size="sm">Yes</Badge>
+                        </Group>
+                      )}
+                      {form.values.confluence_config.include_comments && (
+                        <Group>
+                          <Text fw={500}>Include Comments:</Text>
+                          <Badge color="blue" size="sm">Yes</Badge>
+                        </Group>
+                      )}
+                    </Stack>
+                  )}
+                </>
+              )}
+
             </Stack>
           </Card>
 
