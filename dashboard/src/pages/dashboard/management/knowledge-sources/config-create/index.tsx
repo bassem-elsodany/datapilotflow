@@ -445,7 +445,9 @@ export default function CreateKnowledgeSourceConfig() {
     // Step 4: Generation (only for file types that need conversion)
     // Markdown files are already in final format, so they skip generation
     // HTML, PDF, DOCX, TXT need generation to decide output format
+    // Confluence documents also need generation for format conversion
     const needsGeneration = isWebScraping ||
+      isConfluence ||
       scrapingMode === 'html_files' ||
       scrapingMode === 'pdf_files' ||
       scrapingMode === 'docx_files' ||
@@ -2491,7 +2493,7 @@ Format the output as clean markdown with proper code blocks and headers.`,
       );
     }
 
-    // Step 4: Generation (only for web scraping, HTML, PDF, DOCX, TXT)
+    // Step 4: Generation (only for web scraping, Confluence, HTML, PDF, DOCX, TXT)
     if (currentStepLabel === 'Generation') {
       return (
         <Stack gap="md">
