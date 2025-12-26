@@ -62,6 +62,13 @@ class PipelineFactory:
             )
             return DocumentExtractionStep(batch_size=batch_size)
 
+        elif content_source_type == ContentSourceType.CONFLUENCE:
+            logger.info(
+                f"Creating DocumentExtractionStep for Confluence API "
+                f"(mode: {knowledge_source_config.confluence_config.confluence_mode})"
+            )
+            return DocumentExtractionStep(batch_size=batch_size)
+
         else:
             logger.warning(
                 f"Unknown content source type: {content_source_type}. "
@@ -141,6 +148,12 @@ class PipelineFactory:
             return (
                 f"Web Scraping Pipeline ({scraping_mode}): "
                 f"Web Extraction → Chunking → Embedding → Storage → Timeline"
+            )
+        elif content_type == ContentSourceType.CONFLUENCE:
+            confluence_mode = knowledge_source_config.confluence_config.confluence_mode if knowledge_source_config.confluence_config else "unknown"
+            return (
+                f"Confluence API Pipeline ({confluence_mode}): "
+                f"Confluence Extraction → Chunking → Embedding → Storage → Timeline"
             )
         else:
             return (
