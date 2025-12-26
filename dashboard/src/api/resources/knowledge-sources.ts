@@ -24,7 +24,7 @@ export const UrlSourceConfigCreateSchema = z.object({
 });
 
 // Content Source Type Schema
-export const ContentSourceTypeSchema = z.enum(['web_scraping', 'local_files']);
+export const ContentSourceTypeSchema = z.enum(['web_scraping', 'local_files', 'confluence']);
 
 // Scraping Mode Schema (updated with local files modes)
 export const ScrapingModeSchema = z.enum([
@@ -37,6 +37,30 @@ export const ScrapingModeSchema = z.enum([
   'docx_files',
   'txt_files'
 ]);
+
+// Confluence Mode Schema
+export const ConfluenceScrapingModeSchema = z.enum([
+  'specific_pages',
+  'space_pages',
+  'pages_with_label',
+  'recently_modified'
+]);
+
+// Confluence Configuration Schema
+export const ConfluenceConfigSchema = z.object({
+  cloud_url: z.string().url('Invalid Confluence URL'),
+  username_or_email: z.string().email('Invalid email'),
+  api_token: z.string().min(1, 'API token required'),
+  confluence_mode: ConfluenceScrapingModeSchema,
+  space_keys: z.array(z.string()).nullable().optional(),
+  page_ids: z.array(z.string()).nullable().optional(),
+  labels: z.array(z.string()).nullable().optional(),
+  include_attachments: z.boolean().default(false),
+  include_comments: z.boolean().default(false),
+  max_pages_per_space: z.number().nullable().optional(),
+  expand_child_pages: z.boolean().default(true),
+  follow_page_links: z.boolean().default(false),
+});
 
 // Local File Schema
 export const LocalFileSchema = z.object({
@@ -68,6 +92,8 @@ export const KnowledgeSourceConfigSchema = z.object({
   llm_content_filter_id: z.string().nullable().optional(),
   local_files: z.array(LocalFileSchema).nullable().optional(),
   file_types: z.array(z.string()).nullable().optional(),
+  confluence_credential_id: z.string().nullable().optional(),
+  confluence_config: ConfluenceConfigSchema.nullable().optional(),
   created_at: z.string(),
   updated_at: z.string(),
   created_by: z.string(),
@@ -76,6 +102,8 @@ export const KnowledgeSourceConfigSchema = z.object({
 
 export type ContentSourceType = z.infer<typeof ContentSourceTypeSchema>;
 export type ScrapingMode = z.infer<typeof ScrapingModeSchema>;
+export type ConfluenceScrapingMode = z.infer<typeof ConfluenceScrapingModeSchema>;
+export type ConfluenceConfig = z.infer<typeof ConfluenceConfigSchema>;
 export type LocalFile = z.infer<typeof LocalFileSchema>;
 export type UrlSourceConfig = z.infer<typeof UrlSourceConfigSchema>;
 export type UrlSourceConfigCreate = z.infer<typeof UrlSourceConfigCreateSchema>;
@@ -108,6 +136,8 @@ export const KnowledgeSourceConfigCreateSchema = z.object({
   llm_content_filter_id: z.string().nullable().optional(),
   local_files: z.array(LocalFileSchema).nullable().optional(),
   file_types: z.array(z.string()).nullable().optional(),
+  confluence_credential_id: z.string().nullable().optional(),
+  confluence_config: ConfluenceConfigSchema.nullable().optional(),
 });
 
 export type KnowledgeSourceConfigCreate = z.infer<typeof KnowledgeSourceConfigCreateSchema>;
@@ -132,6 +162,8 @@ export const KnowledgeSourceConfigUpdateSchema = z.object({
   llm_content_filter_id: z.string().nullable().optional(),
   local_files: z.array(LocalFileSchema).nullable().optional(),
   file_types: z.array(z.string()).nullable().optional(),
+  confluence_credential_id: z.string().nullable().optional(),
+  confluence_config: ConfluenceConfigSchema.nullable().optional(),
 });
 
 export type KnowledgeSourceConfigUpdate = z.infer<typeof KnowledgeSourceConfigUpdateSchema>;
