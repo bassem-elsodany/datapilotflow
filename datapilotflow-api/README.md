@@ -211,6 +211,8 @@ cd ../datapilotflow-api && pip install -e .
 
 ### Start API Server
 ```bash
+uv pip install -e ../datapilotflow-domain -e ../datapilotflow-infrastructure -e ../datapilotflow-services -e ../datapilotflow-processors -e ../datapilotflow-events -e ../datapilotflow-rag-agent ../datapilotflow-assistant-agent  -e .
+
 python run_api_server.py
 ```
 

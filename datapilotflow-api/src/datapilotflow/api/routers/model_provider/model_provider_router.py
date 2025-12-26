@@ -413,3 +413,53 @@ def update_model_provider(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
+
+
+@router.delete(
+    "/{provider_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete model provider",
+    description="Delete an existing model provider configuration",
+)
+def delete_model_provider(
+    provider_id: str,
+    current_user: User = Depends(get_current_user),
+    service: ModelProviderService = Depends(get_model_provider_service),
+):
+    """Delete a model provider configuration."""
+    if not current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="User ID is required"
+        )
+
+    # Validate that provider_id is a valid MongoDB ObjectId
+    try:
+        ObjectId(provider_id)
+    except (InvalidId, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Model provider not found"
+        )
+
+    try:
+        logger.info(
+            f"Deleting model provider: {provider_id} for user: {current_user.id}"
+        )
+
+        success = service.delete_model_provider(provider_id, current_user.id)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Model provider not found"
+            )
+
+        return None  # 204 No Content
+
+    except ValueError as e:
+        logger.error(f"Validation error deleting model provider: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting model provider: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
