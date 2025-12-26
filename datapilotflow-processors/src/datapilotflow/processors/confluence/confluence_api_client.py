@@ -16,7 +16,6 @@ from loguru import logger
 
 from datapilotflow.domain.knowledge.knowledge_source_config import (
     ConfluenceConfig,
-    ConfluenceScrapingMode,
 )
 
 

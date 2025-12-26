@@ -11,8 +11,9 @@ from unittest.mock import Mock, AsyncMock, patch, MagicMock
 from langchain.schema import Document
 
 from datapilotflow.domain.knowledge import (
-    ConfluenceScrapingMode,
+    ScrapingMode,
     ConfluenceConfig,
+    KnowledgeSourceConfig,
 )
 from datapilotflow.processors.confluence.confluence_api_client import (
     ConfluencePage,
@@ -29,7 +30,6 @@ def confluence_config():
         cloud_url="https://test.atlassian.net/wiki",
         username_or_email="test@example.com",
         api_token="test-token",
-        confluence_mode=ConfluenceScrapingMode.SPACE_PAGES,
         space_keys=["TEST"],
         include_attachments=False,
         include_comments=False,
@@ -95,7 +95,6 @@ class TestExtractSpecificPages:
             cloud_url="https://test.atlassian.net/wiki",
             username_or_email="test@example.com",
             api_token="test-token",
-            confluence_mode=ConfluenceScrapingMode.SPECIFIC_PAGES,
             page_ids=["123", "124"],
         )
         extractor = ConfluenceDocumentExtractor(config)
@@ -119,7 +118,6 @@ class TestExtractSpecificPages:
             cloud_url="https://test.atlassian.net/wiki",
             username_or_email="test@example.com",
             api_token="test-token",
-            confluence_mode=ConfluenceScrapingMode.SPECIFIC_PAGES,
             page_ids=["123"],
         )
         extractor = ConfluenceDocumentExtractor(config)
@@ -149,7 +147,6 @@ class TestExtractSpacePages:
             cloud_url="https://test.atlassian.net/wiki",
             username_or_email="test@example.com",
             api_token="test-token",
-            confluence_mode=ConfluenceScrapingMode.SPACE_PAGES,
             space_keys=["TEST"],
         )
         extractor = ConfluenceDocumentExtractor(config)
@@ -172,7 +169,6 @@ class TestExtractSpacePages:
             cloud_url="https://test.atlassian.net/wiki",
             username_or_email="test@example.com",
             api_token="test-token",
-            confluence_mode=ConfluenceScrapingMode.SPACE_PAGES,
             space_keys=["TEST"],
             max_pages_per_space=1,
         )
@@ -196,7 +192,6 @@ class TestExtractSpacePages:
             cloud_url="https://test.atlassian.net/wiki",
             username_or_email="test@example.com",
             api_token="test-token",
-            confluence_mode=ConfluenceScrapingMode.SPACE_PAGES,
             space_keys=["TEST", "DOCS"],
         )
         extractor = ConfluenceDocumentExtractor(config)
@@ -224,7 +219,6 @@ class TestExtractPagesWithLabel:
             cloud_url="https://test.atlassian.net/wiki",
             username_or_email="test@example.com",
             api_token="test-token",
-            confluence_mode=ConfluenceScrapingMode.PAGES_WITH_LABEL,
             labels=["api-docs"],
         )
         extractor = ConfluenceDocumentExtractor(config)
@@ -247,7 +241,6 @@ class TestExtractPagesWithLabel:
             cloud_url="https://test.atlassian.net/wiki",
             username_or_email="test@example.com",
             api_token="test-token",
-            confluence_mode=ConfluenceScrapingMode.PAGES_WITH_LABEL,
             labels=["test", "important"],
         )
         extractor = ConfluenceDocumentExtractor(config)
@@ -275,8 +268,7 @@ class TestExtractRecentlyModified:
             cloud_url="https://test.atlassian.net/wiki",
             username_or_email="test@example.com",
             api_token="test-token",
-            confluence_mode=ConfluenceScrapingMode.RECENTLY_MODIFIED,
-        )
+            )
         extractor = ConfluenceDocumentExtractor(config)
 
         with patch.object(
@@ -305,7 +297,6 @@ class TestBatchProcessing:
             cloud_url="https://test.atlassian.net/wiki",
             username_or_email="test@example.com",
             api_token="test-token",
-            confluence_mode=ConfluenceScrapingMode.SPECIFIC_PAGES,
             page_ids=[str(i) for i in range(40)],
         )
         extractor = ConfluenceDocumentExtractor(config, batch_size=10)
@@ -329,7 +320,6 @@ class TestBatchProcessing:
             cloud_url="https://test.atlassian.net/wiki",
             username_or_email="test@example.com",
             api_token="test-token",
-            confluence_mode=ConfluenceScrapingMode.SPECIFIC_PAGES,
             page_ids=["123", "124"],
         )
         extractor = ConfluenceDocumentExtractor(config, batch_size=1)
@@ -357,7 +347,6 @@ class TestDocumentMetadata:
             cloud_url="https://test.atlassian.net/wiki",
             username_or_email="test@example.com",
             api_token="test-token",
-            confluence_mode=ConfluenceScrapingMode.SPECIFIC_PAGES,
             page_ids=["123"],
         )
         extractor = ConfluenceDocumentExtractor(config)
@@ -386,7 +375,6 @@ class TestDocumentMetadata:
             cloud_url="https://test.atlassian.net/wiki",
             username_or_email="test@example.com",
             api_token="test-token",
-            confluence_mode=ConfluenceScrapingMode.SPECIFIC_PAGES,
             page_ids=["123"],
         )
         extractor = ConfluenceDocumentExtractor(config)
@@ -411,7 +399,6 @@ class TestErrorHandling:
             cloud_url="https://test.atlassian.net/wiki",
             username_or_email="test@example.com",
             api_token="test-token",
-            confluence_mode=ConfluenceScrapingMode.SPECIFIC_PAGES,
             page_ids=["999"],
         )
         extractor = ConfluenceDocumentExtractor(config)
@@ -433,7 +420,6 @@ class TestErrorHandling:
             cloud_url="https://test.atlassian.net/wiki",
             username_or_email="test@example.com",
             api_token="test-token",
-            confluence_mode=ConfluenceScrapingMode.SPACE_PAGES,
             space_keys=["EMPTY"],
         )
         extractor = ConfluenceDocumentExtractor(config)
@@ -460,7 +446,6 @@ class TestAsyncGeneratorBehavior:
             cloud_url="https://test.atlassian.net/wiki",
             username_or_email="test@example.com",
             api_token="test-token",
-            confluence_mode=ConfluenceScrapingMode.SPECIFIC_PAGES,
             page_ids=["123", "124"],
         )
         extractor = ConfluenceDocumentExtractor(config)
