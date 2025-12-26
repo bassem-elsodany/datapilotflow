@@ -24,6 +24,7 @@ from .confluence_api_client import (
     ConfluenceRateLimitError,
     ConfluenceServerError,
 )
+from .confluence_markdown_converter import convert_confluence_xhtml_to_markdown
 
 
 class ConfluenceDocumentExtractor:
@@ -344,6 +345,24 @@ class ConfluenceDocumentExtractor:
         Returns:
             Document: LangChain Document with metadata
         """
+        # Convert content to markdown if requested
+        page_content = page.content
+        output_format = config.output_format if hasattr(config, 'output_format') else 'html'
+        markdown_generation = config.markdown_generation if hasattr(config, 'markdown_generation') else None
+
+        if output_format == 'markdown' or markdown_generation:
+            try:
+                page_content = convert_confluence_xhtml_to_markdown(page.content)
+                logger.debug(
+                    f"Converted page {page.page_id} to markdown "
+                    f"({len(page.content)} -> {len(page_content)} chars)"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to convert page {page.page_id} to markdown, using HTML: {e}"
+                )
+                # Keep original HTML content if conversion fails
+
         metadata = {
             "source_url": page.url,
             "title": page.title,
@@ -355,9 +374,11 @@ class ConfluenceDocumentExtractor:
             "confluence_mode": config.confluence_mode.value,
             "knowledge_source": config.cloud_url,
             "extraction_method": "confluence_api",
+            "output_format": output_format,
+            "content_type": "markdown" if page_content != page.content and output_format == 'markdown' else "html",
         }
 
         return Document(
-            page_content=page.content,
+            page_content=page_content,
             metadata=metadata,
         )

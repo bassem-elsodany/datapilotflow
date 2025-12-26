@@ -100,6 +100,16 @@ class ConfluenceConfig(BaseModel):
         default=False, description="Follow links to other pages within Confluence"
     )
 
+    # Output Format
+    output_format: OutputFormat = Field(
+        default=OutputFormat.HTML,
+        description="Output format for extracted content (HTML, Markdown, or LLM-powered Markdown)"
+    )
+    markdown_generation: Optional[str] = Field(
+        default=None,
+        description="Markdown generation method (standard or llm) when output_format is MARKDOWN"
+    )
+
     class Config:
         json_encoders = {datetime: lambda v: v.isoformat()}
 
