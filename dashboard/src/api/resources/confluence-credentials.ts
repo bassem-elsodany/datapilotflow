@@ -63,7 +63,7 @@ export const useGetConfluenceCredential = (credentialId: string) => {
   return createGetQueryHook({
     endpoint,
     responseSchema: ConfluenceCredentialSchema,
-    rQueryParams: { queryKey: ['confluence-credentials', credentialId] },
+    rQueryParams: { queryKey: ['confluence-credentials', { id: credentialId }] },
   })();
 };
 
