@@ -14,6 +14,7 @@ dependencies = [
     "crawl4ai>=0.6.3",
     "html2text>=2025.4.15",
     "huggingface-hub>=0.34.0,<1.0",  # Required by transformers (via marker-pdf)
+    "tabulate>=0.9.0",  # Required by confluence_markdown_converter
 ]
 
 [build-system]

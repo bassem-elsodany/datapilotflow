@@ -10,6 +10,7 @@ dependencies = [
     "datapilotflow-services>=1.0.0",
     "datapilotflow-rag-agent>=1.0.0",
     "datapilotflow-assistant-agent>=1.0.0",
+    "datapilotflow-processors>=1.0.0",  # Added for knowledge_source_preview_router
     "fastapi[standard]>=0.115.8",
     "uvicorn>=0.24.0",
     "python-multipart>=0.0.20",

@@ -216,6 +216,48 @@ class ConfluenceCredentialService:
 
         return success
 
+    async def verify_raw_credentials(
+        self, cloud_url: str, username_or_email: str, api_token: str
+    ) -> bool:
+        """
+        Verify raw Confluence credentials without requiring a stored credential.
+
+        Used for testing credentials before saving them.
+
+        Args:
+            cloud_url: Confluence Cloud URL
+            username_or_email: Username or email
+            api_token: API token
+
+        Returns:
+            bool: True if credentials are valid
+
+        Raises:
+            ValueError: If verification fails
+        """
+        logger.info(f"Testing Confluence credentials for URL: {cloud_url}")
+
+        try:
+            from datapilotflow.processors.confluence import ConfluenceApiClient
+
+            config = ConfluenceConfig(
+                cloud_url=cloud_url,
+                username_or_email=username_or_email,
+                api_token=api_token,
+                confluence_mode=None,  # Not needed for verification
+            )
+
+            async with ConfluenceApiClient(config) as client:
+                is_valid = await client.verify_credentials()
+
+            if is_valid:
+                logger.info(f"Credentials verified for URL: {cloud_url}")
+                return True
+
+        except Exception as e:
+            logger.error(f"Failed to verify credentials: {e}")
+            raise ValueError(f"Credential verification failed: {str(e)}")
+
     async def verify_credential(self, credential_id: str, user_id: str) -> bool:
         """
         Verify that a credential is valid by testing the connection to Confluence.

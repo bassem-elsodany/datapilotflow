@@ -41,7 +41,7 @@ import {
   IconWorld
 } from '@tabler/icons-react';
 import sortBy from 'lodash/sortBy';
-import { DataTable, DataTableSortStatus, useDataTableColumns } from 'mantine-datatable';
+import { DataTable, DataTableColumn, DataTableSortStatus } from 'mantine-datatable';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -397,9 +397,7 @@ export default function KnowledgeSourceConfigs() {
     }
   }, [configsData, sortStatus]);
 
-  const { effectiveColumns } = useDataTableColumns<KnowledgeSourceConfig>({
-    key: 'knowledge-sources-configs-table',
-    columns: [
+  const columns: DataTableColumn<KnowledgeSourceConfig>[] = [
       {
         accessor: 'name',
         title: 'Name',
@@ -438,6 +436,7 @@ export default function KnowledgeSourceConfigs() {
         width: 300,
         sortable: true,
         textAlign: 'left',
+        toggleable: false,
         render: (record: Record<string, unknown>) => {
           const config = record as KnowledgeSourceConfig;
           return (
@@ -455,9 +454,12 @@ export default function KnowledgeSourceConfigs() {
         textAlign: 'left',
         render: (record: Record<string, unknown>) => {
           const config = record as KnowledgeSourceConfig;
+          const displayUrl = config.content_source_type === 'confluence' && config.confluence_config
+            ? config.confluence_config.cloud_url
+            : config.url;
           return (
             <Text size="sm" lineClamp={1} maw={200} style={{ wordWrap: 'break-word', overflowWrap: 'break-word' }}>
-              {config.url}
+              {displayUrl || '-'}
             </Text>
           );
         },
@@ -483,7 +485,11 @@ export default function KnowledgeSourceConfigs() {
                         config.scraping_mode === 'pdf_files' ? 'PDF Files' :
                           config.scraping_mode === 'docx_files' ? 'DOCX Files' :
                             config.scraping_mode === 'txt_files' ? 'TXT Files' :
-                              'Unknown'}
+                              config.scraping_mode === 'space_pages' ? 'Space Pages' :
+                                config.scraping_mode === 'specific_pages' ? 'Specific Pages' :
+                                  config.scraping_mode === 'pages_with_label' ? 'Pages with Label' :
+                                    config.scraping_mode === 'recently_modified' ? 'Recently Modified' :
+                                      'Unknown'}
             </Badge>
           );
         },
@@ -599,8 +605,7 @@ export default function KnowledgeSourceConfigs() {
           );
         },
       },
-    ],
-  });
+    ];
 
   const handleDeleteClick = (configId: string, configName: string) => {
     // Check if the configuration still exists in the current data
@@ -783,7 +788,7 @@ export default function KnowledgeSourceConfigs() {
           ) : (
             <DataTable
               records={configs}
-              columns={effectiveColumns as any}
+              columns={columns}
               striped
               highlightOnHover
               minHeight={200}

@@ -89,10 +89,11 @@ class ConfluencePage:
 
 class ConfluenceApiClient:
     """
-    Client for interacting with Confluence Cloud API.
+    Client for interacting with Confluence Cloud API or Server/Data Center API.
 
     Supports:
     - Authentication via Basic Auth (email + API token)
+    - Auto-detection of Confluence Cloud vs Server/Data Center
     - Fetching pages from specific spaces
     - Fetching specific pages by ID
     - Searching pages by labels
@@ -101,10 +102,14 @@ class ConfluenceApiClient:
     - Handling pagination and rate limiting
     """
 
-    # API endpoints
-    SEARCH_ENDPOINT = "/wiki/api/v2/pages"
-    PAGES_ENDPOINT = "/wiki/api/v2/pages"
-    SPACES_ENDPOINT = "/wiki/api/v2/spaces"
+    # Cloud API v2 endpoints
+    CLOUD_SEARCH_ENDPOINT = "/wiki/api/v2/pages"
+    CLOUD_PAGES_ENDPOINT = "/wiki/api/v2/pages"
+    CLOUD_SPACES_ENDPOINT = "/wiki/api/v2/spaces"
+
+    # Server/Data Center API v1 endpoints
+    SERVER_SPACES_ENDPOINT = "/rest/api/space"
+    SERVER_PAGES_ENDPOINT = "/rest/api/content"
 
     # Pagination
     DEFAULT_LIMIT = 25
@@ -120,13 +125,30 @@ class ConfluenceApiClient:
         self.config = config
         self.base_url = config.cloud_url.rstrip("/")
         self.session: Optional[aiohttp.ClientSession] = None
+        self.auth_method = None  # Will be determined as "bearer" or "basic"
 
-        # Prepare Basic Auth header
+        # Prepare both Bearer and Basic Auth headers
+        # Bearer token (works for Server/Data Center with token auth)
+        self.bearer_auth_header = f"Bearer {config.api_token}"
+
+        # Basic Auth (works for Cloud and some Server/Data Center setups)
         credentials = f"{config.username_or_email}:{config.api_token}"
         encoded = base64.b64encode(credentials.encode()).decode()
-        self.auth_header = f"Basic {encoded}"
+        self.basic_auth_header = f"Basic {encoded}"
 
-        logger.debug(f"Initialized Confluence API client for {self.base_url}")
+        # Default to Bearer first (since that's what works)
+        self.auth_header = self.bearer_auth_header
+
+        # Set Confluence type if provided, otherwise will be auto-detected on first API call
+        if config.is_cloud_instance is not None:
+            self.is_cloud = config.is_cloud_instance
+            self.is_server = not config.is_cloud_instance
+            instance_type = "Cloud" if self.is_cloud else "Local/Self-Hosted"
+            logger.debug(f"Initialized Confluence API client for {self.base_url} (explicitly configured as {instance_type})")
+        else:
+            self.is_cloud = None  # Will be determined on first API call
+            self.is_server = None  # Will be determined on first API call
+            logger.debug(f"Initialized Confluence API client for {self.base_url} (will auto-detect instance type)")
 
     async def __aenter__(self):
         """Async context manager entry."""
@@ -138,9 +160,117 @@ class ConfluenceApiClient:
         if self.session:
             await self.session.close()
 
+    async def _detect_confluence_type(self) -> bool:
+        """
+        Detect whether this is Confluence Cloud or Server/Data Center.
+
+        Returns:
+            True if Cloud, False if Server/Data Center
+
+        Raises:
+            ConfluenceAuthenticationError: If credentials are invalid
+            ConfluenceServerError: If server error occurs
+        """
+        if self.is_cloud is not None:
+            return self.is_cloud
+
+        cloud_auth_error = None
+        server_auth_error = None
+
+        # Check if this is a local instance (localhost, 127.0.0.1, etc.)
+        is_local = (
+            "localhost" in self.base_url.lower()
+            or "127.0.0.1" in self.base_url
+            or "0.0.0.0" in self.base_url
+        )
+
+        if not is_local:
+            # Only try Cloud API v2 for non-local URLs (actual Cloud instances)
+            try:
+                async with self.session.get(
+                    urljoin(self.base_url, self.CLOUD_SPACES_ENDPOINT),
+                    headers=self._get_headers(),
+                    params={"limit": 1},
+                    timeout=aiohttp.ClientTimeout(total=5),
+                ) as resp:
+                    logger.debug(f"Cloud API v2 response: {resp.status}")
+                    content_type = resp.headers.get("content-type", "").lower()
+                    logger.debug(f"Cloud API v2 content-type: {content_type}")
+
+                    if resp.status == 200 and "application/json" in content_type:
+                        logger.debug("Detected Confluence Cloud (v2 API)")
+                        self.is_cloud = True
+                        self.is_server = False
+                        return True
+                    elif resp.status == 200 and "text/html" in content_type:
+                        logger.debug("Cloud API v2 returned HTML (not JSON) - likely not Cloud API")
+                    elif resp.status == 401:
+                        cloud_auth_error = "Invalid Confluence credentials (Cloud API)"
+                    elif resp.status == 403:
+                        cloud_auth_error = "User does not have permission to access Confluence (Cloud API)"
+            except asyncio.TimeoutError:
+                logger.debug("Cloud API v2 timeout")
+            except Exception as e:
+                logger.debug(f"Cloud API v2 not available: {e}")
+        else:
+            logger.debug(f"Local Confluence instance detected ({self.base_url}) - skipping Cloud API check")
+
+        # Try Server/Data Center API v1
+        try:
+            async with self.session.get(
+                urljoin(self.base_url, self.SERVER_SPACES_ENDPOINT),
+                headers=self._get_headers(),
+                params={"limit": 1},
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as resp:
+                logger.debug(f"Server API v1 response: {resp.status}")
+                response_text = await resp.text()
+                logger.debug(f"Server API response: {response_text[:200]}")
+
+                if resp.status == 200:
+                    logger.debug("Detected Confluence Server/Data Center (v1 API)")
+                    self.is_cloud = False
+                    self.is_server = True
+                    return False
+                elif resp.status == 401:
+                    # Check if it's a Basic Auth disabled message
+                    if "Basic Authentication has been disabled" in response_text:
+                        server_auth_error = "Basic Authentication is disabled on this Confluence instance. Enable Basic Auth or use Confluence Cloud with API tokens."
+                    else:
+                        server_auth_error = "Invalid Confluence credentials (Server API)"
+                elif resp.status == 403:
+                    server_auth_error = "User does not have permission to access Confluence (Server API)"
+        except asyncio.TimeoutError:
+            logger.debug("Server API v1 timeout")
+        except Exception as e:
+            logger.debug(f"Server API v1 not available: {e}")
+
+        # If we have specific auth errors, raise them
+        if cloud_auth_error or server_auth_error:
+            error_msg = server_auth_error or cloud_auth_error
+
+            # Provide helpful context for the user
+            detailed_msg = (
+                f"{error_msg}\n\n"
+                "HINT: Pages in Confluence may have been created via the UI (logging in manually), "
+                "not via API. To use API-based data extraction:\n"
+                "1. Check Confluence Admin → Security Configuration → Enable Basic Authentication\n"
+                "2. Verify your account has API token permissions\n"
+                "3. If using Confluence Server/Data Center locally, OAuth is required (use admin panel)"
+            )
+            logger.warning(f"Confluence authentication error: {error_msg}")
+            raise ConfluenceAuthenticationError(detailed_msg)
+
+        # If neither API works, raise error with more details
+        logger.error("Could not detect Confluence type - neither API is accessible")
+        raise ConfluenceServerError(
+            "Could not detect Confluence type - neither Cloud nor Server/Data Center API is accessible. "
+            "Check that the Confluence URL is correct and the server is running."
+        )
+
     async def verify_credentials(self) -> bool:
         """
-        Verify that credentials are valid by making a test API call.
+        Verify that credentials are valid by detecting Confluence type and making a test API call.
 
         Returns:
             bool: True if credentials are valid
@@ -149,35 +279,156 @@ class ConfluenceApiClient:
             ConfluenceAuthenticationError: If credentials are invalid
         """
         try:
-            async with self.session.get(
-                urljoin(self.base_url, self.SPACES_ENDPOINT),
-                headers=self._get_headers(),
-                params={"limit": 1},
-                timeout=aiohttp.ClientTimeout(total=10),
-            ) as resp:
-                if resp.status == 401:
-                    raise ConfluenceAuthenticationError(
-                        "Invalid Confluence credentials"
-                    )
-                if resp.status == 403:
-                    raise ConfluenceAuthenticationError(
-                        "User does not have permission to access Confluence"
-                    )
-                if resp.status >= 500:
-                    raise ConfluenceServerError(
-                        f"Confluence server error: {resp.status}"
-                    )
-                if resp.status >= 400:
-                    raise ConfluencePageNotFoundError(
-                        f"Invalid Confluence URL or API not available: {resp.status}"
-                    )
-
-                logger.info("Confluence credentials verified successfully")
-                return True
+            # This will detect and set self.is_cloud and self.is_server
+            await self._detect_confluence_type()
+            logger.info("Confluence credentials verified successfully")
+            return True
         except asyncio.TimeoutError:
             raise ConfluenceAuthenticationError(
                 "Connection timeout - invalid Confluence URL or server unreachable"
             )
+
+    async def get_spaces(self) -> List[dict]:
+        """
+        Fetch all available spaces from Cloud or Server/Data Center Confluence.
+
+        Returns:
+            List[dict]: List of spaces with key and name
+
+        Raises:
+            ConfluenceAuthenticationError: If credentials are invalid
+            ConfluenceServerError: If server error occurs
+        """
+        try:
+            # Ensure we've detected the Confluence type
+            if self.is_cloud is None:
+                await self._detect_confluence_type()
+
+            spaces = []
+
+            # Use appropriate endpoint based on Confluence type
+            if self.is_cloud:
+                return await self._get_spaces_cloud(spaces)
+            else:
+                return await self._get_spaces_server(spaces)
+
+        except (ConfluenceAuthenticationError, ConfluenceServerError, ConfluencePageNotFoundError):
+            raise
+        except Exception as e:
+            logger.error(f"Error fetching spaces: {e}")
+            raise ConfluenceServerError(f"Error fetching spaces: {str(e)}")
+
+    async def _get_spaces_cloud(self, spaces: List[dict]) -> List[dict]:
+        """Fetch spaces from Confluence Cloud using v2 API."""
+        start = 0
+
+        while True:
+            try:
+                params = {
+                    "limit": self.MAX_LIMIT,
+                    "start": start,
+                }
+
+                async with self.session.get(
+                    urljoin(self.base_url, self.CLOUD_SPACES_ENDPOINT),
+                    headers=self._get_headers(),
+                    params=params,
+                    timeout=aiohttp.ClientTimeout(total=30),
+                ) as resp:
+                    if resp.status == 401:
+                        raise ConfluenceAuthenticationError("Invalid Confluence credentials")
+                    if resp.status == 403:
+                        raise ConfluenceAuthenticationError("User does not have permission to access Confluence")
+                    if resp.status >= 500:
+                        raise ConfluenceServerError(f"Confluence server error: {resp.status}")
+                    if resp.status >= 400:
+                        raise ConfluencePageNotFoundError(f"Unable to fetch spaces: {resp.status}")
+
+                    data = await resp.json()
+
+                    if not data.get("results"):
+                        logger.debug("No more spaces found")
+                        break
+
+                    for space_data in data["results"]:
+                        space_info = {
+                            "key": space_data.get("key"),
+                            "name": space_data.get("name"),
+                            "id": space_data.get("id"),
+                        }
+                        spaces.append(space_info)
+                        logger.debug(f"Found space: {space_info['key']} - {space_info['name']}")
+
+                    # Check pagination
+                    if not data.get("_links", {}).get("next"):
+                        logger.debug("Completed pagination for spaces")
+                        break
+
+                    start = data.get("start", 0) + len(data.get("results", []))
+
+            except asyncio.TimeoutError:
+                logger.error("Timeout fetching spaces")
+                raise ConfluenceServerError("Request timeout - server not responding")
+
+        logger.info(f"Fetched {len(spaces)} spaces from Cloud")
+        return spaces
+
+    async def _get_spaces_server(self, spaces: List[dict]) -> List[dict]:
+        """Fetch spaces from Confluence Server/Data Center using v1 API."""
+        start = 0
+
+        while True:
+            try:
+                params = {
+                    "limit": self.MAX_LIMIT,
+                    "start": start,
+                }
+
+                async with self.session.get(
+                    urljoin(self.base_url, self.SERVER_SPACES_ENDPOINT),
+                    headers=self._get_headers(),
+                    params=params,
+                    timeout=aiohttp.ClientTimeout(total=30),
+                ) as resp:
+                    if resp.status == 401:
+                        raise ConfluenceAuthenticationError("Invalid Confluence credentials")
+                    if resp.status == 403:
+                        raise ConfluenceAuthenticationError("User does not have permission to access Confluence")
+                    if resp.status >= 500:
+                        raise ConfluenceServerError(f"Confluence server error: {resp.status}")
+                    if resp.status >= 400:
+                        raise ConfluencePageNotFoundError(f"Unable to fetch spaces: {resp.status}")
+
+                    data = await resp.json()
+
+                    # Server API returns results in a "results" key
+                    results = data.get("results", [])
+                    if not results:
+                        logger.debug("No more spaces found")
+                        break
+
+                    for space_data in results:
+                        space_info = {
+                            "key": space_data.get("key"),
+                            "name": space_data.get("name"),
+                            "id": space_data.get("id"),
+                        }
+                        spaces.append(space_info)
+                        logger.debug(f"Found space: {space_info['key']} - {space_info['name']}")
+
+                    # Check pagination - Server API may not have _links
+                    if isinstance(results, list) and len(results) < self.MAX_LIMIT:
+                        logger.debug("Completed pagination for spaces")
+                        break
+
+                    start = data.get("start", 0) + len(results) if isinstance(results, list) else start + self.MAX_LIMIT
+
+            except asyncio.TimeoutError:
+                logger.error("Timeout fetching spaces")
+                raise ConfluenceServerError("Request timeout - server not responding")
+
+        logger.info(f"Fetched {len(spaces)} spaces from Server/Data Center")
+        return spaces
 
     async def get_space_pages(
         self, space_key: str, max_pages: Optional[int] = None
@@ -198,20 +449,36 @@ class ConfluenceApiClient:
             ConfluenceServerError: If server error occurs
         """
         logger.info(f"Fetching pages from space: {space_key}")
+
+        # Ensure we've detected the Confluence type
+        if self.is_cloud is None:
+            await self._detect_confluence_type()
+
         pages = []
         start = 0
 
         while True:
             try:
-                params = {
-                    "space-key": space_key,
-                    "limit": self.MAX_LIMIT,
-                    "start": start,
-                    "expand": "body.storage,history,children",
-                }
+                # Use the correct endpoint based on Confluence type
+                if self.is_cloud:
+                    endpoint = self.CLOUD_SEARCH_ENDPOINT
+                    params = {
+                        "space-key": space_key,
+                        "limit": self.MAX_LIMIT,
+                        "start": start,
+                        "expand": "body.storage,history,children",
+                    }
+                else:
+                    endpoint = self.SERVER_PAGES_ENDPOINT
+                    params = {
+                        "spaceKey": space_key,
+                        "limit": self.MAX_LIMIT,
+                        "start": start,
+                        "expand": "body.storage,history,children",
+                    }
 
                 async with self.session.get(
-                    urljoin(self.base_url, self.SEARCH_ENDPOINT),
+                    urljoin(self.base_url, endpoint),
                     headers=self._get_headers(),
                     params=params,
                     timeout=aiohttp.ClientTimeout(total=30),
@@ -296,12 +563,22 @@ class ConfluenceApiClient:
         """
         logger.info(f"Fetching page: {page_id}")
 
+        # Ensure we've detected the Confluence type
+        if self.is_cloud is None:
+            await self._detect_confluence_type()
+
         try:
             expand = "body.storage,history,children" if expand_children else "body.storage,history"
             params = {"expand": expand}
 
+            # Use the correct endpoint based on Confluence type
+            if self.is_cloud:
+                endpoint = f"{self.CLOUD_PAGES_ENDPOINT}/{page_id}"
+            else:
+                endpoint = f"{self.SERVER_PAGES_ENDPOINT}/{page_id}"
+
             async with self.session.get(
-                urljoin(self.base_url, f"{self.PAGES_ENDPOINT}/{page_id}"),
+                urljoin(self.base_url, endpoint),
                 headers=self._get_headers(),
                 params=params,
                 timeout=aiohttp.ClientTimeout(total=30),
@@ -345,6 +622,11 @@ class ConfluenceApiClient:
             List[ConfluencePage]: Pages matching the labels
         """
         logger.info(f"Searching for pages with labels: {labels}")
+
+        # Ensure we've detected the Confluence type
+        if self.is_cloud is None:
+            await self._detect_confluence_type()
+
         pages = []
         start = 0
 
@@ -354,6 +636,12 @@ class ConfluenceApiClient:
 
         while True:
             try:
+                # Use the correct endpoint based on Confluence type
+                if self.is_cloud:
+                    endpoint = self.CLOUD_SEARCH_ENDPOINT
+                else:
+                    endpoint = self.SERVER_PAGES_ENDPOINT
+
                 params = {
                     "cql": cql,
                     "limit": self.MAX_LIMIT,
@@ -362,7 +650,7 @@ class ConfluenceApiClient:
                 }
 
                 async with self.session.get(
-                    urljoin(self.base_url, self.SEARCH_ENDPOINT),
+                    urljoin(self.base_url, endpoint),
                     headers=self._get_headers(),
                     params=params,
                     timeout=aiohttp.ClientTimeout(total=30),
@@ -427,9 +715,19 @@ class ConfluenceApiClient:
         """
         logger.info(f"Fetching {limit} recently modified pages")
 
+        # Ensure we've detected the Confluence type
+        if self.is_cloud is None:
+            await self._detect_confluence_type()
+
         try:
             # CQL query for pages modified within last 30 days
             cql = 'type = page AND modified >= -30d ORDER BY modified DESC'
+
+            # Use the correct endpoint based on Confluence type
+            if self.is_cloud:
+                endpoint = self.CLOUD_SEARCH_ENDPOINT
+            else:
+                endpoint = self.SERVER_PAGES_ENDPOINT
 
             params = {
                 "cql": cql,
@@ -438,7 +736,7 @@ class ConfluenceApiClient:
             }
 
             async with self.session.get(
-                urljoin(self.base_url, self.SEARCH_ENDPOINT),
+                urljoin(self.base_url, endpoint),
                 headers=self._get_headers(),
                 params=params,
                 timeout=aiohttp.ClientTimeout(total=30),

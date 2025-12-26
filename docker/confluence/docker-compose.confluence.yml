@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  confluence:
+    image: atlassian/confluence:latest
+    container_name: confluence-dev
+    ports:
+      - "8090:8090"
+      - "8091:8091"
+    environment:
+      # Confluence configuration
+      JVM_MINIMUM_MEMORY: 512m
+      JVM_MAXIMUM_MEMORY: 1024m
+      ATL_TOMCAT_MGMT_PORT: 8091
+
+      # License (30-day trial key - generates automatically in UI)
+      ATL_LICENSE_KEY: ""
+
+      # Database configuration
+      ATL_DB_TYPE: postgresql
+      ATL_JDBC_URL: jdbc:postgresql://confluence-db:5432/confluence
+      ATL_JDBC_USER: confluence
+      ATL_JDBC_PASSWORD: confluence
+      ATL_DB_DRIVER: org.postgresql.Driver
+
+      # Disable plugins initially for faster startup
+      ATL_PLUGIN_DISABLE_UNAUTHENTICATED_PLUGIN_ACCESS: "false"
+
+    depends_on:
+      - confluence-db
+
+    volumes:
+      - confluence-home:/var/atlassian/application-data/confluence
+
+    networks:
+      - confluence-network
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  confluence-db:
+    image: postgres:15-alpine
+    container_name: confluence-db
+    environment:
+      POSTGRES_DB: confluence
+      POSTGRES_USER: confluence
+      POSTGRES_PASSWORD: confluence
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - confluence-db-data:/var/lib/postgresql/data
+      - ./confluence-init.sql:/docker-entrypoint-initdb.d/init.sql
+
+    networks:
+      - confluence-network
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U confluence"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  confluence-home:
+    driver: local
+  confluence-db-data:
+    driver: local
+
+networks:
+  confluence-network:
+    driver: bridge

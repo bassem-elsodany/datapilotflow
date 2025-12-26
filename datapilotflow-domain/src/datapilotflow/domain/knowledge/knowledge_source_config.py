@@ -35,14 +35,11 @@ class ScrapingMode(str, Enum):
     DOCX_FILES = "docx_files"  # DOCX files only
     TXT_FILES = "txt_files"  # TXT files only
 
-
-class ConfluenceScrapingMode(str, Enum):
-    """Confluence API extraction mode options."""
-
-    SPECIFIC_PAGES = "specific_pages"  # Extract specific page IDs
-    SPACE_PAGES = "space_pages"  # Extract all pages in specific spaces
-    PAGES_WITH_LABEL = "pages_with_label"  # Extract pages matching labels
-    RECENTLY_MODIFIED = "recently_modified"  # Extract recently modified pages
+    # Confluence modes
+    SPECIFIC_PAGES = "specific_pages"  # Extract specific Confluence page IDs
+    SPACE_PAGES = "space_pages"  # Extract all pages in specific Confluence spaces
+    PAGES_WITH_LABEL = "pages_with_label"  # Extract Confluence pages matching labels
+    RECENTLY_MODIFIED = "recently_modified"  # Extract recently modified Confluence pages
 
 
 class OutputFormat(str, Enum):
@@ -61,16 +58,17 @@ class ConfluenceConfig(BaseModel):
         description="Confluence cloud URL (e.g., https://company.atlassian.net/wiki)"
     )
     username_or_email: str = Field(
-        description="Confluence username or email for Basic Auth"
+        description="Confluence username or email for Bearer Token Auth"
     )
     api_token: str = Field(
         description="Confluence API token (encrypted in database)"
     )
+    is_cloud_instance: Optional[bool] = Field(
+        default=None,
+        description="Whether this is an Atlassian Cloud instance (True) or Local/Self-Hosted (False). If None, will be auto-detected."
+    )
 
     # Source specification
-    confluence_mode: ConfluenceScrapingMode = Field(
-        description="Confluence extraction mode"
-    )
     space_keys: Optional[List[str]] = Field(
         default=None, description="Space keys to extract (for space_pages mode)"
     )
