@@ -9,8 +9,8 @@ from urllib.parse import urlparse
 from loguru import logger
 
 from datapilotflow.domain.config import settings
-from src.domain.rag.knowledge_chunk import KnowledgeChunk
-from src.infrastructure.milvus.client import MilvusClientWrapper
+from datapilotflow.domain.rag.knowledge_chunk import KnowledgeChunk
+from datapilotflow.infrastructure.vectordb import MilvusClientWrapper
 
 
 class DuplicateDetector:
@@ -114,16 +114,26 @@ class DuplicateDetector:
                         break
 
                 if primary_field:
-                    expr = f"{primary_field} != ''" if primary_field in ["id", "correlation_id"] else None
-                    logger.debug(f"Using primary key '{primary_field}' for query expression")
+                    expr = (
+                        f"{primary_field} != ''"
+                        if primary_field in ["id", "correlation_id"]
+                        else None
+                    )
+                    logger.debug(
+                        f"Using primary key '{primary_field}' for query expression"
+                    )
                 else:
                     # Fallback: try correlation_id first, then id
                     expr = "correlation_id != ''"
-                    logger.debug("No primary key detected, using correlation_id as default")
+                    logger.debug(
+                        "No primary key detected, using correlation_id as default"
+                    )
             except Exception as e:
                 # If schema inspection fails, use correlation_id as default
                 expr = "correlation_id != ''"
-                logger.debug(f"Could not inspect schema ({e}), using correlation_id as default")
+                logger.debug(
+                    f"Could not inspect schema ({e}), using correlation_id as default"
+                )
 
             iterator = self.milvus_client.collection.query_iterator(
                 batch_size=5000,  # Process 5000 entities per batch

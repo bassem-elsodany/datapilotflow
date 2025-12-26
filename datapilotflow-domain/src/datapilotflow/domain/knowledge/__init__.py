@@ -28,6 +28,10 @@ __all__ = [
     # "KnowledgeConfig",
     # "KnowledgeFactory",
     # Knowledge Source Configuration
+    "ContentSourceType",
+    "ScrapingMode",
+    "ConfluenceScrapingMode",
+    "ConfluenceConfig",
     "KnowledgeSourceConfig",
     "KnowledgeSourceConfigCreate",
     "KnowledgeSourceConfigUpdate",

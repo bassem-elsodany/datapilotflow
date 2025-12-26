@@ -9,8 +9,10 @@ import inspect
 import json
 import time
 import traceback
+from collections.abc import Sequence
 from typing import Any, Dict, List, Optional
 
+import litellm
 from datapilotflow.domain.model_provider.model_provider import (
     ModelProvider,
     ModelProviderCreate,
@@ -22,14 +24,9 @@ from datapilotflow.infrastructure.dao.model_provider import ModelProviderDAO
 from litellm import acompletion, aembedding, rerank
 from loguru import logger
 
-# Register JSON-based providers with LiteLLM
-from datapilotflow.services.model_provider.json_loader import (
-    register_json_providers_with_litellm,
-)
-
-logger.info("MODEL_PROVIDER_SERVICE: About to call register_json_providers_with_litellm()")
-register_json_providers_with_litellm()
-logger.info("MODEL_PROVIDER_SERVICE: Finished calling register_json_providers_with_litellm()")
+# Enable LiteLLM debug mode for better error diagnostics
+litellm._turn_on_debug()
+logger.info("LiteLLM debug mode enabled")
 
 
 class ModelProviderService:
@@ -171,23 +168,45 @@ class ModelProviderService:
         logger.info(
             f"Updated provider '{provider.name}' (id: {provider_id}) by user {user_id}"
         )
-        return provider
+        return provider  # type: ignore[return-value]
 
-    def get_active_model_providers(self, user_id: str) -> List[ModelProvider]:
+    def delete_model_provider(self, provider_id: str, user_id: str) -> bool:
+        """
+        Delete a model provider configuration.
+
+        Only custom providers can be deleted. System providers cannot be deleted.
+        """
+        # Check if provider exists
+        existing_provider = self.model_provider_dao.get_model_provider(
+            provider_id, user_id
+        )
+        if not existing_provider:
+            raise ValueError("Model provider not found")
+
+        success = self.model_provider_dao.delete_model_provider(provider_id, user_id)
+        if not success:
+            raise ValueError("Failed to delete model provider configuration")
+
+        logger.info(
+            f"Deleted provider '{existing_provider.name}' (id: {provider_id}) by user {user_id}"
+        )
+        return True
+
+    def get_active_model_providers(self, user_id: str) -> Sequence[ModelProvider]:
         """Get all active model providers for a user."""
-        return self.model_provider_dao.get_active_model_providers(user_id)
+        return list(self.model_provider_dao.get_active_model_providers(user_id))  # type: ignore[return-value]
 
     def get_providers_by_type(
         self, user_id: str, model_type: ModelType
-    ) -> List[ModelProvider]:
+    ) -> Sequence[ModelProvider]:
         """Get model providers that support a specific model type."""
-        return self.model_provider_dao.get_providers_by_type(user_id, model_type)
+        return list(self.model_provider_dao.get_providers_by_type(user_id, model_type))  # type: ignore[return-value]
 
     def get_provider_by_name(
         self, user_id: str, provider_name: str
     ) -> Optional[ModelProvider]:
         """Get a model provider by name."""
-        return self.model_provider_dao.get_provider_by_name(user_id, provider_name)
+        return self.model_provider_dao.get_provider_by_name(user_id, provider_name)  # type: ignore[return-value]
 
     async def test_model_provider(
         self,
@@ -211,6 +230,7 @@ class ModelProviderService:
         # Check if there's a model-type-specific endpoint (e.g., generative.endpoint)
         # If present, concatenate it with the base endpoint
         endpoint_to_use = base_endpoint
+
         if (
             test_type == ModelType.EMBEDDING
             and provider_data.embedding
@@ -224,6 +244,9 @@ class ModelProviderService:
                     endpoint_to_use = f"{base_endpoint}{specific_endpoint}"
                 else:
                     endpoint_to_use = f"{base_endpoint}/{specific_endpoint}"
+                logger.debug(
+                    f"Concatenated embedding endpoint: {base_endpoint} + {specific_endpoint} = {endpoint_to_use}"
+                )
         elif (
             test_type == ModelType.GENERATIVE
             and provider_data.generative
@@ -237,6 +260,9 @@ class ModelProviderService:
                     endpoint_to_use = f"{base_endpoint}{specific_endpoint}"
                 else:
                     endpoint_to_use = f"{base_endpoint}/{specific_endpoint}"
+                logger.debug(
+                    f"Concatenated generative endpoint: {base_endpoint} + {specific_endpoint} = {endpoint_to_use}"
+                )
         elif (
             test_type == ModelType.RERANKER
             and provider_data.reranker
@@ -253,11 +279,13 @@ class ModelProviderService:
 
         # LiteLLM expects model identifiers in the form "provider/model_name"
         # so we compose this from provider_type + model_name when available.
-        model_identifier = (
-            f"{provider_data.provider_type}/{model_name}"
-            if provider_data.provider_type
-            else model_name
-        )
+        # EXCEPTION: For "custom" providers, don't add any prefix - use model_name as-is
+        if provider_data.provider_type == "custom":
+            model_identifier = model_name
+        elif provider_data.provider_type:
+            model_identifier = f"{provider_data.provider_type}/{model_name}"
+        else:
+            model_identifier = model_name
 
         # Log test initiation with key details (masking sensitive data)
         logger.debug(
@@ -562,20 +590,20 @@ class ModelProviderService:
             List of available provider type names, sorted alphabetically
         """
         try:
-            # Import litellm's models_by_provider to get all provider types
-            from litellm import models_by_provider
+            # Import litellm's constants to get all chat providers
+            from litellm.constants import LITELLM_CHAT_PROVIDERS
 
             logger.info("Fetching all available provider types from LiteLLM")
 
-            # Get all provider types from LiteLLM
-            provider_types = list(models_by_provider.keys())
+            # Get all provider types from LiteLLM constants and remove duplicates
+            # Use dict.fromkeys() to preserve order while removing duplicates
+            provider_types = list(dict.fromkeys(LITELLM_CHAT_PROVIDERS))
 
             # Sort alphabetically
             provider_types.sort()
 
-            logger.info(f"Found {len(provider_types)} provider types")
+            logger.info(f"Found {len(provider_types)} unique provider types")
             logger.debug(f"Provider types list: {provider_types}")
-            logger.debug(f"EPAM-DIAL in models_by_provider: {'epam-dial' in provider_types}")
             return provider_types
 
         except Exception as e:

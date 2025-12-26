@@ -43,6 +43,7 @@ from .constants import (
     MessageHeaders,
     RetryConfig,
 )
+from .confluence_events import ConfluenceContentExtracted
 from .job_events import (
     JobActionRequested,
     JobCancelled,
@@ -67,6 +68,8 @@ __all__ = [
     "JobCompleted",
     "JobFailed",
     "JobCancelled",
+    # Confluence Events
+    "ConfluenceContentExtracted",
     # Event Constants - Exchanges
     "FILE_UPLOAD_EVENTS_EXCHANGE",
     "FILE_UPLOAD_EVENTS_DLQ_EXCHANGE",

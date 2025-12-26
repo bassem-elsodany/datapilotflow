@@ -17,6 +17,7 @@ class ContentSourceType(str, Enum):
 
     WEB_SCRAPING = "web_scraping"  # Web scraping content
     LOCAL_FILES = "local_files"  # Local uploaded files
+    CONFLUENCE = "confluence"  # Confluence API integration
 
 
 class ScrapingMode(str, Enum):
@@ -35,12 +36,72 @@ class ScrapingMode(str, Enum):
     TXT_FILES = "txt_files"  # TXT files only
 
 
+class ConfluenceScrapingMode(str, Enum):
+    """Confluence API extraction mode options."""
+
+    SPECIFIC_PAGES = "specific_pages"  # Extract specific page IDs
+    SPACE_PAGES = "space_pages"  # Extract all pages in specific spaces
+    PAGES_WITH_LABEL = "pages_with_label"  # Extract pages matching labels
+    RECENTLY_MODIFIED = "recently_modified"  # Extract recently modified pages
+
+
 class OutputFormat(str, Enum):
     """Output format options."""
 
     HTML = "html"  # Raw HTML content
     MARKDOWN = "markdown"  # Structured markdown content
     LLM_MARKDOWN = "llm_markdown"  # LLM-powered markdown content
+
+
+class ConfluenceConfig(BaseModel):
+    """Configuration for Confluence API integration."""
+
+    # Confluence instance details
+    cloud_url: str = Field(
+        description="Confluence cloud URL (e.g., https://company.atlassian.net/wiki)"
+    )
+    username_or_email: str = Field(
+        description="Confluence username or email for Basic Auth"
+    )
+    api_token: str = Field(
+        description="Confluence API token (encrypted in database)"
+    )
+
+    # Source specification
+    confluence_mode: ConfluenceScrapingMode = Field(
+        description="Confluence extraction mode"
+    )
+    space_keys: Optional[List[str]] = Field(
+        default=None, description="Space keys to extract (for space_pages mode)"
+    )
+    page_ids: Optional[List[str]] = Field(
+        default=None, description="Page IDs to extract (for specific_pages mode)"
+    )
+    labels: Optional[List[str]] = Field(
+        default=None, description="Page labels to match (for pages_with_label mode)"
+    )
+
+    # Filtering
+    include_attachments: bool = Field(
+        default=False, description="Include page attachments as separate chunks"
+    )
+    include_comments: bool = Field(
+        default=False, description="Include page comments and discussions"
+    )
+    max_pages_per_space: Optional[int] = Field(
+        default=None, description="Limit pages per space (optional)"
+    )
+
+    # Processing
+    expand_child_pages: bool = Field(
+        default=True, description="Include child pages in hierarchy"
+    )
+    follow_page_links: bool = Field(
+        default=False, description="Follow links to other pages within Confluence"
+    )
+
+    class Config:
+        json_encoders = {datetime: lambda v: v.isoformat()}
 
 
 class UrlSourceType(str, Enum):
@@ -153,6 +214,16 @@ class KnowledgeSourceConfig(BaseModel):
         description="Supported file types: ['html', 'markdown'] (local files only)",
     )
 
+    # Confluence Configuration
+    confluence_credential_id: Optional[str] = Field(
+        default=None,
+        description="ID of the Confluence credential (confluence only)",
+    )
+    confluence_config: Optional[ConfluenceConfig] = Field(
+        default=None,
+        description="Confluence API configuration (confluence only)",
+    )
+
     # Metadata fields
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
@@ -246,6 +317,16 @@ class KnowledgeSourceConfigCreate(BaseModel):
         description="Supported file types: ['html', 'markdown'] (local files only)",
     )
 
+    # Confluence Configuration
+    confluence_credential_id: Optional[str] = Field(
+        default=None,
+        description="ID of the Confluence credential (confluence only)",
+    )
+    confluence_config: Optional[ConfluenceConfig] = Field(
+        default=None,
+        description="Confluence API configuration (confluence only)",
+    )
+
 
 class KnowledgeSourceConfigUpdate(BaseModel):
     """Model for updating an existing knowledge source configuration.
@@ -315,6 +396,16 @@ class KnowledgeSourceConfigUpdate(BaseModel):
     file_types: Optional[List[str]] = Field(
         default=None,
         description="Supported file types: ['html', 'markdown'] (local files only)",
+    )
+
+    # Confluence Configuration
+    confluence_credential_id: Optional[str] = Field(
+        default=None,
+        description="ID of the Confluence credential (confluence only)",
+    )
+    confluence_config: Optional[ConfluenceConfig] = Field(
+        default=None,
+        description="Confluence API configuration (confluence only)",
     )
 
 

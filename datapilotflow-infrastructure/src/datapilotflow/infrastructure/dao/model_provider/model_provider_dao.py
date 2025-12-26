@@ -8,13 +8,13 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from bson import ObjectId
-
 from datapilotflow.domain.model_provider.model_provider import (
     ModelProvider,
     ModelProviderCreate,
     ModelProviderUpdate,
     ModelType,
 )
+
 from datapilotflow.infrastructure.mongo.client import MongoClientWrapper
 
 
@@ -205,3 +205,27 @@ class ModelProviderDAO(MongoClientWrapper[ModelProvider]):
             return self._parse_single_document(document)
 
         return None
+
+    def delete_model_provider(self, provider_id: str, user_id: str) -> bool:
+        """Delete a model provider configuration."""
+        from loguru import logger
+
+        try:
+            result = self.collection.delete_one(
+                {"_id": ObjectId(provider_id), "created_by": user_id}
+            )
+
+            if result.deleted_count > 0:
+                logger.info(f"Deleted model provider {provider_id} for user {user_id}")
+                return True
+            else:
+                logger.warning(
+                    f"Model provider {provider_id} not found or not owned by user {user_id}"
+                )
+                return False
+        except Exception as e:
+            logger.error(f"Error deleting model provider {provider_id}: {e}")
+            import traceback
+
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return False

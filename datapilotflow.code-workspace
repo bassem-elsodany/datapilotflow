@@ -1,46 +1,7 @@
 {
     "folders": [
-        {
-            "name": "dashboard",
-            "path": "dashboard"
-        },
-        {
-            "name": "docker",
-            "path": "docker"
-        },
-        {
-            "name": "datapilotflow-domain",
-            "path": "datapilotflow-domain",
-            "settings": {
-                "python.defaultInterpreterPath": "/Users/bassem.elsodany/workspaces/datapilotflow/datapilotflow-domain/.venv/bin/python",
-                "python.venvPath": "/Users/bassem.elsodany/workspaces/datapilotflow/datapilotflow-domain",
-                "python.venvFolders": [
-                    "/Users/bassem.elsodany/workspaces/datapilotflow/datapilotflow-domain"
-                ],
-                "python.terminal.activateEnvironment": true
-            }
-        },
-        {
-            "name": "datapilotflow-events",
-            "path": "datapilotflow-events"
-        },
-        {
-            "name": "datapilotflow-processors",
-            "path": "datapilotflow-processors"
-        },
-        {
-            "name": "datapilotflow-services",
-            "path": "datapilotflow-services",
-            "settings": {
-                "python.defaultInterpreterPath": "/Users/bassem.elsodany/workspaces/datapilotflow/datapilotflow-services/.venv/bin/python",
-                "python.venvPath": "/Users/bassem.elsodany/workspaces/datapilotflow/datapilotflow-services",
-                "python.venvFolders": [
-                    "/Users/bassem.elsodany/workspaces/datapilotflow/datapilotflow-services"
-                ],
-                "python.terminal.activateEnvironment": true
-            }
-        },
-        {
+
+       {
             "name": "datapilotflow-api",
             "path": "datapilotflow-api",
             "settings": {
@@ -64,6 +25,44 @@
             }
         },
         {
+            "name": "datapilotflow-services",
+            "path": "datapilotflow-services",
+            "settings": {
+                "python.defaultInterpreterPath": "/Users/bassem.elsodany/workspaces/datapilotflow/datapilotflow-services/.venv/bin/python",
+                "python.venvPath": "/Users/bassem.elsodany/workspaces/datapilotflow/datapilotflow-services",
+                "python.venvFolders": [
+                    "/Users/bassem.elsodany/workspaces/datapilotflow/datapilotflow-services"
+                ],
+                "python.terminal.activateEnvironment": true
+            }
+        },
+        {
+            "name": "datapilotflow-processors",
+            "path": "datapilotflow-processors"
+        },
+        {
+            "name": "datapilotflow-events",
+            "path": "datapilotflow-events"
+        },
+        {
+            "path": "datapilotflow-infrastructure"
+        },
+        {
+            "name": "datapilotflow-domain",
+            "path": "datapilotflow-domain",
+            "settings": {
+                "python.defaultInterpreterPath": "/Users/bassem.elsodany/workspaces/datapilotflow/datapilotflow-domain/.venv/bin/python",
+                "python.venvPath": "/Users/bassem.elsodany/workspaces/datapilotflow/datapilotflow-domain",
+                "python.venvFolders": [
+                    "/Users/bassem.elsodany/workspaces/datapilotflow/datapilotflow-domain"
+                ],
+                "python.terminal.activateEnvironment": true
+            }
+        },
+
+
+
+        {
             "name": "datapilotflow-rag-agent",
             "path": "datapilotflow-rag-agent",
             "settings": {
@@ -77,9 +76,15 @@
         },
         {
             "path": "datapilotflow-assistant-agent"
+        }
+
+        {
+            "name": "dashboard",
+            "path": "dashboard"
         },
         {
-            "path": "datapilotflow-infrastructure"
+            "name": "docker",
+            "path": "docker"
         }
     ],
     "settings": {

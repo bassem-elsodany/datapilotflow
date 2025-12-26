@@ -5,9 +5,10 @@
  * These providers support both embedding and generative models with a single API key.
  */
 
+import { useQueryClient } from '@tanstack/react-query';
 import { apiEndpoints } from '@/config';
 import { z } from 'zod';
-import { createGetQueryHook, createPostMutationHook, createPutMutationHook } from '../helpers';
+import { createGetQueryHook, createPostMutationHook, createPutMutationHook, createDeleteMutationHook } from '../helpers';
 
 // ============================================================================
 // Zod Schemas
@@ -252,3 +253,17 @@ export const useGetAvailableProviderTypes = createGetQueryHook({
     refetchOnWindowFocus: false,
   },
 });
+
+// Delete model provider
+export const useDeleteModelProvider = (providerId: string) => {
+  const queryClient = useQueryClient();
+  
+  return createDeleteMutationHook<typeof ModelProviderResponseSchema, { providerId: string }>({
+    endpoint: apiEndpoints.modelProviders.delete(providerId),
+    rMutationParams: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['model-providers'] });
+      },
+    },
+  })({ route: { providerId } });
+};

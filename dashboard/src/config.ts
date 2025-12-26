@@ -168,6 +168,7 @@ export const apiEndpoints = {
     create: '/providers',
     get: (providerId: string) => `/providers/${providerId}`,
     update: (providerId: string) => `/providers/${providerId}`,
+    delete: (providerId: string) => `/providers/${providerId}`,
     test: '/providers/test',
     testById: (providerId: string) => `/providers/${providerId}/test`,
     models: (providerId: string, modelType?: string) =>
