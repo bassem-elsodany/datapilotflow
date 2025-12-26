@@ -78,6 +78,15 @@ class DocumentExtractionService:
                 knowledge_job, knowledge_source_config, batch_size
             ):
                 yield batch
+        elif (
+            knowledge_source_config.content_source_type
+            == ContentSourceType.CONFLUENCE
+        ):
+            # Extract from Confluence using API
+            async for batch in self._extract_from_confluence(
+                knowledge_job, knowledge_source_config, batch_size
+            ):
+                yield batch
         else:
             raise ValueError(
                 f"Unsupported content_source_type: {knowledge_source_config.content_source_type}"
@@ -296,6 +305,53 @@ class DocumentExtractionService:
             f"[GENERATOR] Document extraction completed: {total_documents} documents "
             f"in {batch_count} batches ({execution_time:.2f}s)"
         )
+
+    async def _extract_from_confluence(
+        self,
+        knowledge_job: KnowledgeJob,
+        knowledge_source_config: KnowledgeSourceConfig,
+        batch_size: int,
+    ) -> AsyncGenerator[List[Document], None]:
+        """
+        Extract documents from Confluence using API.
+
+        Args:
+            knowledge_job: The job configuration
+            knowledge_source_config: The knowledge source configuration (CONFLUENCE)
+            batch_size: Target batch size for yielding
+
+        Yields:
+            List[Document]: Batches of extracted documents
+        """
+        logger.info(
+            f"[CONFLUENCE] Extracting from Confluence with mode: {knowledge_source_config.confluence_config.confluence_mode}"
+        )
+
+        from datapilotflow.processors.confluence import ConfluenceDocumentExtractor
+
+        # Create Confluence document extractor instance
+        confluence_extractor = ConfluenceDocumentExtractor()
+
+        # Delegate to ConfluenceDocumentExtractor's extract_documents method
+        async for batch in confluence_extractor.extract_documents(
+            knowledge_job, knowledge_source_config, batch_size
+        ):
+            # Filter out documents with empty content
+            valid_documents = [
+                doc
+                for doc in batch
+                if doc.page_content and doc.page_content.strip()
+            ]
+
+            if valid_documents:
+                logger.info(
+                    f"[CONFLUENCE] Yielding batch with {len(valid_documents)} documents"
+                )
+                yield valid_documents
+            else:
+                logger.warning(
+                    "[CONFLUENCE] Batch had all empty documents, skipping"
+                )
 
 
 # Singleton instance
