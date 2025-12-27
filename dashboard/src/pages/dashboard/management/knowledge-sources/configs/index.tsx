@@ -27,6 +27,7 @@ import {
   IconAlertTriangle,
   IconBriefcase,
   IconChevronDown,
+  IconDatabase,
   IconEdit,
   IconExternalLink,
   IconFileText,
@@ -119,8 +120,8 @@ const scrapingModeColors: Record<string, string> = {
 
 const contentSourceTypeIcons: Record<string, typeof IconFileText> = {
   web_scraping: IconWorld,
-  local_files: IconUpload,
-  confluence: IconWorld,
+  local_files: IconFileText,
+  confluence: IconDatabase,
 };
 
 const getSourceTypeDisplay = (sourceType: string): string => {
