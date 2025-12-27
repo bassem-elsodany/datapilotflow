@@ -169,7 +169,11 @@ class ConfluenceMarkdownConverter(MarkdownConverter):
         if "expand-container" in str(el.get("class", "")):
             return self._convert_expand_container(el, text, parent_tags)
 
-        return super().convert_div(el, text, parent_tags)
+        # Default div handling - just return the text with proper spacing
+        if '_inline' in parent_tags:
+            return ' ' + text.strip() + ' '
+        text_content = text.strip()
+        return '\n\n%s\n\n' % text_content if text_content else ''
 
     def _convert_alert(self, el: BeautifulSoup, text: str, macro_type: str) -> str:
         """
