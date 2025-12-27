@@ -347,23 +347,28 @@ class ConfluenceDocumentExtractor:
         Returns:
             Document: LangChain Document with metadata
         """
-        # Convert content to markdown if requested
+        # Convert content to markdown for better content quality
+        # Raw XHTML content from Confluence API is converted to markdown
         page_content = page.content
-        output_format = config.output_format if hasattr(config, 'output_format') else 'html'
-        markdown_generation = config.markdown_generation if hasattr(config, 'markdown_generation') else None
+        output_format = config.output_format if hasattr(config, 'output_format') else 'markdown'
 
-        if output_format == 'markdown' or markdown_generation:
-            try:
-                page_content = convert_confluence_xhtml_to_markdown(page.content)
+        try:
+            converted_content = convert_confluence_xhtml_to_markdown(page.content)
+            if converted_content:
+                page_content = converted_content
                 logger.debug(
                     f"Converted page {page.page_id} to markdown "
                     f"({len(page.content)} -> {len(page_content)} chars)"
                 )
-            except Exception as e:
+            else:
                 logger.warning(
-                    f"Failed to convert page {page.page_id} to markdown, using HTML: {e}"
+                    f"Markdown conversion for page {page.page_id} resulted in empty content, keeping raw XHTML"
                 )
-                # Keep original HTML content if conversion fails
+        except Exception as e:
+            logger.warning(
+                f"Failed to convert page {page.page_id} to markdown: {e}"
+            )
+            # Keep original HTML content if conversion fails
 
         metadata = {
             "source_url": page.url,
