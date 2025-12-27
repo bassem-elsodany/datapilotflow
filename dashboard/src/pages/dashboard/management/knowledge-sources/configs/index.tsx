@@ -27,7 +27,6 @@ import {
   IconAlertTriangle,
   IconBriefcase,
   IconChevronDown,
-  IconDatabase,
   IconEdit,
   IconExternalLink,
   IconFileText,
@@ -39,7 +38,8 @@ import {
   IconTrash,
   IconUpload,
   IconWand,
-  IconWorld
+  IconWorld,
+  IconBookmarks
 } from '@tabler/icons-react';
 import sortBy from 'lodash/sortBy';
 import { DataTable, DataTableColumn, DataTableSortStatus } from 'mantine-datatable';
@@ -121,7 +121,7 @@ const scrapingModeColors: Record<string, string> = {
 const contentSourceTypeIcons: Record<string, typeof IconFileText> = {
   web_scraping: IconWorld,
   local_files: IconFileText,
-  confluence: IconDatabase,
+  confluence: IconBookmarks,
 };
 
 const getSourceTypeDisplay = (sourceType: string): string => {
