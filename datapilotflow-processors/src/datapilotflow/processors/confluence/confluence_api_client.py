@@ -778,14 +778,12 @@ class ConfluenceApiClient:
         page_id = page_data.get("id", "")
         title = page_data.get("title", "Untitled")
 
-        # Extract storage format content and convert to markdown
+        # Extract storage format content (raw XHTML)
+        # DO NOT convert here - let document_extractor handle conversion based on output_format
         storage_content = (
             page_data.get("body", {})
             .get("storage", {})
             .get("value", "")
-        )
-        markdown_content = self._convert_storage_to_markdown(
-            storage_content
         )
 
         # Extract space key from metadata
@@ -822,7 +820,7 @@ class ConfluenceApiClient:
         return ConfluencePage(
             page_id=page_id,
             title=title,
-            content=markdown_content,
+            content=storage_content,
             space_key=space_key,
             url=url,
             version=version,
