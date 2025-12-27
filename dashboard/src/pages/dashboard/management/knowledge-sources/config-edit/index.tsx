@@ -2780,8 +2780,9 @@ export default function EditKnowledgeSourceConfig() {
                 </Card>
               )}
 
-              {/* Generation Section - Only show for web scraping or file types that need generation (not markdown) */}
+              {/* Generation Section - Only show for web scraping, confluence, or file types that need generation (not markdown) */}
               {(form.values.content_source_type === 'web_scraping' ||
+                form.values.content_source_type === 'confluence' ||
                 form.values.scraping_mode === 'html_files' ||
                 form.values.scraping_mode === 'pdf_files' ||
                 form.values.scraping_mode === 'docx_files' ||
@@ -2905,6 +2906,128 @@ export default function EditKnowledgeSourceConfig() {
                     </Stack>
                   </Card>
                 )}
+
+              {/* Confluence Configuration Section - Only for Confluence mode */}
+              {form.values.content_source_type === 'confluence' && (
+                <Card withBorder p="md" style={{ backgroundColor: 'var(--mantine-color-gray-0)' }}>
+                  <Stack gap="md">
+                    <Group gap="xs" align="center">
+                      <IconWorld size={18} color="var(--mantine-color-indigo-6)" />
+                      <Text size="lg" fw={600} c="indigo">Confluence Configuration</Text>
+                    </Group>
+
+                    {/* Confluence Credentials */}
+                    <Stack gap="sm">
+                      <Text size="sm" fw={600}>Credentials</Text>
+                      <Group gap="md">
+                        <Group gap="xs">
+                          <Text size="sm" fw={500}>Cloud URL:</Text>
+                          <Text size="sm" ff="monospace">{form.values.confluence_config.cloud_url}</Text>
+                        </Group>
+                      </Group>
+                      <Group gap="md">
+                        <Group gap="xs">
+                          <Text size="sm" fw={500}>Username/Email:</Text>
+                          <Text size="sm">{form.values.confluence_config.username_or_email}</Text>
+                        </Group>
+                      </Group>
+                      <Group gap="md">
+                        <Group gap="xs">
+                          <Text size="sm" fw={500}>Instance Type:</Text>
+                          <Badge size="sm" color="indigo" variant="light">
+                            {form.values.confluence_config.is_cloud_instance ? 'Cloud' : 'Self-Hosted'}
+                          </Badge>
+                        </Group>
+                      </Group>
+                    </Stack>
+
+                    <Divider />
+
+                    {/* Extraction Mode */}
+                    <Stack gap="sm">
+                      <Text size="sm" fw={600}>Extraction Mode</Text>
+                      <Group gap="md">
+                        <Group gap="xs">
+                          <Text size="sm" fw={500}>Mode:</Text>
+                          <Badge size="sm" color="indigo" variant="light">
+                            {form.values.scraping_mode === 'specific_pages' ? 'Specific Pages' :
+                              form.values.scraping_mode === 'space_pages' ? 'Space Pages' :
+                              form.values.scraping_mode === 'pages_with_label' ? 'Pages with Label' :
+                              form.values.scraping_mode === 'recently_modified' ? 'Recently Modified' : form.values.scraping_mode}
+                          </Badge>
+                        </Group>
+                      </Group>
+                    </Stack>
+
+                    {/* Mode-specific configuration */}
+                    {form.values.scraping_mode === 'space_pages' && form.values.confluence_config.space_keys && form.values.confluence_config.space_keys.length > 0 && (
+                      <Stack gap="sm">
+                        <Text size="sm" fw={500}>Spaces ({form.values.confluence_config.space_keys.length}):</Text>
+                        <Group gap="xs" wrap="wrap">
+                          {form.values.confluence_config.space_keys.map((space, index) => (
+                            <Badge key={index} size="sm" color="indigo" variant="light">{space}</Badge>
+                          ))}
+                        </Group>
+                      </Stack>
+                    )}
+
+                    {form.values.scraping_mode === 'specific_pages' && form.values.confluence_config.page_ids && form.values.confluence_config.page_ids.length > 0 && (
+                      <Stack gap="sm">
+                        <Text size="sm" fw={500}>Page IDs ({form.values.confluence_config.page_ids.length}):</Text>
+                        <Stack gap="xs" style={{ maxHeight: '150px', overflowY: 'auto' }}>
+                          {form.values.confluence_config.page_ids.map((pageId, index) => (
+                            <Group key={index} gap="xs">
+                              <Text size="xs" ff="monospace" style={{ flex: 1 }}>{pageId}</Text>
+                            </Group>
+                          ))}
+                        </Stack>
+                      </Stack>
+                    )}
+
+                    {form.values.scraping_mode === 'pages_with_label' && form.values.confluence_config.labels && form.values.confluence_config.labels.length > 0 && (
+                      <Stack gap="sm">
+                        <Text size="sm" fw={500}>Labels ({form.values.confluence_config.labels.length}):</Text>
+                        <Group gap="xs" wrap="wrap">
+                          {form.values.confluence_config.labels.map((label, index) => (
+                            <Badge key={index} size="sm" color="indigo" variant="light">{label}</Badge>
+                          ))}
+                        </Group>
+                      </Stack>
+                    )}
+
+                    <Divider />
+
+                    {/* Processing Options */}
+                    <Stack gap="sm">
+                      <Text size="sm" fw={600}>Processing Options</Text>
+                      <Group gap="md">
+                        <Group gap="xs">
+                          <Text size="sm" fw={500}>Include Attachments:</Text>
+                          <Badge size="sm" color={form.values.confluence_config.include_attachments ? "green" : "gray"} variant="light">
+                            {form.values.confluence_config.include_attachments ? 'Yes' : 'No'}
+                          </Badge>
+                        </Group>
+                      </Group>
+                      <Group gap="md">
+                        <Group gap="xs">
+                          <Text size="sm" fw={500}>Include Comments:</Text>
+                          <Badge size="sm" color={form.values.confluence_config.include_comments ? "green" : "gray"} variant="light">
+                            {form.values.confluence_config.include_comments ? 'Yes' : 'No'}
+                          </Badge>
+                        </Group>
+                      </Group>
+                      <Group gap="md">
+                        <Group gap="xs">
+                          <Text size="sm" fw={500}>Expand Child Pages:</Text>
+                          <Badge size="sm" color={form.values.confluence_config.expand_child_pages ? "green" : "gray"} variant="light">
+                            {form.values.confluence_config.expand_child_pages ? 'Yes' : 'No'}
+                          </Badge>
+                        </Group>
+                      </Group>
+                    </Stack>
+                  </Stack>
+                </Card>
+              )}
             </Stack>
           )}
         </ColorfulVerticalStepper>
