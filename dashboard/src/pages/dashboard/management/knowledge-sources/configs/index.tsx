@@ -559,19 +559,10 @@ export default function KnowledgeSourceConfigs() {
           const config = record as KnowledgeSourceConfig;
           const date = new Date(config.updated_at);
           const dateStr = isNaN(date.getTime()) ? 'Unknown' : date.toLocaleDateString();
-          const activities = [
-            dateStr,
-            config.content_source_type === 'confluence' ? 'API Sync' : 'Auto Crawl',
-            'Indexed'
-          ];
           return (
-            <Stack gap={4}>
-              {activities.map((activity, idx) => (
-                <Text key={idx} size="xs" c="dimmed" fw={400}>
-                  {activity}
-                </Text>
-              ))}
-            </Stack>
+            <Text size="xs" c="dimmed" fw={400}>
+              {dateStr}
+            </Text>
           );
         },
       },
