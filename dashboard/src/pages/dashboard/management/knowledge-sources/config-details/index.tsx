@@ -204,8 +204,8 @@ export default function ConfigDetailsPage() {
         <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="lg">
           <StatCard
             title="Content Source"
-            value={config.content_source_type === 'web_scraping' ? 'Web Scraping' : 'Local Files'}
-            icon={config.content_source_type === 'web_scraping' ? <IconWorld size={24} /> : <IconFileText size={24} />}
+            value={config.content_source_type === 'web_scraping' ? 'Web Scraping' : config.content_source_type === 'confluence' ? 'Confluence' : 'Local Files'}
+            icon={config.content_source_type === 'web_scraping' ? <IconWorld size={24} /> : config.content_source_type === 'confluence' ? <IconWorld size={24} /> : <IconFileText size={24} />}
             color="#45c9bb"
             gradientFrom="#45c9bb"
             gradientTo="#87cbbc"
@@ -238,6 +238,27 @@ export default function ConfigDetailsPage() {
                 gradientFrom="#3bc57d"
                 gradientTo="#45c9bb"
                 description="Include/Exclude rules"
+              />
+            </>
+          ) : config.content_source_type === 'confluence' ? (
+            <>
+              <StatCard
+                title="Extraction Mode"
+                value={config.scraping_mode ? config.scraping_mode.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'N/A'}
+                icon={<IconExternalLink size={24} />}
+                color="#ddde65"
+                gradientFrom="#ddde65"
+                gradientTo="#bbe773"
+                description="Confluence mode"
+              />
+              <StatCard
+                title="Cloud URL"
+                value={config.confluence_config?.cloud_url ? 'Configured' : 'Not Set'}
+                icon={<IconWorld size={24} />}
+                color="#3bc57d"
+                gradientFrom="#3bc57d"
+                gradientTo="#45c9bb"
+                description="Confluence instance"
               />
             </>
           ) : (
@@ -369,6 +390,112 @@ export default function ConfigDetailsPage() {
               </InfoSectionCard>
             )}
           </>
+        ) : config.content_source_type === 'confluence' ? (
+          /* Confluence Configuration */
+          <SimpleGrid cols={{ base: 1, md: 2, lg: 3 }} spacing="lg">
+            {/* Confluence Credentials */}
+            <InfoSectionCard
+              title="Confluence Credentials"
+              icon={<IconSettings size={20} />}
+              color="#45c9bb"
+              gradientFrom="#45c9bb"
+              gradientTo="#87cbbc"
+            >
+              <Stack gap="md">
+                <Stack gap="xs">
+                  <Text size="xs" c="dimmed" fw={600} tt="uppercase">Cloud URL</Text>
+                  <Text size="sm" ff="monospace" c="dimmed">{config.confluence_config?.cloud_url || 'Not configured'}</Text>
+                </Stack>
+                <Stack gap="xs">
+                  <Text size="xs" c="dimmed" fw={600} tt="uppercase">Username/Email</Text>
+                  <Text size="sm">{config.confluence_config?.username_or_email || 'Not configured'}</Text>
+                </Stack>
+                <Stack gap="xs">
+                  <Text size="xs" c="dimmed" fw={600} tt="uppercase">Instance Type</Text>
+                  <Badge color="indigo" variant="light" size="sm">
+                    {config.confluence_config?.is_cloud_instance ? 'Cloud' : 'Self-Hosted'}
+                  </Badge>
+                </Stack>
+              </Stack>
+            </InfoSectionCard>
+
+            {/* Extraction Configuration */}
+            <InfoSectionCard
+              title="Extraction Configuration"
+              icon={<IconFilter size={20} />}
+              color="#bbe773"
+              gradientFrom="#bbe773"
+              gradientTo="#9dd245"
+            >
+              <Stack gap="md">
+                <Stack gap="xs">
+                  <Text size="xs" c="dimmed" fw={600} tt="uppercase">Mode</Text>
+                  <Badge color="indigo" variant="light">
+                    {config.scraping_mode === 'space_pages' ? 'Space Pages' :
+                      config.scraping_mode === 'specific_pages' ? 'Specific Pages' :
+                      config.scraping_mode === 'pages_with_label' ? 'Pages with Label' :
+                      config.scraping_mode === 'recently_modified' ? 'Recently Modified' : config.scraping_mode}
+                  </Badge>
+                </Stack>
+                {config.scraping_mode === 'space_pages' && config.confluence_config?.space_keys && (
+                  <Stack gap="xs">
+                    <Text size="xs" c="dimmed" fw={600} tt="uppercase">Spaces ({config.confluence_config.space_keys.length})</Text>
+                    <Group gap="xs" wrap="wrap">
+                      {config.confluence_config.space_keys.map((space, index) => (
+                        <Badge key={index} size="sm" color="blue" variant="light">{space}</Badge>
+                      ))}
+                    </Group>
+                  </Stack>
+                )}
+                {config.scraping_mode === 'specific_pages' && config.confluence_config?.page_ids && (
+                  <Stack gap="xs">
+                    <Text size="xs" c="dimmed" fw={600} tt="uppercase">Page IDs ({config.confluence_config.page_ids.length})</Text>
+                    <Text size="sm">{config.confluence_config.page_ids.slice(0, 3).join(', ')}{config.confluence_config.page_ids.length > 3 ? '...' : ''}</Text>
+                  </Stack>
+                )}
+                {config.scraping_mode === 'pages_with_label' && config.confluence_config?.labels && (
+                  <Stack gap="xs">
+                    <Text size="xs" c="dimmed" fw={600} tt="uppercase">Labels ({config.confluence_config.labels.length})</Text>
+                    <Group gap="xs" wrap="wrap">
+                      {config.confluence_config.labels.map((label, index) => (
+                        <Badge key={index} size="sm" color="blue" variant="light">{label}</Badge>
+                      ))}
+                    </Group>
+                  </Stack>
+                )}
+              </Stack>
+            </InfoSectionCard>
+
+            {/* Processing Options */}
+            <InfoSectionCard
+              title="Processing Options"
+              icon={<IconCode size={20} />}
+              color="#ddde65"
+              gradientFrom="#ddde65"
+              gradientTo="#bbe773"
+            >
+              <Stack gap="md">
+                <Group gap="md" style={{ flexWrap: 'wrap' }}>
+                  <InfoItem
+                    label="Include Attachments"
+                    value={<Badge color={config.confluence_config?.include_attachments ? "green" : "gray"} variant="light">{config.confluence_config?.include_attachments ? 'Yes' : 'No'}</Badge>}
+                  />
+                </Group>
+                <Group gap="md" style={{ flexWrap: 'wrap' }}>
+                  <InfoItem
+                    label="Include Comments"
+                    value={<Badge color={config.confluence_config?.include_comments ? "green" : "gray"} variant="light">{config.confluence_config?.include_comments ? 'Yes' : 'No'}</Badge>}
+                  />
+                </Group>
+                <Group gap="md" style={{ flexWrap: 'wrap' }}>
+                  <InfoItem
+                    label="Expand Child Pages"
+                    value={<Badge color={config.confluence_config?.expand_child_pages ? "green" : "gray"} variant="light">{config.confluence_config?.expand_child_pages ? 'Yes' : 'No'}</Badge>}
+                  />
+                </Group>
+              </Stack>
+            </InfoSectionCard>
+          </SimpleGrid>
         ) : (
           /* Local Files Configuration */
           <InfoSectionCard
