@@ -424,7 +424,7 @@ export default function KnowledgeSourceConfigs() {
       {
         accessor: 'name',
         title: 'Name',
-        width: 280,
+        width: 320,
         sortable: true,
         textAlign: 'left',
         render: (record: Record<string, unknown>) => {
@@ -449,36 +449,20 @@ export default function KnowledgeSourceConfigs() {
                 >
                   {config.name}
                 </Text>
-                <Text size="xs" c="dimmed" fw={400}>
-                  {config.content_source_type === 'confluence' ? 'Confluence' :
-                   config.content_source_type === 'local_files' ? 'Local Files' :
-                   'Web Scraping'}
-                </Text>
+                <Stack gap={2}>
+                  <Text size="xs" c="dimmed" fw={400}>
+                    {config.content_source_type === 'confluence' ? 'Confluence' :
+                     config.content_source_type === 'local_files' ? 'Local Files' :
+                     'Web Scraping'}
+                  </Text>
+                  {config.description && (
+                    <Text size="xs" c="dimmed" fw={400} lineClamp={2}>
+                      {config.description}
+                    </Text>
+                  )}
+                </Stack>
               </Stack>
             </Group>
-          );
-        },
-      },
-      {
-        accessor: 'description',
-        title: 'Description',
-        width: 220,
-        sortable: false,
-        textAlign: 'left',
-        render: (record: Record<string, unknown>) => {
-          const config = record as KnowledgeSourceConfig;
-          const lines = (config.description || '').split('\n').filter(line => line.trim());
-          return (
-            <Stack gap={4}>
-              {lines.slice(0, 3).map((line, idx) => (
-                <Text key={idx} size="xs" c="dimmed" fw={400}>
-                  {line.trim()}
-                </Text>
-              ))}
-              {!config.description && (
-                <Text size="xs" c="dimmed">-</Text>
-              )}
-            </Stack>
           );
         },
       },
