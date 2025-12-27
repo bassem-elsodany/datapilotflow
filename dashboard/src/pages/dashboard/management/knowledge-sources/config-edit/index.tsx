@@ -2549,6 +2549,11 @@ export default function EditKnowledgeSourceConfig() {
                             form.values.scraping_mode === 'pdf_files' ? 'PDF Files' :
                               form.values.scraping_mode === 'docx_files' ? 'DOCX Files' :
                                 form.values.scraping_mode === 'txt_files' ? 'TXT Files' : 'Local Files')
+                        : form.values.content_source_type === 'confluence'
+                        ? (form.values.scraping_mode === 'space_pages' ? 'Space Pages' :
+                          form.values.scraping_mode === 'specific_pages' ? 'Specific Pages' :
+                            form.values.scraping_mode === 'pages_with_label' ? 'Pages with Label' :
+                              form.values.scraping_mode === 'recently_modified' ? 'Recently Modified' : 'Confluence')
                         : (form.values.scraping_mode === 'single_page' ? 'Single Page' :
                           form.values.scraping_mode === 'multiple_pages' ? 'Multiple Pages' :
                             'Website Crawler')}
