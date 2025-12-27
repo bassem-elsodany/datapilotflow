@@ -49,12 +49,58 @@ export function Welcome() {
 
       {/* Core Features Overview */}
       <Stack gap="lg">
-        <Title order={2} ta="center">🚀 Core Features</Title>
+        <Title order={2} ta="center">🚀 Core Capabilities</Title>
 
         <Grid gutter="md">
-          {/* Interview Process removed - focusing on knowledge management */}
+          {/* Knowledge Source Management */}
+          <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
+            <Card shadow="sm" padding="lg" radius="md" withBorder>
+              <Group mb="md">
+                <ThemeIcon size="lg" variant="light" color="blue">
+                  <IconFileText size={24} />
+                </ThemeIcon>
+                <div>
+                  <Text fw={600} size="lg">Knowledge Sources</Text>
+                  <Badge color="blue" variant="light">Multi-Source</Badge>
+                </div>
+              </Group>
+              <Text size="sm" c="dimmed" mb="md">
+                Ingest knowledge from multiple sources including web crawling, local files, and Confluence integration.
+              </Text>
+              <Stack gap="xs">
+                <Text size="xs" fw={500}>✓ Web Crawling & Scraping</Text>
+                <Text size="xs" fw={500}>✓ File Upload (PDF, DOCX, HTML)</Text>
+                <Text size="xs" fw={500}>✓ Confluence Integration</Text>
+                <Text size="xs" fw={500}>✓ Content Extraction</Text>
+              </Stack>
+            </Card>
+          </Grid.Col>
 
-          {/* Knowledge Conversations */}
+          {/* Knowledge Jobs & Processing */}
+          <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
+            <Card shadow="sm" padding="lg" radius="md" withBorder>
+              <Group mb="md">
+                <ThemeIcon size="lg" variant="light" color="orange">
+                  <IconSettings size={24} />
+                </ThemeIcon>
+                <div>
+                  <Text fw={600} size="lg">Knowledge Jobs</Text>
+                  <Badge color="orange" variant="light">Automated</Badge>
+                </div>
+              </Group>
+              <Text size="sm" c="dimmed" mb="md">
+                Execute knowledge ingestion jobs with automated processing, chunking, and vector embedding.
+              </Text>
+              <Stack gap="xs">
+                <Text size="xs" fw={500}>✓ Batch Processing</Text>
+                <Text size="xs" fw={500}>✓ Text Chunking</Text>
+                <Text size="xs" fw={500}>✓ Vector Embedding</Text>
+                <Text size="xs" fw={500}>✓ Job Monitoring</Text>
+              </Stack>
+            </Card>
+          </Grid.Col>
+
+          {/* Agents & Conversations */}
           <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
             <Card shadow="sm" padding="lg" radius="md" withBorder>
               <Group mb="md">
@@ -62,73 +108,21 @@ export function Welcome() {
                   <IconMessageCircle size={24} />
                 </ThemeIcon>
                 <div>
-                  <Text fw={600} size="lg">Knowledge Conversations</Text>
-                  <Badge color="green" variant="light">RAG System</Badge>
+                  <Text fw={600} size="lg">Agents & Conversations</Text>
+                  <Badge color="green" variant="light">RAG-Powered</Badge>
                 </div>
               </Group>
               <Text size="sm" c="dimmed" mb="md">
-                Advanced RAG (Retrieval-Augmented Generation) system with semantic search,
-                context-aware conversations, and intelligent knowledge retrieval.
+                Create intelligent agents and have context-aware conversations backed by your knowledge base.
               </Text>
               <Stack gap="xs">
+                <Text size="xs" fw={500}>✓ Agent Management</Text>
+                <Text size="xs" fw={500}>✓ RAG Conversations</Text>
                 <Text size="xs" fw={500}>✓ Semantic Search</Text>
-                <Text size="xs" fw={500}>✓ Context-Aware Chat</Text>
-                <Text size="xs" fw={500}>✓ Knowledge Retrieval</Text>
                 <Text size="xs" fw={500}>✓ Conversation History</Text>
               </Stack>
             </Card>
           </Grid.Col>
-
-          {/* Document Processing */}
-          <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
-            <Card shadow="sm" padding="lg" radius="md" withBorder>
-              <Group mb="md">
-                <ThemeIcon size="lg" variant="light" color="orange">
-                  <IconFileText size={24} />
-                </ThemeIcon>
-                <div>
-                  <Text fw={600} size="lg">Document Processing</Text>
-                  <Badge color="orange" variant="light">Intelligent</Badge>
-                </div>
-              </Group>
-              <Text size="sm" c="dimmed" mb="md">
-                Intelligent document processing with web crawling, text extraction,
-                chunking, and vector storage for comprehensive knowledge base building.
-              </Text>
-              <Stack gap="xs">
-                <Text size="xs" fw={500}>✓ Web Crawling</Text>
-                <Text size="xs" fw={500}>✓ Document Processing</Text>
-                <Text size="xs" fw={500}>✓ Vector Storage</Text>
-                <Text size="xs" fw={500}>✓ Content Extraction</Text>
-              </Stack>
-            </Card>
-          </Grid.Col>
-
-          {/* Pipeline Builder */}
-          <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
-            <Card shadow="sm" padding="lg" radius="md" withBorder>
-              <Group mb="md">
-                <ThemeIcon size="lg" variant="light" color="purple">
-                  <IconSettings size={24} />
-                </ThemeIcon>
-                <div>
-                  <Text fw={600} size="lg">Pipeline Builder</Text>
-                  <Badge color="purple" variant="light">Visual</Badge>
-                </div>
-              </Group>
-              <Text size="sm" c="dimmed" mb="md">
-                Visual pipeline builder for creating data processing workflows with drag-and-drop
-                nodes for crawling, extraction, chunking, and vector storage.
-              </Text>
-              <Stack gap="xs">
-                <Text size="xs" fw={500}>✓ Visual Workflow Design</Text>
-                <Text size="xs" fw={500}>✓ Drag & Drop Interface</Text>
-                <Text size="xs" fw={500}>✓ Real-time Execution</Text>
-                <Text size="xs" fw={500}>✓ Pipeline Monitoring</Text>
-              </Stack>
-            </Card>
-          </Grid.Col>
-
 
           {/* Model Providers */}
           <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
@@ -139,23 +133,46 @@ export function Welcome() {
                 </ThemeIcon>
                 <div>
                   <Text fw={600} size="lg">Model Providers</Text>
-                  <Badge color="red" variant="light">AI-Powered</Badge>
+                  <Badge color="red" variant="light">Multi-Provider</Badge>
                 </div>
               </Group>
               <Text size="sm" c="dimmed" mb="md">
-                Configure and manage multiple LLM providers including OpenAI, Anthropic, and local models
-                for embeddings, chat completions, and content generation.
+                Configure and manage multiple LLM providers for embeddings, chat completions, and AI workflows.
               </Text>
               <Stack gap="xs">
-                <Text size="xs" fw={500}>✓ Multi-Provider Support</Text>
-                <Text size="xs" fw={500}>✓ OpenAI & Anthropic</Text>
-                <Text size="xs" fw={500}>✓ Local Model Support</Text>
+                <Text size="xs" fw={500}>✓ OpenAI, Claude, & More</Text>
                 <Text size="xs" fw={500}>✓ Embedding Models</Text>
+                <Text size="xs" fw={500}>✓ Local Model Support</Text>
+                <Text size="xs" fw={500}>✓ Provider Management</Text>
               </Stack>
             </Card>
           </Grid.Col>
 
-          {/* Query Enhancement */}
+          {/* System Management */}
+          <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
+            <Card shadow="sm" padding="lg" radius="md" withBorder>
+              <Group mb="md">
+                <ThemeIcon size="lg" variant="light" color="purple">
+                  <IconChartBar size={24} />
+                </ThemeIcon>
+                <div>
+                  <Text fw={600} size="lg">System Management</Text>
+                  <Badge color="purple" variant="light">Admin</Badge>
+                </div>
+              </Group>
+              <Text size="sm" c="dimmed" mb="md">
+                Manage users, roles, tools, and system configuration for enterprise RAG deployments.
+              </Text>
+              <Stack gap="xs">
+                <Text size="xs" fw={500}>✓ User & Role Management</Text>
+                <Text size="xs" fw={500}>✓ Knowledge Status Monitoring</Text>
+                <Text size="xs" fw={500}>✓ Vector Database Status</Text>
+                <Text size="xs" fw={500}>✓ Tool Management</Text>
+              </Stack>
+            </Card>
+          </Grid.Col>
+
+          {/* Knowledge Base Analytics */}
           <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
             <Card shadow="sm" padding="lg" radius="md" withBorder>
               <Group mb="md">
@@ -163,43 +180,18 @@ export function Welcome() {
                   <IconTarget size={24} />
                 </ThemeIcon>
                 <div>
-                  <Text fw={600} size="lg">Query Enhancement</Text>
-                  <Badge color="indigo" variant="light">Advanced</Badge>
+                  <Text fw={600} size="lg">Knowledge Analytics</Text>
+                  <Badge color="indigo" variant="light">Monitoring</Badge>
                 </div>
               </Group>
               <Text size="sm" c="dimmed" mb="md">
-                Advanced query enhancement strategies including HyDE, Decomposition,
-                Multi-Query, and Augmented for improved retrieval accuracy.
+                Monitor knowledge base health, vector storage metrics, and ingestion performance.
               </Text>
               <Stack gap="xs">
-                <Text size="xs" fw={500}>✓ Hypothetical Document Embeddings</Text>
-                <Text size="xs" fw={500}>✓ Query Decomposition</Text>
-                <Text size="xs" fw={500}>✓ Multi-Query Variants</Text>
-              </Stack>
-            </Card>
-          </Grid.Col>
-
-          {/* Vector Storage & Search */}
-          <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
-            <Card shadow="sm" padding="lg" radius="md" withBorder>
-              <Group mb="md">
-                <ThemeIcon size="lg" variant="light" color="violet">
-                  <IconChartBar size={24} />
-                </ThemeIcon>
-                <div>
-                  <Text fw={600} size="lg">Vector Storage & Search</Text>
-                  <Badge color="violet" variant="light">Scalable</Badge>
-                </div>
-              </Group>
-              <Text size="sm" c="dimmed" mb="md">
-                High-performance vector storage with Milvus integration, semantic search,
-                and real-time document retrieval with configurable similarity metrics.
-              </Text>
-              <Stack gap="xs">
-                <Text size="xs" fw={500}>✓ Milvus Vector Database</Text>
-                <Text size="xs" fw={500}>✓ Semantic Search</Text>
-                <Text size="xs" fw={500}>✓ Real-time Retrieval</Text>
-                <Text size="xs" fw={500}>✓ Configurable Similarity</Text>
+                <Text size="xs" fw={500}>✓ Knowledge Status</Text>
+                <Text size="xs" fw={500}>✓ Vector DB Metrics</Text>
+                <Text size="xs" fw={500}>✓ Ingestion Monitoring</Text>
+                <Text size="xs" fw={500}>✓ Performance Analytics</Text>
               </Stack>
             </Card>
           </Grid.Col>
@@ -222,28 +214,12 @@ export function Welcome() {
               <Stack gap="md" h="100%" justify="space-between">
                 <Group mb="md">
                   <ThemeIcon size="lg" variant="light" color="blue">
-                    <IconSettings size={20} />
-                  </ThemeIcon>
-                  <Text fw={600}>1. Configure Sources</Text>
-                </Group>
-                <Text size="sm" c="dimmed">
-                  Set up knowledge source configurations for web crawling, document processing, and data ingestion.
-                </Text>
-              </Stack>
-            </Card>
-          </Grid.Col>
-
-          <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
-            <Card shadow="sm" padding="lg" radius="md" withBorder h="100%">
-              <Stack gap="md" h="100%" justify="space-between">
-                <Group mb="md">
-                  <ThemeIcon size="lg" variant="light" color="green">
                     <IconFileText size={20} />
                   </ThemeIcon>
-                  <Text fw={600}>2. Process Data</Text>
+                  <Text fw={600}>1. Add Knowledge Sources</Text>
                 </Group>
                 <Text size="sm" c="dimmed">
-                  Create and execute knowledge jobs to process your sources into searchable chunks and embeddings.
+                  Configure knowledge sources from web URLs, Confluence spaces, or upload local files (PDF, DOCX, etc.).
                 </Text>
               </Stack>
             </Card>
@@ -254,12 +230,28 @@ export function Welcome() {
               <Stack gap="md" h="100%" justify="space-between">
                 <Group mb="md">
                   <ThemeIcon size="lg" variant="light" color="orange">
-                    <IconMessageCircle size={20} />
+                    <IconSettings size={20} />
                   </ThemeIcon>
-                  <Text fw={600}>3. Start Conversations</Text>
+                  <Text fw={600}>2. Create & Run Jobs</Text>
                 </Group>
                 <Text size="sm" c="dimmed">
-                  Query your knowledge base through intelligent conversations with advanced RAG capabilities.
+                  Execute knowledge ingestion jobs to process, chunk, and embed your content into the vector database.
+                </Text>
+              </Stack>
+            </Card>
+          </Grid.Col>
+
+          <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
+            <Card shadow="sm" padding="lg" radius="md" withBorder h="100%">
+              <Stack gap="md" h="100%" justify="space-between">
+                <Group mb="md">
+                  <ThemeIcon size="lg" variant="light" color="green">
+                    <IconMessageCircle size={20} />
+                  </ThemeIcon>
+                  <Text fw={600}>3. Chat with Agents</Text>
+                </Group>
+                <Text size="sm" c="dimmed">
+                  Create agents and have intelligent conversations powered by your knowledge base with RAG capabilities.
                 </Text>
               </Stack>
             </Card>
@@ -272,17 +264,17 @@ export function Welcome() {
             size="lg"
             variant="gradient"
             gradient={{ from: 'blue', to: 'cyan' }}
-            onClick={() => navigate(paths.dashboard.management.knowledgeSources.configCreate)}
+            onClick={() => navigate(paths.dashboard.management.knowledgeSources.configs)}
           >
-            Start Building Your RAG System
+            Manage Knowledge Sources
           </Button>
           <Button
-            leftSection={<IconSettings size={16} />}
+            leftSection={<IconMessageCircle size={16} />}
             size="lg"
             variant="light"
-            onClick={() => navigate(paths.dashboard.apps.agents)}
+            onClick={() => navigate(paths.dashboard.apps.conversations)}
           >
-            Explore Knowledge Search
+            Start Conversations
           </Button>
         </Group>
       </Stack>
