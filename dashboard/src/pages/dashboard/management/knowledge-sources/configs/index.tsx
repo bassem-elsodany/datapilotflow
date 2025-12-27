@@ -142,45 +142,127 @@ function InteractiveCrawlingPipeline() {
   const [currentStep, setCurrentStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true); // Always playing by default
   const [showDetails, setShowDetails] = useState(true); // Always show details
+  const [activeDataSource, setActiveDataSource] = useState<'web_scraping' | 'local_files' | 'confluence'>('web_scraping');
 
-  const steps = [
-    {
-      id: 'discovery',
-      title: 'Discovery',
-      description: 'Find and index URLs',
-      details: 'The system discovers URLs from your configured sources, follows sitemaps, and builds a comprehensive list of pages to crawl. It respects robots.txt and rate limiting policies.',
-      icon: IconWorld,
-      color: 'blue',
-      duration: 3000
-    },
-    {
-      id: 'crawling',
-      title: 'Crawling',
-      description: 'Extract content from pages',
-      details: 'Each discovered URL is visited to extract text content, metadata, and structure. The system handles different content types and follows links to discover new pages.',
-      icon: IconLink,
-      color: 'orange',
-      duration: 3500
-    },
-    {
-      id: 'filtering',
-      title: 'Filtering',
-      description: 'Clean and filter content',
-      details: 'Extracted content is cleaned, filtered, and processed according to your configuration. Duplicates are removed and content quality is assessed.',
-      icon: IconSettings,
-      color: 'green',
-      duration: 2500
-    },
-    {
-      id: 'generation',
-      title: 'Generation',
-      description: 'Generate final content',
-      details: 'Content is processed into the final format - either standard markdown with content filtering or LLM-powered markdown with intelligent processing based on your configuration.',
-      icon: IconWand,
-      color: 'purple',
-      duration: 2000
-    }
-  ];
+  // Define pipelines for each datasource type
+  const pipelinesByDataSource = {
+    web_scraping: [
+      {
+        id: 'discovery',
+        title: 'Discovery',
+        description: 'Find and index URLs',
+        details: 'The system discovers URLs from your configured sources, follows sitemaps, and builds a comprehensive list of pages to crawl. It respects robots.txt and rate limiting policies.',
+        icon: IconWorld,
+        color: 'blue',
+        duration: 3000
+      },
+      {
+        id: 'crawling',
+        title: 'Crawling',
+        description: 'Extract content from pages',
+        details: 'Each discovered URL is visited to extract text content, metadata, and structure. The system handles different content types and follows links to discover new pages.',
+        icon: IconLink,
+        color: 'orange',
+        duration: 3500
+      },
+      {
+        id: 'filtering',
+        title: 'Filtering',
+        description: 'Clean and filter content',
+        details: 'Extracted content is cleaned, filtered, and processed according to your configuration. Duplicates are removed and content quality is assessed.',
+        icon: IconSettings,
+        color: 'green',
+        duration: 2500
+      },
+      {
+        id: 'generation',
+        title: 'Generation',
+        description: 'Generate final content',
+        details: 'Content is processed into the final format - either standard markdown with content filtering or LLM-powered markdown with intelligent processing based on your configuration.',
+        icon: IconWand,
+        color: 'purple',
+        duration: 2000
+      }
+    ],
+    local_files: [
+      {
+        id: 'upload',
+        title: 'Upload',
+        description: 'Upload local files',
+        details: 'Upload your local files (HTML, Markdown, PDF, DOCX, TXT) to be processed. The system validates file formats and prepares them for extraction.',
+        icon: IconUpload,
+        color: 'blue',
+        duration: 2500
+      },
+      {
+        id: 'extraction',
+        title: 'Extraction',
+        description: 'Extract content',
+        details: 'Content is extracted from uploaded files based on their type. The system handles different file formats and converts them to a standardized format.',
+        icon: IconFileText,
+        color: 'orange',
+        duration: 3000
+      },
+      {
+        id: 'processing',
+        title: 'Processing',
+        description: 'Process and clean',
+        details: 'Extracted content is cleaned, deduplicated, and processed according to your configuration. Quality checks ensure content integrity.',
+        icon: IconSettings,
+        color: 'green',
+        duration: 2500
+      },
+      {
+        id: 'indexing',
+        title: 'Indexing',
+        description: 'Index for search',
+        details: 'Processed content is indexed and made available for knowledge base search and RAG operations.',
+        icon: IconWand,
+        color: 'purple',
+        duration: 2000
+      }
+    ],
+    confluence: [
+      {
+        id: 'auth',
+        title: 'Authentication',
+        description: 'Verify credentials',
+        details: 'The system authenticates with your Confluence instance using the provided API token and validates access permissions.',
+        icon: IconSettings,
+        color: 'indigo',
+        duration: 2500
+      },
+      {
+        id: 'retrieval',
+        title: 'Retrieval',
+        description: 'Fetch pages',
+        details: 'The system retrieves pages from Confluence based on your configuration - specific pages, spaces, labels, or recently modified pages.',
+        icon: IconBookmarks,
+        color: 'blue',
+        duration: 3500
+      },
+      {
+        id: 'conversion',
+        title: 'Conversion',
+        description: 'Convert to markdown',
+        details: 'Confluence XHTML content is converted to markdown format, preserving structure and formatting.',
+        icon: IconLink,
+        color: 'orange',
+        duration: 3000
+      },
+      {
+        id: 'indexing',
+        title: 'Indexing',
+        description: 'Index content',
+        details: 'Converted content is processed, indexed, and made available for knowledge base search and RAG operations.',
+        icon: IconWand,
+        color: 'green',
+        duration: 2000
+      }
+    ]
+  };
+
+  const steps = pipelinesByDataSource[activeDataSource];
 
   // Auto-start the animation on component mount
   useEffect(() => {
@@ -188,6 +270,11 @@ function InteractiveCrawlingPipeline() {
     setCurrentStep(0);
     setShowDetails(true);
   }, []);
+
+  // Reset animation when datasource changes
+  useEffect(() => {
+    setCurrentStep(0);
+  }, [activeDataSource]);
 
   useEffect(() => {
     if (!isPlaying) return;
@@ -209,6 +296,42 @@ function InteractiveCrawlingPipeline() {
   return (
     <Card withBorder p="md" radius="md" bg="gray.0" w="100%">
       <Stack gap="sm">
+        {/* Datasource Selector */}
+        <Group justify="flex-start" gap="xs">
+          <Text size="sm" fw={500} c="dimmed">Data Source:</Text>
+          <Group gap={8}>
+            <Button
+              variant={activeDataSource === 'web_scraping' ? 'filled' : 'light'}
+              color="blue"
+              size="xs"
+              onClick={() => setActiveDataSource('web_scraping')}
+              leftSection={<IconWorld size={14} />}
+            >
+              Web Scraping
+            </Button>
+            <Button
+              variant={activeDataSource === 'local_files' ? 'filled' : 'light'}
+              color="violet"
+              size="xs"
+              onClick={() => setActiveDataSource('local_files')}
+              leftSection={<IconFileText size={14} />}
+            >
+              Local Files
+            </Button>
+            <Button
+              variant={activeDataSource === 'confluence' ? 'filled' : 'light'}
+              color="indigo"
+              size="xs"
+              onClick={() => setActiveDataSource('confluence')}
+              leftSection={<IconBookmarks size={14} />}
+            >
+              Confluence
+            </Button>
+          </Group>
+        </Group>
+
+        <Divider />
+
         <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
           {/* Left side - Step details */}
           <div style={{ flex: '0 0 350px', minHeight: '90px' }}>
