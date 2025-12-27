@@ -248,6 +248,29 @@ export default function CreateKnowledgeSourceConfig() {
           return 'Please enter a valid URL (e.g., https://example.com)';
         }
       },
+      confluence_config: {
+        cloud_url: (value, values) => {
+          // Only validate if Confluence is selected
+          if (values.content_source_type !== 'confluence') {
+            return null;
+          }
+
+          if (!value) {
+            return 'Confluence URL is required';
+          }
+
+          // Validate URL format
+          try {
+            const url = new URL(value);
+            if (!url.protocol.startsWith('http')) {
+              return 'URL must start with http:// or https://';
+            }
+            return null;
+          } catch (e) {
+            return 'Please enter a valid URL (e.g., https://company.atlassian.net/wiki)';
+          }
+        },
+      },
     },
   });
 
