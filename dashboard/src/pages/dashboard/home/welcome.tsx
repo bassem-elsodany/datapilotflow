@@ -212,55 +212,61 @@ export function Welcome() {
       <Stack gap="lg" align="center">
         <Title order={2} ta="center">🚀 Getting Started</Title>
 
-        <Text c="dimmed" ta="center" size="lg" maw={600}>
+        <Text c="dimmed" ta="center" size="lg" maw={600} mx="auto">
           Ready to build your RAG knowledge base? Here's how to get started:
         </Text>
 
-        <Grid gutter="md" w="100%" maw={800}>
-          <Grid.Col span={{ base: 12, md: 4 }}>
-            <Card shadow="sm" padding="lg" radius="md" withBorder>
-              <Group mb="md">
-                <ThemeIcon size="lg" variant="light" color="blue">
-                  <IconSettings size={20} />
-                </ThemeIcon>
-                <Text fw={600}>1. Configure Sources</Text>
-              </Group>
-              <Text size="sm" c="dimmed">
-                Set up knowledge source configurations for web crawling, document processing, and data ingestion.
-              </Text>
+        <Grid gutter="md" w="100%" maw={900} mx="auto">
+          <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
+            <Card shadow="sm" padding="lg" radius="md" withBorder h="100%">
+              <Stack gap="md" h="100%" justify="space-between">
+                <Group mb="md">
+                  <ThemeIcon size="lg" variant="light" color="blue">
+                    <IconSettings size={20} />
+                  </ThemeIcon>
+                  <Text fw={600}>1. Configure Sources</Text>
+                </Group>
+                <Text size="sm" c="dimmed">
+                  Set up knowledge source configurations for web crawling, document processing, and data ingestion.
+                </Text>
+              </Stack>
             </Card>
           </Grid.Col>
 
-          <Grid.Col span={{ base: 12, md: 4 }}>
-            <Card shadow="sm" padding="lg" radius="md" withBorder>
-              <Group mb="md">
-                <ThemeIcon size="lg" variant="light" color="green">
-                  <IconFileText size={20} />
-                </ThemeIcon>
-                <Text fw={600}>2. Process Data</Text>
-              </Group>
-              <Text size="sm" c="dimmed">
-                Create and execute knowledge jobs to process your sources into searchable chunks and embeddings.
-              </Text>
+          <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
+            <Card shadow="sm" padding="lg" radius="md" withBorder h="100%">
+              <Stack gap="md" h="100%" justify="space-between">
+                <Group mb="md">
+                  <ThemeIcon size="lg" variant="light" color="green">
+                    <IconFileText size={20} />
+                  </ThemeIcon>
+                  <Text fw={600}>2. Process Data</Text>
+                </Group>
+                <Text size="sm" c="dimmed">
+                  Create and execute knowledge jobs to process your sources into searchable chunks and embeddings.
+                </Text>
+              </Stack>
             </Card>
           </Grid.Col>
 
-          <Grid.Col span={{ base: 12, md: 4 }}>
-            <Card shadow="sm" padding="lg" radius="md" withBorder>
-              <Group mb="md">
-                <ThemeIcon size="lg" variant="light" color="orange">
-                  <IconMessageCircle size={20} />
-                </ThemeIcon>
-                <Text fw={600}>3. Start Conversations</Text>
-              </Group>
-              <Text size="sm" c="dimmed">
-                Query your knowledge base through intelligent conversations with advanced RAG capabilities.
-              </Text>
+          <Grid.Col span={{ base: 12, md: 6, lg: 4 }}>
+            <Card shadow="sm" padding="lg" radius="md" withBorder h="100%">
+              <Stack gap="md" h="100%" justify="space-between">
+                <Group mb="md">
+                  <ThemeIcon size="lg" variant="light" color="orange">
+                    <IconMessageCircle size={20} />
+                  </ThemeIcon>
+                  <Text fw={600}>3. Start Conversations</Text>
+                </Group>
+                <Text size="sm" c="dimmed">
+                  Query your knowledge base through intelligent conversations with advanced RAG capabilities.
+                </Text>
+              </Stack>
             </Card>
           </Grid.Col>
         </Grid>
 
-        <Group mt="md">
+        <Group justify="center" mt="lg">
           <Button
             leftSection={<IconRocket size={16} />}
             size="lg"
