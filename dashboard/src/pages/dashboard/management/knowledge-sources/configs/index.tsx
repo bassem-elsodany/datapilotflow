@@ -143,6 +143,7 @@ function InteractiveCrawlingPipeline() {
   const [isPlaying, setIsPlaying] = useState(true); // Always playing by default
   const [showDetails, setShowDetails] = useState(true); // Always show details
   const [activeDataSource, setActiveDataSource] = useState<'web_scraping' | 'local_files' | 'confluence'>('web_scraping');
+  const [isExpanded, setIsExpanded] = useState(false); // Hidden by default
 
   // Define pipelines for each datasource type
   const pipelinesByDataSource = {
@@ -296,41 +297,65 @@ function InteractiveCrawlingPipeline() {
   return (
     <Card withBorder p="md" radius="md" bg="gray.0" w="100%">
       <Stack gap="sm">
-        {/* Datasource Selector */}
-        <Group justify="flex-start" gap="xs">
-          <Text size="sm" fw={500} c="dimmed">Data Source:</Text>
-          <Group gap={8}>
-            <Button
-              variant={activeDataSource === 'web_scraping' ? 'filled' : 'light'}
-              color="blue"
-              size="xs"
-              onClick={() => setActiveDataSource('web_scraping')}
-              leftSection={<IconWorld size={14} />}
-            >
-              Web Scraping
-            </Button>
-            <Button
-              variant={activeDataSource === 'local_files' ? 'filled' : 'light'}
-              color="violet"
-              size="xs"
-              onClick={() => setActiveDataSource('local_files')}
-              leftSection={<IconFileText size={14} />}
-            >
-              Local Files
-            </Button>
-            <Button
-              variant={activeDataSource === 'confluence' ? 'filled' : 'light'}
-              color="indigo"
-              size="xs"
-              onClick={() => setActiveDataSource('confluence')}
-              leftSection={<IconBookmarks size={14} />}
-            >
-              Confluence
-            </Button>
+        {/* Header with Collapse Toggle */}
+        <Group justify="space-between" align="center">
+          <Group justify="flex-start" gap="xs" style={{ flex: 1 }}>
+            <Text size="sm" fw={500} c="dimmed">Data Processing Pipeline</Text>
           </Group>
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            onClick={() => setIsExpanded(!isExpanded)}
+            size="sm"
+          >
+            <IconChevronDown
+              size={18}
+              style={{
+                transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform 0.3s ease'
+              }}
+            />
+          </ActionIcon>
         </Group>
 
-        <Divider />
+        {/* Expandable Content */}
+        {isExpanded && (
+          <>
+            {/* Datasource Selector */}
+            <Group justify="flex-start" gap="xs">
+              <Text size="sm" fw={500} c="dimmed">Data Source:</Text>
+              <Group gap={8}>
+                <Button
+                  variant={activeDataSource === 'web_scraping' ? 'filled' : 'light'}
+                  color="blue"
+                  size="xs"
+                  onClick={() => setActiveDataSource('web_scraping')}
+                  leftSection={<IconWorld size={14} />}
+                >
+                  Web Scraping
+                </Button>
+                <Button
+                  variant={activeDataSource === 'local_files' ? 'filled' : 'light'}
+                  color="violet"
+                  size="xs"
+                  onClick={() => setActiveDataSource('local_files')}
+                  leftSection={<IconFileText size={14} />}
+                >
+                  Local Files
+                </Button>
+                <Button
+                  variant={activeDataSource === 'confluence' ? 'filled' : 'light'}
+                  color="indigo"
+                  size="xs"
+                  onClick={() => setActiveDataSource('confluence')}
+                  leftSection={<IconBookmarks size={14} />}
+                >
+                  Confluence
+                </Button>
+              </Group>
+            </Group>
+
+            <Divider />
 
         <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
           {/* Left side - Step details */}
@@ -471,6 +496,8 @@ function InteractiveCrawlingPipeline() {
             </div>
           </div>
         </div>
+          </>
+        )}
 
       </Stack>
     </Card>
