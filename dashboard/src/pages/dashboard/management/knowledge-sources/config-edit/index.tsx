@@ -610,7 +610,7 @@ export default function EditKnowledgeSourceConfig() {
 
   const handleStepClick = (step: number) => {
     if (step < activeStep) {
-      // Allow going back
+      // Allow going back to any previous step
       setActiveStep(step);
     } else if (step === activeStep + 1) {
       // Allow going forward only if current step is valid
@@ -618,8 +618,11 @@ export default function EditKnowledgeSourceConfig() {
         setCompletedSteps(prev => [...prev.filter(s => s !== activeStep), activeStep]);
         setActiveStep(step);
       }
+    } else if (step > activeStep + 1 && completedSteps.includes(step - 1)) {
+      // Allow jumping to future steps if the previous step is completed
+      setActiveStep(step);
     }
-    // Block navigation to future uncompleted steps
+    // Allow free navigation between completed and current steps
   };
 
   const nextStep = () => {
