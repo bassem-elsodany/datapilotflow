@@ -423,67 +423,69 @@ export default function KnowledgeSourceConfigs() {
   const columns: DataTableColumn<KnowledgeSourceConfig>[] = [
       {
         accessor: 'name',
-        title: 'Project',
-        width: 180,
+        title: 'Principle',
+        width: 280,
         sortable: true,
         textAlign: 'left',
         render: (record: Record<string, unknown>) => {
           const config = record as KnowledgeSourceConfig;
           const SourceIcon = (config.content_source_type && contentSourceTypeIcons[config.content_source_type]) || IconSettings;
           return (
-            <Group gap="sm" style={{ alignItems: 'flex-start' }}>
-              <SourceIcon size={16} color="var(--mantine-color-blue-6)" style={{ marginTop: 2 }} />
-              <Stack gap={0}>
+            <Group gap="md" style={{ alignItems: 'flex-start' }}>
+              <SourceIcon size={32} color="var(--mantine-color-blue-5)" style={{ flexShrink: 0, marginTop: 4 }} />
+              <Stack gap={2} style={{ flex: 1 }}>
                 <Text
-                  fw={500}
+                  fw={600}
                   size="sm"
                   component={Link}
                   to={paths.dashboard.management.knowledgeSources.config(config.id)}
-                  c="blue"
+                  c="dark"
                   style={{
                     textDecoration: 'none',
                     wordWrap: 'break-word',
                     overflowWrap: 'break-word',
-                    maxWidth: '150px'
                   }}
                   className="hover:underline"
                 >
                   {config.name}
                 </Text>
-                <Text size="xs" c="dimmed">{config.description || 'No description'}</Text>
+                <Text size="xs" c="dimmed" fw={400}>
+                  {config.content_source_type === 'confluence' ? 'Confluence' :
+                   config.content_source_type === 'local_files' ? 'Local Files' :
+                   'Web Scraping'}
+                </Text>
               </Stack>
             </Group>
           );
         },
       },
       {
-        accessor: 'source_type',
-        title: 'Source Type',
-        width: 140,
-        sortable: true,
+        accessor: 'description',
+        title: 'Ideal',
+        width: 220,
+        sortable: false,
         textAlign: 'left',
         render: (record: Record<string, unknown>) => {
           const config = record as KnowledgeSourceConfig;
-          const SourceIcon = (config.content_source_type && contentSourceTypeIcons[config.content_source_type]) || IconSettings;
+          const lines = (config.description || '').split('\n').filter(line => line.trim());
           return (
-            <Group gap="xs">
-              <SourceIcon size={14} color="gray" />
-              <Badge
-                color={config.content_source_type === 'confluence' ? 'indigo' :
-                       config.content_source_type === 'local_files' ? 'violet' : 'blue'}
-                variant="light"
-                size="sm"
-              >
-                {getSourceTypeDisplay(config.content_source_type)}
-              </Badge>
-            </Group>
+            <Stack gap={4}>
+              {lines.slice(0, 3).map((line, idx) => (
+                <Text key={idx} size="xs" c="dimmed" fw={400}>
+                  {line.trim()}
+                </Text>
+              ))}
+              {!config.description && (
+                <Text size="xs" c="dimmed">-</Text>
+              )}
+            </Stack>
           );
         },
       },
       {
         accessor: 'url',
-        title: 'Endpoint',
-        width: 200,
+        title: 'Nourishment',
+        width: 180,
         sortable: true,
         textAlign: 'left',
         render: (record: Record<string, unknown>) => {
@@ -495,7 +497,7 @@ export default function KnowledgeSourceConfigs() {
             : config.url;
           return (
             <Tooltip label={displayUrl} multiline maw={300}>
-              <Text size="sm" c="dimmed" lineClamp={1} maw={180} style={{ wordWrap: 'break-word', overflowWrap: 'break-word' }}>
+              <Text size="xs" c="dimmed" lineClamp={1} fw={400}>
                 {displayUrl || '-'}
               </Text>
             </Tooltip>
@@ -504,7 +506,7 @@ export default function KnowledgeSourceConfigs() {
       },
       {
         accessor: 'scraping_mode',
-        title: 'Mode',
+        title: 'Price',
         width: 160,
         sortable: true,
         textAlign: 'left',
@@ -553,39 +555,28 @@ export default function KnowledgeSourceConfigs() {
         },
       },
       {
-        accessor: 'status',
-        title: 'Status',
-        width: 100,
-        sortable: false,
-        textAlign: 'center',
-        render: (record: Record<string, unknown>) => {
-          const config = record as KnowledgeSourceConfig;
-          return (
-            <Group gap={4} justify="center">
-              <div style={{
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                backgroundColor: 'var(--mantine-color-green-6)',
-              }} />
-              <Text size="xs" fw={500}>Active</Text>
-            </Group>
-          );
-        },
-      },
-      {
         accessor: 'created_at',
-        title: 'Created',
-        width: 130,
-        sortable: true,
+        title: 'Activity',
+        width: 220,
+        sortable: false,
         textAlign: 'left',
         render: (record: Record<string, unknown>) => {
           const config = record as KnowledgeSourceConfig;
           const date = new Date(config.created_at);
+          const dateStr = isNaN(date.getTime()) ? 'Unknown' : date.toLocaleDateString();
+          const activities = [
+            dateStr,
+            config.content_source_type === 'confluence' ? 'API Sync' : 'Auto Crawl',
+            'Indexed'
+          ];
           return (
-            <Text size="sm" c="dimmed" style={{ wordWrap: 'break-word' }}>
-              {isNaN(date.getTime()) ? 'Invalid' : date.toLocaleDateString()}
-            </Text>
+            <Stack gap={4}>
+              {activities.map((activity, idx) => (
+                <Text key={idx} size="xs" c="dimmed" fw={400}>
+                  {activity}
+                </Text>
+              ))}
+            </Stack>
           );
         },
       },
