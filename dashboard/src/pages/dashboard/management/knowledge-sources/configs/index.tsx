@@ -423,7 +423,7 @@ export default function KnowledgeSourceConfigs() {
   const columns: DataTableColumn<KnowledgeSourceConfig>[] = [
       {
         accessor: 'name',
-        title: 'Principle',
+        title: 'Name',
         width: 280,
         sortable: true,
         textAlign: 'left',
@@ -461,7 +461,7 @@ export default function KnowledgeSourceConfigs() {
       },
       {
         accessor: 'description',
-        title: 'Ideal',
+        title: 'Description',
         width: 220,
         sortable: false,
         textAlign: 'left',
@@ -484,7 +484,7 @@ export default function KnowledgeSourceConfigs() {
       },
       {
         accessor: 'url',
-        title: 'Nourishment',
+        title: 'URL',
         width: 180,
         sortable: true,
         textAlign: 'left',
@@ -506,7 +506,7 @@ export default function KnowledgeSourceConfigs() {
       },
       {
         accessor: 'scraping_mode',
-        title: 'Price',
+        title: 'Mode',
         width: 160,
         sortable: true,
         textAlign: 'left',
@@ -556,7 +556,7 @@ export default function KnowledgeSourceConfigs() {
       },
       {
         accessor: 'created_at',
-        title: 'Activity',
+        title: 'Created',
         width: 220,
         sortable: false,
         textAlign: 'left',
