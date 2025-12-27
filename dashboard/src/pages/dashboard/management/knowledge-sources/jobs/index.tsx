@@ -14,6 +14,7 @@ import { PageHeader } from '@/components/page-header';
 import { paths } from '@/routes/paths';
 import {
   Alert,
+  Badge,
   Button,
   Card,
   Center,
@@ -27,6 +28,7 @@ import {
   ThemeIcon,
   Title
 } from '@mantine/core';
+import { DataTable, DataTableColumn } from 'mantine-datatable';
 import { notifications } from '@mantine/notifications';
 import {
   IconAlertCircle,
@@ -430,6 +432,112 @@ export default function KnowledgeSourceJobs() {
     setJobToDelete(null);
   };
 
+  // Define columns for DataTable
+  const columns: DataTableColumn<KnowledgeJob>[] = [
+    {
+      accessor: 'name',
+      title: 'Job Name',
+      width: 250,
+      sortable: true,
+      textAlign: 'left',
+      render: (record: Record<string, unknown>) => {
+        const job = record as KnowledgeJob;
+        return (
+          <Stack gap={2}>
+            <Text
+              fw={600}
+              size="sm"
+              style={{
+                cursor: 'pointer',
+                color: 'var(--mantine-color-blue-6)',
+                wordWrap: 'break-word',
+                overflowWrap: 'break-word'
+              }}
+              onClick={() => navigate(paths.dashboard.management.knowledgeSources.job(job.id))}
+            >
+              {job.name}
+            </Text>
+            {job.description && (
+              <Text size="xs" c="dimmed" fw={400} lineClamp={1}>
+                {job.description}
+              </Text>
+            )}
+          </Stack>
+        );
+      }
+    },
+    {
+      accessor: 'knowledge_source_config_id',
+      title: 'Configuration',
+      width: 200,
+      sortable: true,
+      textAlign: 'left',
+      render: (record: Record<string, unknown>) => {
+        const job = record as KnowledgeJob;
+        return (
+          <Text size="xs" fw={400}>
+            {getConfigName(job.knowledge_source_config_id)}
+          </Text>
+        );
+      }
+    },
+    {
+      accessor: 'latest_execution',
+      title: 'Latest Execution',
+      width: 220,
+      sortable: false,
+      textAlign: 'left',
+      render: (record: Record<string, unknown>) => {
+        const job = record as KnowledgeJob;
+        return (
+          <JobLastExecution jobId={job.id} refreshTrigger={refreshTrigger} />
+        );
+      }
+    },
+    {
+      accessor: 'created_at',
+      title: 'Created',
+      width: 140,
+      sortable: true,
+      textAlign: 'left',
+      render: (record: Record<string, unknown>) => {
+        const job = record as KnowledgeJob;
+        const date = new Date(job.created_at);
+        const dateStr = isNaN(date.getTime()) ? 'Invalid Date' : date.toLocaleDateString();
+        return (
+          <Text size="xs" c="dimmed" fw={400}>
+            {dateStr}
+          </Text>
+        );
+      }
+    },
+    {
+      accessor: 'actions',
+      title: 'Actions',
+      width: 150,
+      textAlign: 'right',
+      render: (record: Record<string, unknown>) => {
+        const job = record as KnowledgeJob;
+        return (
+          <JobActions
+            job={job}
+            onExecute={handleExecuteJob}
+            onDelete={handleDeleteClick}
+            onCancel={() => {
+              refetch();
+              setRefreshTrigger(prev => prev + 1);
+            }}
+            onViewDetails={(job) => {
+              navigate(paths.dashboard.management.knowledgeSources.job(job.id));
+            }}
+            isExecuting={executeJobMutation.isPending}
+            isDeleting={deletingId === job.id}
+          />
+        );
+      }
+    }
+  ];
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'created':
@@ -616,73 +724,13 @@ export default function KnowledgeSourceJobs() {
               </Paper>
             ) : (
               <Card withBorder shadow="sm">
-                <Table>
-                  <Table.Thead>
-                    <Table.Tr>
-                      <Table.Th style={{ maxWidth: '200px', textAlign: 'left', verticalAlign: 'top' }}>Job Name</Table.Th>
-                      <Table.Th style={{ textAlign: 'left', verticalAlign: 'top' }}>Configuration</Table.Th>
-                      <Table.Th style={{ textAlign: 'left', verticalAlign: 'top' }}>Latest Execution</Table.Th>
-                      <Table.Th style={{ textAlign: 'left', verticalAlign: 'top' }}>Created</Table.Th>
-                      <Table.Th style={{ textAlign: 'left', verticalAlign: 'top' }}></Table.Th>
-                    </Table.Tr>
-                  </Table.Thead>
-                  <Table.Tbody>
-                    {filteredJobs.map((job: KnowledgeJob) => (
-                      <Table.Tr key={job.id}>
-                        <Table.Td style={{ maxWidth: '200px', wordWrap: 'break-word', textAlign: 'left', verticalAlign: 'top' }}>
-                          <Stack gap={4}>
-                            <Text
-                              fw={400}
-                              size="sm"
-                              style={{ 
-                                cursor: 'pointer', 
-                                color: 'var(--mantine-color-blue-6)',
-                                wordWrap: 'break-word',
-                                overflowWrap: 'break-word'
-                              }}
-                              onClick={() => navigate(paths.dashboard.management.knowledgeSources.job(job.id))}
-                            >
-                              {job.name}
-                            </Text>
-                            {job.description && (
-                              <Text size="sm" c="dimmed">{job.description}</Text>
-                            )}
-                          </Stack>
-                        </Table.Td>
-                        <Table.Td style={{ textAlign: 'left', verticalAlign: 'top' }}>
-                          <Text size="sm">{getConfigName(job.knowledge_source_config_id)}</Text>
-                        </Table.Td>
-                        <Table.Td style={{ textAlign: 'left', verticalAlign: 'top' }}>
-                          <JobLastExecution jobId={job.id} refreshTrigger={refreshTrigger} />
-                        </Table.Td>
-                        <Table.Td style={{ textAlign: 'left', verticalAlign: 'top' }}>
-                          <Text size="sm" c="dimmed">
-                            {(() => {
-                              const date = new Date(job.created_at);
-                              return isNaN(date.getTime()) ? 'Invalid Date' : date.toLocaleDateString();
-                            })()}
-                          </Text>
-                        </Table.Td>
-                        <Table.Td style={{ textAlign: 'left', verticalAlign: 'top' }}>
-                          <JobActions
-                            job={job}
-                            onExecute={handleExecuteJob}
-                            onDelete={handleDeleteClick}
-                            onCancel={() => {
-                              refetch();
-                              setRefreshTrigger(prev => prev + 1);
-                            }}
-                            onViewDetails={(job) => {
-                              navigate(paths.dashboard.management.knowledgeSources.job(job.id));
-                            }}
-                            isExecuting={executeJobMutation.isPending}
-                            isDeleting={deletingId === job.id}
-                          />
-                        </Table.Td>
-                      </Table.Tr>
-                    ))}
-                  </Table.Tbody>
-                </Table>
+                <DataTable
+                  records={filteredJobs}
+                  columns={columns}
+                  striped
+                  highlightOnHover
+                  minHeight={200}
+                />
               </Card>
             )}
           </Stack>
