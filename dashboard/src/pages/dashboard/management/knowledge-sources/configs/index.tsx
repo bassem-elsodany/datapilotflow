@@ -475,16 +475,33 @@ export default function KnowledgeSourceConfigs() {
         textAlign: 'left',
         render: (record: Record<string, unknown>) => {
           const config = record as KnowledgeSourceConfig;
-          const displayUrl = config.content_source_type === 'confluence' && config.confluence_config
-            ? config.confluence_config.cloud_url
-            : config.content_source_type === 'local_files'
-            ? 'Local Storage'
-            : config.url;
+
+          let displayUrl = '';
+          let additionalCount = 0;
+
+          if (config.content_source_type === 'confluence' && config.confluence_config) {
+            displayUrl = config.confluence_config.cloud_url;
+          } else if (config.content_source_type === 'local_files') {
+            displayUrl = 'Local Storage';
+          } else if (config.scraping_mode === 'multiple_pages' && config.url_source_id) {
+            // For multiple_pages mode, we can show "Multiple URLs"
+            displayUrl = 'Multiple URLs';
+          } else {
+            displayUrl = config.url || '-';
+          }
+
           return (
             <Tooltip label={displayUrl} multiline maw={300}>
-              <Text size="xs" c="dimmed" lineClamp={1} fw={400}>
-                {displayUrl || '-'}
-              </Text>
+              <Stack gap={2}>
+                <Text size="xs" c="dimmed" lineClamp={1} fw={400}>
+                  {displayUrl || '-'}
+                </Text>
+                {config.scraping_mode === 'multiple_pages' && config.url_source_id && (
+                  <Text size="xs" c="blue" fw={500} style={{ cursor: 'pointer' }}>
+                    See all URLs →
+                  </Text>
+                )}
+              </Stack>
             </Tooltip>
           );
         },
