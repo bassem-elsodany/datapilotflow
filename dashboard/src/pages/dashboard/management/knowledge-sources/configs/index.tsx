@@ -111,6 +111,29 @@ const scrapingModeColors: Record<string, string> = {
   pdf_files: 'purple',
   docx_files: 'purple',
   txt_files: 'purple',
+  space_pages: 'indigo',
+  specific_pages: 'indigo',
+  pages_with_label: 'indigo',
+  recently_modified: 'indigo',
+};
+
+const contentSourceTypeIcons: Record<string, typeof IconFileText> = {
+  web_scraping: IconWorld,
+  local_files: IconUpload,
+  confluence: IconWorld,
+};
+
+const getSourceTypeDisplay = (sourceType: string): string => {
+  switch (sourceType) {
+    case 'web_scraping':
+      return 'Web Scraping';
+    case 'local_files':
+      return 'Local Files';
+    case 'confluence':
+      return 'Confluence';
+    default:
+      return sourceType;
+  }
 };
 
 // Interactive Crawling Pipeline Component
@@ -400,104 +423,160 @@ export default function KnowledgeSourceConfigs() {
   const columns: DataTableColumn<KnowledgeSourceConfig>[] = [
       {
         accessor: 'name',
-        title: 'Name',
-        width: 200,
+        title: 'Project',
+        width: 180,
         sortable: true,
         textAlign: 'left',
         render: (record: Record<string, unknown>) => {
           const config = record as KnowledgeSourceConfig;
-          const ScrapingIcon = (config.scraping_mode && scrapingModeIcons[config.scraping_mode]) || IconSettings;
+          const SourceIcon = (config.content_source_type && contentSourceTypeIcons[config.content_source_type]) || IconSettings;
           return (
             <Group gap="sm" style={{ alignItems: 'flex-start' }}>
-              <ScrapingIcon size={16} color="var(--mantine-color-blue-6)" style={{ marginTop: 2 }} />
-              <Text
-                fw={400}
-                size="sm"
-                component={Link}
-                to={paths.dashboard.management.knowledgeSources.config(config.id)}
-                c="blue"
-                style={{ 
-                  textDecoration: 'none',
-                  wordWrap: 'break-word',
-                  overflowWrap: 'break-word',
-                  maxWidth: '160px'
-                }}
-                className="hover:underline"
-              >
-                {config.name}
-              </Text>
+              <SourceIcon size={16} color="var(--mantine-color-blue-6)" style={{ marginTop: 2 }} />
+              <Stack gap={0}>
+                <Text
+                  fw={500}
+                  size="sm"
+                  component={Link}
+                  to={paths.dashboard.management.knowledgeSources.config(config.id)}
+                  c="blue"
+                  style={{
+                    textDecoration: 'none',
+                    wordWrap: 'break-word',
+                    overflowWrap: 'break-word',
+                    maxWidth: '150px'
+                  }}
+                  className="hover:underline"
+                >
+                  {config.name}
+                </Text>
+                <Text size="xs" c="dimmed">{config.description || 'No description'}</Text>
+              </Stack>
             </Group>
           );
         },
       },
       {
-        accessor: 'description',
-        title: 'Description',
-        width: 300,
+        accessor: 'source_type',
+        title: 'Source Type',
+        width: 140,
         sortable: true,
         textAlign: 'left',
-        toggleable: false,
         render: (record: Record<string, unknown>) => {
           const config = record as KnowledgeSourceConfig;
+          const SourceIcon = (config.content_source_type && contentSourceTypeIcons[config.content_source_type]) || IconSettings;
           return (
-            <Text size="sm" c="dimmed" lineClamp={2} maw={300} style={{ wordWrap: 'break-word', overflowWrap: 'break-word' }}>
-              {config.description}
-            </Text>
+            <Group gap="xs">
+              <SourceIcon size={14} color="gray" />
+              <Badge
+                color={config.content_source_type === 'confluence' ? 'indigo' :
+                       config.content_source_type === 'local_files' ? 'violet' : 'blue'}
+                variant="light"
+                size="sm"
+              >
+                {getSourceTypeDisplay(config.content_source_type)}
+              </Badge>
+            </Group>
           );
         },
       },
       {
         accessor: 'url',
-        title: 'URL',
-        width: 250,
+        title: 'Endpoint',
+        width: 200,
         sortable: true,
         textAlign: 'left',
         render: (record: Record<string, unknown>) => {
           const config = record as KnowledgeSourceConfig;
           const displayUrl = config.content_source_type === 'confluence' && config.confluence_config
             ? config.confluence_config.cloud_url
+            : config.content_source_type === 'local_files'
+            ? 'Local Storage'
             : config.url;
           return (
-            <Text size="sm" lineClamp={1} maw={200} style={{ wordWrap: 'break-word', overflowWrap: 'break-word' }}>
-              {displayUrl || '-'}
-            </Text>
+            <Tooltip label={displayUrl} multiline maw={300}>
+              <Text size="sm" c="dimmed" lineClamp={1} maw={180} style={{ wordWrap: 'break-word', overflowWrap: 'break-word' }}>
+                {displayUrl || '-'}
+              </Text>
+            </Tooltip>
           );
         },
       },
       {
         accessor: 'scraping_mode',
         title: 'Mode',
-        width: 150,
+        width: 160,
         sortable: true,
         textAlign: 'left',
         render: (record: Record<string, unknown>) => {
           const config = record as KnowledgeSourceConfig;
+          const getModeDisplay = (mode: string | undefined) => {
+            if (!mode) return 'Unknown';
+            switch (mode) {
+              case 'website':
+                return 'Website Crawler';
+              case 'multiple_pages':
+                return 'Multiple Pages';
+              case 'single_page':
+                return 'Single Page';
+              case 'html_files':
+                return 'HTML Files';
+              case 'markdown_files':
+                return 'Markdown Files';
+              case 'pdf_files':
+                return 'PDF Files';
+              case 'docx_files':
+                return 'DOCX Files';
+              case 'txt_files':
+                return 'TXT Files';
+              case 'space_pages':
+                return 'Space Pages';
+              case 'specific_pages':
+                return 'Specific Pages';
+              case 'pages_with_label':
+                return 'Pages with Label';
+              case 'recently_modified':
+                return 'Recently Modified';
+              default:
+                return mode;
+            }
+          };
           return (
             <Badge
               color={(config.scraping_mode && scrapingModeColors[config.scraping_mode]) || 'gray'}
               variant="light"
+              size="sm"
             >
-              {config.scraping_mode === 'website' ? 'Website Crawler' :
-                config.scraping_mode === 'multiple_pages' ? 'Multiple Pages' :
-                  config.scraping_mode === 'single_page' ? 'Single Page' :
-                    config.scraping_mode === 'html_files' ? 'HTML Files' :
-                      config.scraping_mode === 'markdown_files' ? 'Markdown Files' :
-                        config.scraping_mode === 'pdf_files' ? 'PDF Files' :
-                          config.scraping_mode === 'docx_files' ? 'DOCX Files' :
-                            config.scraping_mode === 'txt_files' ? 'TXT Files' :
-                              config.scraping_mode === 'space_pages' ? 'Space Pages' :
-                                config.scraping_mode === 'specific_pages' ? 'Specific Pages' :
-                                  config.scraping_mode === 'pages_with_label' ? 'Pages with Label' :
-                                    config.scraping_mode === 'recently_modified' ? 'Recently Modified' :
-                                      'Unknown'}
+              {getModeDisplay(config.scraping_mode)}
             </Badge>
+          );
+        },
+      },
+      {
+        accessor: 'status',
+        title: 'Status',
+        width: 100,
+        sortable: false,
+        textAlign: 'center',
+        render: (record: Record<string, unknown>) => {
+          const config = record as KnowledgeSourceConfig;
+          return (
+            <Group gap={4} justify="center">
+              <div style={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                backgroundColor: 'var(--mantine-color-green-6)',
+              }} />
+              <Text size="xs" fw={500}>Active</Text>
+            </Group>
           );
         },
       },
       {
         accessor: 'created_at',
         title: 'Created',
-        width: 150,
+        width: 130,
         sortable: true,
         textAlign: 'left',
         render: (record: Record<string, unknown>) => {
@@ -505,7 +584,7 @@ export default function KnowledgeSourceConfigs() {
           const date = new Date(config.created_at);
           return (
             <Text size="sm" c="dimmed" style={{ wordWrap: 'break-word' }}>
-              {isNaN(date.getTime()) ? 'Invalid Date' : date.toLocaleDateString()}
+              {isNaN(date.getTime()) ? 'Invalid' : date.toLocaleDateString()}
             </Text>
           );
         },
