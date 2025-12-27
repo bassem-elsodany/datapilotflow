@@ -618,11 +618,15 @@ export default function EditKnowledgeSourceConfig() {
         setCompletedSteps(prev => [...prev.filter(s => s !== activeStep), activeStep]);
         setActiveStep(step);
       }
-    } else if (step > activeStep + 1 && completedSteps.includes(step - 1)) {
-      // Allow jumping to future steps if the previous step is completed
-      setActiveStep(step);
+    } else if (step > activeStep) {
+      // Allow jumping to any future step if all previous steps are completed
+      const allPreviousCompleted = Array.from({ length: step }, (_, i) => i).every(
+        s => s === activeStep || completedSteps.includes(s)
+      );
+      if (allPreviousCompleted) {
+        setActiveStep(step);
+      }
     }
-    // Allow free navigation between completed and current steps
   };
 
   const nextStep = () => {
