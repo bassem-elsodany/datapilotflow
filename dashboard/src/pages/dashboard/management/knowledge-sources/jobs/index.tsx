@@ -13,11 +13,13 @@ import { Page } from '@/components/page';
 import { PageHeader } from '@/components/page-header';
 import { paths } from '@/routes/paths';
 import {
+  ActionIcon,
   Alert,
   Badge,
   Button,
   Card,
   Center,
+  Divider,
   Group,
   Loader,
   Modal,
@@ -34,6 +36,7 @@ import {
   IconAlertCircle,
   IconBrain,
   IconCheck,
+  IconChevronDown,
   IconClock,
   IconCut,
   IconDatabase,
@@ -109,6 +112,7 @@ function InteractivePipeline() {
   const [currentStep, setCurrentStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true); // Always playing by default
   const [showDetails, setShowDetails] = useState(true); // Always show details
+  const [isExpanded, setIsExpanded] = useState(false); // Hidden by default
 
   const steps = [
     {
@@ -176,6 +180,32 @@ function InteractivePipeline() {
   return (
     <Card withBorder p="md" radius="md" bg="gray.0" w="100%">
       <Stack gap="sm">
+        {/* Header with Collapse Toggle */}
+        <Group justify="space-between" align="center">
+          <Group justify="flex-start" gap="xs" style={{ flex: 1 }}>
+            <Text size="sm" fw={500} c="dimmed">Processing Pipeline</Text>
+          </Group>
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            onClick={() => setIsExpanded(!isExpanded)}
+            size="sm"
+          >
+            <IconChevronDown
+              size={18}
+              style={{
+                transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform 0.3s ease'
+              }}
+            />
+          </ActionIcon>
+        </Group>
+
+        {/* Expandable Content */}
+        {isExpanded && (
+          <>
+            <Divider />
+
         <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
           {/* Left side - Step details */}
           <div style={{ flex: '0 0 350px', minHeight: '90px' }}>
@@ -315,6 +345,8 @@ function InteractivePipeline() {
             </div>
           </div>
         </div>
+          </>
+        )}
 
       </Stack>
     </Card>
