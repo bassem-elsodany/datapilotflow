@@ -492,16 +492,9 @@ export default function KnowledgeSourceConfigs() {
 
           return (
             <Tooltip label={displayUrl} multiline maw={300}>
-              <Stack gap={2}>
-                <Text size="xs" c="dimmed" lineClamp={1} fw={400}>
-                  {displayUrl || '-'}
-                </Text>
-                {config.scraping_mode === 'multiple_pages' && config.url_source_id && (
-                  <Text size="xs" c="blue" fw={500} style={{ cursor: 'pointer' }}>
-                    See all URLs →
-                  </Text>
-                )}
-              </Stack>
+              <Text size="xs" c="dimmed" lineClamp={1} fw={400}>
+                {displayUrl || '-'}
+              </Text>
             </Tooltip>
           );
         },
@@ -557,14 +550,14 @@ export default function KnowledgeSourceConfigs() {
         },
       },
       {
-        accessor: 'created_at',
-        title: 'Created',
+        accessor: 'updated_at',
+        title: 'Updated',
         width: 220,
         sortable: false,
         textAlign: 'left',
         render: (record: Record<string, unknown>) => {
           const config = record as KnowledgeSourceConfig;
-          const date = new Date(config.created_at);
+          const date = new Date(config.updated_at);
           const dateStr = isNaN(date.getTime()) ? 'Unknown' : date.toLocaleDateString();
           const activities = [
             dateStr,
