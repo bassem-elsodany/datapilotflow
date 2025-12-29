@@ -79,8 +79,8 @@
         }
 
         {
-            "name": "dashboard",
-            "path": "dashboard"
+            "name": "datapilotflow-dashboard",
+            "path": "datapilotflow-dashboard"
         },
         {
             "name": "docker",
