@@ -412,10 +412,10 @@ npm run dev
 | **Domain** | None | All | Python imports |
 | **Infrastructure** | Domain | Services, Events, Processors | Python imports |
 | **Services** | Domain, Infrastructure | API, Agents, Processors | Python method calls |
-| **API** | All | Dashboard, External clients | HTTP/REST + WebSocket |
+| **API** | Domain, Infrastructure, Services | Dashboard, External clients | HTTP/REST + WebSocket |
 | **RAG Agent** | Domain, Infrastructure, Services | Assistant Agent | MCP protocol |
 | **Assistant Agent** | Domain, Infrastructure, Services | API | Python/LangGraph |
-| **Events** | Domain | Infrastructure, Processors | RabbitMQ topics |
+| **Events** | Domain, Infrastructure | Processors, Event handlers | RabbitMQ messaging |
 | **Processors** | Domain, Infrastructure, Services | Background jobs | Event-driven |
 | **Dashboard** | None (frontend only) | User interaction | HTTP/WebSocket |
 
