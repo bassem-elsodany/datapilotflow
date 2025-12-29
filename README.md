@@ -100,11 +100,11 @@ graph TD
         Services --> RAGAgent
     end
 
-    subgraph Events["📨 Event Processing"]
-        Events["datapilotflow-events<br/>Event Listeners"]
+    subgraph EventProcessing["📨 Event Processing"]
+        EventsModule["datapilotflow-events<br/>Event Listeners"]
         Processors["datapilotflow-processors<br/>Document Processing"]
-        Domain --> Events
-        Infrastructure --> Events
+        Domain --> EventsModule
+        Infrastructure --> EventsModule
         Domain --> Processors
         Infrastructure --> Processors
         Services --> Processors
@@ -117,7 +117,7 @@ graph TD
     API --> Docker
     AssistantAgent --> Docker
     RAGAgent --> Docker
-    Events --> Docker
+    EventsModule --> Docker
     Processors --> Docker
 ```
 
