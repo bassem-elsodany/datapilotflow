@@ -45,6 +45,10 @@
             "path": "datapilotflow-events"
         },
         {
+            "name": "backend",
+            "path": "backend"
+        },
+        {
             "path": "datapilotflow-infrastructure"
         },
         {
