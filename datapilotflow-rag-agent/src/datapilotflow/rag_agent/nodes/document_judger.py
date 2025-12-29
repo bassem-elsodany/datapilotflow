@@ -56,7 +56,7 @@ async def _judge_single_document_async(
 
         except (ValueError, AttributeError):
             logger.warning(
-                f"⚠️ Failed to parse score from Doc {doc_index + 1}: {response_text[:100]}"
+                f"Failed to parse score from doc {doc_index + 1}: {response_text[:100]}"
             )
             score = 0.0  # Default to not relevant if parsing fails
 
@@ -71,7 +71,7 @@ async def _judge_single_document_async(
         return judged_doc, score
 
     except Exception as e:
-        logger.warning(f"⚠️ Failed to judge document {doc_index + 1}: {e}")
+        logger.warning(f"Failed to judge document {doc_index + 1}: {e}")
         # Default to not relevant
         judged_doc = doc.copy()
         judged_doc["relevance_score"] = 0.0
@@ -91,7 +91,7 @@ async def document_judger(state: WorkflowState) -> WorkflowState:
     Returns:
         Updated state with judged documents and relevance labels
     """
-    logger.info("🚀 [NODE START] document_judger")
+    logger.debug("Node starting: document_judger")
     try:
         # Get LLM client from config
         # Use reranker_client if available (separate provider), otherwise use primary llm_client
@@ -108,20 +108,16 @@ async def document_judger(state: WorkflowState) -> WorkflowState:
             )
 
         if reranker_client:
-            logger.info(
-                f"🔍 Judging documents using separate reranker LLM client (ASYNC PARALLEL MODE)"
-            )
+            logger.debug("Judging documents using separate reranker LLM client (async parallel mode)")
         else:
-            logger.info(
-                f"🔍 Judging documents using primary LLM client (ASYNC PARALLEL MODE)"
-            )
+            logger.debug("Judging documents using primary LLM client (async parallel mode)")
 
         retrieved_docs = state.get("retrieved_documents", [])
         if not retrieved_docs:
-            logger.warning("⚠️ No documents to judge")
+            logger.warning("No documents to judge")
             state["judged_documents"] = []
             state["relevance_labels"] = []
-            logger.info("✅ [NODE FINISH] document_judger (no documents)")
+            logger.debug("Node finished: document_judger (no documents)")
             return state
 
         # Get the judger chain using the appropriate client
@@ -156,7 +152,7 @@ async def document_judger(state: WorkflowState) -> WorkflowState:
 
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                logger.error(f"❌ Error judging document {i + 1}: {result}")
+                logger.error(f"Error judging document {i + 1}: {result}")
                 error_count += 1
                 # Create fallback document on error
                 judged_doc = retrieved_docs[i].copy()
@@ -173,7 +169,7 @@ async def document_judger(state: WorkflowState) -> WorkflowState:
         # Log error summary if any
         if error_count > 0:
             logger.warning(
-                f"⚠️  {error_count}/{len(retrieved_docs)} documents failed during judging"
+                f"{error_count}/{len(retrieved_docs)} documents failed during judging"
             )
 
         # Reconstruct judged_docs in original order
@@ -203,17 +199,17 @@ async def document_judger(state: WorkflowState) -> WorkflowState:
             sum(relevance_scores) / len(relevance_scores) if relevance_scores else 0.0
         )
 
-        logger.info(
-            f"✅ Judged {len(judged_docs)} documents: "
+        logger.debug(
+            f"Judged {len(judged_docs)} documents: "
             f"{relevant_count} relevant (threshold: {relevance_threshold}), "
             f"avg score: {avg_score:.2f}"
         )
-        logger.info("✅ [NODE FINISH] document_judger")
+        logger.debug("Node finished: document_judger")
 
     except Exception as e:
         error_msg = f"Document judging failed: {str(e)}"
         state["errors"].append(error_msg)
-        logger.error(f"❌ {error_msg}")
-        logger.error("❌ [NODE FINISH] document_judger (with error)")
+        logger.error(error_msg)
+        logger.error("Node finished: document_judger (with error)")
 
     return state

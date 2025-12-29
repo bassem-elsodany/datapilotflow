@@ -20,6 +20,13 @@ from datapilotflow.processors.knowledge_job.orchestration.cancellation_manager i
 )
 from datapilotflow.services.knowledge import get_knowledge_job_service
 from datapilotflow.services.knowledge.job_timeline_service import get_job_timeline_service
+from datapilotflow.services.notification.job_notification_helper import (
+    emit_job_started_notification,
+    emit_job_progress_notification,
+    emit_job_completed_notification,
+    emit_job_failed_notification,
+    emit_job_cancelled_notification,
+)
 
 
 class RefactoredKnowledgeJobEventProcessor:
@@ -163,6 +170,11 @@ class RefactoredKnowledgeJobEventProcessor:
             orchestrator = create_job_orchestrator(
                 enable_rollback=False,
                 knowledge_source_config=knowledge_source_config,
+                emit_notification_started=emit_job_started_notification,
+                emit_notification_progress=emit_job_progress_notification,
+                emit_notification_completed=emit_job_completed_notification,
+                emit_notification_failed=emit_job_failed_notification,
+                emit_notification_cancelled=emit_job_cancelled_notification,
             )
 
             # 7. Execute the job through the orchestrator

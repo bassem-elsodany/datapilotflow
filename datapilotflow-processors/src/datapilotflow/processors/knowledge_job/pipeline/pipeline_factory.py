@@ -65,7 +65,7 @@ class PipelineFactory:
         elif content_source_type == ContentSourceType.CONFLUENCE:
             logger.info(
                 f"Creating DocumentExtractionStep for Confluence API "
-                f"(mode: {knowledge_source_config.confluence_config.confluence_mode})"
+                f"(mode: {knowledge_source_config.scraping_mode})"
             )
             return DocumentExtractionStep(batch_size=batch_size)
 

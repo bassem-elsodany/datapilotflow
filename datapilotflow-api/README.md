@@ -13,31 +13,66 @@ The `datapilotflow-api` package provides the REST API and WebSocket endpoints fo
 
 ## 🏗️ Architecture Position
 
+### System Architecture Diagram
+
+```mermaid
+graph TB
+    Frontend["🎨 Frontend<br/>Dashboard<br/>Mobile App"]
+    Clients["🔌 External Clients<br/>API Users"]
+
+    API["🌐 datapilotflow-api<br/>REST API + WebSocket<br/>:65500<br/><br/>33+ Routers<br/>Knowledge | Auth | Agent<br/>Conversation | Notifications<br/>Models | Files | Tools"]
+
+    Services["🔧 Services<br/>Business Logic<br/><br/>Event Publishing<br/>Data Management"]
+
+    Agents["🧠 Agents<br/>RAG | Assistant"]
+
+    RabbitMQ["📨 RabbitMQ<br/>Message Broker<br/>Topic Exchanges<br/>Queues"]
+
+    Events["🎧 Event Listeners<br/>(Separate Processes)<br/>Job | File | Notification"]
+    Processors["⚙️ Processors<br/>Document Processing<br/>Pipeline Orchestration"]
+
+    Databases["🗄️ Databases<br/>MongoDB | Milvus<br/>Cache/Sessions"]
+
+    Frontend -->|HTTP/WS:65500| API
+    Clients -->|HTTP/WS:65500| API
+
+    API -->|calls| Services
+    API -->|uses| Agents
+
+    Services -->|accesses| Databases
+    Services -->|publishes events to| RabbitMQ
+
+    RabbitMQ -->|consumes messages| Events
+    Events -->|triggers| Processors
+    Processors -->|uses| Services
+
+    Agents -->|access| Databases
+
+    style API fill:#E6F3FF,stroke:#0051BA,stroke-width:3px
+    style Services fill:#F0E6FF,stroke:#7851A9,stroke-width:2px
+    style Agents fill:#E6F9FF,stroke:#0066CC,stroke-width:2px
+    style Events fill:#FFE6F0,stroke:#CC0066,stroke-width:2px
+    style RabbitMQ fill:#FFE6E6,stroke:#C41E3A,stroke-width:2px
+    style Databases fill:#FFF9E6,stroke:#CC6600,stroke-width:2px
 ```
-┌─────────────────────────────────────────┐
-│     Frontend, External Clients           │
-└────────────────┬────────────────────────┘
-                 │ HTTP/WebSocket
-┌────────────────▼────────────────────────┐
-│   datapilotflow-api                    │
-│   (REST API + WebSocket)                │
-└────────────────┬────────────────────────┘
-                 │ orchestrates
-┌────────────────▼────────────────────────┐
-│   datapilotflow-services                │
-│   (Business Logic)                       │
-└────────────────┬────────────────────────┘
-                 │ uses
-┌────────────────▼────────────────────────┐
-│   datapilotflow-infrastructure          │
-│   (Database Access)                      │
-└────────────────┬────────────────────────┘
-                 │ uses
-┌────────────────▼────────────────────────┐
-│      datapilotflow-domain               │
-│      (Foundation)                        │
-└─────────────────────────────────────────┘
-```
+
+**Key Architectural Points**:
+
+1. **Event-Driven Decoupling**:
+   - Services publish events to RabbitMQ (not directly to Event Listeners)
+   - Event Listeners (running as separate processes) consume messages from RabbitMQ
+   - This provides complete decoupling and allows independent scaling
+   - API requests trigger events asynchronously without waiting for processing
+
+2. **Layered Processing**:
+   - Synchronous: API → Services → Databases (immediate response to client)
+   - Asynchronous: Services → RabbitMQ → Event Listeners → Processors → Services (background work)
+
+3. **No Direct Dependencies**:
+   - API doesn't know about Event Listeners
+   - Services don't directly depend on Event Listeners
+   - Only integration point is RabbitMQ message broker
+   - Processors can use Services to update state after event processing
 
 **This package provides**:
 - REST API endpoints (FastAPI)
@@ -45,6 +80,7 @@ The `datapilotflow-api` package provides the REST API and WebSocket endpoints fo
 - Authentication and authorization
 - Request/response validation
 - API documentation (OpenAPI/Swagger)
+- Event publishing through services (JobEventPublisher, FileUploadEventPublisher, etc.)
 
 ## 📁 Package Structure
 
@@ -193,87 +229,121 @@ from datapilotflow.domain.knowledge import KnowledgeJob
 - `loguru>=0.7.3` - Logging
 - `opik>=1.9.11` - Observability
 
+## 📋 Module Capabilities
+
+### 1. **REST API Endpoints**
+- **Knowledge Management** (jobs, sources, documents, collections)
+- **Authentication & Authorization** (login, user management, roles)
+- **Agent Management** (RAG, Assistant agent operations)
+- **Conversation Management** (chat history, multi-turn)
+- **Notifications** (real-time updates, delivery)
+- **Vector Database** (collection management, search)
+- **Model Providers** (LLM configuration)
+- **File Management** (uploads, processing)
+- **Tool & MCP** (server management, tool configuration)
+
+### 2. **WebSocket Real-Time Communication**
+- Assistant agent streaming responses
+- RAG agent interactions
+- Job progress notifications
+- Real-time status updates
+
+### 3. **Authentication**
+- JWT token-based authentication
+- Role-based access control (RBAC)
+- User session management
+
+### 4. **Documentation**
+- OpenAPI/Swagger UI at `/docs`
+- ReDoc at `/redoc`
+- JSON schema at `/openapi.json`
+
+## 🔄 API Request Flow - Synchronous vs Event-Driven
+
+### Synchronous Request Flow (Immediate Response)
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API as FastAPI Router
+    participant Service as Business Service
+    participant DAO as Data Access (DAO)
+    participant DB as Database
+
+    Client->>API: HTTP Request + JWT
+    API->>API: Validate JWT
+    API->>API: Validate Pydantic Schema
+    API->>Service: Call Service Method
+    Service->>DAO: Access/Update Data
+    DAO->>DB: Execute Query
+    DB-->>DAO: Return Result
+    DAO-->>Service: Return Data
+    Service-->>API: Return Business Result
+    API-->>Client: HTTP Response
+```
+
+### Asynchronous Event-Driven Flow (Background Processing)
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API as FastAPI Router
+    participant Service as Business Service
+    participant Publisher as Event Publisher
+    participant MQ as RabbitMQ
+    participant Listener as Event Listener<br/>(Separate Process)
+    participant Processor as Event Processor
+    participant WS as WebSocket
+
+    Client->>API: HTTP Request (Create Job)
+    API->>Service: Create Job in DB
+    Service-->>API: Return Job ID (Immediate)
+    API-->>Client: 202 Accepted + Job ID
+
+    Service->>Publisher: Publish JobCreatedEvent
+    Publisher->>MQ: Send Message
+
+    Note over Listener: Running as separate process
+    MQ-->>Listener: Consume Message
+    Listener->>Processor: Handle Event
+    Processor->>Service: Update Job Status
+    Service->>Service: Process Documents
+    Service->>WS: Notify Client (via notification)
+    WS-->>Client: Job Progress Update
+```
+
+### Complete Request-Response-Notification Flow
+```
+1. SYNCHRONOUS (Blocking):
+   Client → API Router → Service → DAO → Database
+   ↑ Return immediate response (202 Accepted for async)
+
+2. ASYNCHRONOUS (Non-blocking):
+   Service → Event Publisher → RabbitMQ
+   Event Listener (separate process) ← consumes
+   → Event Processor → Service (update state)
+   → WebSocket/Notification → Client (eventual notification)
+```
+
 ## 🚀 Installation
 
-```bash
-# Install all dependencies first
-cd datapilotflow-domain && pip install -e .
-cd ../datapilotflow-infrastructure && pip install -e .
-cd ../datapilotflow-services && pip install -e .
-cd ../datapilotflow-rag-agent && pip install -e .
-cd ../datapilotflow-assistant-agent && pip install -e .
+### Prerequisites
+- Python >=3.11
+- All lower-layer packages installed
+- MongoDB, Milvus, RabbitMQ running
+- RAG MCP server accessible (if using RAG features)
 
-# Install API
-cd ../datapilotflow-api && pip install -e .
-```
-
-## 📝 Usage Examples
-
-### Start API Server
-```bash
-uv pip install -e ../datapilotflow-domain -e ../datapilotflow-infrastructure -e ../datapilotflow-services -e ../datapilotflow-processors -e ../datapilotflow-events -e ../datapilotflow-rag-agent ../datapilotflow-assistant-agent  -e .
-
-python run_api_server.py
-```
-
-The server will be available at:
-- **HTTP**: `http://0.0.0.0:65500`
-- **WebSocket**: `ws://0.0.0.0:65500/ws`
-- **API Docs**: `http://0.0.0.0:65500/docs`
-- **Log File**: `logs/api.log`
-
-### API Endpoints
-
-**Knowledge Jobs**:
-```bash
-# Create job
-POST /api/knowledge/jobs
-{
-    "name": "My Job",
-    "source_id": "source_123",
-    "config": {...}
-}
-
-# Get job
-GET /api/knowledge/jobs/{job_id}
-
-# List jobs
-GET /api/knowledge/jobs
-```
-
-**Authentication**:
-```bash
-# Login
-POST /api/auth/login
-{
-    "email": "user@example.com",
-    "password": "password"
-}
-
-# Returns JWT token
-```
-
-**WebSocket (Assistant Agent)**:
-```javascript
-const ws = new WebSocket('ws://localhost:65500/ws/assistant');
-
-ws.send(JSON.stringify({
-    message: "What is RAG?",
-    conversation_id: "conv_123"
-}));
-
-ws.onmessage = (event) => {
-    const response = JSON.parse(event.data);
-    console.log(response);
-};
-```
-
-## 🧪 Testing
+### Install All Dependencies
 
 ```bash
-cd datapilotflow-api
-pytest tests/
+uv pip install -e ../datapilotflow-domain \
+  -e ../datapilotflow-infrastructure \
+  -e ../datapilotflow-services \
+  -e ../datapilotflow-processors \
+  -e ../datapilotflow-events \
+  -e ../datapilotflow-rag-agent \
+  -e ../datapilotflow-assistant-agent \
+  -e .
 ```
+
 
 ## 📚 Related Packages
 
@@ -310,27 +380,155 @@ WEBSOCKET_TIMEOUT = settings.WEBSOCKET_TIMEOUT
 JWT_SECRET_KEY = settings.JWT_SECRET_KEY
 ```
 
+## 🛠️ How to Build & Start
+
+### Build Steps
+
+1. **Install all dependencies in order**
+   ```bash
+   cd ../datapilotflow-domain && pip install -e .
+   cd ../datapilotflow-infrastructure && pip install -e .
+   cd ../datapilotflow-services && pip install -e .
+   cd ../datapilotflow-processors && pip install -e .
+   cd ../datapilotflow-events && pip install -e .
+   cd ../datapilotflow-rag-agent && pip install -e .
+   cd ../datapilotflow-assistant-agent && pip install -e .
+   cd ../datapilotflow-api && pip install -e .
+   ```
+
+2. **Configure environment**
+   ```bash
+   cat > .env << EOF
+   # API Configuration
+   API_SERVER_HOST=0.0.0.0
+   API_SERVER_PORT=65500
+
+   # Database
+   MONGO_CONN_STR=mongodb://localhost:27017
+   MONGO_DB_NAME=datapilotflow
+
+   # Vector DB
+   VECTOR_DB_HOST=localhost
+   VECTOR_DB_HTTP_PORT=19530
+
+   # Message Queue
+   RABBITMQ_HOST=localhost
+   RABBITMQ_PORT=5672
+
+   # JWT
+   JWT_SECRET_KEY=your-secret-key-here
+
+   # MCP Servers
+   MCP_SERVER_HOST=localhost
+   MCP_SERVER_PORT=65510
+   EOF
+   ```
+
+3. **Start infrastructure services** (if using Docker)
+   ```bash
+   cd ../../docker
+   docker-compose up -d mongodb milvus rabbitmq
+   ```
+
+### Starting the API Server
+
+```bash
+# Standard startup
+python run_api_server.py
+
+# With custom host/port
+API_SERVER_HOST=127.0.0.1 API_SERVER_PORT=8000 python run_api_server.py
+
+# With verbose logging
+export DATAPILOTFLOW_LOG_LEVEL=DEBUG
+python run_api_server.py
+```
+
+### API Server Information
+
+Once running, access:
+- **API**: http://localhost:65500
+- **Swagger UI**: http://localhost:65500/docs
+- **ReDoc**: http://localhost:65500/redoc
+- **Health Check**: http://localhost:65500/api/health
+- **WebSocket Assistant**: ws://localhost:65500/ws/assistant
+
+### Development Setup
+
+```bash
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install with dev dependencies
+pip install -e ".[dev]"
+
+# Run tests
+pytest tests/ -v
+
+# Run API with auto-reload
+uvicorn datapilotflow.api.server:app --reload --host 0.0.0.0 --port 65500
+```
+
+### Complete System Startup (All Services)
+
+```bash
+# Terminal 1: Start infrastructure
+cd docker && docker-compose up
+
+# Terminal 2: Start RAG MCP server
+cd datapilotflow-rag-agent
+python run_rag_mcp_server.py
+
+# Terminal 3: Start event listeners
+cd datapilotflow-events
+python run_all_event_listeners.py
+
+# Terminal 4: Start API server
+cd datapilotflow-api
+python run_api_server.py
+
+# Terminal 5: Monitor logs
+tail -f logs/api.log
+tail -f logs/rag-agent.log
+tail -f logs/*-event-listener.log
+```
+
 ## 📖 Documentation
 
-For more details:
-- **API Server**: See `src/datapilotflow/api/server.py`
-- **Routers**: See `src/datapilotflow/api/routers/`
-- **Middleware**: See `src/datapilotflow/api/middleware/`
+For more details on specific components:
+- **API Server**: See [src/datapilotflow/api/server.py](src/datapilotflow/api/server.py)
+- **Routers**: See [src/datapilotflow/api/routers/](src/datapilotflow/api/routers/)
+- **Middleware**: See [src/datapilotflow/api/middleware/](src/datapilotflow/api/middleware/)
 - **API Docs**: Available at `/docs` when server is running
 
 ## 🚀 Deployment
 
-**Start API Server**:
+### Prerequisites for Production
+- MongoDB cluster (for high availability)
+- Milvus cluster (for vector search)
+- RabbitMQ cluster (for message queue)
+- RAG MCP server (for knowledge retrieval)
+- Redis (optional, for session caching)
+
+### Production Configuration
+- Use environment variables for secrets
+- Enable CORS appropriately
+- Setup JWT key rotation
+- Configure logging and monitoring
+- Setup health checks and auto-restart
+
+### Docker Deployment
+
 ```bash
-python run_api_server.py
+# Build API image
+docker build -t datapilotflow-api:latest .
+
+# Run API container
+docker run -p 65500:65500 \
+  -e MONGO_CONN_STR=mongodb://mongo:27017 \
+  -e VECTOR_DB_HOST=milvus \
+  -e RABBITMQ_HOST=rabbitmq \
+  datapilotflow-api:latest
 ```
-
-**Environment Variables**:
-- Configure via `.env` file or environment variables
-- See `datapilotflow-domain` config for all settings
-
-**Infrastructure Requirements**:
-- MongoDB (for data persistence)
-- Milvus (for vector search)
-- RabbitMQ (for event processing)
 

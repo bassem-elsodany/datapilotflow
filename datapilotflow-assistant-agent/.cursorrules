@@ -1,0 +1,65 @@
+# DataPilotFlow Assistant Agent - Cursor Instructions
+
+## Package Management
+- **ALWAYS use `uv` for package management** - Never use `pip`, `pipenv`, `poetry`, or `conda`
+- To install dependencies: `uv sync` or `uv pip install -e .`
+- To add a new dependency: Add it to `pyproject.toml` under `[project] dependencies`, then run `uv sync`
+- Local package dependencies are defined in `[tool.uv.sources]` - reference them as `{ path = "../package-name" }`
+
+## Code Understanding Before Changes
+- **ALWAYS read and understand existing code before making changes**
+- Understand the assistant agent architecture
+- Review existing agent implementations before creating new ones
+- Understand how the agent integrates with the system
+- Check existing patterns for response handling and error handling
+
+## Assistant Agent
+- Assistant agent provides general-purpose AI assistance
+- Agent uses LLM for conversation and task completion
+- Agent can integrate with tools and external services
+- Agent handles conversation context and history
+
+## Code Style
+- Follow PEP 8 style guide
+- Use type hints for all function parameters and return types
+- Use `Optional` and `Union` from `typing` module
+- Prefer `list` and `dict` over `List` and `Dict` (Python 3.9+)
+- Use f-strings for string formatting
+- Keep functions focused and single-purpose
+
+## Import Organization
+- Standard library imports first
+- Third-party imports second
+- Local package imports last
+- Use absolute imports from `datapilotflow.*`
+- Group imports logically
+
+## Logging
+- Use `loguru` logger: `from loguru import logger`
+- Use appropriate log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+- Include context in log messages
+- Log agent operations and milestones
+
+## Testing
+- Write tests for agent components in `tests/` directory
+- Mock external dependencies
+- Test agent logic thoroughly
+- Test error cases and edge cases
+
+## Documentation
+- **DO NOT create summaries or documentation files unless explicitly requested**
+- Add docstrings to agent classes and functions
+- Document agent capabilities and limitations
+- Explain agent workflows
+
+## Performance
+- Optimize agent operations
+- Use async operations when possible
+- Handle large contexts efficiently
+- Consider caching for frequently accessed data
+
+## Dependencies
+- This package depends on `datapilotflow-domain`, `datapilotflow-infrastructure`, and `datapilotflow-services`
+- Use appropriate LLM libraries
+- Don't add API-specific code - agent is framework-agnostic
+

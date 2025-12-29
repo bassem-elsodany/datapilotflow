@@ -1,0 +1,123 @@
+# DataPilotFlow Dashboard - Cursor Instructions
+
+## Package Management
+- **Use `npm` for package management** - This is a Node.js/TypeScript project
+- To install dependencies: `npm install`
+- To add a new dependency: `npm install <package-name>` or `npm install -D <package-name>` for dev dependencies
+- Use `package.json` for dependency management
+
+## Code Understanding Before Changes
+- **ALWAYS read and understand existing code before making changes**
+- Search for similar patterns in the codebase using `codebase_search` tool
+- Review existing components, hooks, and API integrations before implementing new features
+- Understand the React component structure and state management patterns
+- Check existing patterns for API calls, error handling, and UI components
+
+## React Best Practices
+- Use functional components with hooks (not class components)
+- Use TypeScript for all components and utilities
+- Follow React best practices: proper key usage, memoization when needed, etc.
+- Use proper state management (React Query for server state, useState for local state)
+
+## TypeScript
+- **Always use TypeScript** - no JavaScript files unless absolutely necessary
+- Use proper types for all props, state, and function parameters
+- Avoid `any` type - use proper types or `unknown`
+- Use interfaces for object types, types for unions/intersections
+- Use type guards when needed
+
+## Component Structure
+- Keep components focused and single-purpose
+- Extract reusable logic into custom hooks
+- Use proper component composition
+- Follow the existing folder structure: `src/components/`, `src/pages/`, `src/api/`, etc.
+
+## API Integration
+- Use `react-query` (`@tanstack/react-query`) for API calls
+- Use the existing API helper functions in `src/api/helpers.ts`
+- Follow existing patterns for query hooks and mutations
+- Handle loading, error, and success states properly
+- Use proper error handling and retry logic
+
+## UI Components
+- Use Mantine UI components (`@mantine/core`, `@mantine/hooks`, etc.)
+- Use `mantine-datatable` for data tables
+- Follow Mantine design patterns and theming
+- Use existing UI patterns and components
+
+## State Management
+- Use React Query for server state (API data)
+- Use `useState` for local component state
+- Use `useContext` for shared state when appropriate
+- Avoid prop drilling - use context or state management library
+
+## Error Handling
+- Handle errors gracefully in UI
+- Show user-friendly error messages
+- Use proper null checks and optional chaining
+- Handle loading states properly
+- Don't crash on API errors - show error UI instead
+
+## Code Style
+- Follow ESLint and Prettier configurations
+- Use consistent formatting (run `npm run prettier:write` before committing)
+- Use meaningful variable and function names
+- Keep functions focused and single-purpose
+- Use proper indentation and spacing
+
+## Import Organization
+- React imports first
+- Third-party library imports second
+- Local imports last
+- Use absolute imports when configured
+- Group imports logically
+
+## Testing
+- Write tests for components when appropriate
+- Use React Testing Library for component tests
+- Test user interactions and edge cases
+- Run tests before committing: `npm test`
+
+## Documentation
+- **DO NOT create summaries or documentation files unless explicitly requested**
+- Add JSDoc comments for complex functions
+- Document component props using TypeScript interfaces
+- Explain complex logic in comments
+
+## Performance
+- Use React.memo for expensive components
+- Use useMemo and useCallback when appropriate
+- Avoid unnecessary re-renders
+- Optimize API calls (use proper query keys, caching, etc.)
+- Use code splitting for large components
+
+## Routing
+- Use React Router (`react-router-dom`) for navigation
+- Follow existing route patterns
+- Use proper route protection for authenticated routes
+- Handle route parameters correctly
+
+## Forms
+- Use Mantine Form (`@mantine/form`) for form handling
+- Validate forms properly
+- Handle form submission and errors
+- Use proper form state management
+
+## Styling
+- Use Mantine's styling system
+- Use CSS modules or styled components when needed
+- Follow existing styling patterns
+- Keep styles organized and maintainable
+
+## Accessibility
+- Use proper semantic HTML
+- Include ARIA labels when needed
+- Ensure keyboard navigation works
+- Test with screen readers when possible
+
+## Build and Development
+- Use `npm run dev` for development
+- Use `npm run build` for production builds
+- Use `npm run typecheck` to check TypeScript errors
+- Use `npm run lint` to check code quality
+

@@ -1,0 +1,108 @@
+# DataPilotFlow RAG Agent - Cursor Instructions
+
+## Package Management
+- **ALWAYS use `uv` for package management** - Never use `pip`, `pipenv`, `poetry`, or `conda`
+- To install dependencies: `uv sync` or `uv pip install -e .`
+- To add a new dependency: Add it to `pyproject.toml` under `[project] dependencies`, then run `uv sync`
+- Local package dependencies are defined in `[tool.uv.sources]` - reference them as `{ path = "../package-name" }`
+
+## Code Understanding Before Changes
+- **ALWAYS read and understand existing code before making changes**
+- Understand LangGraph workflow architecture
+- Review existing node implementations before creating new ones
+- Understand RAG pipeline: retrieval → reranking → generation
+- Check existing patterns for streaming, error handling, and state management
+
+## LangGraph Workflow
+- **Use LangGraph for agent workflows** - don't create custom workflow engines
+- Nodes represent workflow steps
+- State is managed through LangGraph state
+- Use proper checkpointing for state persistence
+
+## RAG Pipeline
+- Document retrieval from vector database (Milvus)
+- Query enhancement strategies (Step-back, HyDE, Decomposition, etc.)
+- Reranking of retrieved documents
+- Answer generation using LLM
+
+## Model Provider Integration
+- Use LiteLLM for LLM and embedding model access
+- Handle custom provider types correctly (don't prefix model name with provider type)
+- Support custom API key field names in headers
+- Use `langchain_litellm.ChatLiteLLM` (not deprecated `langchain_community.chat_models.ChatLiteLLM`)
+
+## Streaming Responses
+- Stream responses to WebSocket clients
+- Handle streaming events correctly (on_chain_start, on_chain_stream, on_chain_end)
+- Emit proper event types for frontend consumption
+- Handle streaming errors gracefully
+
+## Error Handling
+- Handle retrieval errors gracefully
+- Handle LLM errors appropriately
+- Log errors with context (conversation_id, query, etc.)
+- Don't crash on individual failures - return partial results when possible
+
+## Code Style
+- Follow PEP 8 style guide
+- Use type hints for all function parameters and return types
+- Use `Optional` and `Union` from `typing` module
+- Prefer `list` and `dict` over `List` and `Dict` (Python 3.9+)
+- Use f-strings for string formatting
+- Keep functions focused and single-purpose
+
+## Import Organization
+- Standard library imports first
+- Third-party imports second (LangChain, LangGraph, LiteLLM, etc.)
+- Local package imports last
+- Use absolute imports from `datapilotflow.*`
+- Group imports logically
+
+## Logging
+- Use `loguru` logger: `from loguru import logger`
+- Use appropriate log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+- Include context in log messages (conversation_id, query, etc.)
+- Log RAG pipeline milestones (retrieval, reranking, generation)
+
+## Testing
+- Write tests for agent nodes and tools in `tests/` directory
+- Mock external dependencies (vector DB, LLM, etc.)
+- Test RAG pipeline thoroughly
+- Test error cases and edge cases
+
+## Documentation
+- **DO NOT create summaries or documentation files unless explicitly requested**
+- Add docstrings to agent classes, nodes, and tools
+- Document workflow steps and state transitions
+- Explain RAG pipeline and query enhancement strategies
+
+## Performance
+- Optimize retrieval queries
+- Use async operations when possible
+- Handle large result sets efficiently
+- Consider caching for frequently accessed data
+
+## Dependencies
+- This package depends on `datapilotflow-domain`, `datapilotflow-infrastructure`, and `datapilotflow-services`
+- Use LangChain and LangGraph for agent workflows
+- Use LiteLLM for model access
+- Don't add API-specific code - agent is framework-agnostic
+
+## MCP Server
+- RAG agent can run as MCP server
+- Handle MCP protocol correctly
+- Expose tools and functions properly
+- Handle MCP client connections
+
+## Vector Database Integration
+- Use Milvus for document retrieval
+- Handle collection management correctly
+- Use proper vector search parameters
+- Handle retrieval errors gracefully
+
+## Query Enhancement
+- Implement query enhancement strategies correctly
+- Handle different enhancement types (Step-back, HyDE, etc.)
+- Combine multiple enhanced queries appropriately
+- Don't break original query intent
+

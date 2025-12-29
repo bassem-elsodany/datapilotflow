@@ -1,0 +1,91 @@
+# DataPilotFlow Processors - Cursor Instructions
+
+## Package Management
+- **ALWAYS use `uv` for package management** - Never use `pip`, `pipenv`, `poetry`, or `conda`
+- To install dependencies: `uv sync` or `uv pip install -e .`
+- To add a new dependency: Add it to `pyproject.toml` under `[project] dependencies`, then run `uv sync`
+- Local package dependencies are defined in `[tool.uv.sources]` - reference them as `{ path = "../package-name" }`
+
+## Code Understanding Before Changes
+- **ALWAYS read and understand existing code before making changes**
+- Understand the event-driven architecture - processors consume events from RabbitMQ
+- Review existing processor implementations before creating new ones
+- Understand document processing pipelines and workflows
+- Check existing patterns for error handling and retries
+
+## Event-Driven Processing
+- **Processors are triggered by events from RabbitMQ**
+- Processors run as separate processes (not in API server)
+- Processors consume events asynchronously
+- Processors update state through services after processing
+
+## Document Processing
+- Processors handle document ingestion, splitting, and storage
+- Use appropriate document loaders for different file types
+- Handle errors gracefully and log them
+- Update job status through services after processing
+
+## Error Handling
+- Handle processing errors gracefully
+- Log errors with context (job_id, file_id, etc.)
+- Update job status to failed when processing fails
+- Don't crash on individual document failures - continue processing
+
+## Code Style
+- Follow PEP 8 style guide
+- Use type hints for all function parameters and return types
+- Use `Optional` and `Union` from `typing` module
+- Prefer `list` and `dict` over `List` and `Dict` (Python 3.9+)
+- Use f-strings for string formatting
+- Keep functions focused and single-purpose
+
+## Import Organization
+- Standard library imports first
+- Third-party imports second (LangChain, etc.)
+- Local package imports last
+- Use absolute imports from `datapilotflow.*`
+- Group imports logically
+
+## Logging
+- Use `loguru` logger: `from loguru import logger`
+- Use appropriate log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+- Include context in log messages (job_id, file_id, etc.)
+- Log processing progress and milestones
+
+## Testing
+- Write tests for processors in `tests/` directory
+- Mock external dependencies (document loaders, services, etc.)
+- Test processing logic thoroughly
+- Test error cases and edge cases
+
+## Documentation
+- **DO NOT create summaries or documentation files unless explicitly requested**
+- Add docstrings to processor classes and functions
+- Document processing workflows and side effects
+- Explain complex processing logic
+
+## Performance
+- Process documents efficiently
+- Use async operations when possible
+- Handle large files appropriately
+- Consider parallel processing for multiple documents
+- Optimize memory usage
+
+## Dependencies
+- This package depends on `datapilotflow-domain`, `datapilotflow-infrastructure`, and `datapilotflow-services`
+- Use LangChain for document processing
+- Don't add API-specific code - processors are standalone
+- Processors use services to update state
+
+## Document Splitters
+- Implement document splitters for different strategies
+- Handle chunking correctly (respect document structure)
+- Preserve metadata during splitting
+- Handle different document types appropriately
+
+## Storage Processors
+- Handle file storage correctly
+- Manage duplicate detection
+- Update database state after storage
+- Handle storage errors gracefully
+

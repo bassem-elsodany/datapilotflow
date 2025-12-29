@@ -13,35 +13,22 @@ The `datapilotflow-assistant-agent` package provides a supervisor/assistant agen
 
 ## 🏗️ Architecture Position
 
-```
-┌─────────────────────────────────────────┐
-│     API, WebSocket Clients               │
-└────────────────┬────────────────────────┘
-                 │ calls
-┌────────────────▼────────────────────────┐
-│   datapilotflow-assistant-agent         │
-│   (Supervisor Agent)                     │
-└────────────────┬────────────────────────┘
-                 │ orchestrates
-┌────────────────▼────────────────────────┐
-│   datapilotflow-rag-agent               │
-│   (RAG Agent via MCP)                    │
-└────────────────┬────────────────────────┘
-                 │ uses
-┌────────────────▼────────────────────────┐
-│   datapilotflow-services                │
-│   (Business Logic)                       │
-└────────────────┬────────────────────────┘
-                 │ uses
-┌────────────────▼────────────────────────┐
-│   datapilotflow-infrastructure          │
-│   (Database Access)                      │
-└────────────────┬────────────────────────┘
-                 │ uses
-┌────────────────▼────────────────────────┐
-│      datapilotflow-domain               │
-│      (Foundation)                        │
-└─────────────────────────────────────────┘
+```mermaid
+graph TD
+    Users["👥 Users<br/>WebSocket<br/>Clients"]
+    Assistant["👤 datapilotflow-assistant-agent<br/>SUPERVISOR AGENT<br/><br/>Multi-turn Chat<br/>Tool Orchestration<br/>LangGraph"]
+    RAG["🧠 RAG Agent<br/>MCP Client<br/>knowledge_expert"]
+    Services["🔧 Services<br/>Conversation<br/>Models"]
+    Domain["🏛️ Domain"]
+
+    Users -->|WebSocket| Assistant
+    Assistant -->|queries| RAG
+    Assistant -->|uses| Services
+    Services -->|uses| Domain
+
+    style Assistant fill:#E6F3FF,stroke:#0051BA,stroke-width:3px
+    style RAG fill:#E6F9FF,stroke:#0066CC,stroke-width:2px
+    style Services fill:#F0E6FF,stroke:#7851A9,stroke-width:2px
 ```
 
 **This package provides**:
@@ -137,12 +124,17 @@ from datapilotflow.domain.conversation import ConversationMessage
 ## 🚀 Installation
 
 ```bash
-# Install dependencies first
+uv pip install -e ../datapilotflow-domain \
+  -e ../datapilotflow-infrastructure \
+  -e ../datapilotflow-services \
+  -e .
+```
+
+Or with pip:
+```bash
 cd datapilotflow-domain && pip install -e .
 cd ../datapilotflow-infrastructure && pip install -e .
 cd ../datapilotflow-services && pip install -e .
-
-# Install assistant agent
 cd ../datapilotflow-assistant-agent && pip install -e .
 ```
 
@@ -156,10 +148,96 @@ cd ../datapilotflow-assistant-agent && pip install -e .
 **Used by**:
 - ✅ `datapilotflow-api` - Exposes assistant agent via API
 
+## 📋 Module Capabilities
+
+### 1. **Supervisor Agent**
+- Multi-turn conversation management
+- Tool and agent orchestration
+- Query routing and delegation
+- Context preservation
+
+### 2. **Tool Integration**
+- MCP tool integration (RAG agent)
+- Multiple tool coordination
+- Tool output aggregation
+
+### 3. **Conversation Context**
+- Message history management
+- Context-aware responses
+- Multi-user support
+
+## 🔄 Assistant Agent Sequence
+
+```
+User Query (WebSocket)
+    │
+    ▼
+Assistant Agent (Supervisor)
+    │
+    ├→ Analyze Query
+    │   │
+    │   ├→ Use Knowledge Expert (RAG via MCP)
+    │   ├→ Call Tools
+    │   └→ Process Results
+    │
+    ├→ Generate Response
+    │   │
+    │   └→ Apply Context
+    │
+    └→ WebSocket Response Stream
+        │
+        ▼
+    User receives response
+```
+
+## 🛠️ How to Build & Start
+
+### Build Steps
+
+```bash
+uv pip install -e ../datapilotflow-domain \
+  -e ../datapilotflow-infrastructure \
+  -e ../datapilotflow-services -e .
+```
+
+### Using Assistant Agent
+
+The assistant agent is used via the API layer:
+
+```bash
+# API server starts assistant agent
+python ../datapilotflow-api/run_api_server.py
+
+# Access via WebSocket
+ws://localhost:65500/ws/assistant
+```
+
+### Integration with RAG Agent
+
+The assistant agent connects to the RAG MCP server:
+
+```python
+from datapilotflow.assistant_agent.agent import AssistantAgentService
+
+agent = AssistantAgentService()
+response = await agent.process_query(
+    query="What is RAG?",
+    conversation_id="conv_123",
+    use_knowledge_expert=True  # Uses RAG agent
+)
+```
+
 ## 🎯 Design Principles
 
 1. **Supervisor Pattern**: Orchestrates multiple agents and tools
 2. **Tool Integration**: Integrates with MCP tools (RAG agent)
 3. **Conversation Management**: Manages multi-turn conversations
 4. **LangGraph Workflow**: Modular, composable agent pipeline
+
+## 📖 Documentation
+
+For more details:
+- **Agent Graph**: See [src/datapilotflow/assistant_agent/graph.py](src/datapilotflow/assistant_agent/graph.py)
+- **Tools**: See [src/datapilotflow/assistant_agent/tools/](src/datapilotflow/assistant_agent/tools/)
+- **State Management**: See [src/datapilotflow/assistant_agent/state.py](src/datapilotflow/assistant_agent/state.py)
 

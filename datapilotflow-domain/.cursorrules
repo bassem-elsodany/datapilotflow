@@ -1,0 +1,88 @@
+# DataPilotFlow Domain - Cursor Instructions
+
+## Package Management
+- **ALWAYS use `uv` for package management** - Never use `pip`, `pipenv`, `poetry`, or `conda`
+- To install dependencies: `uv sync` or `uv pip install -e .`
+- To add a new dependency: Add it to `pyproject.toml` under `[project] dependencies`, then run `uv sync`
+- This is a foundational package - other packages depend on it
+
+## Code Understanding Before Changes
+- **ALWAYS read and understand existing code before making changes**
+- Domain models represent core business entities
+- Understand the data structure and relationships before modifying models
+- Check existing patterns for validation, serialization, and configuration
+
+## Domain Models
+- **Domain models are pure data structures** - no business logic
+- Use Pydantic models for validation and serialization
+- Models should be framework-agnostic (no FastAPI, Django, etc. dependencies)
+- Keep models simple and focused on data representation
+
+## Configuration
+- Configuration is managed through `datapilotflow.domain.config.settings`
+- Use Pydantic Settings for environment variable management
+- Settings are loaded from environment variables
+- Don't hardcode configuration values
+
+## Model Design Principles
+- Models should be immutable when possible (use `frozen=True` in Pydantic)
+- Use proper field types and validators
+- Include docstrings explaining what each model represents
+- Use enums for fixed sets of values
+- Use `Optional` for nullable fields
+
+## Validation
+- Use Pydantic validators for complex validation logic
+- Keep validation logic simple and focused
+- Don't perform business logic in validators
+- Use field validators for field-specific validation
+
+## Serialization
+- Models should serialize to JSON properly
+- Use Pydantic's serialization features
+- Handle datetime serialization correctly
+- Support both serialization and deserialization
+
+## Code Style
+- Follow PEP 8 style guide
+- Use type hints for all fields and methods
+- Use `Optional` and `Union` from `typing` module
+- Prefer `list` and `dict` over `List` and `Dict` (Python 3.9+)
+- Use descriptive field names
+
+## Import Organization
+- Standard library imports first
+- Third-party imports second (Pydantic, etc.)
+- No local package imports (this is the base package)
+- Group imports logically
+
+## Documentation
+- **DO NOT create summaries or documentation files unless explicitly requested**
+- Add docstrings to all models and fields
+- Document field purposes and constraints
+- Explain enums and their values
+
+## Testing
+- Write tests for domain models in `tests/` directory
+- Test validation logic
+- Test serialization/deserialization
+- Test edge cases and invalid inputs
+
+## Dependencies
+- This package should have minimal external dependencies
+- Only include essential dependencies (Pydantic, etc.)
+- Don't add framework-specific dependencies
+- Keep the package lightweight and reusable
+
+## Breaking Changes
+- **Be careful with breaking changes** - this package is used by all other packages
+- Consider versioning when making breaking changes
+- Update dependent packages when changing models
+- Document breaking changes clearly
+
+## Enums and Constants
+- Use Python enums for fixed sets of values
+- Define constants in appropriate modules
+- Use descriptive names for enum values
+- Document enum purposes
+

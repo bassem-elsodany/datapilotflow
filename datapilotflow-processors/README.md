@@ -13,30 +13,20 @@ The `datapilotflow-processors` package provides document processing capabilities
 
 ## 🏗️ Architecture Position
 
-```
-┌─────────────────────────────────────────┐
-│     Events Layer (Event Listeners)      │
-└────────────────┬────────────────────────┘
-                 │ triggers
-┌────────────────▼────────────────────────┐
-│   datapilotflow-processors             │
-│   (Document Processing & Pipeline)      │
-└────────────────┬────────────────────────┘
-                 │ uses
-┌────────────────▼────────────────────────┐
-│   datapilotflow-services                │
-│   (Business Logic)                       │
-└────────────────┬────────────────────────┘
-                 │ uses
-┌────────────────▼────────────────────────┐
-│   datapilotflow-infrastructure          │
-│   (Database Access)                      │
-└────────────────┬────────────────────────┘
-                 │ uses
-┌────────────────▼────────────────────────┐
-│      datapilotflow-domain               │
-│      (Foundation)                        │
-└─────────────────────────────────────────┘
+```mermaid
+graph TD
+    Events["📨 Event Listeners<br/>RabbitMQ Consumers"]
+
+    Processors["⚙️ datapilotflow-processors<br/>PROCESSING LAYER<br/><br/>Extraction | Chunking<br/>Embedding | Storage<br/>Crawling | Pipeline"]
+
+    Services["🔧 Services<br/>Infrastructure<br/>Domain"]
+
+    Events -->|triggers| Processors
+    Processors -->|uses| Services
+
+    style Processors fill:#FFF9E6,stroke:#CC6600,stroke-width:3px
+    style Events fill:#FFE6F0,stroke:#CC0066,stroke-width:2px
+    style Services fill:#E6F3FF,stroke:#0051BA,stroke-width:2px
 ```
 
 **This package provides**:
@@ -295,44 +285,20 @@ chunks = splitter.split_text(text)
 ## 🚀 Installation
 
 ```bash
-cd datapilotflow-processors
-pip install -e .
+uv pip install -e ../datapilotflow-domain \
+  -e ../datapilotflow-infrastructure \
+  -e ../datapilotflow-services \
+  -e .
 ```
 
-## 📝 Usage Examples
-
-### Process Knowledge Job
-```python
-from datapilotflow.processors.knowledge_job import KnowledgeJobProcessor
-
-processor = KnowledgeJobProcessor()
-
-await processor.process_job(
-    job_id="job_123",
-    source_id="source_456",
-    config={
-        "chunk_size": 1000,
-        "chunk_overlap": 200,
-        "top_k": 5
-    }
-)
+Or with pip:
+```bash
+cd datapilotflow-domain && pip install -e .
+cd ../datapilotflow-infrastructure && pip install -e .
+cd ../datapilotflow-services && pip install -e .
+cd ../datapilotflow-processors && pip install -e .
 ```
 
-### Split Text
-```python
-from datapilotflow.processors.splitters import TextSplitter
-
-splitter = TextSplitter(chunk_size=1000, chunk_overlap=200)
-chunks = splitter.split_text(long_text)
-```
-
-### Extract from File
-```python
-from datapilotflow.processors.document import FileProcessor
-
-processor = FileProcessor()
-content = await processor.extract("/path/to/file.pdf")
-```
 
 ## 🧪 Testing
 
@@ -358,10 +324,100 @@ pytest tests/
 4. **Async Processing**: All operations are async
 5. **Error Handling**: Robust error handling and recovery
 
+## 📋 Module Capabilities
+
+### 1. **Knowledge Job Processing**
+- Complete job orchestration with pipeline execution
+- Batch-wise vs traditional execution modes
+- Job context and cancellation management
+- Progress callbacks and status updates
+
+### 2. **Document Extraction**
+- PDF extraction (marker-pdf)
+- HTML content extraction
+- Web page crawling (crawl4ai)
+- File format detection and handling
+
+### 3. **Text Splitting & Chunking**
+- Token-based splitting
+- Character-based splitting
+- HTML-aware splitting
+- Markdown-aware splitting
+- Overlap handling
+
+### 4. **Vector Processing**
+- Embedding generation
+- Duplicate detection
+- Vector storage and indexing
+
+## 🔄 Processing Pipeline Sequence Diagram
+
+```
+Event Listener receives JobCreatedEvent
+         │
+         ▼
+KnowledgeJobEventProcessor
+         │
+         ▼
+JobOrchestrator.execute_pipeline()
+         │
+         ├─→ FileExtractionStep (extract files)
+         │         │
+         │         ▼
+         ├─→ ChunkingStep (split text)
+         │         │
+         │         ▼
+         ├─→ EmbeddingStep (generate vectors)
+         │         │
+         │         ▼
+         ├─→ StorageStep (store in Milvus)
+         │         │
+         │         ▼
+         └─→ TimelineStep (record progress)
+                  │
+                  ▼
+         Update Job Status → Complete
+```
+
+## 🚀 Installation
+
+```bash
+# Install dependencies
+cd ../datapilotflow-domain && pip install -e .
+cd ../datapilotflow-infrastructure && pip install -e .
+cd ../datapilotflow-services && pip install -e .
+cd ../datapilotflow-processors && pip install -e .
+```
+
+## 🛠️ How to Build & Start
+
+### Build Steps
+
+1. **Install in order**
+   ```bash
+   uv pip install -e ../datapilotflow-domain \
+     -e ../datapilotflow-infrastructure \
+     -e ../datapilotflow-services -e .
+   ```
+
+2. **Verify**
+   ```bash
+   pytest tests/ -v
+   ```
+
+### Using in Event Processing
+
+```python
+from datapilotflow.processors.knowledge_job import KnowledgeJobEventProcessor
+
+processor = KnowledgeJobEventProcessor()
+await processor.process_job_created_event(event_data)
+```
+
 ## 📖 Documentation
 
 For more details:
-- Knowledge Job Processing: See `src/datapilotflow/processors/knowledge_job/`
-- Document Processing: See `src/datapilotflow/processors/document/`
-- Text Splitting: See `src/datapilotflow/processors/splitters/`
-- Web Crawling: See `src/datapilotflow/processors/crawler/`
+- **Knowledge Job Processing**: See [src/datapilotflow/processors/knowledge_job/](src/datapilotflow/processors/knowledge_job/)
+- **Document Processing**: See [src/datapilotflow/processors/document/](src/datapilotflow/processors/document/)
+- **Text Splitting**: See [src/datapilotflow/processors/splitters/](src/datapilotflow/processors/splitters/)
+- **Web Crawling**: See [src/datapilotflow/processors/crawler/](src/datapilotflow/processors/crawler/)

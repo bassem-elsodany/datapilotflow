@@ -118,7 +118,7 @@ services:
     build:
       context: ..
       dockerfile: docker/services/dashboard/Dockerfile
-    container_name: datapilotflow-dashboard
+    container_name: datapilotflow-dashboard-frontend
     ports:
       - "3000:3000"
     depends_on:

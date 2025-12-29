@@ -76,7 +76,7 @@ async def custom_variants_node(state: WorkflowState) -> WorkflowState:
     )
     logger.debug("-" * 80)
     for idx, variant in enumerate(variants, 1):
-        logger.debug(f"   VARIANT [{idx}/{len(variants)}]: '{variant}'")
+        logger.debug(f"VARIANT [{idx}/{len(variants)}]: '{variant}'")
     logger.debug("-" * 80)
 
     # Store in both enhanced_query dict (for response formatter) and augmented_queries (for document_retriever)
@@ -91,5 +91,5 @@ async def custom_variants_node(state: WorkflowState) -> WorkflowState:
     logger.info(
         f"[NODE FINISH] custom_variants_node - Stored {len(variants)} variants in state (enhanced_query + augmented_queries)"
     )
-    logger.info(f"📝 Custom variants stored: {variants}")
+    logger.debug(f"Custom variants stored: {variants}")
     return state

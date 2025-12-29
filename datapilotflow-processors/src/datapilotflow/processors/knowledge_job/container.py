@@ -50,6 +50,11 @@ class JobProcessingContainer:
         self,
         enable_rollback: bool = False,
         knowledge_source_config: Optional[KnowledgeSourceConfig] = None,
+        emit_notification_started: Optional[callable] = None,
+        emit_notification_progress: Optional[callable] = None,
+        emit_notification_completed: Optional[callable] = None,
+        emit_notification_failed: Optional[callable] = None,
+        emit_notification_cancelled: Optional[callable] = None,
     ) -> JobOrchestrator:
         """
         Create a fully configured job orchestrator.
@@ -61,6 +66,11 @@ class JobProcessingContainer:
         Args:
             enable_rollback: Whether to enable automatic rollback on failure
             knowledge_source_config: Optional config for dynamic pipeline creation
+            emit_notification_started: Optional callback when job starts
+            emit_notification_progress: Optional callback for progress updates
+            emit_notification_completed: Optional callback when job completes
+            emit_notification_failed: Optional callback when job fails
+            emit_notification_cancelled: Optional callback when job is cancelled
 
         Returns:
             Configured JobOrchestrator ready for job execution
@@ -107,10 +117,15 @@ class JobProcessingContainer:
             f"{', '.join(pipeline.get_step_names())}"
         )
 
-        # Create orchestrator
+        # Create orchestrator with notification callbacks
         orchestrator = JobOrchestrator(
             pipeline=pipeline,
             cancellation_manager=self.cancellation_manager,
+            emit_notification_started=emit_notification_started,
+            emit_notification_progress=emit_notification_progress,
+            emit_notification_completed=emit_notification_completed,
+            emit_notification_failed=emit_notification_failed,
+            emit_notification_cancelled=emit_notification_cancelled,
         )
 
         logger.info("Job orchestrator created successfully")
@@ -227,6 +242,11 @@ def get_job_processing_container() -> JobProcessingContainer:
 def create_job_orchestrator(
     enable_rollback: bool = False,
     knowledge_source_config: Optional[KnowledgeSourceConfig] = None,
+    emit_notification_started: Optional[callable] = None,
+    emit_notification_progress: Optional[callable] = None,
+    emit_notification_completed: Optional[callable] = None,
+    emit_notification_failed: Optional[callable] = None,
+    emit_notification_cancelled: Optional[callable] = None,
 ) -> JobOrchestrator:
     """
     Convenience function to create a job orchestrator.
@@ -234,6 +254,11 @@ def create_job_orchestrator(
     Args:
         enable_rollback: Whether to enable automatic rollback on failure
         knowledge_source_config: Optional config for dynamic pipeline creation
+        emit_notification_started: Optional callback when job starts
+        emit_notification_progress: Optional callback for progress updates
+        emit_notification_completed: Optional callback when job completes
+        emit_notification_failed: Optional callback when job fails
+        emit_notification_cancelled: Optional callback when job is cancelled
 
     Returns:
         Configured JobOrchestrator
@@ -242,4 +267,9 @@ def create_job_orchestrator(
     return container.create_job_orchestrator(
         enable_rollback=enable_rollback,
         knowledge_source_config=knowledge_source_config,
+        emit_notification_started=emit_notification_started,
+        emit_notification_progress=emit_notification_progress,
+        emit_notification_completed=emit_notification_completed,
+        emit_notification_failed=emit_notification_failed,
+        emit_notification_cancelled=emit_notification_cancelled,
     )
