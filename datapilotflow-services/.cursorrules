@@ -1,0 +1,104 @@
+# DataPilotFlow Services - Cursor Instructions
+
+## Package Management
+- **ALWAYS use `uv` for package management** - Never use `pip`, `pipenv`, `poetry`, or `conda`
+- To install dependencies: `uv sync` or `uv pip install -e .`
+- To add a new dependency: Add it to `pyproject.toml` under `[project] dependencies`, then run `uv sync`
+- Local package dependencies are defined in `[tool.uv.sources]` - reference them as `{ path = "../package-name" }`
+
+## Code Understanding Before Changes
+- **ALWAYS read and understand existing code before making changes**
+- Search for similar patterns in the codebase using `codebase_search` tool
+- Understand the service layer architecture: Services → DAO → Database
+- Review domain models before implementing business logic
+- Check existing service patterns and follow them
+
+## Service Layer Responsibilities
+- **Business logic belongs in services, NOT in routers or DAOs**
+- Services orchestrate multiple DAOs and domain logic
+- Services handle validation beyond basic schema validation
+- Services publish events to RabbitMQ for async processing
+- Services don't directly access databases - use DAOs from infrastructure layer
+
+## Event Publishing
+- Use event publishers (e.g., `JobEventPublisher`, `FileUploadEventPublisher`) to publish events
+- Events are published to RabbitMQ topic exchanges
+- Don't wait for event processing - publish and return
+- Event listeners (separate processes) consume events asynchronously
+
+## Domain Models
+- Use domain models from `datapilotflow.domain` package
+- Don't create new domain models here - add them to domain package
+- Transform between domain models and database documents in DAOs
+- Services work with domain models, not raw database documents
+
+## Error Handling
+- Raise domain-specific exceptions when appropriate
+- Use `loguru` logger for error logging
+- Don't expose internal errors to API layer - use proper exception types
+- Log errors with context (user_id, operation, etc.)
+
+## Authentication & Authorization
+- Services receive authenticated users from API layer
+- Check permissions before performing operations
+- Use role-based access control (RBAC) when needed
+- Validate user access to resources
+
+## Database Access
+- **NEVER access databases directly** - use DAOs from infrastructure layer
+- Services call DAO methods, not database clients
+- DAOs handle all database operations
+- Services handle business logic and orchestration
+
+## Initialization Services
+- Initialization services (e.g., `admin_initialization_service`) run at startup
+- They ensure system state is correct (admin users, default roles, etc.)
+- Handle idempotent operations (safe to run multiple times)
+- Use proper error handling and logging
+
+## Code Style
+- Follow PEP 8 style guide
+- Use type hints for all function parameters and return types
+- Use `Optional` and `Union` from `typing` module
+- Prefer `list` and `dict` over `List` and `Dict` (Python 3.9+)
+- Use f-strings for string formatting
+- Keep functions focused and single-purpose
+
+## Import Organization
+- Standard library imports first
+- Third-party imports second
+- Local package imports last
+- Use absolute imports from `datapilotflow.*`
+- Group imports logically
+
+## Logging
+- Use `loguru` logger: `from loguru import logger`
+- Use appropriate log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+- Include context in log messages (user_id, operation, etc.)
+- Don't log sensitive information (passwords, tokens, API keys)
+
+## Testing
+- Write tests for services in `tests/` directory
+- Mock DAOs and external dependencies
+- Test business logic thoroughly
+- Test error cases and edge cases
+
+## Documentation
+- **DO NOT create summaries or documentation files unless explicitly requested**
+- Add docstrings to functions and classes
+- Document business logic and side effects
+- Explain complex algorithms or workflows
+
+## Performance
+- Use async/await for I/O operations when possible
+- Don't block the event loop
+- Consider caching for frequently accessed data
+- Optimize database queries through DAOs
+- Batch operations when appropriate
+
+## Dependencies
+- This package depends on `datapilotflow-domain` and `datapilotflow-infrastructure`
+- Don't add direct database access - use infrastructure DAOs
+- Don't add API-specific code - keep services framework-agnostic
+- Services can depend on other services when needed
+

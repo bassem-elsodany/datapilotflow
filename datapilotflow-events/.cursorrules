@@ -1,0 +1,90 @@
+# DataPilotFlow Events - Cursor Instructions
+
+## Package Management
+- **ALWAYS use `uv` for package management** - Never use `pip`, `pipenv`, `poetry`, or `conda`
+- To install dependencies: `uv sync` or `uv pip install -e .`
+- To add a new dependency: Add it to `pyproject.toml` under `[project] dependencies`, then run `uv sync`
+- Local package dependencies are defined in `[tool.uv.sources]` - reference them as `{ path = "../package-name" }`
+
+## Code Understanding Before Changes
+- **ALWAYS read and understand existing code before making changes**
+- Understand the event-driven architecture - listeners consume events from RabbitMQ
+- Review existing event listener implementations before creating new ones
+- Understand event types and their handlers
+- Check existing patterns for error handling and message acknowledgment
+
+## Event Listeners
+- **Event listeners run as separate processes** (not in API server)
+- Listeners consume messages from RabbitMQ topic exchanges
+- Listeners trigger processors or services based on event type
+- Each listener handles a specific event type or category
+
+## Message Consumption
+- Handle message acknowledgment correctly
+- Handle message rejection and requeuing appropriately
+- Don't process the same message multiple times
+- Handle connection failures and reconnection
+
+## Error Handling
+- Handle processing errors gracefully
+- Log errors with context (event_id, job_id, etc.)
+- Acknowledge messages only after successful processing
+- Handle poison messages (messages that fail repeatedly)
+
+## Code Style
+- Follow PEP 8 style guide
+- Use type hints for all function parameters and return types
+- Use `Optional` and `Union` from `typing` module
+- Prefer `list` and `dict` over `List` and `Dict` (Python 3.9+)
+- Use f-strings for string formatting
+- Keep functions focused and single-purpose
+
+## Import Organization
+- Standard library imports first
+- Third-party imports second (pika, etc.)
+- Local package imports last
+- Use absolute imports from `datapilotflow.*`
+- Group imports logically
+
+## Logging
+- Use `loguru` logger: `from loguru import logger`
+- Use appropriate log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+- Include context in log messages (event_id, event_type, etc.)
+- Log event processing milestones
+
+## Testing
+- Write tests for event listeners in `tests/` directory
+- Mock RabbitMQ connections and messages
+- Test event handling logic thoroughly
+- Test error cases and edge cases
+
+## Documentation
+- **DO NOT create summaries or documentation files unless explicitly requested**
+- Add docstrings to listener classes and functions
+- Document event types and their handlers
+- Explain event processing workflows
+
+## Performance
+- Process events efficiently
+- Handle high message volumes
+- Use connection pooling
+- Consider parallel processing for multiple events
+
+## Dependencies
+- This package depends on `datapilotflow-domain`, `datapilotflow-infrastructure`, and `datapilotflow-services`
+- Use pika or similar library for RabbitMQ
+- Don't add API-specific code - listeners are standalone
+- Listeners trigger processors or services
+
+## Event Types
+- Understand different event types (JobCreated, FileUploaded, etc.)
+- Handle each event type appropriately
+- Route events to correct processors
+- Update state through services after processing
+
+## RabbitMQ Configuration
+- Use proper exchange and queue names
+- Handle routing keys correctly
+- Configure message durability appropriately
+- Handle connection failures gracefully
+

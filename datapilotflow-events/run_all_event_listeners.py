@@ -50,17 +50,17 @@ class EventListenerManager:
 
     async def start_all_listeners(self):
         """Start all event listeners in separate processes."""
-        logger.info("🚀 Starting all event listener services in separate processes...")
+        logger.info("Starting all event listener services in separate processes...")
 
         # Start each listener in a separate process
         for config in self.listener_configs:
             await self._start_listener_process(config)
 
-        logger.info("✅ All event listeners started successfully")
-        logger.info("📊 Event Listeners Status:")
+        logger.info("All event listeners started successfully")
+        logger.debug("Event listeners status:")
         for config in self.listener_configs:
-            logger.info(f"   • {config['name']} - Running in separate process")
-        logger.info("🔄 All listeners are running in separate processes...")
+            logger.debug(f"  {config['name']} - running in separate process")
+        logger.debug("All listeners are running in separate processes")
 
         # Start status monitoring task
         status_task = asyncio.create_task(self._monitor_status())
@@ -72,7 +72,7 @@ class EventListenerManager:
         status_task.cancel()
 
         # Terminate all processes with timeout
-        logger.info("🛑 Shutting down all event listeners...")
+        logger.info("Shutting down all event listeners...")
         try:
             # Run shutdown in a separate thread with timeout
             import threading
@@ -87,13 +87,13 @@ class EventListenerManager:
 
             # Wait for shutdown with timeout
             if shutdown_complete.wait(timeout=10):
-                logger.info("✅ All event listeners stopped")
+                logger.info("All event listeners stopped")
             else:
-                logger.error("❌ Shutdown timed out after 10 seconds")
+                logger.error("Shutdown timed out after 10 seconds")
 
         except Exception as e:
-            logger.error(f"❌ Error during shutdown: {e}")
-            logger.info("🛑 Forcing exit...")
+            logger.error(f"Error during shutdown: {e}")
+            logger.info("Forcing exit...")
 
     async def _monitor_status(self):
         """Monitor and log status of all listeners."""
@@ -101,15 +101,15 @@ class EventListenerManager:
             try:
                 await asyncio.sleep(300)  # Check every 5 minutes
                 running_count = sum(1 for proc in self.processes if proc.poll() is None)
-                logger.info(
-                    f"📊 Status: {running_count}/{len(self.processes)} listeners running"
+                logger.debug(
+                    f"Status: {running_count}/{len(self.processes)} listeners running"
                 )
 
                 # Check for crashed processes and restart them
                 for i, proc in enumerate(self.processes):
                     if proc.poll() is not None:
                         config = self.listener_configs[i]
-                        logger.warning(f"⚠️ {config['name']} crashed, restarting...")
+                        logger.warning(f"{config['name']} crashed, restarting...")
                         await self._start_listener_process(config, i)
             except asyncio.CancelledError:
                 break
@@ -117,7 +117,7 @@ class EventListenerManager:
     async def _start_listener_process(self, config: dict, index: int = None):
         """Start a single event listener in a separate process."""
         try:
-            logger.info(f"🚀 Starting {config['name']} in separate process...")
+            logger.debug(f"Starting {config['name']} in separate process...")
 
             # Start the process
             proc = subprocess.Popen(
@@ -133,31 +133,31 @@ class EventListenerManager:
             else:
                 self.processes.append(proc)
 
-            logger.info(f"✅ {config['name']} started with PID {proc.pid}")
+            logger.debug(f"{config['name']} started with PID {proc.pid}")
 
         except Exception as e:
-            logger.error(f"❌ Failed to start {config['name']}: {e}")
+            logger.error(f"Failed to start {config['name']}: {e}")
 
     def _shutdown_all_processes(self):
         """Gracefully shutdown all processes."""
         import time
 
-        logger.info("🛑 Starting process shutdown...")
+        logger.debug("Starting process shutdown...")
 
         # First pass: Send SIGTERM to all processes
         for i, proc in enumerate(self.processes):
             if proc.poll() is None:  # Process is still running
                 config = self.listener_configs[i]
-                logger.info(
-                    f"📤 Sending SIGTERM to {config['name']} (PID {proc.pid})..."
+                logger.debug(
+                    f"Sending SIGTERM to {config['name']} (PID {proc.pid})"
                 )
                 try:
                     proc.terminate()
                 except Exception as e:
-                    logger.error(f"❌ Error sending SIGTERM to {config['name']}: {e}")
+                    logger.error(f"Error sending SIGTERM to {config['name']}: {e}")
 
         # Wait briefly for graceful shutdown
-        logger.info("⏳ Waiting 3 seconds for graceful shutdown...")
+        logger.debug("Waiting 3 seconds for graceful shutdown...")
         time.sleep(3)
 
         # Second pass: Check which processes are still running and force kill
@@ -168,21 +168,21 @@ class EventListenerManager:
 
         if still_running:
             logger.warning(
-                f"⚠️ {len(still_running)} processes still running, force killing..."
+                f"{len(still_running)} processes still running, force killing..."
             )
             for i, proc in still_running:
                 config = self.listener_configs[i]
-                logger.warning(f"💀 Force killing {config['name']} (PID {proc.pid})...")
+                logger.warning(f"Force killing {config['name']} (PID {proc.pid})")
                 try:
                     proc.kill()
                     # Don't wait for the process to die, just kill it
-                    logger.info(f"✅ Sent SIGKILL to {config['name']}")
+                    logger.debug(f"Sent SIGKILL to {config['name']}")
                 except Exception as e:
-                    logger.error(f"❌ Error force killing {config['name']}: {e}")
+                    logger.error(f"Error force killing {config['name']}: {e}")
         else:
-            logger.info("✅ All processes terminated gracefully")
+            logger.debug("All processes terminated gracefully")
 
-        logger.info("🛑 Process shutdown completed")
+        logger.debug("Process shutdown completed")
 
     def _check_process_health(self):
         """Check the health of all processes."""
@@ -193,7 +193,7 @@ class EventListenerManager:
             else:
                 config = self.listener_configs[i]
                 logger.warning(
-                    f"⚠️ {config['name']} is not running (exit code: {proc.returncode})"
+                    f"{config['name']} is not running (exit code: {proc.returncode})"
                 )
 
         return healthy_count
@@ -214,7 +214,7 @@ class EventListenerManager:
             # Force exit after 3 signals
             if self.signal_count >= 3:
                 logger.error(
-                    "🚨 Force exit after 3 signals - killing all processes immediately!"
+                    "Force exit after 3 signals - killing all processes immediately"
                 )
                 import os
                 import signal

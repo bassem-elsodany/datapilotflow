@@ -1,0 +1,110 @@
+# DataPilotFlow Infrastructure - Cursor Instructions
+
+## Package Management
+- **ALWAYS use `uv` for package management** - Never use `pip`, `pipenv`, `poetry`, or `conda`
+- To install dependencies: `uv sync` or `uv pip install -e .`
+- To add a new dependency: Add it to `pyproject.toml` under `[project] dependencies`, then run `uv sync`
+- Local package dependencies are defined in `[tool.uv.sources]` - reference them as `{ path = "../package-name" }`
+
+## Code Understanding Before Changes
+- **ALWAYS read and understand existing code before making changes**
+- Understand the DAO (Data Access Object) pattern
+- Review existing DAO implementations before creating new ones
+- Understand database connection patterns and connection pooling
+- Check existing patterns for error handling and transactions
+
+## DAO Pattern
+- **DAOs handle ALL database operations** - no direct database access elsewhere
+- DAOs transform between domain models and database documents
+- DAOs are framework-agnostic (no business logic)
+- One DAO per domain entity/collection
+
+## Database Access
+- Use connection pooling for database connections
+- Handle connection errors gracefully
+- Use transactions for multi-step operations
+- Close connections properly (use context managers)
+
+## MongoDB Operations
+- Use PyMongo or Motor (async) for MongoDB operations
+- Handle ObjectId conversion properly
+- Use proper indexes for queries
+- Handle pagination correctly
+
+## Milvus Operations
+- Use Milvus client wrapper for vector database operations
+- Handle connection errors gracefully
+- Use proper collection management
+- Handle vector operations correctly
+
+## Error Handling
+- Raise appropriate exceptions for database errors
+- Use `loguru` logger for error logging
+- Don't expose database internals to service layer
+- Handle connection failures gracefully
+
+## Connection Management
+- Use singleton pattern for database clients when appropriate
+- Initialize connections at startup
+- Handle reconnection logic
+- Monitor connection health
+
+## Code Style
+- Follow PEP 8 style guide
+- Use type hints for all function parameters and return types
+- Use `Optional` and `Union` from `typing` module
+- Prefer `list` and `dict` over `List` and `Dict` (Python 3.9+)
+- Use f-strings for string formatting
+- Keep functions focused and single-purpose
+
+## Import Organization
+- Standard library imports first
+- Third-party imports second (PyMongo, Milvus, etc.)
+- Local package imports last
+- Use absolute imports from `datapilotflow.*`
+- Group imports logically
+
+## Logging
+- Use `loguru` logger: `from loguru import logger`
+- Use appropriate log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+- Log database operations at DEBUG level
+- Don't log sensitive data (passwords, tokens, etc.)
+
+## Testing
+- Write tests for DAOs in `tests/` directory
+- Use test databases or mocks
+- Test CRUD operations thoroughly
+- Test error cases and edge cases
+- Test connection handling
+
+## Documentation
+- **DO NOT create summaries or documentation files unless explicitly requested**
+- Add docstrings to DAO classes and methods
+- Document database operations and side effects
+- Explain complex queries or operations
+
+## Performance
+- Use indexes for frequently queried fields
+- Optimize queries (avoid N+1 problems)
+- Use bulk operations when appropriate
+- Consider caching for frequently accessed data
+- Use async operations when possible
+
+## Dependencies
+- This package depends on `datapilotflow-domain`
+- Don't add business logic - keep DAOs focused on data access
+- Don't add API-specific code - keep infrastructure framework-agnostic
+- Use appropriate database drivers (PyMongo, Milvus client, etc.)
+
+## Vector Database
+- Handle vector operations correctly
+- Use proper dimension management
+- Handle collection creation and deletion
+- Manage indexes for vector search
+
+## Transactions
+- Use transactions for multi-step operations
+- Handle transaction rollback properly
+- Don't leave transactions open
+- Use context managers for transactions
+

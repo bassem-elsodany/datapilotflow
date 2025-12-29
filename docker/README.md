@@ -103,11 +103,11 @@ docker-compose ps
 
 Expected output:
 ```
-NAME                           STATUS              PORTS
-datapilotflow-api-server       healthy (starting)  0.0.0.0:8800->8800/tcp
-datapilotflow-dashboard        healthy (starting)  0.0.0.0:3000->3000/tcp
-datapilotflow-event-listeners  running             (no ports)
-datapilotflow-mcp-rag          healthy (starting)  0.0.0.0:65510->65510/tcp
+NAME                               STATUS              PORTS
+datapilotflow-api-server           healthy (starting)  0.0.0.0:8800->8800/tcp
+datapilotflow-dashboard-frontend   healthy (starting)  0.0.0.0:3000->3000/tcp
+datapilotflow-event-listeners      running             (no ports)
+datapilotflow-mcp-rag              healthy (starting)  0.0.0.0:65510->65510/tcp
 datapilotflow-mongodb          healthy             0.0.0.0:27020->27017/tcp
 datapilotflow-rabbitmq         healthy             0.0.0.0:5675->5672/tcp
 datapilotflow-milvus           healthy             0.0.0.0:19530->19530/tcp

@@ -13,30 +13,23 @@ The `datapilotflow-rag-agent` package provides a Retrieval-Augmented Generation 
 
 ## 🏗️ Architecture Position
 
-```
-┌─────────────────────────────────────────┐
-│     MCP Clients (LangGraph, etc.)        │
-└────────────────┬────────────────────────┘
-                 │ calls MCP server
-┌────────────────▼────────────────────────┐
-│   datapilotflow-rag-agent               │
-│   (RAG Agent + MCP Server)              │
-└────────────────┬────────────────────────┘
-                 │ uses
-┌────────────────▼────────────────────────┐
-│   datapilotflow-services                │
-│   (Conversation, Model Provider)         │
-└────────────────┬────────────────────────┘
-                 │ uses
-┌────────────────▼────────────────────────┐
-│   datapilotflow-infrastructure          │
-│   (Vector DB, MongoDB)                   │
-└────────────────┬────────────────────────┘
-                 │ uses
-┌────────────────▼────────────────────────┐
-│      datapilotflow-domain               │
-│      (Foundation)                        │
-└─────────────────────────────────────────┘
+```mermaid
+graph TD
+    Clients["🔌 MCP Clients<br/>LangGraph | External"]
+    RAG["🧠 datapilotflow-rag-agent<br/>RAG AGENT<br/><br/>FastMCP Server<br/>knowledge_expert tool<br/>Document Retrieval"]
+    VectorDB["🔍 Milvus<br/>Vector Search<br/>Collections"]
+    Services["🔧 Services<br/>Conversation<br/>Model Provider"]
+    Domain["🏛️ Domain<br/>Config"]
+
+    Clients -->|HTTP| RAG
+    RAG -->|query| VectorDB
+    RAG -->|uses| Services
+    RAG -->|uses| Domain
+    Services -->|uses| Domain
+
+    style RAG fill:#E6F9FF,stroke:#0066CC,stroke-width:3px
+    style VectorDB fill:#FFF9E6,stroke:#CC6600,stroke-width:2px
+    style Services fill:#F0E6FF,stroke:#7851A9,stroke-width:2px
 ```
 
 **This package provides**:
@@ -254,76 +247,20 @@ async for chunk in get_response_stream_rag(
 ## 🚀 Installation
 
 ```bash
-# Install dependencies first
+uv pip install -e ../datapilotflow-domain \
+  -e ../datapilotflow-infrastructure \
+  -e ../datapilotflow-services \
+  -e .
+```
+
+Or with pip:
+```bash
 cd datapilotflow-domain && pip install -e .
 cd ../datapilotflow-infrastructure && pip install -e .
 cd ../datapilotflow-services && pip install -e .
-
-# Install RAG agent
 cd ../datapilotflow-rag-agent && pip install -e .
 ```
 
-## 📝 Usage Examples
-
-### Start MCP Server
-```bash
-python run_rag_mcp_server.py
-```
-
-The server will be available at:
-- **HTTP Endpoint**: `http://0.0.0.0:65510/mcp`
-- **Log File**: `logs/rag-agent.log`
-
-### Use RAG Agent Directly
-```python
-from datapilotflow.rag_agent.graph import get_graph
-from datapilotflow.rag_agent.state import create_initial_state
-
-# Create RAG state
-state = create_initial_state(
-    query="What is RAG?",
-    top_k=5,
-    config={...}
-)
-
-# Get graph
-graph = get_graph()
-
-# Execute
-result = await graph.ainvoke(state)
-
-# Get documents
-documents = result.get("retrieved_documents", [])
-```
-
-### MCP Tool Usage
-```python
-# From MCP client
-response = await mcp_client.call_tool(
-    "knowledge_expert",
-    {
-        "search_query": [
-            "What is RAG?",
-            "Explain retrieval augmented generation",
-            "How does RAG work?",
-            "RAG architecture",
-            "RAG implementation"
-        ],
-        "collection_name": "knowledge_base",
-        "top_k": 5,
-        "enable_reranking": True,
-        "llm_provider_id": "openai",
-        "llm_model_name": "gpt-4"
-    }
-)
-
-# Response contains:
-# {
-#     "documents": [...],
-#     "metadata": {...},
-#     "error": null
-# }
-```
 
 ## 🧪 Testing
 
@@ -372,25 +309,93 @@ MONGO_HOST = settings.MONGO_HOST
 MONGO_PORT = settings.MONGO_PORT
 ```
 
+## 📋 Module Capabilities
+
+### 1. **RAG Agent**
+- Document retrieval from vector database
+- Multi-query search strategies
+- Document relevance judging
+- Document reranking
+- Context-aware response generation
+
+### 2. **MCP Server**
+- HTTP-based MCP server (FastMCP)
+- `knowledge_expert` tool for document retrieval
+- Streaming support
+- Structured output formatting
+
+### 3. **Retrieval Strategies**
+- Multi-query expansion
+- Decomposition-based search
+- HyDE (Hypothetical Document Embeddings)
+- Augmented retrieval strategies
+
+## 🔄 RAG Pipeline Sequence
+
+```
+Client Query
+    │
+    ▼
+RAG Agent (LangGraph)
+    │
+    ├→ Document Retriever (Milvus search)
+    │       │
+    │       ▼
+    │  Retrieved Documents (top-k)
+    │       │
+    ├→ Document Judger (relevance eval)
+    │       │
+    │       ▼
+    │  Ranked Documents
+    │       │
+    ├→ Filter by Threshold
+    │       │
+    └→ Answer Generator (optional)
+            │
+            ▼
+    Structured Response
+```
+
+## 🛠️ How to Build & Start
+
+### Build Steps
+
+```bash
+uv pip install -e ../datapilotflow-domain \
+  -e ../datapilotflow-infrastructure \
+  -e ../datapilotflow-services -e .
+```
+
+### Start MCP Server
+
+```bash
+python run_rag_mcp_server.py
+
+# Server running at:
+# HTTP: http://localhost:65510/mcp
+```
+
+### Monitor
+
+```bash
+tail -f logs/rag-agent.log
+```
+
+### Using RAG Agent
+
+```python
+from datapilotflow.rag_agent.graph import get_graph
+
+graph = get_graph()
+result = await graph.ainvoke(rag_state)
+documents = result.get("retrieved_documents", [])
+```
+
 ## 📖 Documentation
 
 For more details:
-- **Deployment Guide**: See `DEPLOYMENT.md`
-- **MCP Server**: See `src/datapilotflow/rag_agent/mcp/server.py`
-- **RAG Graph**: See `src/datapilotflow/rag_agent/graph.py`
-- **Retrieval Tools**: See `src/datapilotflow/rag_agent/tools/`
-
-## 🚀 Deployment
-
-See `DEPLOYMENT.md` for complete deployment instructions.
-
-**Minimum Requirements**:
-- Milvus vector database (required)
-- MongoDB (optional, for conversation history)
-
-**Package Dependencies**:
-1. `datapilotflow-domain`
-2. `datapilotflow-infrastructure`
-3. `datapilotflow-services`
-4. `datapilotflow-rag-agent`
+- **Deployment Guide**: See [DEPLOYMENT.md](DEPLOYMENT.md)
+- **MCP Server**: See [src/datapilotflow/rag_agent/mcp/server.py](src/datapilotflow/rag_agent/mcp/server.py)
+- **RAG Graph**: See [src/datapilotflow/rag_agent/graph.py](src/datapilotflow/rag_agent/graph.py)
+- **Retrieval Tools**: See [src/datapilotflow/rag_agent/tools/](src/datapilotflow/rag_agent/tools/)
 

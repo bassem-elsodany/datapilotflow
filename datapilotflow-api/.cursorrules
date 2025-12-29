@@ -1,0 +1,111 @@
+# DataPilotFlow API - Cursor Instructions
+
+## Package Management
+- **ALWAYS use `uv` for package management** - Never use `pip`, `pipenv`, `poetry`, or `conda`
+- To install dependencies: `uv sync` or `uv pip install -e .`
+- To add a new dependency: Add it to `pyproject.toml` under `[project] dependencies`, then run `uv sync`
+- Local package dependencies are defined in `[tool.uv.sources]` - reference them as `{ path = "../package-name" }`
+
+## Code Understanding Before Changes
+- **ALWAYS read and understand existing code before making changes**
+- Search for similar patterns in the codebase using `codebase_search` tool
+- Review related routers, services, and domain models before implementing new endpoints
+- Understand the request/response flow: Router → Service → DAO → Database
+- Check existing error handling patterns and follow them
+
+## REST API Compliance
+- **Follow RESTful conventions strictly**:
+  - GET for retrieval (list, get by ID)
+  - POST for creation
+  - PUT/PATCH for updates
+  - DELETE for deletion
+- Use proper HTTP status codes:
+  - 200 OK for successful GET/PUT/PATCH
+  - 201 Created for successful POST
+  - 204 No Content for successful DELETE
+  - 400 Bad Request for validation errors
+  - 401 Unauthorized for authentication failures
+  - 403 Forbidden for authorization failures
+  - 404 Not Found for missing resources
+  - 500 Internal Server Error for unexpected errors
+- Use Pydantic models for request/response validation
+- Include proper OpenAPI documentation (tags, descriptions, examples)
+- Follow existing router patterns in `src/datapilotflow/api/routers/`
+
+## Endpoint Structure
+- Use FastAPI `APIRouter` with appropriate `prefix` and `tags`
+- Group related endpoints in the same router file
+- Use dependency injection for authentication: `current_user: User = Depends(get_current_user)`
+- Validate all inputs using Pydantic models
+- Return proper response models (not raw dicts)
+
+## Error Handling
+- Use `HTTPException` from FastAPI for API errors
+- Log errors using `loguru` logger with appropriate log levels
+- Don't expose internal error details to clients (use generic messages)
+- Log detailed errors server-side for debugging
+
+## Authentication & Authorization
+- All protected endpoints must use `get_current_user` dependency
+- Check user permissions before allowing operations
+- Use role-based access control (RBAC) when needed
+- Validate JWT tokens properly
+
+## Event-Driven Architecture
+- Services publish events to RabbitMQ (not directly to listeners)
+- API endpoints return immediately (202 Accepted for async operations)
+- Don't wait for event processing in API responses
+- Use WebSocket endpoints for real-time updates
+
+## WebSocket Endpoints
+- Validate JWT token from query parameters
+- Handle `WebSocketDisconnect` exceptions
+- Send proper message formats (JSON)
+- Close connections gracefully
+
+## Testing
+- Write tests for new endpoints in `tests/` directory
+- Test both success and error cases
+- Test authentication/authorization
+- Use pytest fixtures for test setup
+
+## Documentation
+- **DO NOT create summaries or documentation files unless explicitly requested**
+- Add docstrings to functions and classes
+- Include OpenAPI descriptions for endpoints
+- Document request/response models
+
+## Code Style
+- Follow PEP 8 style guide
+- Use type hints for all function parameters and return types
+- Use `Optional` and `Union` from `typing` module
+- Prefer `list` and `dict` over `List` and `Dict` (Python 3.9+)
+- Use f-strings for string formatting
+- Keep functions focused and single-purpose
+
+## Import Organization
+- Standard library imports first
+- Third-party imports second
+- Local package imports last
+- Use absolute imports from `datapilotflow.*`
+- Group imports logically
+
+## Logging
+- Use `loguru` logger: `from loguru import logger`
+- Use appropriate log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+- Include context in log messages (user_id, request_id, etc.)
+- Don't log sensitive information (passwords, tokens)
+
+## Performance
+- Use async/await for I/O operations
+- Don't block the event loop
+- Use database indexes for queries
+- Consider pagination for list endpoints
+- Cache frequently accessed data when appropriate
+
+## Dependencies
+- This package depends on all DataPilotFlow packages
+- Don't add direct database access - use services layer
+- Don't add business logic in routers - delegate to services
+- Keep routers thin - they should only handle HTTP concerns
+

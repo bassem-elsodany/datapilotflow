@@ -7,7 +7,6 @@ managing notification events, publishing, and listening.
 
 from .notification_event_service import *
 from .notification_listener_service import *
-from .notification_websocket_service import NotificationWebSocketService
 
 __all__ = [
     # Notification Event Service
@@ -26,6 +25,13 @@ __all__ = [
     "notification_event_listener",
     "start_notification_listener",
 
-    # Notification WebSocket Service
+    # Notification WebSocket Service (lazy import to avoid fastapi dependency)
     "NotificationWebSocketService",
 ]
+
+def __getattr__(name):
+    """Lazy import for NotificationWebSocketService to avoid fastapi dependency."""
+    if name == "NotificationWebSocketService":
+        from .notification_websocket_service import NotificationWebSocketService
+        return NotificationWebSocketService
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -13,25 +13,32 @@ The `datapilotflow-services` package provides business logic services that orche
 
 ## 🏗️ Architecture Position
 
-```
-┌─────────────────────────────────────────┐
-│     API, Agents, Processors, Events      │
-└────────────────┬────────────────────────┘
-                 │ depends on
-┌────────────────▼────────────────────────┐
-│   datapilotflow-services                │
-│   (Business Logic & Orchestration)      │
-└────────────────┬────────────────────────┘
-                 │ depends on
-┌────────────────▼────────────────────────┐
-│   datapilotflow-infrastructure          │
-│   (Database Access)                      │
-└────────────────┬────────────────────────┘
-                 │ depends on
-┌────────────────▼────────────────────────┐
-│      datapilotflow-domain               │
-│      (Foundation)                        │
-└─────────────────────────────────────────┘
+### System Architecture Diagram
+
+```mermaid
+graph TB
+    API["🔌 API Layer"]
+    Agents["🧠 Agents"]
+    Processors["⚙️ Processors"]
+    Events["📨 Events"]
+
+    Services["🔧 datapilotflow-services<br/>BUSINESS LOGIC LAYER<br/><br/>Knowledge | Auth | Conversation<br/>Events | Notifications | Models<br/>Users | VectorDB | Tools"]
+
+    Infra["📊 Infrastructure<br/>DAOs & Clients"]
+    Domain["🏛️ Domain<br/>Models & Config"]
+
+    API --> Services
+    Agents --> Services
+    Processors --> Services
+    Events --> Services
+
+    Services --> Infra
+    Services --> Domain
+    Infra --> Domain
+
+    style Services fill:#F0E6FF,stroke:#7851A9,stroke-width:3px
+    style Infra fill:#E6FFE6,stroke:#2D5016,stroke-width:2px
+    style Domain fill:#FFE6E6,stroke:#C41E3A,stroke-width:2px
 ```
 
 **This package provides**:
@@ -364,73 +371,122 @@ await publisher.publish_job_status_updated(job_id, "completed")
 - `loguru>=0.7.3` - Logging
 - `pydantic>=2.10.6` - Data validation
 
+## 📋 Module Capabilities
+
+### 1. **Knowledge Services**
+- Knowledge job orchestration (create, update, retrieve, delete)
+- Knowledge source management
+- Knowledge ingestion pipeline coordination
+- Document splitter configuration
+- Job timeline tracking
+- LLM content filtering
+
+### 2. **Authentication & Authorization**
+- User authentication (login, signup, verification)
+- JWT token generation and validation
+- Admin user initialization
+- Role-based access control
+- Password hashing and security
+
+### 3. **Conversation Management**
+- Conversation history storage
+- Message persistence
+- Conversation retrieval by ID
+- Multi-user conversation support
+
+### 4. **Event Publishing**
+- Job lifecycle event publishing (Created, Started, Updated, Completed, Failed)
+- File upload event publishing
+- Notification event publishing
+- RabbitMQ message routing
+
+### 5. **Notification Services**
+- Notification creation and persistence
+- WebSocket-based real-time notifications
+- Notification event listeners
+- Job notification helpers
+
+### 6. **Model Provider Services**
+- LLM provider management (OpenAI, Anthropic, etc.)
+- Embedding model provider management
+- Provider configuration and validation
+
+## 🔄 Service Interaction Sequence Diagram
+
+```
+┌──────────────────┐
+│   API Request    │
+└────────┬─────────┘
+         │
+         ▼
+┌────────────────────────────────────────┐
+│  API Router (e.g., knowledge_router)   │
+└────────┬───────────────────────────────┘
+         │ calls
+         ▼
+┌────────────────────────────────────────┐
+│  Service Layer                         │
+│  (e.g., KnowledgeJobService)           │
+│  ┌──────────────────────────────────┐  │
+│  │ • Validate input                 │  │
+│  │ • Orchestrate DAOs               │  │
+│  │ • Apply business rules           │  │
+│  │ • Publish events                 │  │
+│  └──────────────────────────────────┘  │
+└────────┬───────────────────────────────┘
+         │ uses
+         ├─────────────────────┬──────────────────┐
+         ▼                     ▼                  ▼
+    ┌─────────────┐    ┌──────────────┐    ┌────────────┐
+    │ Knowledge   │    │  Event       │    │  Mongo     │
+    │ Job DAO     │    │  Publisher   │    │  Client    │
+    └─────────────┘    └──────────────┘    └────────────┘
+         │                  │                    │
+         │                  ▼                    ▼
+         │            ┌──────────────┐    ┌────────────────┐
+         │            │  RabbitMQ    │    │   MongoDB      │
+         │            │  Message Bus │    │   Database     │
+         │            └──────────────┘    └────────────────┘
+         │                                      │
+         └──────────────────────────────────────┘
+
+         Returns to API Router → HTTP Response
+```
+
 ## 🚀 Installation
 
+### Prerequisites
+- Python >=3.11
+- datapilotflow-domain installed
+- datapilotflow-infrastructure installed
+- MongoDB, Milvus, RabbitMQ running (for full functionality)
+
+### Install from Source
+
 ```bash
-# Install dependencies first
+uv pip install -e ../datapilotflow-domain \
+  -e ../datapilotflow-infrastructure \
+  -e .
+```
+
+Or with pip:
+```bash
 cd datapilotflow-domain && pip install -e .
 cd ../datapilotflow-infrastructure && pip install -e .
-
-# Install services
 cd ../datapilotflow-services && pip install -e .
 ```
 
-## 📝 Usage Examples
+### Verify Installation
 
-### Knowledge Job Service
-```python
+```bash
+python -c "
 from datapilotflow.services.knowledge import KnowledgeJobService
-
-service = KnowledgeJobService()
-
-# Create job
-job = await service.create_job(
-    name="Document Ingestion",
-    source_id="source_123",
-    config={
-        "top_k": 5,
-        "chunk_size": 1000
-    }
-)
-
-# Get job
-job = await service.get_job_by_id(job.id)
-
-# Update job status
-await service.update_job_status(job.id, "processing")
-```
-
-### Authentication Service
-```python
 from datapilotflow.services.auth import AuthService
-
-service = AuthService()
-
-# Authenticate
-user, token = await service.authenticate("user@example.com", "password")
-
-# Verify token
-user = await service.verify_token(token)
-
-# Create user
-user = await service.create_user(
-    email="newuser@example.com",
-    password="secure_password",
-    username="newuser"
-)
+print('✓ Knowledge service imported')
+print('✓ Auth service imported')
+"
 ```
 
-### Event Publishing
-```python
-from datapilotflow.services.events_publisher import JobEventPublisher
-
-publisher = JobEventPublisher()
-
-# Publish events
-await publisher.publish_job_created(job_id, job_data)
-await publisher.publish_job_status_updated(job_id, "completed")
-await publisher.publish_job_failed(job_id, error_message)
-```
 
 ## 🧪 Testing
 
@@ -469,11 +525,79 @@ Each service is responsible for:
 - **Event Publishing**: Publishing domain events
 - **Error Handling**: Service-level error handling
 
+## 🛠️ How to Build & Start
+
+### Build Steps
+
+1. **Install dependencies in order**
+   ```bash
+   cd ../datapilotflow-domain && pip install -e .
+   cd ../datapilotflow-infrastructure && pip install -e .
+   cd ../datapilotflow-services && pip install -e .
+   ```
+
+2. **Configure environment**
+   ```bash
+   cat > .env << EOF
+   MONGO_CONN_STR=mongodb://localhost:27017
+   MONGO_DB_NAME=datapilotflow
+   JWT_SECRET_KEY=your-secret-key-here
+   VECTOR_DB_HOST=localhost
+   VECTOR_DB_HTTP_PORT=19530
+   RABBITMQ_HOST=localhost
+   EOF
+   ```
+
+3. **Verify installation**
+   ```bash
+   python -m pytest tests/ -v
+   ```
+
+### Development Setup
+
+```bash
+# Create development environment
+python -m venv venv
+source venv/bin/activate
+
+# Install with dev dependencies
+pip install -e ".[dev]"
+
+# Run tests
+pytest tests/ -v
+
+# Run type checking
+pyright .
+```
+
+### Using Services in Your Application
+
+```python
+import asyncio
+from datapilotflow.services.knowledge import KnowledgeJobService
+from datapilotflow.services.auth import AuthService
+
+async def main():
+    # Initialize services
+    job_service = KnowledgeJobService()
+    auth_service = AuthService()
+
+    # Create a knowledge job
+    job = await job_service.create_job(
+        name="My Job",
+        source_id="source_123",
+        config={"chunk_size": 1000}
+    )
+    print(f"Created job: {job.id}")
+
+asyncio.run(main())
+```
+
 ## 📖 Documentation
 
-For more details:
-- Knowledge Services: See `src/datapilotflow/services/knowledge/`
-- Auth Services: See `src/datapilotflow/services/auth/`
-- Event Publishers: See `src/datapilotflow/services/events_publisher/`
-- Notification Services: See `src/datapilotflow/services/notification/`
+For more details on specific components:
+- **Knowledge Services**: See [src/datapilotflow/services/knowledge/](src/datapilotflow/services/knowledge/)
+- **Auth Services**: See [src/datapilotflow/services/auth/](src/datapilotflow/services/auth/)
+- **Event Publishers**: See [src/datapilotflow/services/events_publisher/](src/datapilotflow/services/events_publisher/)
+- **Notification Services**: See [src/datapilotflow/services/notification/](src/datapilotflow/services/notification/)
 

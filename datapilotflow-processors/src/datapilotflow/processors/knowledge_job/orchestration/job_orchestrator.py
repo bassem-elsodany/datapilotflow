@@ -39,6 +39,11 @@ class JobOrchestrator:
         self,
         pipeline: JobPipeline,
         cancellation_manager: Optional[CancellationManager] = None,
+        emit_notification_started: Optional[callable] = None,
+        emit_notification_progress: Optional[callable] = None,
+        emit_notification_completed: Optional[callable] = None,
+        emit_notification_failed: Optional[callable] = None,
+        emit_notification_cancelled: Optional[callable] = None,
     ):
         """
         Initialize the job orchestrator.
@@ -46,15 +51,30 @@ class JobOrchestrator:
         Args:
             pipeline: The job processing pipeline
             cancellation_manager: Optional cancellation manager
+            emit_notification_started: Optional callback when job starts
+            emit_notification_progress: Optional callback for progress updates
+            emit_notification_completed: Optional callback when job completes
+            emit_notification_failed: Optional callback when job fails
+            emit_notification_cancelled: Optional callback when job is cancelled
         """
         self.pipeline = pipeline
         self.cancellation_manager = cancellation_manager or get_cancellation_manager()
+        self.emit_notification_started = emit_notification_started
+        self.emit_notification_progress = emit_notification_progress
+        self.emit_notification_completed = emit_notification_completed
+        self.emit_notification_failed = emit_notification_failed
+        self.emit_notification_cancelled = emit_notification_cancelled
 
     async def execute_job(
         self,
         knowledge_job: KnowledgeJob,
         knowledge_source_config: KnowledgeSourceConfig,
         status_callback: Optional[callable] = None,
+        emit_notification_started: Optional[callable] = None,
+        emit_notification_progress: Optional[callable] = None,
+        emit_notification_completed: Optional[callable] = None,
+        emit_notification_failed: Optional[callable] = None,
+        emit_notification_cancelled: Optional[callable] = None,
     ) -> Dict[str, Any]:
         """
         Execute a knowledge processing job.
@@ -65,7 +85,12 @@ class JobOrchestrator:
         Args:
             knowledge_job: The job to execute
             knowledge_source_config: The knowledge source configuration
-            status_callback: Optional callback for status updates
+            status_callback: Optional callback for status updates (logging)
+            emit_notification_started: Optional callback when job starts
+            emit_notification_progress: Optional callback for progress updates
+            emit_notification_completed: Optional callback when job completes
+            emit_notification_failed: Optional callback when job fails
+            emit_notification_cancelled: Optional callback when job is cancelled
 
         Returns:
             Dictionary containing execution results and statistics
@@ -84,7 +109,14 @@ class JobOrchestrator:
                 f"(batch_size: {knowledge_job.batch_size}, source: {knowledge_source_config.content_source_type})"
             )
             return await self._execute_job_batch_wise(
-                knowledge_job, knowledge_source_config, status_callback
+                knowledge_job,
+                knowledge_source_config,
+                status_callback,
+                emit_notification_started,
+                emit_notification_progress,
+                emit_notification_completed,
+                emit_notification_failed,
+                emit_notification_cancelled,
             )
 
         # Otherwise use traditional pipeline execution (all docs at once)
@@ -110,12 +142,8 @@ class JobOrchestrator:
         Returns:
             Dictionary containing execution results and statistics
         """
-        from datapilotflow.services.notification.job_notification_helper import (
-            emit_job_started_notification,
-            emit_job_completed_notification,
-            emit_job_failed_notification,
-            emit_job_cancelled_notification
-        )
+        # Note: Notification functions are now passed as callbacks during __init__
+        # to avoid bottom-up dependencies (processors importing from services)
 
         job_id = knowledge_job.id
         user_id = knowledge_job.user_id
@@ -137,13 +165,17 @@ class JobOrchestrator:
         start_time = time.time()
 
         try:
-            # Emit job started notification
-            await emit_job_started_notification(
-                job_id=job_id,
-                user_id=user_id,
-                job_name=job_name,
-                content_source_type=knowledge_source_config.content_source_type.value
-            )
+            # Emit job started notification (if callback provided)
+            if self.emit_notification_started:
+                try:
+                    await self.emit_notification_started(
+                        job_id=job_id,
+                        user_id=user_id,
+                        job_name=job_name,
+                        content_source_type=knowledge_source_config.content_source_type.value
+                    )
+                except Exception as notify_error:
+                    logger.warning(f"Failed to emit job started notification: {notify_error}")
 
             # Execute the pipeline
             result = await self.pipeline.execute(context)
@@ -160,31 +192,39 @@ class JobOrchestrator:
                     f"{context.stats.get('total_chunks', 0)} chunks"
                 )
 
-                # Emit job completed notification
-                await emit_job_completed_notification(
-                    job_id=job_id,
-                    user_id=user_id,
-                    job_name=job_name,
-                    total_documents=context.stats.get('total_documents', 0),
-                    total_chunks=context.stats.get('total_chunks', 0),
-                    total_vectors=context.stats.get('total_vectors', 0),
-                    execution_time=total_time
-                )
+                # Emit job completed notification (if callback provided)
+                if self.emit_notification_completed:
+                    try:
+                        await self.emit_notification_completed(
+                            job_id=job_id,
+                            user_id=user_id,
+                            job_name=job_name,
+                            total_documents=context.stats.get('total_documents', 0),
+                            total_chunks=context.stats.get('total_chunks', 0),
+                            total_vectors=context.stats.get('total_vectors', 0),
+                            execution_time=total_time
+                        )
+                    except Exception as notify_error:
+                        logger.warning(f"Failed to emit job completed notification: {notify_error}")
             else:
                 logger.error(
                     f"Job {job_id} failed at step '{result.failed_step}' "
                     f"after {total_time:.2f}s"
                 )
 
-                # Emit failure notification
-                await emit_job_failed_notification(
-                    job_id=job_id,
-                    user_id=user_id,
-                    job_name=job_name,
-                    error_message=result.failed_step or "Unknown error",
-                    documents_processed=context.stats.get('total_documents', 0),
-                    chunks_created=context.stats.get('total_chunks', 0)
-                )
+                # Emit failure notification (if callback provided)
+                if self.emit_notification_failed:
+                    try:
+                        await self.emit_notification_failed(
+                            job_id=job_id,
+                            user_id=user_id,
+                            job_name=job_name,
+                            error_message=result.failed_step or "Unknown error",
+                            documents_processed=context.stats.get('total_documents', 0),
+                            chunks_created=context.stats.get('total_chunks', 0)
+                        )
+                    except Exception as notify_error:
+                        logger.warning(f"Failed to emit job failed notification: {notify_error}")
 
                 # Handle failure timeline recording if not already handled
                 await self._handle_job_failure(context, result)
@@ -194,15 +234,19 @@ class JobOrchestrator:
         except JobCancelledException as e:
             logger.warning(f"Job {job_id} was cancelled: {e}")
 
-            # Emit cancellation notification
-            await emit_job_cancelled_notification(
-                job_id=job_id,
-                user_id=user_id,
-                job_name=job_name,
-                cancellation_reason=str(e),
-                documents_processed=context.stats.get('total_documents', 0) if context.stats else None,
-                chunks_created=context.stats.get('total_chunks', 0) if context.stats else None
-            )
+            # Emit cancellation notification (if callback provided)
+            if self.emit_notification_cancelled:
+                try:
+                    await self.emit_notification_cancelled(
+                        job_id=job_id,
+                        user_id=user_id,
+                        job_name=job_name,
+                        cancellation_reason=str(e),
+                        documents_processed=context.stats.get('total_documents', 0) if context.stats else None,
+                        chunks_created=context.stats.get('total_chunks', 0) if context.stats else None
+                    )
+                except Exception as notify_error:
+                    logger.warning(f"Failed to emit job cancelled notification: {notify_error}")
 
             # Record cancellation in timeline
             await self._handle_job_cancellation(context, str(e))
@@ -214,15 +258,19 @@ class JobOrchestrator:
             logger.error(f"Unexpected error during job orchestration: {e}")
             logger.error(f"Traceback: {traceback.format_exc()}")
 
-            # Emit failure notification
-            await emit_job_failed_notification(
-                job_id=job_id,
-                user_id=user_id,
-                job_name=job_name,
-                error_message=str(e),
-                documents_processed=context.stats.get('total_documents', 0) if context.stats else None,
-                chunks_created=context.stats.get('total_chunks', 0) if context.stats else None
-            )
+            # Emit failure notification (if callback provided)
+            if self.emit_notification_failed:
+                try:
+                    await self.emit_notification_failed(
+                        job_id=job_id,
+                        user_id=user_id,
+                        job_name=job_name,
+                        error_message=str(e),
+                        documents_processed=context.stats.get('total_documents', 0) if context.stats else None,
+                        chunks_created=context.stats.get('total_chunks', 0) if context.stats else None
+                    )
+                except Exception as notify_error:
+                    logger.warning(f"Failed to emit job failed notification: {notify_error}")
 
             # Record failure in timeline
             await self._handle_job_error(context, e)
@@ -416,6 +464,11 @@ class JobOrchestrator:
         knowledge_job: KnowledgeJob,
         knowledge_source_config: KnowledgeSourceConfig,
         status_callback: Optional[callable] = None,
+        emit_notification_started: Optional[callable] = None,
+        emit_notification_progress: Optional[callable] = None,
+        emit_notification_completed: Optional[callable] = None,
+        emit_notification_failed: Optional[callable] = None,
+        emit_notification_cancelled: Optional[callable] = None,
     ) -> Dict[str, Any]:
         """
         Execute job batch-wise: each batch goes through all pipeline steps before next batch.
@@ -428,17 +481,15 @@ class JobOrchestrator:
             knowledge_job: The job to execute
             knowledge_source_config: The knowledge source configuration
             status_callback: Optional callback for status updates
+            emit_notification_started: Optional callback when job starts
+            emit_notification_progress: Optional callback for progress updates
+            emit_notification_completed: Optional callback when job completes
+            emit_notification_failed: Optional callback when job fails
+            emit_notification_cancelled: Optional callback when job is cancelled
 
         Returns:
             Dictionary containing execution results and statistics
         """
-        from datapilotflow.services.notification.job_notification_helper import (
-            emit_job_started_notification,
-            emit_job_progress_notification,
-            emit_job_completed_notification,
-            emit_job_failed_notification,
-            emit_job_cancelled_notification
-        )
 
         job_id = knowledge_job.id
         user_id = knowledge_job.user_id
@@ -511,14 +562,18 @@ class JobOrchestrator:
             if total_files and batch_size:
                 total_batches = (total_files + batch_size - 1) // batch_size
 
-            # Emit job started notification
-            await emit_job_started_notification(
-                job_id=job_id,
-                user_id=user_id,
-                job_name=job_name,
-                total_files=total_files,
-                content_source_type=knowledge_source_config.content_source_type.value
-            )
+            # Emit job started notification (if callback provided)
+            if self.emit_notification_started:
+                try:
+                    await self.emit_notification_started(
+                        job_id=job_id,
+                        user_id=user_id,
+                        job_name=job_name,
+                        total_files=total_files,
+                        content_source_type=knowledge_source_config.content_source_type.value
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to emit job started notification: {e}")
 
             # Get document batches from extraction service
             # This works for both LOCAL_FILES (FileExtractionStep) and WEB_SCRAPING (DocumentExtractionStep)
@@ -587,17 +642,21 @@ class JobOrchestrator:
                     f"{len(batch_context.chunks)} chunks, {len(batch_context.vectors)} vectors"
                 )
 
-                # Emit progress notification after each batch
-                await emit_job_progress_notification(
-                    job_id=job_id,
-                    user_id=user_id,
-                    job_name=job_name,
-                    batch_number=batch_count,
-                    total_batches=total_batches,
-                    documents_processed=total_documents,
-                    chunks_created=total_chunks,
-                    current_stage="processing"
-                )
+                # Emit progress notification after each batch (if callback provided)
+                if self.emit_notification_progress:
+                    try:
+                        await self.emit_notification_progress(
+                            job_id=job_id,
+                            user_id=user_id,
+                            job_name=job_name,
+                            batch_number=batch_count,
+                            total_batches=total_batches,
+                            documents_processed=total_documents,
+                            chunks_created=total_chunks,
+                            current_stage="processing"
+                        )
+                    except Exception as notify_error:
+                        logger.warning(f"Failed to emit job progress notification: {notify_error}")
 
                 # Update timeline with progress after each batch
                 # This allows the UI to show real-time progress (documents/chunks processed so far)
@@ -665,17 +724,21 @@ class JobOrchestrator:
                 f"{total_documents} docs, {total_chunks} chunks across {batch_count} batches"
             )
 
-            # Emit job completed notification
-            await emit_job_completed_notification(
-                job_id=job_id,
-                user_id=user_id,
-                job_name=job_name,
-                total_documents=total_documents,
-                total_chunks=total_chunks,
-                total_vectors=total_vectors,
-                execution_time=total_time,
-                batch_count=batch_count
-            )
+            # Emit job completed notification (if callback provided)
+            if self.emit_notification_completed:
+                try:
+                    await self.emit_notification_completed(
+                        job_id=job_id,
+                        user_id=user_id,
+                        job_name=job_name,
+                        total_documents=total_documents,
+                        total_chunks=total_chunks,
+                        total_vectors=total_vectors,
+                        execution_time=total_time,
+                        batch_count=batch_count
+                    )
+                except Exception as notify_error:
+                    logger.warning(f"Failed to emit job completed notification: {notify_error}")
 
             return {
                 "success": True,
@@ -692,16 +755,20 @@ class JobOrchestrator:
         except JobCancelledException as e:
             logger.warning(f"Batch-wise job {job_id} was cancelled: {e}")
 
-            # Emit cancellation notification
-            await emit_job_cancelled_notification(
-                job_id=job_id,
-                user_id=user_id,
-                job_name=job_name,
-                cancellation_reason=str(e),
-                batch_number=batch_count if batch_count > 0 else None,
-                documents_processed=total_documents if total_documents > 0 else None,
-                chunks_created=total_chunks if total_chunks > 0 else None
-            )
+            # Emit cancellation notification (if callback provided)
+            if self.emit_notification_cancelled:
+                try:
+                    await self.emit_notification_cancelled(
+                        job_id=job_id,
+                        user_id=user_id,
+                        job_name=job_name,
+                        cancellation_reason=str(e),
+                        batch_number=batch_count if batch_count > 0 else None,
+                        documents_processed=total_documents if total_documents > 0 else None,
+                        chunks_created=total_chunks if total_chunks > 0 else None
+                    )
+                except Exception as notify_error:
+                    logger.warning(f"Failed to emit job cancelled notification: {notify_error}")
 
             await self._handle_job_cancellation(extraction_context, str(e))
             raise
@@ -710,16 +777,20 @@ class JobOrchestrator:
             logger.error(f"Batch-wise job {job_id} failed: {e}")
             logger.error(f"Traceback: {traceback.format_exc()}")
 
-            # Emit failure notification
-            await emit_job_failed_notification(
-                job_id=job_id,
-                user_id=user_id,
-                job_name=job_name,
-                error_message=str(e),
-                batch_number=batch_count if batch_count > 0 else None,
-                documents_processed=total_documents if total_documents > 0 else None,
-                chunks_created=total_chunks if total_chunks > 0 else None
-            )
+            # Emit failure notification (if callback provided)
+            if self.emit_notification_failed:
+                try:
+                    await self.emit_notification_failed(
+                        job_id=job_id,
+                        user_id=user_id,
+                        job_name=job_name,
+                        error_message=str(e),
+                        batch_number=batch_count if batch_count > 0 else None,
+                        documents_processed=total_documents if total_documents > 0 else None,
+                        chunks_created=total_chunks if total_chunks > 0 else None
+                    )
+                except Exception as notify_error:
+                    logger.warning(f"Failed to emit job failed notification: {notify_error}")
 
             # Mark timeline as failed
             if timeline_id:

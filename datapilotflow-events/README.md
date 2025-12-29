@@ -13,35 +13,20 @@ The `datapilotflow-events` package provides event-driven architecture capabiliti
 
 ## 🏗️ Architecture Position
 
-```
-┌─────────────────────────────────────────┐
-│     API, Services (Event Publishers)     │
-└────────────────┬────────────────────────┘
-                 │ publishes events
-┌────────────────▼────────────────────────┐
-│   datapilotflow-events                  │
-│   (Event Listeners & Routing)           │
-└────────────────┬────────────────────────┘
-                 │ triggers
-┌────────────────▼────────────────────────┐
-│   datapilotflow-processors              │
-│   (Event Processors)                    │
-└────────────────┬────────────────────────┘
-                 │ uses
-┌────────────────▼────────────────────────┐
-│   datapilotflow-services                │
-│   (Business Logic)                       │
-└────────────────┬────────────────────────┘
-                 │ uses
-┌────────────────▼────────────────────────┐
-│   datapilotflow-infrastructure          │
-│   (RabbitMQ Client)                      │
-└────────────────┬────────────────────────┘
-                 │ uses
-┌────────────────▼────────────────────────┐
-│      datapilotflow-domain               │
-│      (Event Definitions)                 │
-└─────────────────────────────────────────┘
+```mermaid
+graph TD
+    Publishers["📤 Event Publishers<br/>Services | API"]
+    RabbitMQ["📨 RabbitMQ<br/>Topic Exchange<br/>Queues"]
+    Events["🎧 datapilotflow-events<br/>EVENT LISTENERS<br/><br/>Job | File | Notification<br/>Listeners"]
+    Processors["⚙️ Event Processors"]
+
+    Publishers -->|publish| RabbitMQ
+    RabbitMQ -->|subscribe| Events
+    Events -->|trigger| Processors
+
+    style Events fill:#FFE6F0,stroke:#CC0066,stroke-width:3px
+    style RabbitMQ fill:#FFE6E6,stroke:#C41E3A,stroke-width:2px
+    style Publishers fill:#E6F3FF,stroke:#0051BA,stroke-width:2px
 ```
 
 **This package provides**:
@@ -238,46 +223,22 @@ from datapilotflow.services.events_publisher import JobEventPublisher
 ## 🚀 Installation
 
 ```bash
-cd datapilotflow-events
-pip install -e .
+uv pip install -e ../datapilotflow-domain \
+  -e ../datapilotflow-infrastructure \
+  -e ../datapilotflow-services \
+  -e ../datapilotflow-processors \
+  -e .
 ```
 
-## 📝 Usage Examples
-
-### Start All Event Listeners
+Or with pip:
 ```bash
-python run_all_event_listeners.py
+cd datapilotflow-domain && pip install -e .
+cd ../datapilotflow-infrastructure && pip install -e .
+cd ../datapilotflow-services && pip install -e .
+cd ../datapilotflow-processors && pip install -e .
+cd ../datapilotflow-events && pip install -e .
 ```
 
-### Start Individual Listeners
-```bash
-# Job event listener
-python run_job_event_listener.py
-
-# File upload event listener
-python run_file_upload_event_listener.py
-
-# Notification event listener
-python run_notification_event_listener.py
-```
-
-### Custom Event Listener
-```python
-from datapilotflow.events.events_listeners import BaseEventListener
-
-class CustomEventListener(BaseEventListener):
-    async def handle_event(self, event_data: dict):
-        # Process your event
-        await self.process_custom_event(event_data)
-    
-    async def process_custom_event(self, event_data: dict):
-        # Your logic here
-        pass
-
-# Start listener
-listener = CustomEventListener()
-await listener.start()
-```
 
 ## 🧪 Testing
 
@@ -321,28 +282,88 @@ RABBITMQ_PASS = settings.RABBITMQ_PASS
 RABBITMQ_VHOST = settings.RABBITMQ_VHOST
 ```
 
+## 📋 Module Capabilities
+
+### 1. **Job Event Listener**
+- Listen for knowledge job events
+- Trigger job processing
+- Handle job status updates
+- Track job lifecycle
+
+### 2. **File Upload Event Listener**
+- Monitor file uploads
+- Trigger file processing
+- Track upload progress
+- Handle upload failures
+
+### 3. **Notification Event Listener**
+- Handle notification creation
+- Route notifications to users
+- WebSocket delivery
+- Notification persistence
+
+## 🔄 Event Processing Sequence
+
+```
+Service publishes event
+         │
+         ▼
+RabbitMQ Topic Exchange
+         │
+         ▼
+Event Queue (routed by routing key)
+         │
+         ▼
+Event Listener (separate process)
+         │
+    ┌────┼────┐
+    │         │
+    ▼         ▼
+Success    Error/DLQ
+    │         │
+    ├─→ Event Processor
+    │         │
+    │         ▼
+    │    Update via Services
+    │         │
+    └─────────┴──→ Callback/Response
+```
+
+## 🛠️ How to Build & Start
+
+### Build Steps
+
+```bash
+uv pip install -e ../datapilotflow-domain \
+  -e ../datapilotflow-infrastructure \
+  -e ../datapilotflow-services \
+  -e ../datapilotflow-processors -e .
+```
+
+### Start Event Listeners
+
+```bash
+# Start all listeners
+python run_all_event_listeners.py
+
+# Or start individual listeners
+python run_job_event_listener.py &
+python run_file_upload_event_listener.py &
+python run_notification_event_listener.py &
+```
+
+### Monitor Event Processing
+
+```bash
+# Watch logs in real-time
+tail -f logs/job-event-listener.log
+tail -f logs/file-upload-event-listener.log
+tail -f logs/notification-event-listener.log
+```
+
 ## 📖 Documentation
 
 For more details:
-- Event Listeners: See `src/datapilotflow/events/events_listeners/`
-- Event Configuration: See `src/datapilotflow/events/config.py`
-- Run Scripts: See `run_*.py` files
-
-## 🚦 Event Flow
-
-```
-1. Service publishes event → RabbitMQ
-2. Event listener receives event
-3. Event listener triggers processor
-4. Processor processes event
-5. Processor updates state via services
-6. Services may publish new events
-```
-
-## 📝 Logging
-
-Each event listener writes to its own log file:
-- `logs/job-event-listener.log`
-- `logs/file-upload-event-listener.log`
-- `logs/notification-event-listener.log`
-- `logs/all-event-listeners.log`
+- **Event Listeners**: See [src/datapilotflow/events/events_listeners/](src/datapilotflow/events/events_listeners/)
+- **Event Configuration**: See [src/datapilotflow/events/config.py](src/datapilotflow/events/config.py)
+- **Run Scripts**: See [run_*.py](./)

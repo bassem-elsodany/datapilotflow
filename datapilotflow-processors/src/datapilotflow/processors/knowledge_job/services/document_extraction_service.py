@@ -324,7 +324,7 @@ class DocumentExtractionService:
             List[Document]: Batches of extracted documents
         """
         logger.info(
-            f"[CONFLUENCE] Extracting from Confluence with mode: {knowledge_source_config.confluence_config.confluence_mode}"
+            f"[CONFLUENCE] Extracting from Confluence with mode: {knowledge_source_config.scraping_mode}"
         )
 
         from datapilotflow.processors.confluence import ConfluenceDocumentExtractor

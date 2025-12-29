@@ -22,7 +22,7 @@ def answer_generator(state: WorkflowState) -> WorkflowState:
     Returns:
         Updated state with final answer and context
     """
-    logger.info("🚀 [NODE START] answer_generator")
+    logger.debug("Node starting: answer_generator")
     try:
         # Get LLM client from config
         config = state.get("config", {})
@@ -31,7 +31,7 @@ def answer_generator(state: WorkflowState) -> WorkflowState:
         if not llm_client:
             raise ValueError("llm_client not found in config")
 
-        logger.info(f"💬 Generating answer using LLM client")
+        logger.debug("Generating answer using LLM client")
 
         # Get documents - use judged_documents if available, otherwise use retrieved_documents
         judged_docs = state.get("judged_documents")
@@ -44,27 +44,15 @@ def answer_generator(state: WorkflowState) -> WorkflowState:
 
             if not relevant_docs:
                 logger.warning(
-                    "⚠️ No relevant documents found after judging, using all judged documents"
+                    "No relevant documents found after judging, using all judged documents"
                 )
                 relevant_docs = judged_docs
         else:
             # Reranking was disabled - use all retrieved documents
-            logger.info("ℹ️ Using retrieved documents (reranking disabled)")
+            logger.debug("Using retrieved documents (reranking disabled)")
             relevant_docs = state.get("retrieved_documents", [])
-            logger.info(f"📄 Retrieved documents count: {len(relevant_docs)}")
-            if relevant_docs:
-                logger.info(f"📄 First doc keys: {list(relevant_docs[0].keys())}")
-                first_doc_text = relevant_docs[0].get("text", "NO TEXT")
-                logger.info(f"📄 First doc text type: {type(first_doc_text)}")
-                logger.info(
-                    f"📄 First doc text length: {len(first_doc_text) if first_doc_text else 0}"
-                )
-                if first_doc_text:
-                    logger.info(f"📄 First doc text preview: {first_doc_text[:200]}...")
-                else:
-                    logger.error(f"❌ First doc text is empty/None!")
-            else:
-                logger.error(f"❌ No retrieved documents found in state!")
+            if not relevant_docs:
+                logger.error("No retrieved documents found in state")
 
         # Build context from relevant documents
         context_parts = []
@@ -72,33 +60,28 @@ def answer_generator(state: WorkflowState) -> WorkflowState:
             doc_text = doc.get("text", "")
             if doc_text:
                 context_parts.append(f"{i}. {doc_text}")
-                logger.debug(f"📄 Added doc {i}: {len(doc_text)} chars")
             else:
-                logger.warning(f"⚠️ Doc {i} has no text!")
+                logger.warning(f"Document {i} has no text")
 
         context = "\n".join(context_parts)
-        logger.info(
-            f"📝 Built context with {len(context_parts)} documents, total {len(context)} chars"
-        )
+        logger.debug(f"Built context: {len(context_parts)} documents, {len(context)} chars")
 
         # Check if context is empty
         if not context or not context.strip():
-            logger.error("❌ Context is empty! No valid document content found.")
-            logger.error(f"❌ relevant_docs count: {len(relevant_docs)}")
-            if relevant_docs:
-                logger.error(f"❌ First doc sample: {relevant_docs[0]}")
+            logger.error("Context is empty: no valid document content found")
+            logger.error(f"Relevant documents count: {len(relevant_docs)}")
 
             # Set error message as final answer
             state["final_answer"] = (
                 "I apologize, but I couldn't find any relevant information in the knowledge base to answer your question. The documents were retrieved but contained no readable content."
             )
             state["context"] = ""
-            logger.error("❌ [NODE FINISH] answer_generator (empty context)")
+            logger.debug("Node finished: answer_generator (empty context)")
             return state
 
         # Pre-check: Verify context relevance to question
         # Quick check if context is semantically related to the query
-        logger.debug("🔍 Pre-checking context relevance to query...")
+        logger.debug("Pre-checking context relevance to query")
 
         # Simple heuristic: Check if the context seems completely unrelated
         # We'll let the LLM handle the detailed relevance check via the strict prompt
@@ -121,21 +104,13 @@ def answer_generator(state: WorkflowState) -> WorkflowState:
             response.content if hasattr(response, "content") else str(response)
         )
 
-        logger.info("📝 Answer Generator: Starting query_info extraction")
+        logger.debug("Answer Generator: Starting query_info extraction")
 
         # Get query information to show user the difference
         original_query = state["query"]
         enhanced_query_data = state.get("enhanced_query", {})
 
-        logger.info(f"📝 Answer Generator: Got enhanced_query_data from state")
-
-        logger.info(
-            f"📝 Answer Generator: enhanced_query_data type: {type(enhanced_query_data)}"
-        )
-        logger.info(
-            f"📝 Answer Generator: enhanced_query_data keys: {list(enhanced_query_data.keys()) if isinstance(enhanced_query_data, dict) else 'Not a dict'}"
-        )
-        logger.info(f"📝 Answer Generator: enhanced_query_data: {enhanced_query_data}")
+        logger.debug("Answer Generator: Got enhanced_query_data from state")
 
         # Build query comparison info
         query_info = {
@@ -156,10 +131,9 @@ def answer_generator(state: WorkflowState) -> WorkflowState:
                     augmented[1] if len(augmented) > 1 else augmented[0]
                 )
                 query_info["strategy_used"] = "Augmented"
-                logger.info(
-                    f"📝 Answer Generator: Extracted {len(augmented)} augmented queries for query_info"
+                logger.debug(
+                    f"Answer Generator: Extracted {len(augmented)} augmented queries"
                 )
-                logger.info(f"📝 Augmented queries: {augmented}")
             elif enhanced_query_data.get("multi_query_variants"):
                 variants = enhanced_query_data["multi_query_variants"]
                 query_info["enhanced_queries"] = variants
@@ -181,16 +155,16 @@ def answer_generator(state: WorkflowState) -> WorkflowState:
         state["final_answer"] = response_text
         state["query_info"] = query_info  # Add query comparison info
 
-        logger.info(
-            f"✅ Generated answer using {len(relevant_docs)} relevant documents"
+        logger.debug(
+            f"Generated answer using {len(relevant_docs)} relevant documents"
         )
-        logger.info("✅ [NODE FINISH] answer_generator")
+        logger.debug("Node finished: answer_generator")
 
     except Exception as e:
         error_msg = f"Answer generation failed: {str(e)}"
         state["errors"].append(error_msg)
-        logger.error(f"❌ {error_msg}")
-        logger.error("❌ [NODE FINISH] answer_generator (with error)")
+        logger.error(error_msg)
+        logger.error("Node finished: answer_generator (with error)")
 
         # Set fallback answer with actual error details
         state["context"] = ""
