@@ -2,11 +2,15 @@ version: '3.8'
 name: datapilotflow
 
 services:
+  # ============================================================================
+  # APPLICATION SERVICES
+  # ============================================================================
+
   # DataPilotFlow API Server
   api:
     build:
       context: ..
-      dockerfile: docker/Dockerfile
+      dockerfile: docker/services/api/Dockerfile
     container_name: datapilotflow-api-server
     ports:
       - "8800:8800"
@@ -20,6 +24,8 @@ services:
       - VECTOR_DB_HTTP_PORT=19530
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=datapilotflow
+      - RABBITMQ_PASS=datapilotflow123
     depends_on:
       mongodb:
         condition: service_healthy
@@ -28,8 +34,7 @@ services:
       rabbitmq:
         condition: service_healthy
     volumes:
-      - ../backend/upload:/app/upload
-      - ../backend/logs:/app/logs
+      - ../datapilotflow-api/logs:/app/logs
     networks:
       - datapilotflow-network
     restart: unless-stopped
@@ -39,6 +44,99 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  # DataPilotFlow Event Listeners
+  # Runs Job, FileUpload, and Notification event listeners
+  event-listeners:
+    build:
+      context: ..
+      dockerfile: docker/services/events/Dockerfile
+    container_name: datapilotflow-event-listeners
+    # No ports exposed - internal RabbitMQ communication only
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=datapilotflow
+      - RABBITMQ_PASS=datapilotflow123
+      - MONGO_HOST=mongodb
+      - MONGO_PORT=27017
+      - MONGO_DB_NAME=datapilotflow
+      - LOG_LEVEL=INFO
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - ../datapilotflow-events/logs:/app/logs
+    networks:
+      - datapilotflow-network
+    restart: on-failure
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # DataPilotFlow RAG MCP Server
+  # Provides knowledge retrieval via Model Context Protocol
+  mcp-rag-agent:
+    build:
+      context: ..
+      dockerfile: docker/services/mcp-agent/Dockerfile
+    container_name: datapilotflow-mcp-rag
+    ports:
+      - "65510:65510"
+    environment:
+      - MCP_SERVER_HOST=0.0.0.0
+      - MCP_SERVER_PORT=65510
+      - VECTOR_DB_HOST=milvus
+      - VECTOR_DB_HTTP_PORT=19530
+      - MONGO_HOST=mongodb
+      - MONGO_PORT=27017
+      - MONGO_DB_NAME=datapilotflow
+    depends_on:
+      milvus:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - ../datapilotflow-rag-agent/logs:/app/logs
+    networks:
+      - datapilotflow-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:65510/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # DataPilotFlow Dashboard
+  # Frontend web application for DataPilotFlow
+  dashboard:
+    build:
+      context: ..
+      dockerfile: docker/services/dashboard/Dockerfile
+    container_name: datapilotflow-dashboard
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - datapilotflow-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # ============================================================================
+  # INFRASTRUCTURE SERVICES
+  # ============================================================================
 
   # DataPilotFlow MongoDB Database
   # Using port 27020 externally to avoid conflicts with other MongoDB instances
