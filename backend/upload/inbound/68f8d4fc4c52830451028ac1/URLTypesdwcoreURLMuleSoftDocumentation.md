@@ -1,6 +1,0 @@
-# URL Types (dw::core::URL)
-
-Type | Definition | Description  
----|---|---  
-URI |  `type URI = { isValid: Boolean, host?: String, authority?: String, fragment?: String, path?: String, port?: Number, query?: String, scheme?: String, user?: String, isAbsolute?: Boolean, isOpaque?: Boolean }` |  Describes the URI type. For descriptions of the fields, see [URL Types (dw::core::URL)](https://docs.mulesoft.com/dataweave/latest/dataweave-types#dw_type_url).
-
