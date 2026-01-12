@@ -14,6 +14,9 @@ RUN npm ci --legacy-peer-deps
 # Copy source code
 COPY datapilotflow-dashboard ./
 
+# Copy Dashboard service configuration
+COPY docker/services/dashboard/.env .env
+
 # Build the application
 # Skip TypeScript checking to allow Vite bundling despite type errors
 RUN (npx tsc --noEmit 2>/dev/null || true) && npx vite build

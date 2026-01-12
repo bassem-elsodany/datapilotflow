@@ -11,6 +11,7 @@ import { isAxiosError } from 'axios';
 import { useState } from 'react';
 import { z, ZodError } from 'zod';
 import { client } from './axios';
+import { logger } from '@/services/logger';
 
 interface EnhancedMutationParams<
   TData = unknown,
@@ -123,10 +124,10 @@ function handleRequestError(error: unknown) {
   }
 
   if (error instanceof ZodError) {
-    console.error(error.format());
+    logger.error('Validation error', error.format());
   }
 
-  console.log(error);
+  logger.error('Unknown error', error);
 
   throw error;
 }
@@ -178,7 +179,7 @@ export function createGetQueryHook<
         return responseSchema.parse(response.data);
       })
       .catch((error) => {
-        console.error(`[API] GET ${url} - Error:`, error);
+        logger.error(`GET ${url} failed`, error);
         return handleRequestError(error);
       });
   };

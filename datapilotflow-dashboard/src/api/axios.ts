@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { app } from '@/config';
+import { logger } from '@/services/logger';
 
 export const client = axios.create({
   baseURL: app.apiBaseUrl,
@@ -20,7 +21,7 @@ client.interceptors.request.use(
       // Check if we have a valid token before making any request
       const token = localStorage.getItem('jwt_token');
       if (!token || !token.trim()) {
-        console.warn('🚫 Blocking API request: No authentication token available');
+        logger.warn('Blocking API request: No authentication token available');
         // Create a rejected promise that will be thrown
         const error = new Error('No authentication token available');
         error.name = 'AuthenticationError';
@@ -36,7 +37,7 @@ client.interceptors.request.use(
     return config;
   },
   (error) => {
-    console.error('❌ Request Error:', error);
+    logger.error('Request Error', error);
     return Promise.reject(error);
   }
 );
@@ -47,8 +48,11 @@ client.interceptors.response.use(
     return response;
   },
   (error) => {
-    console.error('❌ Response Error:', error.response?.status, error.config?.url);
-    console.error('❌ Error Details:', error.response?.data);
+    logger.error('Response Error', error, {
+      status: error.response?.status,
+      url: error.config?.url,
+      data: error.response?.data,
+    });
     return Promise.reject(error);
   }
 );
