@@ -33,6 +33,9 @@ COPY datapilotflow-events ./datapilotflow-events
 # Copy event listener entry point
 COPY datapilotflow-events/run_all_event_listeners.py ./
 
+# Copy event service configuration
+COPY docker/services/events/.env .env
+
 # Install dependencies using uv
 WORKDIR /app/datapilotflow-events
 RUN uv pip install -e . && \
