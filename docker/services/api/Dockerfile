@@ -28,6 +28,9 @@ COPY datapilotflow-api ./datapilotflow-api
 # Copy API entry point
 COPY datapilotflow-api/run_api_server.py ./
 
+# Copy API service configuration
+COPY docker/services/api/.env .env
+
 # Install dependencies using uv
 WORKDIR /app/datapilotflow-api
 RUN uv pip install -e . && \
