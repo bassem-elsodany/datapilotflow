@@ -5,13 +5,13 @@ FROM node:20-alpine as builder
 WORKDIR /app
 
 # Copy package files
-COPY dashboard/package.json dashboard/package-lock.json ./
+COPY datapilotflow-dashboard/package.json datapilotflow-dashboard/package-lock.json ./
 
 # Install dependencies
 RUN npm ci
 
 # Copy source code
-COPY dashboard ./
+COPY datapilotflow-dashboard ./
 
 # Build the application
 RUN npm run build

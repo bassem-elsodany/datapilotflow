@@ -20,6 +20,8 @@ services:
       - MONGO_HOST=mongodb
       - MONGO_PORT=27017
       - MONGO_DB_NAME=datapilotflow
+      - MONGO_USER=datapilotflow
+      - MONGO_PASS=datapilotflow123
       - VECTOR_DB_HOST=milvus
       - VECTOR_DB_HTTP_PORT=19530
       - RABBITMQ_HOST=rabbitmq
@@ -61,6 +63,8 @@ services:
       - MONGO_HOST=mongodb
       - MONGO_PORT=27017
       - MONGO_DB_NAME=datapilotflow
+      - MONGO_USER=datapilotflow
+      - MONGO_PASS=datapilotflow123
       - LOG_LEVEL=INFO
     depends_on:
       rabbitmq:
@@ -95,6 +99,8 @@ services:
       - MONGO_HOST=mongodb
       - MONGO_PORT=27017
       - MONGO_DB_NAME=datapilotflow
+      - MONGO_USER=datapilotflow
+      - MONGO_PASS=datapilotflow123
     depends_on:
       milvus:
         condition: service_healthy
