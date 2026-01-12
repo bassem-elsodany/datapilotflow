@@ -13,6 +13,7 @@
   "pythonPlatform": "Darwin",
   "venvPath": ".",
   "venv": ".venv",
+  "stubPath": ".venv/lib/python3.13/site-packages",
   "typeCheckingMode": "standard",
   "reportMissingImports": true,
   "extraPaths": [

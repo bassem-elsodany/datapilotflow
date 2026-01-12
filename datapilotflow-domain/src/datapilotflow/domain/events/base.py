@@ -2,7 +2,7 @@
 Base event system for domain events.
 
 This module provides the foundation for domain events, event handlers,
-and event dispatching in the SkillPilot system.
+and event dispatching in the DataPilotFlow system.
 """
 
 from abc import ABC, abstractmethod

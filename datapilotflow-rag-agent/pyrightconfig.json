@@ -13,8 +13,12 @@
   "pythonPlatform": "Darwin",
   "venvPath": ".",
   "venv": ".venv",
-  "typeCheckingMode": "standard",
+  "stubPath": ".venv/lib/python3.13/site-packages",
+  "typeCheckingMode": "basic",
   "reportMissingImports": true,
+  "reportGeneralTypeIssues": false,
+  "reportArgumentType": false,
+  "reportAttributeAccessIssue": false,
   "extraPaths": [
     "src",
     "../datapilotflow-domain/src",

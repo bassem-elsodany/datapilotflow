@@ -80,6 +80,10 @@
         {
             "name": "docker",
             "path": "docker"
+        },
+        {
+            "name": "talks",
+            "path": "talks"
         }
     ],
     "settings": {

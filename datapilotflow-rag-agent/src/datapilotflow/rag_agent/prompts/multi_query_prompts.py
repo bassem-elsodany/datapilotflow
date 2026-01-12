@@ -5,7 +5,7 @@ These prompts are used to generate alternative phrasings of queries
 to improve retrieval coverage and capture different user intents.
 """
 
-from ..base_prompt import Prompt
+from datapilotflow.domain.llm_prompts.base import Prompt
 
 MULTI_QUERY_SYSTEM_PROMPT = Prompt(
     name="datapilotflow_rag_agent_multi_query_system_prompt",

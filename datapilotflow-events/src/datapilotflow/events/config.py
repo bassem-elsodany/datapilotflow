@@ -98,27 +98,6 @@ class EventsSettings(BaseSettings):
         default="http", description="Vector DB connection scheme"
     )
 
-    # ============================================================================
-    # Business Logic Settings (Re-declared to load from .env)
-    # ============================================================================
-
-    # Agent Tracing
-    AGENT_TRACING_ENABLED: bool = Field(
-        default=False, description="Enable agent tracing"
-    )
-    AGENT_TRACING_API_KEY: Optional[str] = Field(
-        default=None, description="Agent tracing API key"
-    )
-    AGENT_TRACING_URL: str = Field(
-        default="http://localhost:5173/api", description="Agent tracing URL"
-    )
-    AGENT_TRACING_PROJECT_NAME: str = Field(
-        default="datapilotflow", description="Agent tracing project name"
-    )
-    AGENT_TRACING_DEFAULT_ENVIRONMENT: str = Field(
-        default="development", description="Agent tracing environment"
-    )
-
 
 # Global events settings instance
 settings = EventsSettings()

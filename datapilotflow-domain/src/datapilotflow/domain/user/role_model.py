@@ -1,5 +1,5 @@
 """
-Role domain model for SkillPilot.
+Role domain model for DataPilotFlow.
 
 This module defines the Role model used for managing roles
 in a separate collection for better scalability and maintainability.
@@ -20,7 +20,7 @@ class RoleType(str, Enum):
 
 class Role(BaseModel):
     """
-    Model representing a role in the SkillPilot system.
+    Model representing a role in the DataPilotFlow system.
     
     This model is stored in a separate 'roles' collection for better
     scalability and maintainability. Roles can be system-defined or

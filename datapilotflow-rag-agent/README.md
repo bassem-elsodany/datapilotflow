@@ -4,13 +4,6 @@
 
 The `datapilotflow-rag-agent` package provides a Retrieval-Augmented Generation (RAG) agent that can retrieve relevant documents from knowledge bases and generate responses. It exposes the RAG agent as an MCP (Model Context Protocol) server for use by any MCP client.
 
-## 📦 Package Overview
-
-- **Version**: 1.0.0
-- **Python**: >=3.11
-- **Dependencies**: `datapilotflow-domain`, `datapilotflow-infrastructure`, `datapilotflow-services`
-- **Purpose**: RAG agent implementation with MCP server exposure
-
 ## 🏗️ Architecture Position
 
 ```mermaid
@@ -38,51 +31,6 @@ graph TD
 - Knowledge retrieval from vector databases
 - Document reranking and filtering
 - Multi-query search strategies
-
-## 📁 Package Structure
-
-```
-datapilotflow-rag-agent/
-├── src/datapilotflow/rag_agent/
-│   ├── __init__.py
-│   │
-│   ├── agent.py                 # RAGAgentService
-│   ├── graph.py                 # LangGraph workflow
-│   ├── state.py                 # RAG workflow state
-│   ├── base_prompt.py           # Base prompts
-│   │
-│   ├── chains/                  # RAG chains
-│   │   ├── multi_query_chain.py
-│   │   ├── decomposition_chain.py
-│   │   └── hyde_chain.py
-│   │
-│   ├── nodes/                   # Graph nodes
-│   │   ├── document_retriever.py
-│   │   ├── document_judger.py
-│   │   ├── augmented_strategy_node.py
-│   │   ├── multi_query_strategy_node.py
-│   │   ├── decomposition_strategy_node.py
-│   │   └── answer_generator.py
-│   │
-│   ├── tools/                    # Retrieval tools
-│   │   ├── retriever_tool.py
-│   │   └── retrieval_tools.py
-│   │
-│   ├── services/                 # RAG services
-│   │   └── generate_response_rag.py
-│   │
-│   └── mcp/                      # MCP Server
-│       ├── server.py            # FastMCP server
-│       ├── adapters/
-│       │   └── rag_adapter.py   # MCP to RAG adapter
-│       └── tools/
-│           └── rag_tools.py     # MCP tool definitions
-│
-├── run_rag_mcp_server.py        # MCP server entry point
-├── DEPLOYMENT.md                 # Deployment guide
-├── pyproject.toml
-└── README.md
-```
 
 ## 🔑 Key Components
 
@@ -162,8 +110,6 @@ mcp.run(
 - Reranking support
 - Relevance filtering
 
-## 🔗 How This Package Uses Lower Layers
-
 ### Uses Services
 ```python
 from datapilotflow.services.conversation import ConversationHistoryService
@@ -226,8 +172,6 @@ async for chunk in get_response_stream_rag(
     yield chunk
 ```
 
-## 📦 Dependencies
-
 ### DataPilotFlow Dependencies
 - `datapilotflow-domain>=1.0.0` - Domain models and configuration
 - `datapilotflow-infrastructure>=1.0.0` - Vector DB client
@@ -268,25 +212,6 @@ cd ../datapilotflow-rag-agent && pip install -e .
 cd datapilotflow-rag-agent
 pytest tests/
 ```
-
-## 📚 Related Packages
-
-**Depends on**:
-- ✅ `datapilotflow-domain` - Uses config and domain models
-- ✅ `datapilotflow-infrastructure` - Uses vector DB client
-- ✅ `datapilotflow-services` - Uses conversation and model services
-
-**Used by**:
-- ✅ `datapilotflow-api` - Can use RAG agent (optional)
-- ✅ External MCP clients - Connect to MCP server
-
-## 🎯 Design Principles
-
-1. **MCP Protocol**: Standard MCP server for interoperability
-2. **LangGraph Workflow**: Modular, composable RAG pipeline
-3. **Multi-Query Search**: Comprehensive document retrieval
-4. **Reranking**: LLM-based document relevance ranking
-5. **Service-Specific Logging**: Dedicated log file
 
 ## 🔧 Configuration
 
@@ -356,8 +281,6 @@ RAG Agent (LangGraph)
     Structured Response
 ```
 
-## 🛠️ How to Build & Start
-
 ### Build Steps
 
 ```bash
@@ -390,12 +313,4 @@ graph = get_graph()
 result = await graph.ainvoke(rag_state)
 documents = result.get("retrieved_documents", [])
 ```
-
-## 📖 Documentation
-
-For more details:
-- **Deployment Guide**: See [DEPLOYMENT.md](DEPLOYMENT.md)
-- **MCP Server**: See [src/datapilotflow/rag_agent/mcp/server.py](src/datapilotflow/rag_agent/mcp/server.py)
-- **RAG Graph**: See [src/datapilotflow/rag_agent/graph.py](src/datapilotflow/rag_agent/graph.py)
-- **Retrieval Tools**: See [src/datapilotflow/rag_agent/tools/](src/datapilotflow/rag_agent/tools/)
 

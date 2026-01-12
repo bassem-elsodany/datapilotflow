@@ -1,7 +1,7 @@
 """
 LLM Prompts Subpackage
 
-This subpackage contains all prompts used throughout the SkillPilot system,
+This subpackage contains all prompts used throughout the DataPilotFlow system,
 organized by functionality and use case.
 """
 

@@ -2,7 +2,7 @@
 Core domain models and exceptions.
 
 This subpackage contains core domain models and exceptions used throughout
-the SkillPilot system.
+the DataPilotFlow system.
 """
 
 from .exceptions import *

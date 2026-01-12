@@ -1,7 +1,7 @@
 """
 File processor module that extends the base document processor for file uploads.
 This module uses Marker PdfConverter for superior document processing across multiple file types
-and integrates with the SkillPilot document processing pipeline.
+and integrates with the DataPilotFlow document processing pipeline.
 """
 
 import asyncio

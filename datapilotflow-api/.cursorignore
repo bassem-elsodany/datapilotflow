@@ -1,0 +1,17 @@
+# Cursor should be able to see .env files
+# Remove .env from ignore so Cursor can read it
+!.env
+!.env.local
+!.env.development
+!.env.production
+
+# But still ignore venv and build artifacts
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+dist/
+*.egg-info/

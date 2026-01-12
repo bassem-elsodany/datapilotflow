@@ -13,7 +13,6 @@ dependencies = [
     "langchain-community>=0.0.1",
     "langchain-litellm>=0.1.0",
     "litellm>=1.79.0",
-    "opik>=1.9.11",
     "loguru>=0.7.3",
     "fastmcp>=0.4.0",
     "pydantic>=2.10.6",

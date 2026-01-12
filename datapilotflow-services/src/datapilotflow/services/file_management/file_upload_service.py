@@ -1,8 +1,8 @@
 """
-File upload service for SkillPilot.
+File upload service for DataPilotFlow.
 
 This module provides file upload handling, RabbitMQ event publishing,
-and file processing queue management for the SkillPilot system.
+and file processing queue management for the DataPilotFlow system.
 """
 
 import os
