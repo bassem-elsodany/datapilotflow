@@ -1,7 +1,6 @@
 {
     "folders": [
-
-       {
+        {
             "name": "datapilotflow-api",
             "path": "datapilotflow-api",
             "settings": {
@@ -45,10 +44,6 @@
             "path": "datapilotflow-events"
         },
         {
-            "name": "backend",
-            "path": "backend"
-        },
-        {
             "path": "datapilotflow-infrastructure"
         },
         {
@@ -63,9 +58,6 @@
                 "python.terminal.activateEnvironment": true
             }
         },
-
-
-
         {
             "name": "datapilotflow-rag-agent",
             "path": "datapilotflow-rag-agent",
@@ -80,8 +72,7 @@
         },
         {
             "path": "datapilotflow-assistant-agent"
-        }
-
+        },
         {
             "name": "datapilotflow-dashboard",
             "path": "datapilotflow-dashboard"

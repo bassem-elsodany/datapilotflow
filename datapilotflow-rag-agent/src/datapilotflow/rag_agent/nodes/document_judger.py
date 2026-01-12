@@ -8,7 +8,6 @@ Uses async concurrent processing to judge multiple documents in parallel.
 import asyncio
 import re
 
-import opik
 from loguru import logger
 
 from ..chains import get_judger_chain

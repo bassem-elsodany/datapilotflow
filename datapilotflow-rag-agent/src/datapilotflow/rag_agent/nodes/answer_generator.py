@@ -4,7 +4,6 @@ Answer generator node for DataPilotFlow LangGraph implementation.
 This node generates the final answer based on the user's question and relevant documents.
 """
 
-import opik
 from loguru import logger
 
 from datapilotflow.rag_agent.chains import get_answer_generation_chain

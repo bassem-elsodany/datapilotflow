@@ -24,7 +24,6 @@ from datapilotflow.services.model_provider.model_provider_service import (
 )
 from langchain_litellm import ChatLiteLLM
 from loguru import logger
-from opik.integrations.langchain import OpikTracer
 
 from datapilotflow.rag_agent.graph import graph_dev as workflow
 from datapilotflow.rag_agent.state import RAGWorkflowState as WorkflowState
@@ -71,35 +70,17 @@ async def get_response_stream_rag(
             f"Workflow config: strategy={selected_strategy}, collection={collection_name}"
         )
 
-        config = {}
+        # Note: No thread_id needed - each query is independent (stateless RAG)
+        config = {
+            "configurable": {"thread_id": uuid.uuid4()},
+        }
+
         if settings.AGENT_TRACING_ENABLED:
             logger.debug(
                 f"Agent tracing enabled: Workflow config: strategy={selected_strategy}, collection={collection_name}, llm_provider_id={llm_provider_id}, llm_model_name={llm_model_name}"
             )
             # Enable LiteLLM tracking for cost and token usage
             logger.debug("LiteLLM tracking enabled for cost and token usage")
-
-            # Build tags for Opik trace
-            trace_tags = [
-                f"strategy:{selected_strategy or 'native'}",
-                f"provider:{llm_provider_id}",
-                f"model:{llm_model_name}",
-                f"collection:{collection_name}",
-                f"conversation:{conversation_id}",
-            ]
-            if conversation_description:
-                trace_tags.append(f"domain:{conversation_description[:50]}")
-
-            opik_tracer = OpikTracer(
-                graph=workflow.get_graph(xray=True),
-                tags=trace_tags,
-            )
-
-            # Note: No thread_id needed - each query is independent (stateless RAG)
-            config = {
-                "configurable": {"thread_id": uuid.uuid4()},
-                "callbacks": [opik_tracer],
-            }
         else:
             logger.debug(
                 f"Agent tracing disabled: Workflow config: strategy={selected_strategy}, collection={collection_name}"
