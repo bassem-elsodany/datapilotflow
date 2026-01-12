@@ -6,8 +6,8 @@ const isProduction = import.meta.env.PROD;
 
 // Get current environment
 const getCurrentEnvironment = () => {
-  if (import.meta.env.ENVIRONMENT === 'production') return 'production';
-  if (import.meta.env.ENVIRONMENT === 'staging') return 'staging';
+  if (import.meta.env.VITE_ENVIRONMENT === 'production') return 'production';
+  if (import.meta.env.VITE_ENVIRONMENT === 'staging') return 'staging';
   return 'development';
 };
 
@@ -221,20 +221,20 @@ export const apiEndpoints = {
 };
 
 export const app = {
-  name: import.meta.env.APP_NAME || 'dataPilotFlow',
-  version: import.meta.env.APP_VERSION || '1.0.0',
+  name: import.meta.env.VITE_APP_NAME || 'dataPilotFlow',
+  version: import.meta.env.VITE_APP_VERSION || '1.0.0',
   apiBaseUrl: buildApiBaseUrl(),
   redirectQueryParamName: 'r',
   accessTokenStoreKey: 'jwt_token',
   environment: currentEnv,
   isDevelopment,
   isProduction,
-  debugMode: import.meta.env.DEBUG_MODE === 'true',
-  logLevel: import.meta.env.LOG_LEVEL || 'info',
+  debugMode: import.meta.env.VITE_DEBUG_MODE === 'true',
+  logLevel: import.meta.env.VITE_LOG_LEVEL || 'info',
   // WebSocket configuration
   ws: {
-    reconnectAttempts: parseInt(import.meta.env.WS_RECONNECT_ATTEMPTS || '3'),
-    reconnectDelay: parseInt(import.meta.env.WS_RECONNECT_DELAY || '2000'),
+    reconnectAttempts: parseInt(import.meta.env.VITE_WS_RECONNECT_ATTEMPTS || '3'),
+    reconnectDelay: parseInt(import.meta.env.VITE_WS_RECONNECT_DELAY || '2000'),
   },
 };
 

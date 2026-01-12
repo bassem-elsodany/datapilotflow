@@ -1,1 +1,187 @@
-""" Admin User Initialization Service. This service handles the initialization of admin users and system roles during application startup. It ensures that essential system users and roles are created if they don't exist. """ import uuid from datetime import datetime, timezone from typing import Optional import bcrypt from datapilotflow.infrastructure.dao.auth import AuthDAO from loguru import logger from datapilotflow.services.users.roles_service import RolesService class AdminInitializationService: """Service for initializing admin users and system roles.""" def __init__(self): self.auth_dao = AuthDAO() self.roles_service = RolesService() async def initialize_admin_user_if_needed(self) -> bool: """Initialize admin user if it doesn't exist.""" try: logger.info("🔧 Initializing admin user...") # Check if admin user already exists existing_admin = self.auth_dao.get_user_by_username("admin") if existing_admin: logger.debug(f"Admin user already exists: {existing_admin.username}") # Ensure admin user has the admin role_id assigned if existing_admin.id: await self._ensure_admin_role_assigned(existing_admin.id) return True # Create admin user if it doesn't exist logger.info("🔧 Creating default admin user...") # Get admin role ID admin_role = self.roles_service.get_role_by_name("admin") if not admin_role: logger.error( " Admin role not found. Please initialize system roles first." ) return False # Create admin user data admin_data = { "_id": str(uuid.uuid4()), "username": "admin", "email": "admin@datapilotflow.com", "name": "System Administrator", "hashed_password": bcrypt.hashpw( "admin123".encode("utf-8"), bcrypt.gensalt() ).decode("utf-8"), "role_ids": [admin_role.id], # Assign admin role_id "created_at": datetime.now(timezone.utc), "last_login": None, "is_active": True, "profile_data": { "description": "Default system administrator", "created_by": "system", }, } # Insert the admin user result = self.auth_dao.collection.insert_one(admin_data) if result.inserted_id: logger.debug("Admin user created successfully!") logger.debug("Username: admin") logger.debug("Password: admin123") logger.debug("Email: admin@datapilotflow.com") logger.warning( " IMPORTANT: Change the default password after first login!" ) return True else: logger.error(f"Failed to create admin user") return False except Exception as e: logger.error(f"Error initializing admin user: {e}") return False async def _ensure_admin_role_assigned(self, user_id: str) -> bool: """Ensure admin user has the admin role_id assigned.""" try: from datapilotflow.services.users.user_service import UserService user_service = UserService() # Get admin role admin_role = self.roles_service.get_role_by_name("admin") if not admin_role or not admin_role.id: logger.error(f"Admin role not found or has no ID") return False # Check if user already has the admin role_id user = user_service.get_user_by_id(user_id) if not user: logger.error(f"User {user_id} not found") return False if admin_role.id not in user.role_ids: logger.info(f"🔧 Assigning admin role to user {user_id}") # Assign admin role success = user_service.assign_role_to_user(user_id, admin_role.id) if success: logger.debug(f"Admin role assigned to user {user_id}") return True else: logger.error(f"Failed to assign admin role to user {user_id}") return False else: logger.debug(f"User {user_id} already has admin role assigned") return True except Exception as e: logger.error(f"Error ensuring admin role assignment: {e}") return False async def initialize_system_roles_if_needed(self) -> bool: """Initialize system roles if they don't exist.""" try: logger.info("🔧 Initializing system roles...") # Check if system roles exist system_roles = self.roles_service.get_system_roles() if system_roles: logger.info( f" System roles already exist: {len(system_roles)} roles found" ) return True # Initialize system roles logger.info("🔧 Initializing system roles...") success = self.roles_service.initialize_system_roles() if success: logger.debug("System roles initialized successfully!") return True else: logger.error(f"Failed to initialize system roles") return False except Exception as e: logger.error(f"Error initializing system roles: {e}") return False async def initialize_system_if_needed(self) -> bool: """Initialize the complete system (admin user and roles) if needed.""" try: logger.debug("Node starting: Starting system initialization...") # Initialize system roles first roles_success = await self.initialize_system_roles_if_needed() # Initialize admin user admin_success = await self.initialize_admin_user_if_needed() if roles_success and admin_success: logger.debug("System initialization completed successfully!") return True else: logger.error(f"System initialization failed") return False except Exception as e: logger.error(f"Error during system initialization: {e}") return False # Global service instance _admin_initialization_service: Optional[AdminInitializationService] = None def get_admin_initialization_service() -> AdminInitializationService: """Get the global admin initialization service instance.""" global _admin_initialization_service if _admin_initialization_service is None: _admin_initialization_service = AdminInitializationService() return _admin_initialization_service
+"""
+Admin User Initialization Service.
+
+This service handles the initialization of admin users and system roles during
+application startup. It ensures that essential system users and roles are created
+if they don't exist.
+"""
+
+import uuid
+from datetime import datetime, timezone
+from typing import Optional
+
+import bcrypt
+from datapilotflow.infrastructure.dao.auth import AuthDAO
+from loguru import logger
+
+from datapilotflow.services.users.roles_service import RolesService
+
+
+class AdminInitializationService:
+    """Service for initializing admin users and system roles."""
+
+    def __init__(self):
+        self.auth_dao = AuthDAO()
+        self.roles_service = RolesService()
+
+    async def initialize_admin_user_if_needed(self) -> bool:
+        """Initialize admin user if it doesn't exist."""
+        try:
+            logger.info("🔧 Initializing admin user...")
+
+            # Check if admin user already exists
+            existing_admin = self.auth_dao.get_user_by_username("admin")
+            if existing_admin:
+                logger.debug(f"Admin user already exists: {existing_admin.username}")
+                # Ensure admin user has the admin role_id assigned
+                if existing_admin.id:
+                    await self._ensure_admin_role_assigned(existing_admin.id)
+                return True
+
+            # Create admin user if it doesn't exist
+            logger.info("🔧 Creating default admin user...")
+
+            # Get admin role ID
+            admin_role = self.roles_service.get_role_by_name("admin")
+            if not admin_role:
+                logger.error(
+                    "❌ Admin role not found. Please initialize system roles first."
+                )
+                return False
+
+            # Create admin user data
+            admin_data = {
+                "_id": str(uuid.uuid4()),
+                "username": "admin",
+                "email": "admin@datapilotflow.com",
+                "name": "System Administrator",
+                "hashed_password": bcrypt.hashpw(
+                    "admin123".encode("utf-8"), bcrypt.gensalt()
+                ).decode("utf-8"),
+                "role_ids": [admin_role.id],  # Assign admin role_id
+                "created_at": datetime.now(timezone.utc),
+                "last_login": None,
+                "is_active": True,
+                "profile_data": {
+                    "description": "Default system administrator",
+                    "created_by": "system",
+                },
+            }
+
+            # Insert the admin user
+            result = self.auth_dao.collection.insert_one(admin_data)
+            if result.inserted_id:
+                logger.debug("✅ Admin user created successfully!")
+                logger.debug("Username: admin")
+                logger.debug("Password: admin123")
+                logger.debug("Email: admin@datapilotflow.com")
+                logger.warning(
+                    "⚠️  IMPORTANT: Change the default password after first login!"
+                )
+                return True
+            else:
+                logger.error(f"❌ Failed to create admin user")
+                return False
+
+        except Exception as e:
+            logger.error(f"Error initializing admin user: {e}")
+            return False
+
+    async def _ensure_admin_role_assigned(self, user_id: str) -> bool:
+        """Ensure admin user has the admin role_id assigned."""
+        try:
+            from datapilotflow.services.users.user_service import UserService
+
+            user_service = UserService()
+
+            # Get admin role
+            admin_role = self.roles_service.get_role_by_name("admin")
+            if not admin_role or not admin_role.id:
+                logger.error(f"❌ Admin role not found or has no ID")
+                return False
+
+            # Check if user already has the admin role_id
+            user = user_service.get_user_by_id(user_id)
+            if not user:
+                logger.error(f"❌ User {user_id} not found")
+                return False
+
+            if admin_role.id not in user.role_ids:
+                logger.info(f"🔧 Assigning admin role to user {user_id}")
+                # Assign admin role
+                success = user_service.assign_role_to_user(user_id, admin_role.id)
+                if success:
+                    logger.debug(f"✅ Admin role assigned to user {user_id}")
+                    return True
+                else:
+                    logger.error(f"❌ Failed to assign admin role to user {user_id}")
+                    return False
+            else:
+                logger.debug(f"✅ User {user_id} already has admin role assigned")
+                return True
+
+        except Exception as e:
+            logger.error(f"Error ensuring admin role assignment: {e}")
+            return False
+
+    async def initialize_system_roles_if_needed(self) -> bool:
+        """Initialize system roles if they don't exist."""
+        try:
+            logger.info("🔧 Initializing system roles...")
+
+            # Check if system roles exist
+            system_roles = self.roles_service.get_system_roles()
+            if system_roles:
+                logger.info(
+                    f"✅ System roles already exist: {len(system_roles)} roles found"
+                )
+                return True
+
+            # Initialize system roles
+            logger.info("🔧 Initializing system roles...")
+            success = self.roles_service.initialize_system_roles()
+
+            if success:
+                logger.debug("✅ System roles initialized successfully!")
+                return True
+            else:
+                logger.error(f"❌ Failed to initialize system roles")
+                return False
+
+        except Exception as e:
+            logger.error(f"Error initializing system roles: {e}")
+            return False
+
+    async def initialize_system_if_needed(self) -> bool:
+        """Initialize the complete system (admin user and roles) if needed."""
+        try:
+            logger.debug("🚀 Starting system initialization...")
+
+            # Initialize system roles first
+            roles_success = await self.initialize_system_roles_if_needed()
+
+            # Initialize admin user
+            admin_success = await self.initialize_admin_user_if_needed()
+
+            if roles_success and admin_success:
+                logger.debug("✅ System initialization completed successfully!")
+                return True
+            else:
+                logger.error(f"❌ System initialization failed")
+                return False
+
+        except Exception as e:
+            logger.error(f"Error during system initialization: {e}")
+            return False
+
+
+# Global service instance
+_admin_initialization_service: Optional[AdminInitializationService] = None
+
+
+def get_admin_initialization_service() -> AdminInitializationService:
+    """Get the global admin initialization service instance."""
+    global _admin_initialization_service
+    if _admin_initialization_service is None:
+        _admin_initialization_service = AdminInitializationService()
+    return _admin_initialization_service

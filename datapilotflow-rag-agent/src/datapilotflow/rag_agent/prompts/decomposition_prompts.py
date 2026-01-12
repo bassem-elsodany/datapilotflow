@@ -5,7 +5,7 @@ These prompts are used to break down complex queries into smaller,
 more manageable sub-questions for targeted retrieval.
 """
 
-from ..base_prompt import Prompt
+from datapilotflow.domain.llm_prompts.base import Prompt
 
 DECOMPOSITION_SYSTEM_PROMPT = Prompt(
     name="datapilotflow_rag_agent_decomposition_system_prompt",

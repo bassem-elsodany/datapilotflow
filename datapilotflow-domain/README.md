@@ -4,14 +4,6 @@
 
 The `datapilotflow-domain` package is the foundational layer of the DataPilotFlow architecture. It contains pure domain models, configuration, and shared utilities with **zero dependencies** on other DataPilotFlow packages.
 
-## 📦 Package Overview
-
-- **Version**: 1.0.0
-- **Python**: >=3.11
-- **Dependencies**: Minimal (Pydantic, loguru, email-validator)
-- **Purpose**: Core domain models, centralized configuration, shared utilities
-- **Status**: Stable - Foundation layer, no breaking changes
-
 ## 🏗️ Architecture Position
 
 ### System Architecture Diagram
@@ -49,79 +41,6 @@ graph TB
 ```
 
 **This package is the foundation** - all other DataPilotFlow packages depend on it, but it depends on **nothing** from the DataPilotFlow ecosystem.
-
-## 📁 Package Structure
-
-```
-datapilotflow-domain/
-├── src/datapilotflow/domain/
-│   ├── __init__.py
-│   ├── config.py              # Centralized configuration (Settings)
-│   ├── logging.py             # Centralized logging utility
-│   │
-│   ├── agent/                 # Agent domain models
-│   │   └── models.py
-│   │
-│   ├── conversation/          # Conversation domain models
-│   │   └── models.py
-│   │
-│   ├── core/                  # Core exceptions and utilities
-│   │   └── exceptions.py
-│   │
-│   ├── embedding/             # Embedding model definitions
-│   │   └── embedding_model.py
-│   │
-│   ├── events/                # Event definitions and constants
-│   │   ├── base.py
-│   │   ├── constants.py
-│   │   ├── job_events.py
-│   │   └── timeline_events.py
-│   │
-│   ├── generative/            # LLM/generative model definitions
-│   │   └── generative_model.py
-│   │
-│   ├── knowledge/             # Knowledge base domain models
-│   │   ├── document_splitter.py
-│   │   ├── job_timeline.py
-│   │   ├── knowledge_factory.py
-│   │   ├── knowledge_job.py
-│   │   ├── knowledge_source_config.py
-│   │   ├── knowledge.py
-│   │   ├── llm_content_filter_config.py
-│   │   └── vectordb_collection.py
-│   │
-│   ├── llm_prompts/           # LLM prompt templates
-│   │   ├── ai_responses.py
-│   │   ├── base.py
-│   │   ├── conversation.py
-│   │   └── knowledge_base.py
-│   │
-│   ├── model_provider/        # Model provider abstractions
-│   │   └── model_provider.py
-│   │
-│   ├── notification/          # Notification domain models
-│   │   └── notification.py
-│   │
-│   ├── rag/                   # RAG-specific domain models
-│   │   ├── knowledge_chunk.py
-│   │   ├── rag_file_upload.py
-│   │   └── weaviate_chunk.py
-│   │
-│   ├── tool/                  # Tool/MCP server definitions
-│   │   └── models.py
-│   │
-│   ├── user/                  # User and role models
-│   │   ├── role_model.py
-│   │   ├── roles.py
-│   │   └── user.py
-│   │
-│   └── vectordb/              # Vector database collection models
-│       └── collection_models.py
-│
-├── tests/                     # Unit tests
-├── pyproject.toml
-└── README.md
-```
 
 ## 🔑 Key Components
 
@@ -245,8 +164,6 @@ from datapilotflow.domain.conversation import ConversationMessage
 # Uses config for agent settings
 ```
 
-## 📦 Dependencies
-
 ### External Dependencies
 - `pydantic>=2.10.6` - Data validation and settings
 - `pydantic-settings>=2.0.0` - Settings management
@@ -364,27 +281,6 @@ cd datapilotflow-domain
 pytest tests/
 ```
 
-## 📚 Related Packages
-
-This package is used by:
-- ✅ `datapilotflow-infrastructure` - Uses config and domain models
-- ✅ `datapilotflow-services` - Uses config and domain models
-- ✅ `datapilotflow-processors` - Uses domain models
-- ✅ `datapilotflow-events` - Uses event definitions
-- ✅ `datapilotflow-api` - Uses config and domain models
-- ✅ `datapilotflow-rag-agent` - Uses config and domain models
-- ✅ `datapilotflow-assistant-agent` - Uses config and domain models
-
-## 🎯 Design Principles
-
-1. **Pure Domain Logic**: No infrastructure concerns, no framework dependencies
-2. **Pydantic Models**: Type-safe, validated data structures
-3. **Configuration Centralization**: Single source of truth for all settings
-4. **Zero Coupling**: No dependencies on other DataPilotFlow packages
-5. **Reusability**: Models and utilities usable across all layers
-
-## 🛠️ How to Build & Start
-
 ### Build Steps
 
 1. **Navigate to module**
@@ -415,23 +311,6 @@ This package is used by:
    vim .env
    ```
 
-### Development Setup
-
-```bash
-# Create development virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install in development mode with test dependencies
-pip install -e ".[dev]"
-
-# Run tests
-pytest tests/ -v
-
-# Run type checking
-pyright .
-```
-
 ### Standalone Usage
 
 ```bash
@@ -449,11 +328,3 @@ print(f'Vector DB: {settings.VECTOR_DB_HOST}:{settings.VECTOR_DB_HTTP_PORT}')
 "
 ```
 
-## 📖 Documentation
-
-For more details on specific components:
-- **Configuration**: See [src/datapilotflow/domain/config.py](src/datapilotflow/domain/config.py)
-- **Logging**: See [src/datapilotflow/domain/logging.py](src/datapilotflow/domain/logging.py)
-- **Domain Models**: See [src/datapilotflow/domain/](src/datapilotflow/domain/) subdirectories
-- **Event Definitions**: See [src/datapilotflow/domain/events/](src/datapilotflow/domain/events/)
-- **LLM Prompts**: See [src/datapilotflow/domain/llm_prompts/](src/datapilotflow/domain/llm_prompts/)

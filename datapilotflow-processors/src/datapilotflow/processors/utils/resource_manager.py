@@ -1,5 +1,5 @@
 """
-Resource Management Utilities for SkillPilot
+Resource Management Utilities for DataPilotFlow
 
 This module provides utilities for managing resources, suppressing warnings,
 and ensuring proper cleanup of database connections and other resources.

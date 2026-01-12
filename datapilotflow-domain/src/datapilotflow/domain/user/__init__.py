@@ -1,8 +1,8 @@
 """
-User domain package for SkillPilot.
+User domain package for DataPilotFlow.
 
 This package contains user-related domain models and enums for managing
-user accounts, roles, and permissions in the SkillPilot system.
+user accounts, roles, and permissions in the DataPilotFlow system.
 """
 
 from .user import User

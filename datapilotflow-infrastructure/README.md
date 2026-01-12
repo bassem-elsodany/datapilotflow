@@ -4,14 +4,6 @@
 
 The `datapilotflow-infrastructure` package provides data access objects (DAOs), database clients, and infrastructure abstractions. It sits directly above the domain layer and provides concrete implementations for data persistence and system integration.
 
-## 📦 Package Overview
-
-- **Version**: 1.0.0
-- **Python**: >=3.11
-- **Dependencies**: `datapilotflow-domain` + database drivers (PyMongo, PyMilvus, aio-pika)
-- **Purpose**: Database access, message queues, infrastructure clients
-- **Status**: Stable - Data layer isolation from business logic
-
 ## 🏗️ Architecture Position
 
 ### System Architecture Diagram
@@ -55,65 +47,6 @@ graph TB
 - RabbitMQ async message queue client
 - Data Access Objects (DAOs) for all domain entities
 - Database schema and index management
-
-## 📁 Package Structure
-
-```
-datapilotflow-infrastructure/
-├── src/datapilotflow/infrastructure/
-│   ├── __init__.py
-│   │
-│   ├── mongo/                    # MongoDB infrastructure
-│   │   ├── client.py            # MongoClientWrapper (singleton)
-│   │   └── indexes.py           # Database indexes
-│   │
-│   ├── mq/                       # Message Queue (RabbitMQ)
-│   │   ├── client.py            # RabbitMQClient (singleton)
-│   │   └── __init__.py
-│   │
-│   ├── vectordb/                 # Vector Database (Milvus)
-│   │   ├── milvus/
-│   │   │   ├── client.py        # MilvusClientWrapper
-│   │   │   ├── indexes.py       # Vector indexes
-│   │   │   ├── utils.py         # Utility functions
-│   │   │   └── examples.py      # Usage examples
-│   │   └── processor.py         # Vector processing utilities
-│   │
-│   └── dao/                      # Data Access Objects (organized by domain)
-│       ├── __init__.py
-│       │
-│       ├── auth/                 # Authentication & Authorization
-│       │   ├── auth_dao.py      # User authentication DAO
-│       │   └── roles_dao.py     # Roles and permissions DAO
-│       │
-│       ├── file_management/     # File upload management
-│       │   └── rag_file_upload_service.py
-│       │
-│       ├── knowledge/            # Knowledge base DAOs
-│       │   ├── document_splitter_dao.py
-│       │   ├── job_timeline_dao.py
-│       │   ├── knowledge_job_dao.py
-│       │   ├── knowledge_source_dao.py
-│       │   ├── llm_content_filter_dao.py
-│       │   └── url_source_dao.py
-│       │
-│       ├── model_provider/       # Model provider DAO
-│       │   └── model_provider_dao.py
-│       │
-│       ├── notification/         # Notification DAO
-│       │   └── notification_service.py
-│       │
-│       ├── tool/                 # Tool & MCP server DAOs
-│       │   ├── mcp_server_dao.py
-│       │   └── tool_dao.py
-│       │
-│       └── vectordb/            # Vector database collection DAO
-│           └── vectordb_collection_dao.py
-│
-├── tests/
-├── pyproject.toml
-└── README.md
-```
 
 ## 🔑 Key Components
 
@@ -262,8 +195,6 @@ user = await auth_dao.authenticate(email, password)
 - `VectorDBCollectionDAO` - Vector collection management
 - `NotificationService` - Notification persistence
 - `ToolDAO`, `MCPServerDAO` - Tool and MCP server management
-
-## 🔗 How This Package Uses Domain
 
 ### Configuration
 ```python
@@ -416,8 +347,6 @@ from datapilotflow.infrastructure.dao.knowledge import KnowledgeJobDAO
     └─────────────────────────────────────────────────────────┘
 ```
 
-## 📦 Dependencies
-
 ### DataPilotFlow Dependencies
 - `datapilotflow-domain>=1.0.0` - Domain models and configuration
 
@@ -478,27 +407,6 @@ pytest tests/
 - Milvus instance (or test container)
 - RabbitMQ instance (or test container)
 
-## 📚 Related Packages
-
-**Depends on**:
-- ✅ `datapilotflow-domain` - Uses config and domain models
-
-**Used by**:
-- ✅ `datapilotflow-services` - Uses DAOs and clients
-- ✅ `datapilotflow-processors` - Uses vector DB client
-- ✅ `datapilotflow-events` - Uses RabbitMQ client
-- ✅ `datapilotflow-api` - Uses through services layer
-- ✅ `datapilotflow-rag-agent` - Uses vector DB client
-- ✅ `datapilotflow-assistant-agent` - Uses infrastructure clients
-
-## 🎯 Design Principles
-
-1. **Separation of Concerns**: Infrastructure separate from business logic
-2. **DAO Pattern**: Data access objects for each domain entity
-3. **Singleton Clients**: Shared connection pools for efficiency
-4. **Domain Model Usage**: Works with domain models, not raw data
-5. **Async/Await**: All operations are async for performance
-
 ## 🔧 Configuration
 
 Infrastructure uses configuration from `datapilotflow-domain`:
@@ -519,8 +427,6 @@ VECTOR_DB_HTTP_PORT = settings.VECTOR_DB_HTTP_PORT
 RABBITMQ_HOST = settings.RABBITMQ_HOST
 RABBITMQ_PORT = settings.RABBITMQ_PORT
 ```
-
-## 🛠️ How to Build & Start
 
 ### Build Steps
 
@@ -557,23 +463,6 @@ RABBITMQ_PORT = settings.RABBITMQ_PORT
    RABBITMQ_PORT=5672
    EOF
    ```
-
-### Development Setup
-
-```bash
-# Create development virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install in development mode
-pip install -e ".[dev]"
-
-# Run tests
-pytest tests/ -v
-
-# Run type checking
-pyright .
-```
 
 ### Starting with Docker (Recommended for Development)
 
@@ -619,11 +508,3 @@ asyncio.run(verify())
 EOF
 ```
 
-## 📖 Documentation
-
-For more details on specific components:
-- **MongoDB Client**: See [src/datapilotflow/infrastructure/mongo/client.py](src/datapilotflow/infrastructure/mongo/client.py)
-- **Vector DB Client**: See [src/datapilotflow/infrastructure/vectordb/milvus/client.py](src/datapilotflow/infrastructure/vectordb/milvus/client.py)
-- **RabbitMQ Client**: See [src/datapilotflow/infrastructure/mq/client.py](src/datapilotflow/infrastructure/mq/client.py)
-- **DAOs**: See [src/datapilotflow/infrastructure/dao/](src/datapilotflow/infrastructure/dao/)
-- **Indexes**: See [src/datapilotflow/infrastructure/mongo/indexes.py](src/datapilotflow/infrastructure/mongo/indexes.py)

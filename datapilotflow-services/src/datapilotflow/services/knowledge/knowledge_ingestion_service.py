@@ -1,5 +1,5 @@
 """
-Knowledge ingestion service for SkillPilot.
+Knowledge ingestion service for DataPilotFlow.
 
 This module provides the KnowledgeIngestionService class for managing
 document ingestion into the knowledge base using Weaviate storage.

@@ -32,7 +32,13 @@ def _is_service_context() -> bool:
             frame_file = str(frame.filename).lower()
             if any(
                 keyword in frame_file
-                for keyword in ["uvicorn", "run_", "api_server", "server.py", "run_api_server"]
+                for keyword in [
+                    "uvicorn",
+                    "run_",
+                    "api_server",
+                    "server.py",
+                    "run_api_server",
+                ]
             ):
                 return True
     except Exception:
@@ -287,33 +293,6 @@ class Settings(BaseSettings):
             return f"mongodb://{user}:{pw}@{host}:{port}/admin"
         return f"mongodb://{host}:{port}/{db}"
 
-    # --- Agent Tracing Configuration ---
-
-    AGENT_TRACING_ENABLED: bool = Field(
-        default=False,
-        description="Whether to enable agent tracing and prompt versioning",
-    )
-
-    AGENT_TRACING_API_KEY: Optional[str] = Field(
-        default=None,
-        description="API key for tracing agent activities",
-    )
-
-    AGENT_TRACING_URL: str = Field(
-        default="http://localhost:5173/api",
-        description="URL for tracing agent activities",
-    )
-
-    AGENT_TRACING_PROJECT_NAME: str = Field(
-        default="datapilotflow",
-        description="Project name for tracing agent activities",
-    )
-
-    AGENT_TRACING_DEFAULT_ENVIRONMENT: str = Field(
-        default="development",
-        description="Default environment for tracing agent activities",
-    )
-
     # --- RAG Configuration ---
 
     RAG_TOP_K: int = Field(
@@ -336,23 +315,6 @@ class Settings(BaseSettings):
         default=Path("data/evaluation_dataset.json"),
         description="Path to evaluation dataset",
     )
-    KNOWLEDGE_METADATA_FILE_NAME: str = Field(
-        default="config/knowledge_metadata.json",
-        description="Name of the knowledge metadata JSON file.",
-        min_length=1,
-    )
-
-    @computed_field
-    @property
-    def EXTRACTION_METADATA_FILE_PATH(self) -> Path:
-        """Computed path for extraction metadata."""
-        return Path(self.KNOWLEDGE_METADATA_FILE_NAME)
-
-    @computed_field
-    @property
-    def KNOWLEDGE_METADATA_FILE_PATH(self) -> Path:
-        """Computed path for knowledge metadata file."""
-        return Path(self.KNOWLEDGE_METADATA_FILE_NAME)
 
     # --- Vector Database Configuration ---
     VECTOR_DB_HOST: str = Field(

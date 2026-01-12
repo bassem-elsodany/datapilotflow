@@ -1,8 +1,8 @@
 """
-User domain model for SkillPilot.
+User domain model for DataPilotFlow.
 
 This module defines the User model used for managing user accounts,
-authentication, and role-based access control in the SkillPilot system.
+authentication, and role-based access control in the DataPilotFlow system.
 """
 
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
@@ -15,7 +15,7 @@ from datetime import datetime
 
 class User(BaseModel):
     """
-    Model representing a user in the SkillPilot system.
+    Model representing a user in the DataPilotFlow system.
     
     This model handles user authentication and profile information.
     Role-based access control is now handled through separate role assignments

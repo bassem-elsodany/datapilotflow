@@ -75,16 +75,9 @@ async def get_response_stream_rag(
             "configurable": {"thread_id": uuid.uuid4()},
         }
 
-        if settings.AGENT_TRACING_ENABLED:
-            logger.debug(
-                f"Agent tracing enabled: Workflow config: strategy={selected_strategy}, collection={collection_name}, llm_provider_id={llm_provider_id}, llm_model_name={llm_model_name}"
-            )
-            # Enable LiteLLM tracking for cost and token usage
-            logger.debug("LiteLLM tracking enabled for cost and token usage")
-        else:
-            logger.debug(
-                f"Agent tracing disabled: Workflow config: strategy={selected_strategy}, collection={collection_name}"
-            )
+        logger.debug(
+            f"Workflow config: strategy={selected_strategy}, collection={collection_name}, llm_provider_id={llm_provider_id}, llm_model_name={llm_model_name}"
+        )
 
         # Build workflow configuration
         # Calculate top_k_per_query: For RRF, we retrieve more docs per query to account for fusion

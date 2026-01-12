@@ -9,26 +9,17 @@ import asyncio
 import signal
 import sys
 from contextlib import asynccontextmanager
+from typing import AsyncGenerator
 
-from datapilotflow.services.opik_utils import configure
 from fastapi import FastAPI, HTTPException, Query, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from langgraph.checkpoint.mongodb import MongoDBSaver
 from loguru import logger
-from opik.integrations.langchain import OpikTracer
 
 # CRITICAL: Import config FIRST to configure loguru with custom format
-from datapilotflow.api.config import settings
-
-if settings.AGENT_TRACING_ENABLED:
-    logger.info("Agent tracing is enabled, configuring Opik")
-    configure()
-else:
-    logger.info("Agent tracing is disabled, skipping Opik configuration")
-
-from datapilotflow.api.config import API_CONFIG, API_PREFIX
+from datapilotflow.api.config import API_CONFIG, API_PREFIX, settings
 from datapilotflow.api.routers import (
     assistant_router,
     auth_router,
@@ -104,8 +95,8 @@ async def initialize_system_if_needed():
         return False
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
+@asynccontextmanager  # type: ignore[arg-type]
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Manage application lifespan."""
     # Startup
     logger.debug("Starting DataPilotFlow API Server...")
@@ -131,7 +122,7 @@ async def lifespan(app: FastAPI):
         def loads(self, data):
             return json.loads(data.decode("utf-8") if isinstance(data, bytes) else data)
 
-    mongodb_utils.serde = JSONSerializer()
+    mongodb_utils.serde = JSONSerializer()  # type: ignore[attr-defined]
     logger.info(
         "✅ Patched langgraph.checkpoint.mongodb.utils.serde with JSONSerializer"
     )
@@ -140,13 +131,13 @@ async def lifespan(app: FastAPI):
         logger.info(
             "MongoDB agent state checkpointing is enabled, configuring MongoDB checkpointer"
         )
-        with MongoDBSaver.from_conn_string(
+        with MongoDBSaver.from_conn_string(  # type: ignore[attr-defined]
             conn_string=agent_mongo_uri,
             db_name=settings.MONGO_AGENT_STATE_CHECKPOINT_DB_NAME,
             checkpoint_collection_name=settings.MONGO_AGENT_STATE_CHECKPOINT_COLLECTION,
             writes_collection_name=settings.MONGO_AGENT_STATE_WRITES_COLLECTION,
         ) as checkpointer:
-            # Store checkpointer in app state and global variable
+            # Store checkpointer in app state
             app.state.checkpointer = checkpointer
 
             # Set checkpointer for assistant_agent
@@ -157,24 +148,14 @@ async def lifespan(app: FastAPI):
             set_assistant_checkpointer(checkpointer)  # For assistant agent
 
             logger.info("DataPilot API ready and running")
-            logger.info(f"Checkpointer stored in app.state and global: {checkpointer}")
+            logger.info(f"Checkpointer stored in app.state: {checkpointer}")
             logger.info("Checkpointer set for assistant_agent")
-            yield {"checkpointer": checkpointer}  # Application is running
+            yield  # Application is running
     else:
         logger.info(
             "MongoDB agent state checkpointing is disabled, skipping MongoDB checkpointer configuration"
         )
-        yield {"checkpointer": None}  # Application is running
-
-    # Handle graceful shutdown
-    if settings.AGENT_TRACING_ENABLED:
-        logger.info("Flushing Opik tracer...")
-        try:
-            opik_tracer = OpikTracer()
-            opik_tracer.flush()
-            logger.info("Opik tracer flushed successfully")
-        except Exception as e:
-            logger.error(f"Error flushing Opik tracer: {e}")
+        yield  # Application is running
 
     # Shutdown
     logger.info("Shutting down DataPilotFlow API Server...")
@@ -188,7 +169,7 @@ app = FastAPI(
     version=API_CONFIG["version_info"],
     docs_url="/docs",
     redoc_url="/redoc",
-    lifespan=lifespan,
+    lifespan=lifespan,  # type: ignore[arg-type]
 )
 
 # Add CORS middleware
@@ -214,7 +195,9 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     # Log 403 (Forbidden) errors at debug level since they're expected for non-admin users
     # Log other HTTP exceptions at warning level
     if exc.status_code == 403:
-        logger.debug(f"HTTP exception: {exc.status_code} - {exc.detail} (path: {request.url.path})")
+        logger.debug(
+            f"HTTP exception: {exc.status_code} - {exc.detail} (path: {request.url.path})"
+        )
     else:
         logger.warning(f"HTTP exception: {exc.status_code} - {exc.detail}")
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})

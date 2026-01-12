@@ -5,55 +5,55 @@ This module defines the base Prompt class used by all prompt modules
 in the LLM prompts subpackage.
 """
 
-import opik
-from loguru import logger
-
-# Note: settings removed from domain - it's only for local prompt fallback
+from typing import Any, Dict, List, Optional
 
 
 class Prompt:
     """
-    Wrapper class for managing prompts with Opik versioning.
+    Simple wrapper class for managing prompts.
 
-    This class provides a unified interface for prompt management, supporting
-    both Opik versioned prompts and local fallback prompts.
+    This class provides a unified interface for prompt management.
 
     Attributes:
         name: Name identifier for the prompt
         prompt: The actual prompt text content
+        labels: Optional labels for categorization
+        config: Optional configuration dictionary
     """
 
-    def __init__(self, name: str, prompt: str, agent_tracing_enabled: bool = False) -> None:
+    def __init__(
+        self,
+        name: str,
+        prompt: str,
+        agent_tracing_enabled: bool = False,
+        labels: Optional[List[str]] = None,
+        config: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """
+        Initialize a Prompt instance.
+
+        Args:
+            name: Name identifier for the prompt
+            prompt: The actual prompt text content
+            agent_tracing_enabled: Deprecated parameter, kept for backward compatibility
+            labels: Optional labels for categorization
+            config: Optional configuration dictionary
+        """
         self.name = name
-
-        try:
-            if agent_tracing_enabled:
-                import opik
-
-                self.__prompt = opik.Prompt(name=name, prompt=prompt)
-            else:
-                self.__prompt = prompt
-        except Exception:
-            logger.warning(
-                "Can't use Opik to version the prompt (probably due to missing or invalid credentials). Falling back to local prompt. The prompt is not versioned, but it's still usable."
-            )
-
-            self.__prompt = prompt
-        else:
-            self.__prompt = prompt
+        self._prompt = prompt
+        self.labels = labels or []
+        self.config = config or {}
+        # agent_tracing_enabled is ignored - kept for backward compatibility
 
     @property
     def prompt(self) -> str:
-        if (
-            hasattr(opik, "Prompt")
-            and isinstance(self.__prompt, opik.Prompt)
-        ):
-            return self.__prompt.prompt
-        else:
-            return str(self.__prompt)
+        """Get the prompt text content."""
+        return self._prompt
 
     def __str__(self) -> str:
+        """Return string representation of the prompt."""
         return self.prompt
 
     def __repr__(self) -> str:
-        return self.__str__()
+        """Return representation of the prompt."""
+        return f"Prompt(name='{self.name}')"

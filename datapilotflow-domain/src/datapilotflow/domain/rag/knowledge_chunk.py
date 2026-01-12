@@ -1,5 +1,5 @@
 """
-Knowledge chunk domain model for SkillPilot.
+Knowledge chunk domain model for DataPilotFlow.
 
 This module defines the KnowledgeChunk model used for storing and retrieving
 document chunks in vector databases.

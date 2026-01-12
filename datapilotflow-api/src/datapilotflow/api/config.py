@@ -130,23 +130,6 @@ class APISettings(BaseSettings):
         le=1.0,
     )
 
-    # Agent Tracing
-    AGENT_TRACING_ENABLED: bool = Field(
-        default=False, description="Enable agent tracing"
-    )
-    AGENT_TRACING_API_KEY: Optional[str] = Field(
-        default=None, description="Agent tracing API key"
-    )
-    AGENT_TRACING_URL: str = Field(
-        default="http://localhost:5173/api", description="Agent tracing URL"
-    )
-    AGENT_TRACING_PROJECT_NAME: str = Field(
-        default="datapilotflow", description="Agent tracing project name"
-    )
-    AGENT_TRACING_DEFAULT_ENVIRONMENT: str = Field(
-        default="development", description="Agent tracing environment"
-    )
-
     # File Management
     RAG_FILE_UPLOAD_INBOUND_DIR: str = Field(
         default="./upload/inbound", description="Inbound upload directory"
@@ -163,11 +146,6 @@ class APISettings(BaseSettings):
     RAG_INGESTION_JOBS_OUTPUT_DATA_DIR: str = Field(
         default="./ingestion_jobs_output_data",
         description="Ingestion jobs output directory",
-    )
-
-    # Knowledge Base
-    KNOWLEDGE_METADATA_FILE_NAME: str = Field(
-        default="config/knowledge_metadata.json", description="Knowledge metadata file"
     )
 
 

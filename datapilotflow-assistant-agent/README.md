@@ -4,13 +4,6 @@
 
 The `datapilotflow-assistant-agent` package provides a supervisor/assistant agent that orchestrates multiple tools and agents, including the RAG agent, to handle complex user queries and tasks.
 
-## 📦 Package Overview
-
-- **Version**: 1.0.0
-- **Python**: >=3.11
-- **Dependencies**: `datapilotflow-domain`, `datapilotflow-infrastructure`, `datapilotflow-services`
-- **Purpose**: Supervisor agent with tool orchestration and multi-agent coordination
-
 ## 🏗️ Architecture Position
 
 ```mermaid
@@ -38,27 +31,6 @@ graph TD
 - MCP tool integration
 - Conversation management
 
-## 📁 Package Structure
-
-```
-datapilotflow-assistant-agent/
-├── src/datapilotflow/assistant_agent/
-│   ├── __init__.py
-│   │
-│   ├── agent.py                 # AssistantAgentService
-│   ├── graph.py                 # LangGraph supervisor workflow
-│   ├── state.py                 # Agent state
-│   │
-│   ├── tools/                    # Agent tools
-│   │   └── ...
-│   │
-│   └── prompts/                  # Agent prompts
-│       └── ...
-│
-├── pyproject.toml
-└── README.md
-```
-
 ## 🔑 Key Components
 
 ### 1. Assistant Agent
@@ -80,8 +52,6 @@ datapilotflow-assistant-agent/
 - Tool selection
 - Multi-step reasoning
 - Conversation management
-
-## 🔗 How This Package Uses Lower Layers
 
 ### Uses RAG Agent (via MCP)
 ```python
@@ -106,8 +76,6 @@ from datapilotflow.domain.conversation import ConversationMessage
 
 # Assistant agent uses domain models
 ```
-
-## 📦 Dependencies
 
 ### DataPilotFlow Dependencies
 - `datapilotflow-domain>=1.0.0` - Domain models and configuration
@@ -137,16 +105,6 @@ cd ../datapilotflow-infrastructure && pip install -e .
 cd ../datapilotflow-services && pip install -e .
 cd ../datapilotflow-assistant-agent && pip install -e .
 ```
-
-## 📚 Related Packages
-
-**Depends on**:
-- ✅ `datapilotflow-domain` - Uses config and domain models
-- ✅ `datapilotflow-infrastructure` - Uses database access
-- ✅ `datapilotflow-services` - Uses business logic services
-
-**Used by**:
-- ✅ `datapilotflow-api` - Exposes assistant agent via API
 
 ## 📋 Module Capabilities
 
@@ -190,8 +148,6 @@ Assistant Agent (Supervisor)
     User receives response
 ```
 
-## 🛠️ How to Build & Start
-
 ### Build Steps
 
 ```bash
@@ -226,18 +182,4 @@ response = await agent.process_query(
     use_knowledge_expert=True  # Uses RAG agent
 )
 ```
-
-## 🎯 Design Principles
-
-1. **Supervisor Pattern**: Orchestrates multiple agents and tools
-2. **Tool Integration**: Integrates with MCP tools (RAG agent)
-3. **Conversation Management**: Manages multi-turn conversations
-4. **LangGraph Workflow**: Modular, composable agent pipeline
-
-## 📖 Documentation
-
-For more details:
-- **Agent Graph**: See [src/datapilotflow/assistant_agent/graph.py](src/datapilotflow/assistant_agent/graph.py)
-- **Tools**: See [src/datapilotflow/assistant_agent/tools/](src/datapilotflow/assistant_agent/tools/)
-- **State Management**: See [src/datapilotflow/assistant_agent/state.py](src/datapilotflow/assistant_agent/state.py)
 

@@ -2,7 +2,7 @@
 Event Publisher Services Package.
 
 This package provides RabbitMQ-based event publishing for various event types
-in the SkillPilot system, following a base class pattern for common functionality.
+in the DataPilotFlow system, following a base class pattern for common functionality.
 """
 
 from .base_event_publisher import BaseEventPublisher

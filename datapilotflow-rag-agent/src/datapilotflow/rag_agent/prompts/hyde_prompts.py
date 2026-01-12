@@ -5,7 +5,7 @@ These prompts are used to generate hypothetical answers that serve as better
 query embeddings for document retrieval.
 """
 
-from ..base_prompt import Prompt
+from datapilotflow.domain.llm_prompts.base import Prompt
 
 HYDE_SYSTEM_PROMPT = Prompt(
     name="datapilotflow_rag_agent_hyde_system_prompt",

@@ -5,7 +5,7 @@ These prompts are used to generate final answers based on the user's question
 and the retrieved, judged documents.
 """
 
-from ..base_prompt import Prompt
+from datapilotflow.domain.llm_prompts.base import Prompt
 
 GENERATION_SYSTEM_PROMPT = Prompt(
     name="datapilotflow_rag_agent_generation_system_prompt",

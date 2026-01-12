@@ -1,0 +1,13 @@
+# Cursor should be able to see .env files
+# Remove .env from ignore so Cursor can read it
+!.env
+!.env.local
+!.env.development
+!.env.production
+
+# But still ignore node_modules and build artifacts
+node_modules/
+dist/
+build/
+.next/
+out/

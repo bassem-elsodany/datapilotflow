@@ -6,7 +6,7 @@ while preserving the original query, ensuring no context is lost while benefitin
 from query improvements.
 """
 
-from ..base_prompt import Prompt
+from datapilotflow.domain.llm_prompts.base import Prompt
 
 AUGMENTED_SYSTEM_PROMPT = Prompt(
     name="datapilotflow_rag_agent_augmented_system_prompt",

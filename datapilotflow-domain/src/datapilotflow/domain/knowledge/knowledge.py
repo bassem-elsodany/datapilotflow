@@ -1,5 +1,5 @@
 """
-Knowledge domain models for SkillPilot.
+Knowledge domain models for DataPilotFlow.
 
 This module defines the core domain models for knowledge sources, including
 KnowledgeExtract for raw knowledge data and Knowledge for enriched knowledge
@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
-from datapilotflow.domain.config import settings
 
 
 class KnowledgeExtract(BaseModel):
@@ -150,11 +149,3 @@ class Knowledge(BaseModel):
             f"enabled={self.enabled}, scraping_mode={self.scraping_mode}, "
             f"crawl_depth={self.crawl_depth})"
         )
-
-    @classmethod
-    def load_all(cls) -> list["Knowledge"]:
-        """Load all knowledge sources from the configuration file."""
-        with open(settings.KNOWLEDGE_METADATA_FILE_PATH) as f:
-            knowledge_data = json.load(f)
-
-        return [cls(**knowledge) for knowledge in knowledge_data]

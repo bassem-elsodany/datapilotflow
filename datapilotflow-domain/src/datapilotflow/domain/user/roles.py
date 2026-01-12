@@ -1,8 +1,8 @@
 """
-User roles and permissions for SkillPilot.
+User roles and permissions for DataPilotFlow.
 
 This module defines the role-based access control system for users
-in the SkillPilot system.
+in the DataPilotFlow system.
 """
 
 from enum import Enum
@@ -10,7 +10,7 @@ from typing import List, Set
 
 
 class UserRole(str, Enum):
-    """User roles in the SkillPilot system."""
+    """User roles in the DataPilotFlow system."""
     
     # Core roles
     ADMIN = "admin"

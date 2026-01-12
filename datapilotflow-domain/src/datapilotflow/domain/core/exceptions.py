@@ -1,7 +1,7 @@
 """
-Custom exceptions for the SkillPilot domain.
+Custom exceptions for the DataPilotFlow domain.
 
-This module defines domain-specific exceptions used throughout the SkillPilot
+This module defines domain-specific exceptions used throughout the DataPilotFlow
 application for handling knowledge source related errors and validation failures.
 """
 
