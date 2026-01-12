@@ -32,6 +32,9 @@ COPY datapilotflow-rag-agent ./datapilotflow-rag-agent
 # Copy MCP server entry point
 COPY datapilotflow-rag-agent/run_rag_mcp_server.py ./
 
+# Copy RAG agent service configuration
+COPY docker/services/mcp-agent/.env .env
+
 # Install dependencies using uv
 WORKDIR /app/datapilotflow-rag-agent
 RUN uv pip install -e . && \
