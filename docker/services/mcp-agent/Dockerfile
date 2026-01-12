@@ -19,6 +19,10 @@ RUN apt-get update && apt-get install -y \
 # Install uv package manager
 RUN pip install uv
 
+# Create virtual environment
+RUN python -m venv /app/.venv
+ENV PATH="/app/.venv/bin:$PATH"
+
 # Copy monorepo structure - RAG agent dependencies
 COPY datapilotflow-domain ./datapilotflow-domain
 COPY datapilotflow-infrastructure ./datapilotflow-infrastructure
