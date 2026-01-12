@@ -2,7 +2,9 @@
 
 > **Intelligent Enterprise Knowledge Platform with Retrieval-Augmented Generation**
 
-A modular, event-driven architecture for building AI-powered knowledge management systems. DataPilotFlow combines multi-agent AI orchestration, real-time document processing, and vector-based knowledge retrieval to enable intelligent conversational interfaces over enterprise data.
+Transform your enterprise documents into intelligent conversations. DataPilotFlow is an AI-powered knowledge management platform that automatically processes your documents, files, and web content—then lets you ask questions in natural language and get context-aware answers powered by AI.
+
+**In 30 seconds**: Upload documents → AI indexes them → Ask questions → Get intelligent answers with sources cited.
 
 ## 🎯 Core Capabilities
 
@@ -14,6 +16,149 @@ A modular, event-driven architecture for building AI-powered knowledge managemen
 - **WebSocket Support**: Real-time AI responses and job progress tracking
 - **MCP Server Exposure**: Model Context Protocol for external agent integration
 - **Docker Containerization**: Production-ready deployment with 9 microservices
+
+---
+
+## 🚀 Quick Start (5 Minutes)
+
+```bash
+# 1. Start everything
+cd docker && docker-compose up -d
+
+# 2. Open dashboard
+# http://localhost:3000
+
+# 3. Upload a document
+# Click "Knowledge" → "Add Source" → upload a PDF/file
+
+# 4. Ask a question
+# Click "Chat" → type your question → see AI answer with sources
+```
+
+**System Requirements**: Docker, 10GB disk space, modern browser
+
+---
+
+## 📚 Understanding the Project Layers
+
+DataPilotFlow has **5 layers** that work together to deliver AI-powered knowledge management:
+
+### Layer 1: **Presentation** (What Users See)
+- **React Dashboard** at `http://localhost:3000`
+- Web UI for uploading documents, managing knowledge, and chatting
+- Real-time updates via WebSocket
+- **Folder**: `datapilotflow-dashboard/`
+
+### Layer 2: **API** (How Frontend Talks to Backend)
+- **FastAPI REST Server** at `http://localhost:8800`
+- 30+ API endpoints for knowledge, auth, conversations, agents
+- WebSocket support for real-time communication
+- JWT-based authentication
+- **Folder**: `datapilotflow-api/`
+
+### Layer 3: **AI Agents** (The Intelligence)
+- **Assistant Agent**: Supervisor that coordinates multiple tools and agents
+- **RAG Agent**: Retrieves relevant documents and generates answers (MCP server on port 65510)
+- Both use LangGraph for multi-step orchestration
+- **Folders**: `datapilotflow-assistant-agent/`, `datapilotflow-rag-agent/`
+
+### Layer 4: **Services** (Business Logic)
+- **KnowledgeService**: Manages document ingestion, processing, storage
+- **AuthService**: User authentication and authorization
+- **ConversationService**: Multi-turn chat conversations
+- **NotificationService**: User alerts and updates
+- **ToolService**: External tool management
+- **Folder**: `datapilotflow-services/`
+
+### Layer 5: **Infrastructure** (Data & Storage)
+- **MongoDB**: Document storage, conversation history, metadata (Port 27020)
+- **Milvus**: Vector database for semantic search (Port 19530)
+- **RabbitMQ**: Message queue for async jobs (Port 5675)
+- **MinIO**: S3-compatible file storage (Port 9002)
+- **Folder**: `datapilotflow-infrastructure/`
+
+### Additional Components
+- **Domain**: Core data models and validation (`datapilotflow-domain/`)
+- **Events**: Event publishing and listening (`datapilotflow-events/`)
+- **Processors**: Document processing pipeline (`datapilotflow-processors/`)
+
+**Visual Flow**:
+```
+User uploads document
+    ↓
+API receives and validates
+    ↓
+Event published to RabbitMQ
+    ↓
+Event listener triggers processor
+    ↓
+Document extracted, chunked, embedded
+    ↓
+Stored in MongoDB + Milvus
+    ↓
+User asks question in chat
+    ↓
+API routes to Assistant Agent
+    ↓
+Agent calls RAG Agent for document retrieval
+    ↓
+RAG searches Milvus for relevant chunks
+    ↓
+LLM generates answer with sources
+    ↓
+Response streams to user via WebSocket
+```
+
+---
+
+## 👤 For Different Users
+
+### I Want to Use DataPilotFlow
+1. Deploy: `cd docker && docker-compose up -d`
+2. Open: `http://localhost:3000`
+3. Upload documents in Knowledge section
+4. Ask questions in Chat section
+5. Check **Troubleshooting** section below if issues
+
+### I Want to Understand the Architecture
+1. Read sections below: "System Architecture" through "Deployment Checklist"
+2. Diagrams show: component relationships, data flows, service dependencies
+3. Each module has detailed README explaining its responsibility
+
+### I Want to Contribute Code
+1. Read project structure below
+2. Pick a module and read its README (in that folder)
+3. Follow local development setup in "Local Development" section
+4. Each module is independent and can be developed separately
+
+### I Want to Deploy to Production
+1. Read "Docker Architecture" section
+2. Review environment variables in `.env` file
+3. Run: `cd docker && docker-compose up -d`
+4. Check services with: `docker-compose ps`
+5. See "Deployment Checklist" below
+
+---
+
+## 🆘 Quick Troubleshooting
+
+**Dashboard won't load**
+- Check Docker: `docker-compose ps`
+- Wait 30 seconds for startup
+- Check logs: `docker-compose logs dashboard`
+
+**Knowledge upload fails**
+- Check file size (<500MB)
+- Verify MongoDB is running: `docker-compose ps | grep mongodb`
+- Check logs: `docker-compose logs api`
+
+**Can't ask questions in chat**
+- Verify documents were uploaded successfully (check Jobs tab)
+- Check API health: `curl http://localhost:8800/health`
+- Try smaller question with key terms
+
+**Need API docs**
+- Visit: `http://localhost:8800/docs` (Swagger UI)
 
 ---
 

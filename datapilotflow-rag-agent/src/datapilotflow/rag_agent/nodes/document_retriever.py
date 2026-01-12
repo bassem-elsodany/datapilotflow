@@ -8,7 +8,6 @@ Supports both single-query and Reciprocal Rank Fusion (RRF) strategies.
 import asyncio
 import traceback
 
-import opik
 from loguru import logger
 
 from ..retrieval import parallel_retrieval, reciprocal_rank_fusion

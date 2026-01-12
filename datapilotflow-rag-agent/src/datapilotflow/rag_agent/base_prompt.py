@@ -8,7 +8,6 @@ with Langfuse versioning and management support.
 import json
 from typing import Any, Dict, List, Literal, Optional
 
-import opik
 from loguru import logger
 
 from datapilotflow.domain.config import settings
