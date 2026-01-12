@@ -224,7 +224,6 @@ export const app = {
   name: import.meta.env.VITE_APP_NAME || 'dataPilotFlow',
   version: import.meta.env.VITE_APP_VERSION || '1.0.0',
   apiBaseUrl: buildApiBaseUrl(),
-  fakeBackend: import.meta.env.VITE_ENABLE_FAKE_BACKEND === 'true',
   redirectQueryParamName: 'r',
   accessTokenStoreKey: 'jwt_token',
   environment: currentEnv,
