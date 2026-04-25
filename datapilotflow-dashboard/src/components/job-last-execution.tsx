@@ -84,37 +84,30 @@ export function JobLastExecution({ jobId, refreshTrigger }: JobLastExecutionProp
   };
 
   return (
-    <Stack gap="xs">
-      {/* Latest Execution Status */}
-      <Group gap="xs" align="center">
-        <Badge 
-          color={getStatusColor(latestTimeline.status)} 
-          leftSection={getStatusIcon(latestTimeline.status)}
-          variant="light"
-        >
-          {latestTimeline.status}
-        </Badge>
-      </Group>
-
-      {/* Execution Date - Clickable */}
-      <Group gap="xs" align="center">
+    <Stack gap={4}>
+      <Badge
+        color={getStatusColor(latestTimeline.status)}
+        leftSection={getStatusIcon(latestTimeline.status)}
+        variant="light"
+        size="sm"
+        style={{ alignSelf: 'flex-start' }}
+      >
+        {latestTimeline.status}
+      </Badge>
+      <Group gap={4} wrap="nowrap" align="center">
         <Anchor
           size="xs"
           c="dimmed"
-          style={{ cursor: 'pointer' }}
+          style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}
           onClick={handleClick}
         >
-          {(() => {
-            if (latestTimeline.completed_at) {
-              return `Completed ${formatDate(latestTimeline.completed_at)}`;
-            } else if (latestTimeline.started_at) {
-              return `Started ${formatDate(latestTimeline.started_at)}`;
-            } else {
-              return `Created ${formatDate(latestTimeline.created_at)}`;
-            }
-          })()}
+          {latestTimeline.completed_at
+            ? `Completed ${formatDate(latestTimeline.completed_at)}`
+            : latestTimeline.started_at
+            ? `Started ${formatDate(latestTimeline.started_at)}`
+            : `Created ${formatDate(latestTimeline.created_at)}`}
         </Anchor>
-        <IconExternalLink size={10} />
+        <IconExternalLink size={10} style={{ flexShrink: 0 }} />
       </Group>
     </Stack>
   );

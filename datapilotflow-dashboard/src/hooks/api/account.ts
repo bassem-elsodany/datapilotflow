@@ -3,7 +3,7 @@ import { createGetQueryHook } from '@/api/helpers';
 import { apiEndpoints } from '@/config';
 
 export const useGetAccountInfo = createGetQueryHook({
-  endpoint: apiEndpoints.auth.me,
+  endpoint: apiEndpoints.users.me,
   responseSchema: User,
   rQueryParams: { queryKey: ['account'] },
 });

@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse, Response
 from loguru import logger
 
 from datapilotflow.api.routers.auth.auth_router import get_current_user
+from datapilotflow.api.dependencies.permissions import require_permission
 from datapilotflow.domain.events.job_events import JobActionRequested
 from datapilotflow.domain.knowledge.job_timeline import JobTimeline, JobTimelineUpdate
 from datapilotflow.domain.knowledge.knowledge_job import (
@@ -38,7 +39,7 @@ def list_all_knowledge_jobs(
     limit: int = Query(
         100, ge=1, le=1000, description="Maximum number of records to return"
     ),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:read")),
     service: KnowledgeJobService = Depends(get_knowledge_job_service),
 ):
     """List all knowledge processing jobs for the current user."""
@@ -58,7 +59,7 @@ def get_knowledge_job(
         None,
         description="Comma-separated list of related data to expand (timeline,document_splitter,vectordb_collection,knowledge_source_config,execution_stats)",
     ),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:read")),
     service: KnowledgeJobService = Depends(get_knowledge_job_service),
 ):
     """Get a knowledge processing job by ID with optional expanded related data."""
@@ -87,7 +88,7 @@ def get_knowledge_job(
 def update_knowledge_job(
     job_id: str,
     update_data: KnowledgeJobUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:manage")),
     service: KnowledgeJobService = Depends(get_knowledge_job_service),
 ):
     """Update a knowledge processing job."""
@@ -112,7 +113,7 @@ def update_knowledge_job(
 @router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_knowledge_job(
     job_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:manage")),
     service: KnowledgeJobService = Depends(get_knowledge_job_service),
 ):
     """Delete a knowledge processing job."""
@@ -136,7 +137,7 @@ def delete_knowledge_job(
 async def execute_knowledge_job(
     job_id: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:manage")),
     service: KnowledgeJobService = Depends(get_knowledge_job_service),
 ):
     """Request execution of a knowledge processing job via event-driven architecture."""
@@ -208,7 +209,7 @@ async def execute_knowledge_job(
 async def cancel_knowledge_job(
     job_id: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:manage")),
     service: KnowledgeJobService = Depends(get_knowledge_job_service),
 ):
     """Cancel a running knowledge processing job."""
@@ -293,7 +294,7 @@ async def list_job_timeline_entries(
     ),
     skip: int = Query(0, ge=0, description="Number of entries to skip"),
     latest: bool = Query(False, description="Get only the latest timeline entry"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:read")),
 ):
     """List timeline entries for a specific job."""
     try:
@@ -335,7 +336,7 @@ async def list_job_timeline_entries(
 
 @router.get("/{job_id}/timelines/statistics")
 async def get_job_timeline_statistics(
-    job_id: str, current_user: User = Depends(get_current_user)
+    job_id: str, current_user: User = Depends(require_permission("knowledge:read"))
 ):
     """Get statistics for all timeline entries of a job."""
     try:
@@ -355,7 +356,7 @@ async def get_job_timeline_statistics(
 async def update_timeline_entry(
     timeline_id: str,
     update_data: JobTimelineUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:manage")),
 ):
     """Update a timeline entry."""
     try:

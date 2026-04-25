@@ -4,9 +4,7 @@ import {
   useExecuteKnowledgeJob,
   useGetKnowledgeJobs
 } from '@/api/resources/knowledge-jobs';
-import {
-  useGetKnowledgeSourceConfigs
-} from '@/api/resources/knowledge-sources';
+import { useGetKnowledgeSourceConfigs } from '@/api/resources/knowledge-sources';
 import { JobActions } from '@/components/job-actions';
 import { JobLastExecution } from '@/components/job-last-execution';
 import { Page } from '@/components/page';
@@ -17,78 +15,320 @@ import {
   Alert,
   Badge,
   Button,
-  Card,
   Center,
   Divider,
   Group,
   Loader,
   Modal,
   Paper,
+  SegmentedControl,
   Stack,
-  Table,
   Text,
   ThemeIcon,
-  Title
+  Tooltip,
 } from '@mantine/core';
-import { DataTable, DataTableColumn } from 'mantine-datatable';
+import { useDisclosure } from '@mantine/hooks';
+import { DataTable as AppDataTable } from '@/components/data-table';
+import { DataTableTable as DataTable } from '@/components/data-table/data-table-table';
+import { DataTableColumn } from 'mantine-datatable';
 import { notifications } from '@mantine/notifications';
 import {
   IconAlertCircle,
-  IconBrain,
+  IconBriefcase,
   IconCheck,
-  IconChevronDown,
   IconClock,
-  IconCut,
-  IconDatabase,
   IconFileText,
   IconPlus,
   IconRefresh,
   IconSettings,
   IconTrash,
+  IconUpload,
   IconWand,
-  IconWorld,
-  IconX
+  IconX,
 } from '@tabler/icons-react';
 import { useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { usePermissions } from '@/hooks/use-permissions';
+import { useGetJobsWithStatus } from '@/hooks/api/job-status';
 
 // CSS animations for the pipeline
 const pipelineStyles = `
   @keyframes dataFlow {
-    0% {
-      left: -10px;
-      opacity: 0;
-    }
-    10% {
-      opacity: 1;
-    }
-    90% {
-      opacity: 1;
-    }
-    100% {
-      left: 50px;
-      opacity: 0;
-    }
+    0% { left: -10px; opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { left: 50px; opacity: 0; }
   }
-  
   @keyframes pulse {
-    0%, 100% {
-      transform: scale(1);
-    }
-    50% {
-      transform: scale(1.1);
-    }
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
   }
-  
   @keyframes arrowPulse {
-    0%, 100% {
-      transform: translateY(-50%) scale(1);
-    }
-    50% {
-      transform: translateY(-50%) scale(1.2);
-    }
+    0%, 100% { transform: translateY(-50%) scale(1); }
+    50% { transform: translateY(-50%) scale(1.2); }
+  }
+  @keyframes slideInFromRight {
+    0% { transform: translateX(60px); opacity: 0; }
+    100% { transform: translateX(0); opacity: 1; }
   }
 `;
+
+function PipelineDemoTrigger() {
+  const [opened, { open, close }] = useDisclosure(false);
+  return (
+    <>
+      <Button
+        variant="light"
+        color="violet"
+        size="xs"
+        leftSection={<IconWand size={14} />}
+        onClick={open}
+      >
+        Pipeline Demo
+      </Button>
+
+      <Modal
+        opened={opened}
+        onClose={close}
+        title={
+          <Group gap="xs">
+            <ThemeIcon size="sm" variant="light" color="violet" radius="sm">
+              <IconWand size={12} />
+            </ThemeIcon>
+            <Text size="sm" fw={600}>RAG Ingestion Job Pipeline</Text>
+            <Badge size="xs" variant="dot" color="green">Live</Badge>
+          </Group>
+        }
+        size="xl"
+        radius="md"
+        centered
+        transitionProps={{ transition: 'slide-left', duration: 400 }}
+      >
+        <div style={{ animation: 'slideInFromRight 0.45s cubic-bezier(0.4, 0, 0.2, 1)' }}>
+          <InteractiveJobPipeline />
+        </div>
+      </Modal>
+    </>
+  );
+}
+
+function InteractiveJobPipeline() {
+  const [currentStep, setCurrentStep] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(true);
+
+  const steps = [
+    {
+      id: 'load',
+      title: 'Load',
+      description: 'Fetch raw content',
+      details: 'The job fetches raw content from the knowledge source — web pages, uploaded files, or Confluence pages — and normalises it into a common document format ready for processing.',
+      icon: IconUpload,
+      color: 'blue',
+      duration: 3000,
+    },
+    {
+      id: 'parse',
+      title: 'Parse',
+      description: 'Extract & clean text',
+      details: 'Documents are parsed to extract clean text, stripping HTML tags, boilerplate, and noise. Metadata (title, URL, author, timestamps) is preserved alongside the content.',
+      icon: IconFileText,
+      color: 'cyan',
+      duration: 3000,
+    },
+    {
+      id: 'chunk',
+      title: 'Chunk',
+      description: 'Split into segments',
+      details: 'Clean text is split into overlapping chunks using the configured strategy (fixed-size, sentence, or semantic). Chunk size and overlap are tuned to maximise retrieval precision.',
+      icon: IconSettings,
+      color: 'orange',
+      duration: 3500,
+    },
+    {
+      id: 'embed',
+      title: 'Embed',
+      description: 'Generate vectors',
+      details: 'Each chunk is sent to the configured embedding model (e.g. OpenAI, Cohere, local) which converts the text into a dense numerical vector capturing its semantic meaning.',
+      icon: IconWand,
+      color: 'violet',
+      duration: 3500,
+    },
+    {
+      id: 'store',
+      title: 'Store',
+      description: 'Write to vector DB',
+      details: 'Chunk vectors and their metadata are upserted into the target Milvus collection. Existing documents are deduplicated by source hash to avoid re-indexing unchanged content.',
+      icon: IconBriefcase,
+      color: 'teal',
+      duration: 3000,
+    },
+    {
+      id: 'index',
+      title: 'Index',
+      description: 'Build search index',
+      details: 'Milvus builds or updates its ANN (Approximate Nearest Neighbor) index on the new vectors, making them immediately queryable for RAG retrieval.',
+      icon: IconCheck,
+      color: 'green',
+      duration: 2500,
+    },
+  ];
+
+  useEffect(() => {
+    if (!isPlaying) return;
+    const timer = setTimeout(() => {
+      if (currentStep < steps.length - 1) {
+        setCurrentStep(currentStep + 1);
+      } else {
+        setTimeout(() => setCurrentStep(0), 1200);
+      }
+    }, steps[currentStep]?.duration || 3000);
+    return () => clearTimeout(timer);
+  }, [currentStep, isPlaying, steps]);
+
+  return (
+    <Stack gap="md">
+      <Group justify="space-between" align="center">
+        <Text size="xs" c="dimmed" fw={500}>
+          Live walkthrough of the RAG ingestion job execution — from raw content to queryable vectors.
+        </Text>
+        <Button
+          size="xs"
+          variant="subtle"
+          color={isPlaying ? 'red' : 'green'}
+          leftSection={isPlaying ? <IconX size={12} /> : <IconRefresh size={12} />}
+          onClick={() => setIsPlaying(p => !p)}
+        >
+          {isPlaying ? 'Pause' : 'Play'}
+        </Button>
+      </Group>
+
+      <Divider />
+
+      <div style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: '6px',
+        overflowX: 'auto',
+        paddingBottom: '4px',
+      }}>
+        {steps.map((step, index) => {
+          const isActive = currentStep >= index;
+          const isCurrent = currentStep === index;
+          const StepIcon = step.icon;
+          return (
+            <div key={step.id} style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '6px',
+                  opacity: isActive ? 1 : 0.35,
+                  transition: 'opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
+                  padding: '0 4px',
+                  cursor: 'pointer',
+                }}
+                onClick={() => { setIsPlaying(false); setCurrentStep(index); }}
+              >
+                <ThemeIcon
+                  size={isCurrent ? 40 : 32}
+                  radius="xl"
+                  color={step.color}
+                  variant={isCurrent ? 'filled' : isActive ? 'light' : 'outline'}
+                  style={{
+                    flexShrink: 0,
+                    overflow: 'visible',
+                    transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
+                    boxShadow: isCurrent ? `0 0 18px var(--mantine-color-${step.color}-4)` : 'none',
+                    animation: isCurrent ? 'pulse 2s infinite' : 'none',
+                  }}
+                >
+                  <StepIcon size={isCurrent ? 20 : 16} style={{ flexShrink: 0 }} />
+                </ThemeIcon>
+                <Stack gap={1} style={{ textAlign: 'center', width: 80 }}>
+                  <Text size="xs" fw={isCurrent ? 700 : 500} c={isCurrent ? `${step.color}.7` : 'dimmed'} style={{ transition: 'color 0.4s' }}>
+                    {step.title}
+                  </Text>
+                  <Text size="xs" c="dimmed" lh={1.3}>{step.description}</Text>
+                </Stack>
+              </div>
+
+              {index < steps.length - 1 && (
+                <div style={{
+                  width: 44,
+                  height: 20,
+                  flexShrink: 0,
+                  position: 'relative',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: isActive ? 1 : 0.2,
+                  transition: 'opacity 0.5s',
+                  marginBottom: 28,
+                }}>
+                  <div style={{
+                    width: 28,
+                    height: 2,
+                    background: isActive
+                      ? `repeating-linear-gradient(to right, var(--mantine-color-${step.color}-4) 0px, var(--mantine-color-${step.color}-4) 4px, transparent 4px, transparent 8px)`
+                      : 'var(--mantine-color-gray-3)',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    transition: 'background 0.5s',
+                  }}>
+                    {isCurrent && (
+                      <div style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: '-10px',
+                        width: 6,
+                        height: 2,
+                        backgroundColor: `var(--mantine-color-${step.color}-6)`,
+                        borderRadius: 1,
+                        animation: 'dataFlow 1.2s infinite linear',
+                        boxShadow: `0 0 6px var(--mantine-color-${step.color}-4)`,
+                      }} />
+                    )}
+                  </div>
+                  <div style={{
+                    position: 'absolute',
+                    right: 4,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    width: 0,
+                    height: 0,
+                    borderLeft: `6px solid ${isActive ? `var(--mantine-color-${step.color}-4)` : 'var(--mantine-color-gray-3)'}`,
+                    borderTop: '4px solid transparent',
+                    borderBottom: '4px solid transparent',
+                    transition: 'border-color 0.5s',
+                    animation: isCurrent ? 'arrowPulse 1.5s infinite' : 'none',
+                  }} />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {steps[currentStep] && (
+        <Paper withBorder p="sm" radius="sm" style={{
+          borderColor: `var(--mantine-color-${steps[currentStep].color}-3)`,
+          backgroundColor: `var(--mantine-color-${steps[currentStep].color}-0)`,
+        }}>
+          <Group gap="xs" mb={4}>
+            <ThemeIcon size="xs" color={steps[currentStep].color} variant="light" radius="xl">
+              <IconWand size={10} />
+            </ThemeIcon>
+            <Text size="xs" fw={600} c={`${steps[currentStep].color}.7`}>
+              Step {currentStep + 1} of {steps.length}: {steps[currentStep].title}
+            </Text>
+          </Group>
+          <Text size="xs" c="dimmed" lh={1.5}>{steps[currentStep].details}</Text>
+        </Paper>
+      )}
+    </Stack>
+  );
+}
 
 const breadcrumbs = [
   { label: 'Dashboard', href: paths.dashboard.root },
@@ -97,7 +337,7 @@ const breadcrumbs = [
   { label: 'Processing Jobs' },
 ];
 
-const statusColors = {
+const statusColors: Record<string, string> = {
   created: 'cyan',
   pending: 'yellow',
   running: 'blue',
@@ -106,301 +346,61 @@ const statusColors = {
   cancelled: 'gray',
 };
 
-
-// Interactive Pipeline Component
-function InteractivePipeline() {
-  const [currentStep, setCurrentStep] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(true); // Always playing by default
-  const [showDetails, setShowDetails] = useState(true); // Always show details
-  const [isExpanded, setIsExpanded] = useState(false); // Hidden by default
-
-  const steps = [
-    {
-      id: 'crawling',
-      title: 'Crawling',
-      description: 'Extract contents',
-      details: 'The system crawls through configured URLs, extracting text content, metadata, and following links to discover new pages. This process respects robots.txt and rate limiting.',
-      icon: IconWorld,
-      color: 'blue',
-      duration: 3000
-    },
-    {
-      id: 'chunking',
-      title: 'Chunking',
-      description: 'Split documents into chunks',
-      details: 'Large documents are intelligently split into smaller chunks using configurable size and overlap parameters. This ensures optimal processing and retrieval performance.',
-      icon: IconCut,
-      color: 'orange',
-      duration: 2500
-    },
-    {
-      id: 'embedding',
-      title: 'Embedding',
-      description: 'Generate vector representations',
-      details: 'Each text chunk is converted into high-dimensional vectors using AI models. These vectors capture semantic meaning and enable similarity-based search.',
-      icon: IconBrain,
-      color: 'green',
-      duration: 4000
-    },
-    {
-      id: 'storage',
-      title: 'Storage',
-      description: 'Store vector embeddings',
-      details: 'Vector embeddings are stored in the vector database with metadata, enabling fast similarity search and retrieval for RAG applications.',
-      icon: IconDatabase,
-      color: 'purple',
-      duration: 2000
-    }
-  ];
-
-  // Auto-start the animation on component mount
-  useEffect(() => {
-    // Start the animation immediately when component mounts
-    setCurrentStep(0);
-    setShowDetails(true);
-  }, []);
-
-  useEffect(() => {
-    if (!isPlaying) return;
-
-    const timer = setTimeout(() => {
-      if (currentStep < steps.length - 1) {
-        setCurrentStep(currentStep + 1);
-      } else {
-        // Animation completed - always restart (infinite loop)
-        setTimeout(() => {
-          setCurrentStep(0);
-        }, 1000); // 1 second pause between loops
-      }
-    }, steps[currentStep]?.duration || 3000);
-
-    return () => clearTimeout(timer);
-  }, [currentStep, isPlaying, steps]);
-
-  return (
-    <Card withBorder p="md" radius="md" bg="gray.0" w="100%">
-      <Stack gap="sm">
-        {/* Header with Collapse Toggle */}
-        <Group justify="space-between" align="center">
-          <Group justify="flex-start" gap="xs" style={{ flex: 1 }}>
-            <Text size="sm" fw={500} c="dimmed">Processing Pipeline</Text>
-          </Group>
-          <ActionIcon
-            variant="subtle"
-            color="gray"
-            onClick={() => setIsExpanded(!isExpanded)}
-            size="sm"
-          >
-            <IconChevronDown
-              size={18}
-              style={{
-                transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                transition: 'transform 0.3s ease'
-              }}
-            />
-          </ActionIcon>
-        </Group>
-
-        {/* Expandable Content */}
-        {isExpanded && (
-          <>
-            <Divider />
-
-        <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-          {/* Left side - Step details */}
-          <div style={{ flex: '0 0 350px', minHeight: '90px' }}>
-            {isPlaying && steps[currentStep] && (
-              <Alert
-                icon={<IconWand size={14} />}
-                title={`Processing: ${steps[currentStep].title}`}
-                color={steps[currentStep].color}
-                variant="light"
-              >
-                <Text size="xs">{steps[currentStep].details}</Text>
-              </Alert>
-            )}
-          </div>
-
-          {/* Right side - Pipeline */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              overflowX: 'auto',
-              paddingTop: '20px',
-              paddingBottom: '6px',
-              minHeight: '80px'
-            }}>
-              {steps.map((step, index) => {
-                const isActive = currentStep >= index;
-                const isCurrent = currentStep === index;
-                const isVisible = currentStep >= index; // Show step only when it's reached
-                const StepIcon = step.icon;
-
-                return (
-                  <div key={step.id} style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                    {/* Step */}
-                    <div style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: '4px',
-                      opacity: isVisible ? 1 : 0,
-                      transform: isVisible ? (isCurrent ? 'scale(1.05)' : 'scale(1)') : 'scale(0.8)',
-                      transition: 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
-                      animationDelay: `${index * 0.2}s`
-                    }}>
-                      <ThemeIcon
-                        size={isCurrent ? 36 : 28}
-                        radius="xl"
-                        color={step.color}
-                        variant={isCurrent ? "filled" : "light"}
-                        style={{
-                          transition: 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
-                          boxShadow: isCurrent ? `0 4px 20px var(--mantine-color-${step.color}-4)` : 'none',
-                          animation: isCurrent ? 'pulse 2s infinite' : 'none'
-                        }}
-                      >
-                        <StepIcon size={isCurrent ? 18 : 14} />
-                      </ThemeIcon>
-
-                      <Stack gap={1} style={{ textAlign: 'center', maxWidth: '90px' }}>
-                        <Text
-                          size="xs"
-                          fw={isCurrent ? 600 : 500}
-                          c={isCurrent ? `${step.color}.7` : "gray.8"}
-                          style={{
-                            transition: 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)'
-                          }}
-                        >
-                          {step.title}
-                        </Text>
-                        <Text size="xs" c="gray.6">
-                          {step.description}
-                        </Text>
-                      </Stack>
-
-                    </div>
-
-                    {/* Connector with animated data flow */}
-                    {index < steps.length - 1 && (
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: '60px',
-                        height: '20px',
-                        flexShrink: 0,
-                        position: 'relative',
-                        opacity: isActive ? 1 : 0,
-                        transform: isActive ? 'scale(1)' : 'scale(0.8)',
-                        transition: 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
-                        animationDelay: `${index * 0.2}s`
-                      }}>
-                        {/* Arrow line */}
-                        <div style={{
-                          width: '40px',
-                          height: '2px',
-                          background: isActive ? `repeating-linear-gradient(to right, var(--mantine-color-${step.color}-4) 0px, var(--mantine-color-${step.color}-4) 4px, transparent 4px, transparent 8px)` : 'repeating-linear-gradient(to right, var(--mantine-color-gray-3) 0px, var(--mantine-color-gray-3) 4px, transparent 4px, transparent 8px)',
-                          transition: 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
-                          position: 'relative',
-                          overflow: 'hidden'
-                        }}>
-                          {/* Animated data flow */}
-                          {isCurrent && (
-                            <div style={{
-                              position: 'absolute',
-                              top: 0,
-                              left: '-10px',
-                              width: '6px',
-                              height: '2px',
-                              backgroundColor: `var(--mantine-color-${step.color}-6)`,
-                              borderRadius: '1px',
-                              animation: 'dataFlow 1.5s infinite linear',
-                              boxShadow: `0 0 8px var(--mantine-color-${step.color}-4)`
-                            }} />
-                          )}
-                        </div>
-
-                        {/* Arrow head */}
-                        <div style={{
-                          position: 'absolute',
-                          right: '8px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          width: '0',
-                          height: '0',
-                          borderLeft: `6px solid ${isActive ? `var(--mantine-color-${step.color}-4)` : 'var(--mantine-color-gray-3)'}`,
-                          borderTop: '4px solid transparent',
-                          borderBottom: '4px solid transparent',
-                          transition: 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
-                          animation: isCurrent ? 'arrowPulse 1.5s infinite' : 'none'
-                        }} />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-          </>
-        )}
-
-      </Stack>
-    </Card>
-  );
-}
-
-
 export default function KnowledgeSourceJobs() {
-  // Inject CSS animations
   useEffect(() => {
     const styleElement = document.createElement('style');
-    styleElement.textContent = pipelineStyles;
+    styleElement.innerHTML = pipelineStyles;
     document.head.appendChild(styleElement);
-
-    return () => {
-      document.head.removeChild(styleElement);
-    };
+    return () => { document.head.removeChild(styleElement); };
   }, []);
 
   const navigate = useNavigate();
   const location = useLocation();
+  const { hasPermission, isAdmin } = usePermissions();
+  const canManage = isAdmin() || hasPermission('knowledge:manage');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [jobToDelete, setJobToDelete] = useState<{ id: string, name: string } | null>(null);
+  const [jobToDelete, setJobToDelete] = useState<{ id: string; name: string } | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [tabValue, setTabValue] = useState<string>('*');
 
-  // Get filter from navigation state (passed from configs page)
   const locationState = location.state as { filterConfigId?: string; filterConfigName?: string } | null;
   const [filterConfigId, setFilterConfigId] = useState<string | null>(locationState?.filterConfigId || null);
 
   const { data: jobs, isLoading, error, refetch } = useGetKnowledgeJobs();
   const { data: configs } = useGetKnowledgeSourceConfigs();
+  const { data: jobsWithStatus } = useGetJobsWithStatus();
   const deleteJobMutation = useDeleteKnowledgeJob();
   const executeJobMutation = useExecuteKnowledgeJob();
 
-  // Filter jobs by config if filter is active
+  // Map job ID → latest execution status (from timeline data)
+  const jobStatusMap = useMemo(() => {
+    const map = new Map<string, string>();
+    if (jobsWithStatus) {
+      for (const j of jobsWithStatus) {
+        if (j.current_status?.status) {
+          map.set(j.id, j.current_status.status);
+        }
+      }
+    }
+    return map;
+  }, [jobsWithStatus]);
+
+  const getJobStatus = (jobId: string): string | null => jobStatusMap.get(jobId) ?? null;
+
   const filteredJobs = useMemo(() => {
     if (!jobs) return [];
     if (!filterConfigId) return jobs;
     return jobs.filter(job => job.knowledge_source_config_id === filterConfigId);
   }, [jobs, filterConfigId]);
 
-  // Get filtered config name
   const filteredConfigName = useMemo(() => {
     if (!filterConfigId) return null;
-    return locationState?.filterConfigName || getConfigName(filterConfigId);
+    return locationState?.filterConfigName || configs?.find(c => c.id === filterConfigId)?.name || 'Unknown';
   }, [filterConfigId, locationState, configs]);
 
-  // Helper functions
-  const getConfigName = (configId: string) => {
-    const config = configs?.find(c => c.id === configId);
-    return config?.name || 'Unknown Configuration';
-  };
-
+  const getConfigName = (configId: string) =>
+    configs?.find(c => c.id === configId)?.name || 'Unknown';
 
   const handleDeleteClick = (jobId: string, jobName: string) => {
     setJobToDelete({ id: jobId, name: jobName });
@@ -409,438 +409,270 @@ export default function KnowledgeSourceJobs() {
 
   const handleExecuteJob = async (jobId: string) => {
     try {
-      await executeJobMutation.mutateAsync({
-        variables: {} as any,
-        route: { jobId }
-      });
-      notifications.show({
-        title: 'Job Started',
-        message: 'Job execution has been requested successfully',
-        color: 'green',
-      });
-      // Refresh data to show updated status
+      await executeJobMutation.mutateAsync({ variables: {} as any, route: { jobId } });
+      notifications.show({ title: 'Job Started', message: 'Job execution requested successfully', color: 'green' });
       refetch();
       setRefreshTrigger(prev => prev + 1);
-    } catch (error) {
-      console.error('Error executing job:', error);
-      notifications.show({
-        title: 'Error',
-        message: 'Failed to start job execution',
-        color: 'red',
-      });
+    } catch {
+      notifications.show({ title: 'Error', message: 'Failed to start job execution', color: 'red' });
     }
   };
 
   const handleDeleteConfirm = async () => {
     if (!jobToDelete) return;
-
     setDeletingId(jobToDelete.id);
     try {
-      await deleteJobMutation.mutateAsync({
-        model: {},
-        route: { jobId: jobToDelete.id }
-      });
-      notifications.show({
-        title: 'Success',
-        message: `Job "${jobToDelete.name}" has been deleted successfully.`,
-        color: 'green',
-      });
+      await deleteJobMutation.mutateAsync({ model: {}, route: { jobId: jobToDelete.id } });
+      notifications.show({ title: 'Deleted', message: `"${jobToDelete.name}" deleted`, color: 'green' });
       refetch();
       setDeleteModalOpen(false);
       setJobToDelete(null);
     } catch (error: any) {
-      notifications.show({
-        title: 'Error',
-        message: error.message || 'Failed to delete job',
-        color: 'red',
-      });
+      notifications.show({ title: 'Error', message: error.message || 'Failed to delete job', color: 'red' });
     } finally {
       setDeletingId(null);
     }
   };
 
-  const handleDeleteCancel = () => {
-    setDeleteModalOpen(false);
-    setJobToDelete(null);
+  const visibleJobs = filteredJobs.filter(j => {
+    if (tabValue === '*') return true;
+    const status = getJobStatus(j.id);
+    if (tabValue === 'pending') return status === 'pending' || status === 'created';
+    return status === tabValue;
+  });
+
+  const formatRelativeDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return '—';
+    const diff = Date.now() - date.getTime();
+    const days = Math.floor(diff / 86400000);
+    if (days === 0) return 'Today';
+    if (days === 1) return 'Yesterday';
+    if (days < 30) return `${days}d ago`;
+    if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+    return date.toLocaleDateString();
   };
 
-  // Define columns for DataTable
   const columns: DataTableColumn<KnowledgeJob>[] = [
     {
       accessor: 'name',
-      title: 'Job Name',
-      width: 250,
+      title: 'Job',
+      width: 220,
       sortable: true,
-      textAlign: 'left',
       render: (record: Record<string, unknown>) => {
         const job = record as KnowledgeJob;
         return (
-          <Stack gap={2}>
-            <Text
-              fw={600}
-              size="sm"
-              style={{
-                cursor: 'pointer',
-                color: 'var(--mantine-color-blue-6)',
-                wordWrap: 'break-word',
-                overflowWrap: 'break-word'
-              }}
-              onClick={() => navigate(paths.dashboard.management.knowledgeSources.job(job.id))}
-            >
-              {job.name}
-            </Text>
-            {job.description && (
-              <Text size="xs" c="dimmed" fw={400} lineClamp={1}>
-                {job.description}
+          <Group gap="sm" wrap="nowrap">
+            <ThemeIcon size="md" variant="light" color="blue" radius="sm" style={{ flexShrink: 0 }}>
+              <IconBriefcase size={14} />
+            </ThemeIcon>
+            <div style={{ minWidth: 0 }}>
+              <Text
+                fw={600}
+                size="sm"
+                style={{ cursor: 'pointer', color: 'var(--mantine-color-blue-6)' }}
+                truncate
+                onClick={() => navigate(paths.dashboard.management.knowledgeSources.job(job.id))}
+              >
+                {job.name}
               </Text>
-            )}
-          </Stack>
+              {job.description && (
+                <Text size="xs" c="dimmed" lineClamp={1}>{job.description}</Text>
+              )}
+            </div>
+          </Group>
         );
-      }
+      },
     },
     {
       accessor: 'knowledge_source_config_id',
       title: 'Configuration',
-      width: 200,
+      width: 160,
       sortable: true,
-      textAlign: 'left',
       render: (record: Record<string, unknown>) => {
         const job = record as KnowledgeJob;
         return (
-          <Text size="xs" fw={400}>
-            {getConfigName(job.knowledge_source_config_id)}
-          </Text>
+          <Badge
+            size="sm"
+            variant="light"
+            color="blue"
+            radius="sm"
+            style={{ maxWidth: '100%', cursor: 'pointer' }}
+            component={Link}
+            to={paths.dashboard.management.knowledgeSources.config(job.knowledge_source_config_id)}
+          >
+            <Text size="xs" truncate style={{ maxWidth: 120 }}>{getConfigName(job.knowledge_source_config_id)}</Text>
+          </Badge>
         );
-      }
+      },
     },
     {
       accessor: 'latest_execution',
-      title: 'Latest Execution',
-      width: 220,
-      sortable: false,
-      textAlign: 'left',
+      title: 'Last Execution',
+      width: 190,
       render: (record: Record<string, unknown>) => {
         const job = record as KnowledgeJob;
-        return (
-          <JobLastExecution jobId={job.id} refreshTrigger={refreshTrigger} />
-        );
-      }
+        return <JobLastExecution jobId={job.id} refreshTrigger={refreshTrigger} />;
+      },
     },
     {
       accessor: 'created_at',
       title: 'Created',
-      width: 140,
+      width: 160,
       sortable: true,
-      textAlign: 'left',
       render: (record: Record<string, unknown>) => {
         const job = record as KnowledgeJob;
-        const date = new Date(job.created_at);
-        const dateStr = isNaN(date.getTime()) ? 'Invalid Date' : date.toLocaleDateString();
+        const d = new Date(job.created_at);
+        const date = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' });
+        const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         return (
-          <Text size="xs" c="dimmed" fw={400}>
-            {dateStr}
-          </Text>
+          <Stack gap={0}>
+            <Text size="xs" fw={500}>{date}</Text>
+            <Text size="xs" c="dimmed">{time}</Text>
+          </Stack>
         );
-      }
+      },
     },
     {
       accessor: 'actions',
-      title: 'Actions',
-      width: 150,
+      title: '',
+      width: 140,
       textAlign: 'right',
       render: (record: Record<string, unknown>) => {
         const job = record as KnowledgeJob;
         return (
           <JobActions
             job={job}
-            onExecute={handleExecuteJob}
-            onDelete={handleDeleteClick}
-            onCancel={() => {
-              refetch();
-              setRefreshTrigger(prev => prev + 1);
-            }}
-            onViewDetails={(job) => {
-              navigate(paths.dashboard.management.knowledgeSources.job(job.id));
-            }}
+            onExecute={canManage ? handleExecuteJob : undefined}
+            onDelete={canManage ? handleDeleteClick : undefined}
+            onCancel={() => { refetch(); setRefreshTrigger(prev => prev + 1); }}
+            onViewDetails={(j) => navigate(paths.dashboard.management.knowledgeSources.job(j.id))}
             isExecuting={executeJobMutation.isPending}
             isDeleting={deletingId === job.id}
           />
         );
-      }
-    }
+      },
+    },
   ];
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'created':
-        return <IconCheck size={16} />;
-      case 'pending':
-        return <IconClock size={16} />;
-      case 'running':
-        return <IconRefresh size={16} />;
-      case 'completed':
-        return <IconCheck size={16} />;
-      case 'failed':
-        return <IconX size={16} />;
-      case 'cancelled':
-        return <IconAlertCircle size={16} />;
-      default:
-        return null;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    return statusColors[status as keyof typeof statusColors] || 'gray';
-  };
 
   if (isLoading) {
     return (
-      <Page title="RAG Processing Jobs">
-        <PageHeader title="RAG Processing Jobs" breadcrumbs={breadcrumbs} />
-        <Center h={200}>
-          <Loader size="lg" />
-        </Center>
+      <Page title="Processing Jobs">
+        <PageHeader title="Processing Jobs" breadcrumbs={breadcrumbs} />
+        <Center h={200}><Loader size="lg" /></Center>
       </Page>
     );
   }
 
   if (error) {
     return (
-      <Page title="RAG Processing Jobs">
-        <PageHeader title="RAG Processing Jobs" breadcrumbs={breadcrumbs} />
-        <Alert color="red" title="Error loading jobs">
-          {error.message || 'Failed to load processing jobs'}
-        </Alert>
+      <Page title="Processing Jobs">
+        <PageHeader title="Processing Jobs" breadcrumbs={breadcrumbs} />
+        <Alert color="red" title="Error">{error.message || 'Failed to load jobs'}</Alert>
       </Page>
     );
   }
 
   return (
-    <Page title="RAG Processing Jobs">
-      <PageHeader
-        title="RAG Processing Jobs"
-        breadcrumbs={breadcrumbs}
-      />
+    <Page title="Processing Jobs">
+      <PageHeader title="Processing Jobs" breadcrumbs={breadcrumbs} />
 
+      <AppDataTable.Container>
+        <AppDataTable.Title
+          title="Processing Jobs"
+          description="Manage knowledge injection jobs that process data sources into searchable vector embeddings"
+          actions={
+            <Group gap="xs">
+              {filterConfigId && (
+                <Badge
+                  variant="light" color="blue" size="sm"
+                  rightSection={
+                    <ActionIcon size="xs" variant="transparent" onClick={() => { setFilterConfigId(null); navigate(location.pathname, { replace: true, state: {} }); }}>
+                      <IconX size={10} />
+                    </ActionIcon>
+                  }
+                >
+                  {filteredConfigName}
+                </Badge>
+              )}
+              <ActionIcon variant="subtle" size="sm" onClick={() => { refetch(); setRefreshTrigger(p => p + 1); }} loading={isLoading}>
+                <IconRefresh size={14} />
+              </ActionIcon>
+              <PipelineDemoTrigger />
+              {canManage && (
+                <Button
+                  leftSection={<IconPlus size={14} />}
+                  size="xs"
+                  variant="default"
+                  onClick={() => navigate(paths.dashboard.management.knowledgeSources.jobCreate)}
+                  disabled={!configs || configs.length === 0}
+                >
+                  New Job
+                </Button>
+              )}
+            </Group>
+          }
+        />
+        <AppDataTable.Tabs
+          tabs={[
+            { value: '*', label: 'All', counter: filteredJobs.length },
+            { value: 'running', label: 'Running', color: 'blue', counter: filteredJobs.filter(j => getJobStatus(j.id) === 'running').length },
+            { value: 'completed', label: 'Completed', color: 'green', counter: filteredJobs.filter(j => getJobStatus(j.id) === 'completed').length },
+            { value: 'failed', label: 'Failed', color: 'red', counter: filteredJobs.filter(j => getJobStatus(j.id) === 'failed').length },
+            { value: 'pending', label: 'Pending', color: 'yellow', counter: filteredJobs.filter(j => { const s = getJobStatus(j.id); return s === 'pending' || s === 'created'; }).length },
+            { value: 'cancelled', label: 'Cancelled', color: 'gray', counter: filteredJobs.filter(j => getJobStatus(j.id) === 'cancelled').length },
+          ]}
+          onChange={setTabValue}
+        />
+        <AppDataTable.Content>
+          <AppDataTable.Table
+            records={visibleJobs}
+            columns={columns}
+            fetching={isLoading}
+            striped
+            highlightOnHover
+            minHeight={200}
+            noRecordsText={AppDataTable.noRecordsText('jobs')}
+            recordsPerPageLabel={AppDataTable.recordsPerPageLabel('jobs')}
+            paginationText={AppDataTable.paginationText('jobs')}
+            page={1}
+            onPageChange={() => {}}
+            recordsPerPage={10}
+            totalRecords={visibleJobs.length}
+            onRecordsPerPageChange={() => {}}
+            recordsPerPageOptions={[10, 20, 50]}
+          />
+        </AppDataTable.Content>
+      </AppDataTable.Container>
 
-      <Stack gap="sm">
-        {/* Filter indicator */}
-        {filterConfigId && (
-          <Alert
-            icon={<IconSettings size={16} />}
-            title={`Filtered by Configuration: ${filteredConfigName}`}
-            color="blue"
-            withCloseButton
-            onClose={() => {
-              setFilterConfigId(null);
-              // Clear location state
-              navigate(location.pathname, { replace: true, state: {} });
-            }}
-          >
-            Showing {filteredJobs.length} job{filteredJobs.length !== 1 ? 's' : ''} for this configuration.
-          </Alert>
-        )}
-
-        <Group justify="space-between" w="100%">
-          <div />
-          <Group gap="sm">
-            <Button
-              variant="outline"
-              leftSection={<IconRefresh size={16} />}
-              onClick={() => {
-                refetch();
-                setRefreshTrigger(prev => prev + 1);
-              }}
-              loading={isLoading}
-            >
-              Refresh
-            </Button>
-            <Button
-              leftSection={<IconPlus size={16} />}
-              onClick={() => navigate('/dashboard/management/knowledge-sources/job-create')}
-              disabled={!configs || configs.length === 0}
-            >
-              Create Job
-            </Button>
-          </Group>
-        </Group>
-        <div />
-      </Stack>
-      <Stack gap="lg" w="100%">
-        {/* Header Description */}
-        <Paper withBorder p="lg" radius="md" bg="gray.0" w="100%">
-          <Stack gap="md">
-            <Text c="gray.6" size="sm">
-              Create and manage knowledge injection jobs to process your data sources into searchable chunks.
-            </Text>
-            {/* Interactive Pipeline */}
-            <InteractivePipeline />
-
-            {!configs || configs.length === 0 ? (
-              <Paper withBorder p="lg" radius="md" w="100%">
-                <Group gap="md" align="flex-start" w="100%">
-                  <ThemeIcon size={50} radius="xl" color="blue" variant="light" style={{ flexShrink: 0 }}>
-                    <IconFileText size={24} />
-                  </ThemeIcon>
-                  <Stack gap="sm" style={{ flex: 1, minWidth: 0 }}>
-                    <Title order={5} c="gray.8">No Knowledge Source Configurations</Title>
-                    <Text c="gray.6" size="sm">
-                      You need to create a knowledge source configuration before you can create processing jobs.
-                    </Text>
-                    <Button
-                      leftSection={<IconFileText size={16} />}
-                      onClick={() => navigate('/dashboard/management/knowledge-sources/config-create')}
-                      size="sm"
-                      style={{ alignSelf: 'flex-start' }}
-                    >
-                      Create Your First Configuration
-                    </Button>
-                  </Stack>
-                </Group>
-              </Paper>
-            ) : !filteredJobs || filteredJobs.length === 0 ? (
-              <Paper withBorder p="lg" radius="md" w="100%">
-                <Group gap="md" align="flex-start" w="100%">
-                  <ThemeIcon size={50} radius="xl" color="green" variant="light" style={{ flexShrink: 0 }}>
-                    <IconWand size={24} />
-                  </ThemeIcon>
-                  <Stack gap="sm" style={{ flex: 1, minWidth: 0 }}>
-                    <Title order={5} c="gray.8">No Processing Jobs Yet</Title>
-                    <Text c="gray.6" size="sm">
-                      Create your first knowledge processing job to start converting your data sources into searchable chunks.
-                    </Text>
-                    <Group gap="sm" wrap="wrap">
-                      <Button
-                        leftSection={<IconWand size={16} />}
-                        onClick={() => navigate('/dashboard/management/knowledge-sources/job-create')}
-                        size="sm"
-                      >
-                        Create Your First Job
-                      </Button>
-                      <Button
-                        variant="light"
-                        leftSection={<IconFileText size={16} />}
-                        onClick={() => navigate('/dashboard/management/knowledge-sources/configs')}
-                        size="sm"
-                      >
-                        View Configurations
-                      </Button>
-                    </Group>
-
-                    {/* Feature highlights */}
-                    <Stack gap="sm" mt="md" w="100%">
-                      <Text fw={500} c="gray.7" size="xs">What you can do with processing jobs:</Text>
-                      <Group gap="md" wrap="wrap" w="100%">
-                        <Group gap="xs" style={{ flex: '1 1 auto', minWidth: 'fit-content' }}>
-                          <ThemeIcon size={24} radius="md" color="blue" variant="light">
-                            <IconBrain size={12} />
-                          </ThemeIcon>
-                          <Text size="xs" c="gray.6">Choose embedding models</Text>
-                        </Group>
-                        <Group gap="xs" style={{ flex: '1 1 auto', minWidth: 'fit-content' }}>
-                          <ThemeIcon size={24} radius="md" color="orange" variant="light">
-                            <IconSettings size={12} />
-                          </ThemeIcon>
-                          <Text size="xs" c="gray.6">Configure chunking</Text>
-                        </Group>
-                        <Group gap="xs" style={{ flex: '1 1 auto', minWidth: 'fit-content' }}>
-                          <ThemeIcon size={24} radius="md" color="green" variant="light">
-                            <IconRefresh size={12} />
-                          </ThemeIcon>
-                          <Text size="xs" c="gray.6">Process documents</Text>
-                        </Group>
-                      </Group>
-                    </Stack>
-                  </Stack>
-                </Group>
-              </Paper>
-            ) : (
-              <Card withBorder shadow="sm">
-                <DataTable
-                  records={filteredJobs}
-                  columns={columns}
-                  striped
-                  highlightOnHover
-                  minHeight={200}
-                />
-              </Card>
-            )}
-          </Stack>
-        </Paper>
-      </Stack>
-
-      {/* Delete Confirmation Modal */}
+      {/* Delete Modal */}
       <Modal
         opened={deleteModalOpen}
-        onClose={handleDeleteCancel}
+        onClose={() => { setDeleteModalOpen(false); setJobToDelete(null); }}
         title={
-          <Group gap="sm">
-            <IconTrash size={20} color="var(--mantine-color-red-6)" />
-            <Text fw={600} size="lg">Delete Job</Text>
+          <Group gap="xs">
+            <ThemeIcon size="sm" variant="light" color="red" radius="sm"><IconTrash size={12} /></ThemeIcon>
+            <Text size="sm" fw={600} c="red">Delete Job</Text>
           </Group>
         }
         centered
-        size="md"
+        size="sm"
         radius="md"
-        shadow="xl"
-        transitionProps={{
-          transition: 'slide-up',
-          duration: 300,
-          timingFunction: 'ease-out',
-        }}
-        overlayProps={{
-          backgroundOpacity: 0.55,
-          blur: 3,
-          transitionProps: {
-            transition: 'fade',
-            duration: 300,
-            timingFunction: 'ease-in-out',
-          },
-        }}
-        styles={{
-          header: {
-            backgroundColor: 'var(--mantine-color-red-0)',
-            borderBottom: '1px solid var(--mantine-color-red-2)',
-            paddingBottom: '16px',
-            marginBottom: '16px',
-          },
-        }}
       >
         <Stack gap="md">
-          <Alert
-            icon={<IconTrash size={16} />}
-            title="Confirm Deletion"
-            color="red"
-            variant="light"
-          >
-            <Text>
-              Are you sure you want to delete the job <strong>"{jobToDelete?.name}"</strong>?
-            </Text>
-          </Alert>
-
-          <Text size="sm" c="dimmed">
-            This action cannot be undone. All job data and processing results will be permanently removed.
+          <Text size="sm">
+            Are you sure you want to delete <strong>"{jobToDelete?.name}"</strong>? This cannot be undone.
           </Text>
-
-          <Group justify="flex-end" gap="sm">
-            <Button
-              variant="light"
-              onClick={handleDeleteCancel}
-              disabled={deletingId !== null}
-            >
+          <Group justify="flex-end" gap="xs">
+            <Button variant="subtle" size="sm" onClick={() => { setDeleteModalOpen(false); setJobToDelete(null); }} disabled={deletingId !== null}>
               Cancel
             </Button>
-            <Button
-              color="red"
-              onClick={handleDeleteConfirm}
-              loading={deletingId !== null}
-            >
-              Delete Job
+            <Button color="red" size="sm" leftSection={<IconTrash size={14} />} onClick={handleDeleteConfirm} loading={deletingId !== null}>
+              Delete
             </Button>
           </Group>
         </Stack>
       </Modal>
-
     </Page>
   );
 }

@@ -322,8 +322,9 @@ class RolesDAO(MongoClientWrapper[Role]):
     
     def initialize_system_roles(self) -> bool:
         """
-        Initialize system roles if they don't exist.
-        
+        Initialize (upsert) system roles for the RAG platform.
+        Runs on every startup so role definitions stay in sync with code.
+
         Returns:
             True if successful, False otherwise
         """
@@ -331,42 +332,107 @@ class RolesDAO(MongoClientWrapper[Role]):
             system_roles = [
                 {
                     "name": "admin",
-                    "display_name": "Administrator",
-                    "description": "Full system access with all permissions",
+                    "display_name": "Platform Admin",
+                    "description": "Full access to all platform features including user management and system configuration",
                     "permissions": [
-                        "user:manage", "user:read", "interview:manage", "interview:read",
-                        "knowledge:manage", "knowledge:read", "analytics:manage", "analytics:read",
-                        "system:manage", "system:read"
+                        "user:manage", "user:read",
+                        "knowledge:manage", "knowledge:read",
+                        "conversation:manage", "conversation:read",
+                        "tools:manage", "tools:read",
+                        "models:manage", "models:read",
+                        "analytics:manage", "analytics:read",
+                        "system:manage", "system:read",
                     ],
                     "role_type": RoleType.SYSTEM,
-                    "is_system_role": True
+                    "is_system_role": True,
                 },
                 {
-                    "name": "user",
-                    "display_name": "User",
-                    "description": "Basic user access",
-                    "permissions": ["interview:read", "knowledge:read"],
+                    "name": "rag_engineer",
+                    "display_name": "RAG Engineer",
+                    "description": "Builds and maintains the RAG pipeline: knowledge sources, ingestion jobs, vector collections, tools and model providers",
+                    "permissions": [
+                        "knowledge:manage", "knowledge:read",
+                        "tools:manage", "tools:read",
+                        "models:manage", "models:read",
+                        "conversation:read",
+                        "analytics:read",
+                        "system:read",
+                    ],
                     "role_type": RoleType.SYSTEM,
-                    "is_system_role": True
+                    "is_system_role": True,
                 },
                 {
-                    "name": "interviewer",
-                    "display_name": "Interviewer",
-                    "description": "Interview management access",
-                    "permissions": ["interview:manage", "interview:read", "knowledge:read"],
-                    "role_type": RoleType.FEATURE,
-                    "is_system_role": True
-                }
+                    "name": "knowledge_manager",
+                    "display_name": "Knowledge Manager",
+                    "description": "Manages data ingestion: creates knowledge sources, runs jobs and monitors vector collections",
+                    "permissions": [
+                        "knowledge:manage", "knowledge:read",
+                        "conversation:read",
+                        "tools:read",
+                        "analytics:read",
+                    ],
+                    "role_type": RoleType.SYSTEM,
+                    "is_system_role": True,
+                },
+                {
+                    "name": "ai_user",
+                    "display_name": "AI User",
+                    "description": "Uses AI conversations to query the knowledge base and interact with configured tools",
+                    "permissions": [
+                        "knowledge:read",
+                        "conversation:manage", "conversation:read",
+                        "tools:read",
+                    ],
+                    "role_type": RoleType.SYSTEM,
+                    "is_system_role": True,
+                },
+                {
+                    "name": "viewer",
+                    "display_name": "Viewer",
+                    "description": "Read-only access across the platform — can view knowledge, conversations and tools but cannot create or modify anything",
+                    "permissions": [
+                        "knowledge:read",
+                        "conversation:read",
+                        "tools:read",
+                        "models:read",
+                        "analytics:read",
+                    ],
+                    "role_type": RoleType.SYSTEM,
+                    "is_system_role": True,
+                },
             ]
-            
+
+            # Remove legacy roles that no longer belong to this platform
+            legacy_role_names = ["user", "interviewer"]
+            for legacy_name in legacy_role_names:
+                result = self.collection.delete_one({"name": legacy_name, "is_system_role": True})
+                if result.deleted_count:
+                    logger.info(f"Removed legacy system role: {legacy_name}")
+
+            # Upsert each system role so updates are always applied on restart
             for role_data in system_roles:
-                if not self.role_exists(role_data["name"]):
-                    role = Role(**role_data)
-                    self.create_role(role)
-                    logger.info(f"System role {role_data['name']} initialized")
+                now = datetime.now(timezone.utc)
+                update_doc = {
+                    "display_name": role_data["display_name"],
+                    "description": role_data["description"],
+                    "permissions": role_data["permissions"],
+                    "role_type": role_data["role_type"].value,
+                    "is_system_role": role_data["is_system_role"],
+                    "updated_at": now,
+                }
+                result = self.collection.update_one(
+                    {"name": role_data["name"]},
+                    {
+                        "$set": update_doc,
+                        "$setOnInsert": {"name": role_data["name"], "created_at": now},
+                    },
+                    upsert=True,
+                )
+                if result.upserted_id:
+                    logger.info(f"System role '{role_data['name']}' created")
                 else:
-                    logger.info(f"System role {role_data['name']} already exists")
-            
+                    logger.info(f"System role '{role_data['name']}' updated")
+
             return True
         except Exception as e:
             logger.error(f"Error initializing system roles: {e}")

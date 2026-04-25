@@ -14,6 +14,7 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 from datapilotflow.api.routers.auth.auth_router import get_current_user
+from datapilotflow.api.dependencies.permissions import require_permission
 from datapilotflow.domain.tool import MCPServerConfig
 from datapilotflow.domain.user import User
 from datapilotflow.services.tool import get_mcp_server_service, get_tool_service
@@ -199,7 +200,7 @@ def server_to_response(_id: str, server: MCPServerConfig) -> MCPServerResponse:
 @router.post("", response_model=MCPServerResponse, status_code=status.HTTP_201_CREATED)
 async def create_mcp_server(
     request: CreateMCPServerRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("tools:manage")),
 ):
     """
     Create a new MCP server configuration.
@@ -251,7 +252,7 @@ async def create_mcp_server(
 @router.get("", response_model=List[MCPServerResponse])
 async def list_mcp_servers(
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("tools:read")),
 ):
     """
     List all MCP servers for the authenticated user.
@@ -289,7 +290,7 @@ async def list_mcp_servers(
 @router.get("/{server_id}", response_model=MCPServerResponse)
 async def get_mcp_server(
     server_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("tools:read")),
 ):
     """
     Get a specific MCP server by ID.
@@ -334,7 +335,7 @@ async def get_mcp_server(
 async def update_mcp_server(
     server_id: str,
     request: UpdateMCPServerRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("tools:manage")),
 ):
     """
     Update an existing MCP server.
@@ -414,7 +415,7 @@ async def update_mcp_server(
 @router.delete("/{server_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_mcp_server(
     server_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("tools:manage")),
 ):
     """
     Delete an MCP server.
@@ -454,7 +455,7 @@ async def delete_mcp_server(
         all_tools = tool_service.get_user_tools(user_id)
         related_tools = [
             tool
-            for tool in all_tools
+            for _, tool in all_tools
             if tool.tool_type.value == "mcp_remote" and tool.mcp_server_id == server_id
         ]
 
@@ -500,7 +501,7 @@ async def delete_mcp_server(
 @router.post("/discover", response_model=List[dict])
 async def discover_mcp_tools(
     request: DiscoverToolsRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("tools:manage")),
 ):
     """
     Discover available tools from an MCP server (without saving).
@@ -560,7 +561,7 @@ async def discover_mcp_tools(
 @router.post("/{server_id}/discover", response_model=List[dict])
 async def discover_from_existing_server(
     server_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("tools:manage")),
 ):
     """
     Discover tools from an existing saved MCP server.
@@ -619,7 +620,7 @@ async def discover_from_existing_server(
 @router.get("/{server_id}/tools", response_model=List[dict])
 async def get_server_tools(
     server_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("tools:read")),
 ):
     """
     Get live tools from an MCP server.

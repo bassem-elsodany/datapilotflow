@@ -33,6 +33,7 @@ class UserProfile(BaseModel):
     email: str
     name: str
     roles: List[str]
+    permissions: List[str] = []
     created_at: datetime
     last_login: Optional[datetime] = None
     is_active: bool
@@ -40,15 +41,16 @@ class UserProfile(BaseModel):
     @classmethod
     def from_user(cls, user: User):
         """Create UserProfile from User object."""
-        # Get user roles through the role system
         role_names = user_service.get_user_role_names(user.id)
+        permissions = list(user_service.get_user_permissions(user.id)) if user.id else []
 
         return cls(
             id=user.id,
             username=user.username,
             email=user.email,
             name=user.name,
-            roles=role_names,  # Use role names from the role system
+            roles=role_names,
+            permissions=permissions,
             created_at=user.created_at,
             last_login=user.last_login,
             is_active=user.is_active,

@@ -235,37 +235,61 @@ class UserService:
 
     # Convenience Methods for Common Permission Checks
 
+    # ── User management ──────────────────────────────────────────────────────
+
     def user_can_manage_users(self, user_id: str) -> bool:
-        """Check if user can manage other users."""
+        """Check if user can create/update/delete users and roles."""
         return self.user_has_permission(user_id, "user:manage")
 
     def user_can_read_users(self, user_id: str) -> bool:
-        """Check if user can read user information."""
+        """Check if user can view users."""
         return self.user_has_permission(user_id, "user:read")
 
-    def user_can_manage_interviews(self, user_id: str) -> bool:
-        """Check if user can manage interviews."""
-        return self.user_has_permission(user_id, "interview:manage")
-
-    def user_can_read_interviews(self, user_id: str) -> bool:
-        """Check if user can read interviews."""
-        return self.user_has_permission(user_id, "interview:read")
+    # ── Knowledge pipeline ───────────────────────────────────────────────────
 
     def user_can_manage_knowledge(self, user_id: str) -> bool:
-        """Check if user can manage knowledge base."""
+        """Check if user can create/edit knowledge sources, run jobs, manage collections."""
         return self.user_has_permission(user_id, "knowledge:manage")
 
     def user_can_read_knowledge(self, user_id: str) -> bool:
-        """Check if user can read knowledge base."""
+        """Check if user can view knowledge sources, jobs and vector collections."""
         return self.user_has_permission(user_id, "knowledge:read")
 
-    def user_is_admin(self, user_id: str) -> bool:
-        """Check if user is an admin."""
-        return self.user_has_role(user_id, "admin")
+    # ── Conversations ────────────────────────────────────────────────────────
 
-    def user_is_interviewer(self, user_id: str) -> bool:
-        """Check if user is an interviewer."""
-        return self.user_has_role(user_id, "interviewer")
+    def user_can_manage_conversations(self, user_id: str) -> bool:
+        """Check if user can create and manage AI conversations."""
+        return self.user_has_permission(user_id, "conversation:manage")
+
+    def user_can_read_conversations(self, user_id: str) -> bool:
+        """Check if user can view conversations."""
+        return self.user_has_permission(user_id, "conversation:read")
+
+    # ── Tools & MCP ──────────────────────────────────────────────────────────
+
+    def user_can_manage_tools(self, user_id: str) -> bool:
+        """Check if user can add/edit/delete tools and MCP servers."""
+        return self.user_has_permission(user_id, "tools:manage")
+
+    def user_can_read_tools(self, user_id: str) -> bool:
+        """Check if user can view tools and MCP servers."""
+        return self.user_has_permission(user_id, "tools:read")
+
+    # ── Model providers ──────────────────────────────────────────────────────
+
+    def user_can_manage_models(self, user_id: str) -> bool:
+        """Check if user can add/edit/delete model providers."""
+        return self.user_has_permission(user_id, "models:manage")
+
+    def user_can_read_models(self, user_id: str) -> bool:
+        """Check if user can view model providers."""
+        return self.user_has_permission(user_id, "models:read")
+
+    # ── System ───────────────────────────────────────────────────────────────
+
+    def user_is_admin(self, user_id: str) -> bool:
+        """Check if user has the platform admin role."""
+        return self.user_has_role(user_id, "admin")
 
     def get_users_with_role(self, role_name: str) -> List[User]:
         """Get all users with a specific role by name."""

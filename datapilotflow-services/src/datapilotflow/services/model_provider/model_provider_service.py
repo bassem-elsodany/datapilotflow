@@ -24,10 +24,6 @@ from datapilotflow.infrastructure.dao.model_provider import ModelProviderDAO
 from litellm import acompletion, aembedding, rerank
 from loguru import logger
 
-# Enable LiteLLM debug mode for better error diagnostics
-litellm._turn_on_debug()
-logger.info("LiteLLM debug mode enabled")
-
 
 class ModelProviderService:
     """Service for managing unified model provider configurations."""

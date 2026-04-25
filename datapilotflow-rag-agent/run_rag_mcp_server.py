@@ -11,10 +11,20 @@ The server will be available at:
     http://localhost:65510 (or configured MCP_SERVER_PORT)
 """
 
+import asyncio
+import logging
 import sys
 
 # CRITICAL: Configure service-specific logging BEFORE any other imports
 from datapilotflow.domain.logging import setup_service_logging
+
+
+class _SuppressHealthCheck(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "/health" not in record.getMessage()
+
+
+logging.getLogger("uvicorn.access").addFilter(_SuppressHealthCheck())
 
 setup_service_logging("rag-agent")
 
@@ -29,20 +39,21 @@ if __name__ == "__main__":
     logger.info("=" * 80)
     logger.info("RAG Agent MCP Server")
     logger.info(f"Server Name: {settings.MCP_SERVER_NAME}")
-    logger.info("Transport: HTTP (Streamable)")
+    logger.info("Transport: Streamable HTTP")
     logger.info("Tool: knowledge_expert")
     logger.info(
         f"MCP Endpoint: http://{settings.MCP_SERVER_HOST}:{settings.MCP_SERVER_PORT}/mcp"
     )
-    logger.info("Protocol: Streamable HTTP (full bidirectional communication)")
     logger.info("=" * 80)
 
     try:
-        # Run FastMCP server with HTTP transport (Streamable)
-        mcp.run(
-            transport="http",  # HTTP Transport (Streamable) - recommended for network deployments
-            host=settings.MCP_SERVER_HOST,
-            port=settings.MCP_SERVER_PORT,
+        # FastMCP 2.14+: run_http_async with streamable-http transport
+        asyncio.run(
+            mcp.run_http_async(
+                transport="streamable-http",
+                host=settings.MCP_SERVER_HOST,
+                port=settings.MCP_SERVER_PORT,
+            )
         )
     except KeyboardInterrupt:
         logger.info("RAG MCP Server stopped by user")

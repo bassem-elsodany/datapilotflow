@@ -1,5 +1,5 @@
 import { MCPServerConfig, MCPToolDiscovery, useCreateMCPServer, useDeleteMCPServer, useDiscoverMCPTools, useGetMCPServers, useTestMCPConnection, useUpdateMCPServer } from '@/api/resources/mcp-servers';
-import { Tool, useDeleteTool, useGetTools, useUpdateTool } from '@/api/resources/tools';
+import { Tool, useCreateTool, useDeleteTool, useGetTools, useUpdateTool } from '@/api/resources/tools';
 import { Page } from '@/components/page';
 import { PageHeader } from '@/components/page-header';
 import { paths } from '@/routes/paths';
@@ -20,9 +20,11 @@ import {
   Select,
   Stack,
   Table,
+  Tabs,
   TagsInput,
   Text,
   TextInput,
+  ThemeIcon,
   Title,
   Tooltip
 } from '@mantine/core';
@@ -39,12 +41,15 @@ import {
   IconRefresh,
   IconServer,
   IconTool,
-  IconTrash
+  IconTrash,
+  IconZoomScan
 } from '@tabler/icons-react';
 import sortBy from 'lodash/sortBy';
-import { DataTable, DataTableColumn, DataTableSortStatus } from 'mantine-datatable';
+import { DataTableTable as DataTable } from '@/components/data-table/data-table-table';
+import { DataTableColumn, DataTableSortStatus } from 'mantine-datatable';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { usePermissions } from '@/hooks/use-permissions';
 
 const breadcrumbs = [
   { label: 'Dashboard', href: paths.dashboard.root },
@@ -76,13 +81,11 @@ const getToolTypeBadge = (toolType: string) => {
 
 export default function ToolsManagementPage() {
   const navigate = useNavigate();
+  const { hasPermission, isAdmin } = usePermissions();
+  const canManage = isAdmin() || hasPermission('tools:manage');
 
   // MCP Servers state
   const [selectedServerId, setSelectedServerId] = useState<string | null>(null);
-  const [serverSortStatus, setServerSortStatus] = useState<DataTableSortStatus<MCPServerConfig>>({
-    columnAccessor: 'name',
-    direction: 'asc',
-  });
   const [deleteServerModalOpened, { open: openDeleteServerModal, close: closeDeleteServerModal }] = useDisclosure(false);
   const [serverFormModalOpened, { open: openServerFormModal, close: closeServerFormModal }] = useDisclosure(false);
   const [selectedServer, setSelectedServer] = useState<MCPServerConfig | null>(null);
@@ -110,10 +113,110 @@ export default function ToolsManagementPage() {
   const updateMCPServerMutation = useUpdateMCPServer();
   const discoverMCPMutation = useDiscoverMCPTools();
   const testConnectionMutation = useTestMCPConnection();
+  const createToolMutation = useCreateTool();
 
   // State for testing connection
   const [discoveredTools, setDiscoveredTools] = useState<MCPToolDiscovery[]>([]);
   const [isTestingConnection, setIsTestingConnection] = useState(false);
+
+  // Rediscover state
+  const [rediscoverModalOpened, { open: openRediscoverModal, close: closeRediscoverModal }] = useDisclosure(false);
+  const [rediscoverServerId, setRediscoverServerId] = useState<string | null>(null);
+  const [rediscoverResults, setRediscoverResults] = useState<MCPToolDiscovery[]>([]);
+  const [rediscoverRemovedTools, setRediscoverRemovedTools] = useState<Tool[]>([]);
+  const [isRediscovering, setIsRediscovering] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [selectedNewTools, setSelectedNewTools] = useState<Set<string>>(new Set());
+
+  const closeRediscover = () => {
+    closeRediscoverModal();
+    setRediscoverResults([]);
+    setRediscoverRemovedTools([]);
+    setSelectedNewTools(new Set());
+    setRediscoverServerId(null);
+  };
+
+  const handleRediscover = async (server: MCPServerConfig) => {
+    setRediscoverServerId(server.id);
+    setRediscoverResults([]);
+    setRediscoverRemovedTools([]);
+    setSelectedNewTools(new Set());
+    setIsRediscovering(true);
+    openRediscoverModal();
+    try {
+      const result = await discoverMCPMutation.mutateAsync({ serverId: server.id });
+      const serverTools = tools.filter(t => t.tool_type === 'mcp_remote' && t.mcp_server_id === server.id);
+      const returnedNames = new Set(result.map((t: MCPToolDiscovery) => t.name));
+
+      // Tools that no longer exist on the server
+      const removed = serverTools.filter(t => !returnedNames.has(t.mcp_tool_name || t.name));
+      // Tools that are new (not yet in DB)
+      const existingNames = new Set(serverTools.map(t => t.mcp_tool_name || t.name));
+      const newOnes = result.filter((t: MCPToolDiscovery) => !existingNames.has(t.name));
+
+      setRediscoverResults(result);
+      setRediscoverRemovedTools(removed);
+      setSelectedNewTools(new Set(newOnes.map((t: MCPToolDiscovery) => t.name)));
+    } catch (error: any) {
+      notifications.show({
+        title: 'Rediscover Failed',
+        message: error.response?.data?.detail || 'Failed to discover tools from server',
+        color: 'red',
+      });
+      closeRediscover();
+    } finally {
+      setIsRediscovering(false);
+    }
+  };
+
+  const handleSyncTools = async () => {
+    if (!rediscoverServerId) return;
+    setIsSyncing(true);
+    try {
+      const toAdd = rediscoverResults.filter(t => selectedNewTools.has(t.name));
+
+      await Promise.all([
+        // Add new tools
+        ...toAdd.map(tool =>
+          createToolMutation.mutateAsync({
+            name: tool.name,
+            display_name: tool.name.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()),
+            description: tool.description || '',
+            tool_type: 'mcp_remote',
+            is_active: true,
+            tags: ['mcp', 'auto-discovered'],
+            mcp_server_id: rediscoverServerId,
+            mcp_tool_name: tool.name,
+          } as any)
+        ),
+        // Delete removed tools
+        ...rediscoverRemovedTools.map(tool =>
+          deleteToolMutation.mutateAsync({ toolId: tool.id })
+        ),
+      ]);
+
+      const addedCount = toAdd.length;
+      const deletedCount = rediscoverRemovedTools.length;
+      notifications.show({
+        title: 'Sync Complete',
+        message: [
+          addedCount > 0 && `Added ${addedCount} new tool(s)`,
+          deletedCount > 0 && `Removed ${deletedCount} stale tool(s)`,
+        ].filter(Boolean).join('. ') || 'Already up to date',
+        color: 'green',
+      });
+      closeRediscover();
+      refetchTools();
+    } catch (error: any) {
+      notifications.show({
+        title: 'Sync Failed',
+        message: error.response?.data?.detail || 'Failed to sync tools',
+        color: 'red',
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   // MCP Server form
   const serverForm = useForm({
@@ -189,22 +292,28 @@ export default function ToolsManagementPage() {
     setSelectedToolIds(new Set());
   }, [selectedServerId, searchQuery, filterActive]);
 
-  // Sort MCP servers
-  const sortedServers = useMemo(() => {
-    const sorted = sortBy(mcpServers, serverSortStatus.columnAccessor);
-    return serverSortStatus.direction === 'desc' ? sorted.reverse() : sorted;
-  }, [mcpServers, serverSortStatus]);
+  // Ensure a valid selected tab whenever server list changes
+  useEffect(() => {
+    if (!mcpServers.length) {
+      setSelectedServerId(null);
+      return;
+    }
+
+    if (!selectedServerId || !mcpServers.some((server) => server.id === selectedServerId)) {
+      setSelectedServerId(mcpServers[0].id);
+    }
+  }, [mcpServers, selectedServerId]);
+
+  const selectedServerConfig = useMemo(
+    () => mcpServers.find((server) => server.id === selectedServerId) || null,
+    [mcpServers, selectedServerId]
+  );
 
   // Filter and sort tools
-  const filteredTools = useMemo(() => {
-    let filtered = tools;
-
-    // Filter by selected MCP server
-    if (selectedServerId) {
-      filtered = filtered.filter((tool) =>
-        tool.tool_type === 'mcp_remote' && tool.mcp_server_id === selectedServerId
-      );
-    }
+  const getFilteredToolsForServer = (serverId: string) => {
+    let filtered = tools.filter(
+      (tool) => tool.tool_type === 'mcp_remote' && tool.mcp_server_id === serverId
+    );
 
     // Search filter
     if (searchQuery) {
@@ -223,6 +332,11 @@ export default function ToolsManagementPage() {
     // Sort
     const sorted = sortBy(filtered, sortStatus.columnAccessor);
     return sortStatus.direction === 'desc' ? sorted.reverse() : sorted;
+  };
+
+  const filteredTools = useMemo(() => {
+    if (!selectedServerId) return [];
+    return getFilteredToolsForServer(selectedServerId);
   }, [tools, selectedServerId, searchQuery, filterActive, sortStatus]);
 
   const handleDeleteTool = async () => {
@@ -243,7 +357,7 @@ export default function ToolsManagementPage() {
         });
 
         setSelectedToolIds(new Set());
-      } 
+      }
       // Single delete
       else if (selectedTool) {
         await deleteToolMutation.mutateAsync({
@@ -263,7 +377,7 @@ export default function ToolsManagementPage() {
       refetchTools();
     } catch (error: any) {
       console.error('Failed to delete tool(s):', error);
-      
+
       // Handle 409 Conflict - tool is bound to conversations (referential integrity)
       if (error.response?.status === 409) {
         notifications.show({
@@ -273,11 +387,11 @@ export default function ToolsManagementPage() {
           autoClose: 10000, // Show longer for users to read the conversation names
         });
       } else {
-      notifications.show({
-        title: 'Error',
-        message: error.response?.data?.detail || 'Failed to delete tool(s)',
-        color: 'red',
-      });
+        notifications.show({
+          title: 'Error',
+          message: error.response?.data?.detail || 'Failed to delete tool(s)',
+          color: 'red',
+        });
       }
     }
   };
@@ -346,7 +460,7 @@ export default function ToolsManagementPage() {
     } catch (error: any) {
       const status = error.response?.status;
       const detail = error.response?.data?.detail;
-      
+
       // 409 Conflict means server has related tools
       if (status === 409) {
         notifications.show({
@@ -494,82 +608,6 @@ export default function ToolsManagementPage() {
     }
   };
 
-  // MCP Servers table columns
-  const serverColumns: DataTableColumn<MCPServerConfig>[] = [
-    {
-      accessor: 'name',
-      title: 'Server Name',
-      sortable: true,
-      render: (server) => (
-        <Group gap="sm">
-          <IconServer size={16} />
-          <div>
-            <Text size="sm" fw={500}>{server.name}</Text>
-            <Text size="xs" c="dimmed">{server.server_url}</Text>
-          </div>
-        </Group>
-      ),
-    },
-    {
-      accessor: 'server_type',
-      title: 'Type',
-      render: () => <Badge size="sm">HTTP</Badge>,
-    },
-    {
-      accessor: 'is_active',
-      title: 'Status',
-      sortable: true,
-      render: (server) => (
-        <Badge color={server.is_active ? 'green' : 'gray'} size="sm">
-          {server.is_active ? 'Active' : 'Inactive'}
-        </Badge>
-      ),
-    },
-    {
-      accessor: 'tools_count',
-      title: 'Tools',
-      render: (server) => {
-        const toolsCount = tools.filter(t => t.mcp_server_id === server.id).length;
-        return <Badge size="sm" variant="light">{toolsCount} tool(s)</Badge>;
-      },
-    },
-    {
-      accessor: 'actions',
-      title: 'Actions',
-      textAlign: 'right',
-      render: (server) => (
-        <Group gap={4} justify="flex-end">
-          <Tooltip label="Edit">
-            <ActionIcon
-              variant="subtle"
-              color="blue"
-              onClick={(e) => {
-                e.stopPropagation();
-                setEditingServerId(server.id);
-                openServerFormModal();
-              }}
-            >
-              <IconEdit size={16} />
-            </ActionIcon>
-          </Tooltip>
-          <Tooltip label="Delete">
-            <ActionIcon
-              variant="subtle"
-              color="red"
-              onClick={(e) => {
-                e.stopPropagation();
-                setSelectedServer(server);
-                openDeleteServerModal();
-              }}
-            >
-              <IconTrash size={16} />
-            </ActionIcon>
-          </Tooltip>
-        </Group>
-      ),
-    },
-  ];
-
   const columns: DataTableColumn<Tool>[] = [
     {
       accessor: 'checkbox',
@@ -591,14 +629,21 @@ export default function ToolsManagementPage() {
     },
     {
       accessor: 'name',
-      title: 'Tool Name',
+      title: 'Tool',
       sortable: true,
       render: (tool) => (
-        <Group gap="sm">
-          {getToolIcon(tool.tool_type)}
-          <div>
-            <Text size="sm" fw={500}>{tool.display_name}</Text>
-            <Text size="xs" c="dimmed">{tool.name}</Text>
+        <Group gap="sm" wrap="nowrap">
+          <ThemeIcon
+            size="md"
+            variant="light"
+            color={tool.tool_type === 'prompt_based' ? 'violet' : 'blue'}
+            radius="sm"
+          >
+            {getToolIcon(tool.tool_type)}
+          </ThemeIcon>
+          <div style={{ minWidth: 0 }}>
+            <Text size="sm" fw={600} truncate>{tool.display_name}</Text>
+            <Text size="xs" c="dimmed" truncate>{tool.name}</Text>
           </div>
         </Group>
       ),
@@ -607,22 +652,28 @@ export default function ToolsManagementPage() {
       accessor: 'description',
       title: 'Description',
       render: (tool) => (
-        <Text size="sm" lineClamp={2}>{tool.description}</Text>
+        <Tooltip label={tool.description} multiline maw={360} withArrow disabled={!tool.description || tool.description.length < 60}>
+          <Text size="sm" c="dimmed" lineClamp={1}>{tool.description || '—'}</Text>
+        </Tooltip>
       ),
     },
     {
       accessor: 'tool_type',
       title: 'Type',
       sortable: true,
+      width: 140,
       render: (tool) => getToolTypeBadge(tool.tool_type),
     },
     {
       accessor: 'is_active',
       title: 'Status',
       sortable: true,
+      width: 110,
       render: (tool) => (
-        <Tooltip label="Click to toggle">
+        <Tooltip label="Click to toggle" withArrow>
           <Badge
+            size="sm"
+            variant="dot"
             color={tool.is_active ? 'green' : 'gray'}
             style={{ cursor: 'pointer' }}
             onClick={() => handleQuickToggle(tool)}
@@ -635,48 +686,71 @@ export default function ToolsManagementPage() {
     {
       accessor: 'tags',
       title: 'Tags',
+      width: 140,
+      render: (tool) => {
+        if (!tool.tags || tool.tags.length === 0) return <Text size="xs" c="dimmed">—</Text>;
+        return (
+          <Tooltip
+            label={tool.tags.join(', ')}
+            withArrow
+            disabled={tool.tags.length <= 2}
+          >
+            <Group gap={4} wrap="nowrap">
+              {tool.tags.slice(0, 2).map((tag, idx) => (
+                <Badge key={idx} size="xs" variant="light" radius="sm">{tag}</Badge>
+              ))}
+              {tool.tags.length > 2 && (
+                <Badge size="xs" variant="light" color="gray" radius="sm">+{tool.tags.length - 2}</Badge>
+              )}
+            </Group>
+          </Tooltip>
+        );
+      },
+    },
+    {
+      accessor: 'actions',
+      title: '',
+      width: 72,
+      textAlign: 'right',
       render: (tool) => (
-        <Group gap={4}>
-          {tool.tags?.slice(0, 2).map((tag, idx) => (
-            <Badge key={idx} size="xs" variant="light">{tag}</Badge>
-          ))}
-          {tool.tags && tool.tags.length > 2 && (
-            <Badge size="xs" variant="light">+{tool.tags.length - 2}</Badge>
+        <Group gap={4} justify="flex-end" wrap="nowrap">
+          {canManage && (
+            <Tooltip label="Edit" withArrow>
+              <ActionIcon
+                variant="subtle"
+                color="blue"
+                size="sm"
+                onClick={() => navigate(paths.dashboard.management.tools.edit(tool.id))}
+              >
+                <IconEdit size={14} />
+              </ActionIcon>
+            </Tooltip>
+          )}
+          {canManage && (
+            <Tooltip label="Delete" withArrow>
+              <ActionIcon
+                variant="subtle"
+                color="red"
+                size="sm"
+                onClick={() => {
+                  setSelectedTool(tool);
+                  openDeleteModal();
+                }}
+              >
+                <IconTrash size={14} />
+              </ActionIcon>
+            </Tooltip>
           )}
         </Group>
       ),
     },
-    {
-      accessor: 'actions',
-      title: 'Actions',
-      textAlign: 'right',
-      render: (tool) => (
-        <Group gap={4} justify="flex-end">
-          <Tooltip label="Edit">
-            <ActionIcon
-              variant="subtle"
-              color="blue"
-              onClick={() => navigate(paths.dashboard.management.tools.edit(tool.id))}
-            >
-              <IconEdit size={16} />
-            </ActionIcon>
-          </Tooltip>
-          <Tooltip label="Delete">
-            <ActionIcon
-              variant="subtle"
-              color="red"
-              onClick={() => {
-                setSelectedTool(tool);
-                openDeleteModal();
-              }}
-            >
-              <IconTrash size={16} />
-            </ActionIcon>
-          </Tooltip>
-        </Group>
-      ),
-    },
   ];
+
+  // Derived stats
+  const totalTools = tools.length;
+  const activeTools = tools.filter(t => t.is_active).length;
+  const mcpTools = tools.filter(t => t.tool_type === 'mcp_remote').length;
+  const promptTools = tools.filter(t => t.tool_type === 'prompt_based').length;
 
   return (
     <Page title="Tools Management">
@@ -686,44 +760,46 @@ export default function ToolsManagementPage() {
       />
 
       <Stack gap="md">
-        {/* MCP Servers Table */}
+        {/* Stat pills */}
+
+
+        {/* MCP Servers Tabs + Selected Server Details */}
         <Card>
           <Stack gap="md">
-            <Group justify="apart">
+            <Group justify="space-between">
               <div>
-                <Title order={5}>MCP Servers ({mcpServers.length})</Title>
+                <Title order={5}>MCP Servers</Title>
                 <Text size="sm" c="dimmed">
-                  {selectedServerId
-                    ? `Selected: ${mcpServers.find(s => s.id === selectedServerId)?.name}`
-                    : 'Click a row to filter tools by server'}
+                  Select a server tab to view and manage its tools
                 </Text>
               </div>
-              <Group>
-                {selectedServerId && (
+              <Group gap="xs" ml="auto">
+                <ActionIcon variant="subtle" size="sm" onClick={() => refetchServers()} loading={serversLoading}>
+                  <IconRefresh size={14} />
+                </ActionIcon>
+                {canManage && (
                   <Button
-                    variant="subtle"
-                    size="sm"
-                    onClick={() => setSelectedServerId(null)}
+                    leftSection={<IconPlus size={14} />}
+                    size="xs"
+                    variant="default"
+                    onClick={() => {
+                      setEditingServerId(null);
+                      openServerFormModal();
+                    }}
                   >
-                    Clear Selection
+                    Add MCP Server
                   </Button>
                 )}
-                <ActionIcon
-                  variant="subtle"
-                  onClick={() => refetchServers()}
-                  loading={serversLoading}
-                >
-                  <IconRefresh size={16} />
-                </ActionIcon>
-                <Button
-                  leftSection={<IconPlus size={16} />}
-                  onClick={() => {
-                    setEditingServerId(null);
-                    openServerFormModal();
-                  }}
-                >
-                  Add MCP Server
-                </Button>
+                {canManage && (
+                  <Button
+                    leftSection={<IconPlus size={14} />}
+                    size="xs"
+                    variant="default"
+                    onClick={() => navigate(paths.dashboard.management.tools.create)}
+                  >
+                    Create MCP Tool
+                  </Button>
+                )}
               </Group>
             </Group>
 
@@ -731,7 +807,7 @@ export default function ToolsManagementPage() {
               <Center py="xl">
                 <Loader />
               </Center>
-            ) : sortedServers.length === 0 ? (
+            ) : mcpServers.length === 0 ? (
               <Center py="xl">
                 <Stack align="center" gap="md">
                   <IconServer size={48} stroke={1.5} color="gray" />
@@ -753,124 +829,116 @@ export default function ToolsManagementPage() {
                 </Stack>
               </Center>
             ) : (
-              <DataTable
-                columns={serverColumns}
-                records={sortedServers}
-                sortStatus={serverSortStatus}
-                onSortStatusChange={setServerSortStatus}
-                highlightOnHover
-                striped
-                onRowClick={({ record }) => {
-                  if (selectedServerId === record.id) {
-                    setSelectedServerId(null);
-                  } else {
-                    setSelectedServerId(record.id);
-                  }
-                }}
-                rowStyle={(server) => ({
-                  cursor: 'pointer',
-                  backgroundColor: selectedServerId === server.id ? 'var(--mantine-color-blue-light-hover)' : undefined,
+              <Tabs
+                value={selectedServerId || undefined}
+                onChange={(value) => setSelectedServerId(value)}
+              >
+                <Tabs.List>
+                  {mcpServers.map((server) => {
+                    const serverTools = tools.filter(
+                      (tool) => tool.tool_type === 'mcp_remote' && tool.mcp_server_id === server.id
+                    ).length;
+                    const isSelected = selectedServerId === server.id;
+                    return (
+                      <Tabs.Tab
+                        key={server.id}
+                        value={server.id}
+                        leftSection={<IconServer size={14} />}
+                      >
+                        <Group gap={6} wrap="nowrap">
+                          <Text size="sm" fw={500}>{server.name}</Text>
+                          <Badge size="xs" variant="light" color={serverTools > 0 ? 'teal' : 'gray'}>
+                            {serverTools}
+                          </Badge>
+                          {isSelected && (
+                            <>
+                              <Tooltip label="Edit server" withArrow>
+                                <ActionIcon
+                                  variant="subtle"
+                                  size="xs"
+                                  color="blue"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingServerId(server.id);
+                                    openServerFormModal();
+                                  }}
+                                >
+                                  <IconEdit size={12} />
+                                </ActionIcon>
+                              </Tooltip>
+                              <Tooltip label="Rediscover tools" withArrow>
+                                <ActionIcon
+                                  variant="subtle"
+                                  size="xs"
+                                  color="teal"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRediscover(server);
+                                  }}
+                                >
+                                  <IconZoomScan size={12} />
+                                </ActionIcon>
+                              </Tooltip>
+                              <Tooltip label="Delete server" withArrow>
+                                <ActionIcon
+                                  variant="subtle"
+                                  size="xs"
+                                  color="red"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedServer(server);
+                                    openDeleteServerModal();
+                                  }}
+                                >
+                                  <IconTrash size={12} />
+                                </ActionIcon>
+                              </Tooltip>
+                            </>
+                          )}
+                        </Group>
+                      </Tabs.Tab>
+                    );
+                  })}
+                </Tabs.List>
+
+                {mcpServers.map((server) => {
+                  const panelTools = getFilteredToolsForServer(server.id);
+                  return (
+                    <Tabs.Panel key={server.id} value={server.id} pt="md">
+                      <Stack gap="md">
+                        {toolsLoading ? (
+                          <Center py="xl">
+                            <Loader />
+                          </Center>
+                        ) : panelTools.length === 0 ? (
+                          <Center py="xl">
+                            <Stack align="center" gap="md">
+                              <IconTool size={48} stroke={1.5} color="gray" />
+                              <div>
+                                <Text size="lg" fw={500} ta="center">
+                                  No tools under this server
+                                </Text>
+                                <Text size="sm" c="dimmed" ta="center">
+                                  Create a tool for this MCP server.
+                                </Text>
+                              </div>
+                            </Stack>
+                          </Center>
+                        ) : (
+                          <DataTable
+                            columns={columns}
+                            records={panelTools}
+                            sortStatus={sortStatus}
+                            onSortStatusChange={setSortStatus}
+                            highlightOnHover
+                            striped
+                          />
+                        )}
+                      </Stack>
+                    </Tabs.Panel>
+                  );
                 })}
-              />
-            )}
-          </Stack>
-        </Card>
-
-        {/* Tools Table */}
-        <Card>
-          <Stack gap="md">
-            <Group justify="apart">
-              <div>
-                <Title order={5}>
-                  {selectedServerId
-                    ? `Tools from ${mcpServers.find(s => s.id === selectedServerId)?.name}`
-                    : `All Tools`} ({filteredTools.length})
-                </Title>
-                <Text size="sm" c="dimmed">
-                  {selectedServerId
-                    ? 'Showing MCP tools from the selected server'
-                    : 'Showing all tools (prompt-based and MCP remote)'}
-                </Text>
-              </div>
-              <Group>
-                {selectedToolIds.size > 0 && (
-                  <Button
-                    leftSection={<IconTrash size={16} />}
-                    color="red"
-                    variant="light"
-                    onClick={handleBulkDelete}
-                  >
-                    Delete Selected ({selectedToolIds.size})
-                  </Button>
-                )}
-                <TextInput
-                  placeholder="Search tools..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.currentTarget.value)}
-                  style={{ width: 250 }}
-                />
-                <Select
-                  placeholder="Filter by status"
-                  data={[
-                    { value: '', label: 'All' },
-                    { value: 'true', label: 'Active' },
-                    { value: 'false', label: 'Inactive' },
-                  ]}
-                  value={filterActive === null ? '' : String(filterActive)}
-                  onChange={(value) => setFilterActive(value === '' ? null : value === 'true')}
-                  style={{ width: 150 }}
-                />
-                <ActionIcon
-                  variant="subtle"
-                  onClick={() => refetchTools()}
-                  loading={toolsLoading}
-                >
-                  <IconRefresh size={16} />
-                </ActionIcon>
-                <Button
-                  leftSection={<IconPlus size={16} />}
-                  onClick={() => navigate(paths.dashboard.management.tools.create)}
-                >
-                  Create Tool
-                </Button>
-              </Group>
-            </Group>
-
-            {toolsLoading ? (
-              <Center py="xl">
-                <Loader />
-              </Center>
-            ) : filteredTools.length === 0 ? (
-              <Center py="xl">
-                <Stack align="center" gap="md">
-                  <IconTool size={48} stroke={1.5} color="gray" />
-                  <div>
-                    <Text size="lg" fw={500} ta="center">
-                      {selectedServerId ? 'No tools from this server' : 'No tools configured'}
-                    </Text>
-                    <Text size="sm" c="dimmed" ta="center">
-                      {selectedServerId
-                        ? 'Create a tool from this MCP server or select a different server'
-                        : 'Create your first tool to get started'}
-                    </Text>
-                  </div>
-                  <Button
-                    leftSection={<IconPlus size={16} />}
-                    onClick={() => navigate(paths.dashboard.management.tools.create)}
-                  >
-                    Create Tool
-                  </Button>
-                </Stack>
-              </Center>
-            ) : (
-              <DataTable
-                columns={columns}
-                records={filteredTools}
-                sortStatus={sortStatus}
-                onSortStatusChange={setSortStatus}
-                highlightOnHover
-                striped
-              />
+              </Tabs>
             )}
           </Stack>
         </Card>
@@ -933,9 +1001,9 @@ export default function ToolsManagementPage() {
             <Text>
               Are you sure you want to delete <strong>{selectedServer.name}</strong>?
             </Text>
-            
+
             <Alert color="yellow" icon={<IconAlertCircle />}>
-              Note: You cannot delete a server that has tools associated with it. 
+              Note: You cannot delete a server that has tools associated with it.
               Please delete all related tools first.
             </Alert>
 
@@ -959,6 +1027,150 @@ export default function ToolsManagementPage() {
             </Group>
           </Stack>
         )}
+      </Modal>
+
+      {/* Rediscover Tools Modal */}
+      <Modal
+        opened={rediscoverModalOpened}
+        onClose={closeRediscover}
+        title={
+          <Group gap="xs">
+            <IconZoomScan size={18} />
+            <Text size="sm" fw={600}>Sync Tools — {mcpServers.find(s => s.id === rediscoverServerId)?.name}</Text>
+          </Group>
+        }
+        size="lg"
+      >
+        <Stack gap="md">
+          {isRediscovering ? (
+            <Center py="xl">
+              <Stack align="center" gap="sm">
+                <Loader />
+                <Text size="sm" c="dimmed">Connecting to MCP server...</Text>
+              </Stack>
+            </Center>
+          ) : (
+            <>
+              {/* Summary alert */}
+              {rediscoverResults.length === 0 && !isRediscovering ? (
+                <Alert color="yellow" icon={<IconAlertCircle size={16} />}>
+                  No tools returned by the server. All existing tools will be removed on sync.
+                </Alert>
+              ) : (
+                <Alert color="blue" icon={<IconInfoCircle size={16} />} p="xs">
+                  <Text size="xs">
+                    Server returned <strong>{rediscoverResults.length}</strong> tool(s).
+                    {selectedNewTools.size > 0 && <> <strong>{selectedNewTools.size}</strong> new to add.</>}
+                    {rediscoverRemovedTools.length > 0 && <> <strong style={{ color: 'var(--mantine-color-red-6)' }}>{rediscoverRemovedTools.length}</strong> stale to remove.</>}
+                  </Text>
+                </Alert>
+              )}
+
+              {/* Stale tools to be deleted */}
+              {rediscoverRemovedTools.length > 0 && (
+                <>
+                  <Text size="xs" fw={600} c="red">Stale Tools — will be deleted</Text>
+                  <Table withTableBorder>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>Tool Name</Table.Th>
+                        <Table.Th>Description</Table.Th>
+                        <Table.Th w={90}>Action</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {rediscoverRemovedTools.map(tool => (
+                        <Table.Tr key={tool.id} style={{ background: 'var(--mantine-color-red-0)' }}>
+                          <Table.Td><Text size="sm" fw={500} c="red">{tool.display_name}</Text></Table.Td>
+                          <Table.Td><Text size="xs" c="dimmed" lineClamp={1}>{tool.description || '—'}</Text></Table.Td>
+                          <Table.Td><Badge size="xs" color="red" variant="light">Remove</Badge></Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                </>
+              )}
+
+              {/* New + existing tools returned by server */}
+              {rediscoverResults.length > 0 && (
+                <>
+                  <Text size="xs" fw={600} c="dimmed">Tools returned by server</Text>
+                  <Table highlightOnHover withTableBorder>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th w={40}>
+                          <Checkbox
+                            checked={selectedNewTools.size > 0 && selectedNewTools.size === rediscoverResults.filter(t => {
+                              const existing = tools.filter(ex => ex.tool_type === 'mcp_remote' && ex.mcp_server_id === rediscoverServerId);
+                              return !existing.some(ex => (ex.mcp_tool_name || ex.name) === t.name);
+                            }).length}
+                            indeterminate={selectedNewTools.size > 0 && selectedNewTools.size < rediscoverResults.filter(t => {
+                              const existing = tools.filter(ex => ex.tool_type === 'mcp_remote' && ex.mcp_server_id === rediscoverServerId);
+                              return !existing.some(ex => (ex.mcp_tool_name || ex.name) === t.name);
+                            }).length}
+                            onChange={(e) => {
+                              const newable = rediscoverResults
+                                .filter(t => !tools.filter(ex => ex.tool_type === 'mcp_remote' && ex.mcp_server_id === rediscoverServerId).some(ex => (ex.mcp_tool_name || ex.name) === t.name))
+                                .map(t => t.name);
+                              setSelectedNewTools(e.currentTarget.checked ? new Set(newable) : new Set());
+                            }}
+                          />
+                        </Table.Th>
+                        <Table.Th>Tool Name</Table.Th>
+                        <Table.Th>Description</Table.Th>
+                        <Table.Th w={90}>Status</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {rediscoverResults.map((tool) => {
+                        const alreadyAdded = tools
+                          .filter(ex => ex.tool_type === 'mcp_remote' && ex.mcp_server_id === rediscoverServerId)
+                          .some(ex => (ex.mcp_tool_name || ex.name) === tool.name);
+                        return (
+                          <Table.Tr key={tool.name} style={{ opacity: alreadyAdded ? 0.55 : 1 }}>
+                            <Table.Td>
+                              <Checkbox
+                                checked={selectedNewTools.has(tool.name)}
+                                disabled={alreadyAdded}
+                                onChange={() => {
+                                  const next = new Set(selectedNewTools);
+                                  next.has(tool.name) ? next.delete(tool.name) : next.add(tool.name);
+                                  setSelectedNewTools(next);
+                                }}
+                              />
+                            </Table.Td>
+                            <Table.Td><Text size="sm" fw={500}>{tool.name}</Text></Table.Td>
+                            <Table.Td><Text size="xs" c="dimmed" lineClamp={2}>{tool.description || '—'}</Text></Table.Td>
+                            <Table.Td>
+                              {alreadyAdded
+                                ? <Badge size="xs" color="gray" variant="light">Exists</Badge>
+                                : <Badge size="xs" color="teal" variant="light">New</Badge>
+                              }
+                            </Table.Td>
+                          </Table.Tr>
+                        );
+                      })}
+                    </Table.Tbody>
+                  </Table>
+                </>
+              )}
+
+              <Group justify="flex-end" gap="xs">
+                <Button variant="subtle" size="sm" onClick={closeRediscover}>Cancel</Button>
+                <Button
+                  size="sm"
+                  leftSection={<IconRefresh size={14} />}
+                  color={rediscoverRemovedTools.length > 0 ? 'orange' : 'teal'}
+                  disabled={selectedNewTools.size === 0 && rediscoverRemovedTools.length === 0}
+                  loading={isSyncing}
+                  onClick={handleSyncTools}
+                >
+                  Sync ({selectedNewTools.size > 0 ? `+${selectedNewTools.size}` : ''}{selectedNewTools.size > 0 && rediscoverRemovedTools.length > 0 ? ' ' : ''}{rediscoverRemovedTools.length > 0 ? `−${rediscoverRemovedTools.length}` : ''})
+                </Button>
+              </Group>
+            </>
+          )}
+        </Stack>
       </Modal>
 
       {/* MCP Server Form Modal */}

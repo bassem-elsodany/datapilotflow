@@ -12,9 +12,18 @@ Environment variables:
     MCP_ENABLED_TOOLS     - Comma-separated list of enabled tools (default: knowledge_expert)
 """
 
+import logging
 import sys
 
 from loguru import logger
+
+
+class _SuppressHealthCheck(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "/health" not in record.getMessage()
+
+
+logging.getLogger("uvicorn.access").addFilter(_SuppressHealthCheck())
 
 from datapilotflow.domain.config import settings
 
@@ -45,7 +54,7 @@ def main():
     try:
         # Run FastMCP server with HTTP transport
         logger.info(f"Listening on http://{settings.MCP_SERVER_HOST}:{settings.MCP_SERVER_PORT}")
-        mcp.run(transport="http", port=settings.MCP_SERVER_PORT)
+        mcp.run(transport="streamable-http", port=settings.MCP_SERVER_PORT)
     except KeyboardInterrupt:
         logger.info("Shutting down server...")
         sys.exit(0)

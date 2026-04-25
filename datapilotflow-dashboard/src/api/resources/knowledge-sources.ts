@@ -43,10 +43,12 @@ export const ScrapingModeSchema = z.enum([
 ]);
 
 // Confluence Configuration Schema
+// Fields are permissive here because confluence_config is always present in the API response
+// even for non-Confluence configs (with empty strings). Strict validation is done in the form.
 export const ConfluenceConfigSchema = z.object({
-  cloud_url: z.string().url('Invalid Confluence URL'),
-  username_or_email: z.string().email('Invalid email'),
-  api_token: z.string().min(1, 'API token required'),
+  cloud_url: z.string().nullable().optional(),
+  username_or_email: z.string().nullable().optional(),
+  api_token: z.string().nullable().optional(),
   is_cloud_instance: z.boolean().nullable().optional(),
   space_keys: z.array(z.string()).nullable().optional(),
   page_ids: z.array(z.string()).nullable().optional(),

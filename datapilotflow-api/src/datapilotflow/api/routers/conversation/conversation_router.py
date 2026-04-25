@@ -17,6 +17,7 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 from datapilotflow.api.routers.auth.auth_router import get_current_user
+from datapilotflow.api.dependencies.permissions import require_permission
 from datapilotflow.domain.conversation import ConversationSession
 from datapilotflow.domain.user import User
 from datapilotflow.services.conversation.conversation_history_service import (
@@ -97,7 +98,7 @@ class RenameSessionRequest(BaseModel):
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_conversation_session(
     create_request: CreateSessionRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("conversation:manage")),
 ):
     """
     Create a new conversation session linked to an agent.
@@ -160,7 +161,7 @@ async def create_conversation_session(
 # async def send_chat_message(
 #     conversation_id: str,
 #     chat_message: ChatMessage,
-#     current_user: User = Depends(get_current_user),
+#     current_user: User = Depends(require_permission("conversation:read")),
 # ):
 #     """
 #     Send a chat message to a specific conversation session.
@@ -171,7 +172,7 @@ async def create_conversation_session(
 
 @router.delete("/{conversation_id}/messages", status_code=status.HTTP_204_NO_CONTENT)
 async def reset_conversation_messages(
-    conversation_id: str, current_user: User = Depends(get_current_user)
+    conversation_id: str, current_user: User = Depends(require_permission("conversation:manage"))
 ):
     """
     Reset messages for a specific conversation session.
@@ -210,7 +211,7 @@ async def get_conversation_sessions(
         100, ge=1, le=1000, description="Maximum number of conversations"
     ),
     offset: int = Query(0, ge=0, description="Number of conversations to skip"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("conversation:read")),
 ):
     """
     Get all conversation sessions for the current user with new nested configuration structure.
@@ -276,7 +277,7 @@ async def get_conversation_session(
     expand: Optional[str] = Query(
         None, description="Comma-separated fields to expand (e.g., agent, messages)"
     ),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("conversation:read")),
 ):
     """
     Get specific conversation session details.
@@ -381,7 +382,7 @@ async def get_conversation_session(
 
 @router.delete("/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_conversation_session(
-    conversation_id: str, current_user: User = Depends(get_current_user)
+    conversation_id: str, current_user: User = Depends(require_permission("conversation:manage"))
 ):
     """
     Delete a conversation session and all its messages.
@@ -410,7 +411,7 @@ async def delete_conversation_session(
 async def rename_conversation_session(
     conversation_id: str,
     rename_request: RenameSessionRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("conversation:manage")),
 ):
     """
     Rename a conversation session.
@@ -461,7 +462,7 @@ class UpdateConversationRequest(BaseModel):
 async def update_conversation_session(
     conversation_id: str,
     update_request: UpdateConversationRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("conversation:manage")),
 ):
     """
     Update conversation metadata.

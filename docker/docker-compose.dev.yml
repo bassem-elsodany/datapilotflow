@@ -1,14 +1,50 @@
-version: '3.8'
-
 services:
-  # Development override for API server with live reload
-  datapilotflow-api:
+  # ─── Dashboard ──────────────────────────────────────────────────────────────
+  # Runs Vite dev server with HMR instead of the static production build.
+  # node_modules are baked into the image at build time (no npm ci on startup).
+  # Only src/ and config files are mounted so changes are live without restart.
+  dashboard:
+    build:
+      context: ..
+      dockerfile: docker/services/dashboard/Dockerfile.dev
+    container_name: datapilotflow-dashboard
     volumes:
-      - ../backend/src:/app/src
-      - ../backend/run_api_server.py:/app/run_api_server.py
-      - ../backend/run_file_listener.py:/app/run_file_listener.py
-      - ../backend/run_notification_listener.py:/app/run_notification_listener.py
-      - ../backend/run_notification_websocket_service.py:/app/run_notification_websocket_service.py
+      - ../datapilotflow-dashboard:/app                          # full source for HMR
+      - datapilotflow_dashboard_node_modules:/app/node_modules  # Linux node_modules from image
     environment:
-      - PYTHONPATH=/app
-    command: ["uv", "run", "python", "run_api_server.py"]
+      - VITE_API_BASE_URL=http://localhost:8800
+      - VITE_ENVIRONMENT=development
+      - VITE_APP_NAME=dataPilotFlow
+      - VITE_ENABLE_DEV_TOOLS=true
+      - VITE_DEBUG_MODE=true
+      - VITE_LOG_LEVEL=debug
+      - VITE_WS_RECONNECT_ATTEMPTS=3
+      - VITE_WS_RECONNECT_DELAY=2000
+      - VITE_API_VERSION=v1
+      - VITE_APP_VERSION=1.0.0
+    ports:
+      - "3000:3000"
+    networks:
+      - datapilotflow-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ─── API ────────────────────────────────────────────────────────────────────
+  # Mount only src/ directories — avoids the macOS .venv breaking in Linux.
+  # Packages are installed as editable so Python resolves code from src/.
+  # uvicorn --reload is already set in run_api_server.py so saves auto-restart.
+  api:
+    volumes:
+      - ../datapilotflow-api/src:/app/datapilotflow-api/src
+      - ../datapilotflow-api/run_api_server.py:/app/datapilotflow-api/run_api_server.py
+      - ../datapilotflow-domain/src:/app/datapilotflow-domain/src
+      - ../datapilotflow-infrastructure/src:/app/datapilotflow-infrastructure/src
+      - ../datapilotflow-services/src:/app/datapilotflow-services/src
+
+volumes:
+  datapilotflow_dashboard_node_modules:

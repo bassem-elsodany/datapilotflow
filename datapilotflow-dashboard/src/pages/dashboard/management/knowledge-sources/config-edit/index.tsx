@@ -1004,6 +1004,7 @@ export default function EditKnowledgeSourceConfig() {
       </Group>
 
       <form onSubmit={form.onSubmit(handleSubmit)}>
+        <div style={{ position: 'relative', zIndex: 1 }}>
         <ColorfulVerticalStepper
           activeStep={activeStep}
           completedSteps={completedSteps}
@@ -2009,7 +2010,7 @@ export default function EditKnowledgeSourceConfig() {
                     position: 'absolute',
                     top: '20px',
                     right: '0px',
-                    zIndex: 100,
+                    zIndex: 1000,
                     minWidth: isContentFilterTestVisible ? '400px' : '200px'
                   }}>
                     {!isContentFilterTestVisible ? (
@@ -2417,7 +2418,7 @@ export default function EditKnowledgeSourceConfig() {
                     position: 'absolute',
                     top: '20px',
                     right: '0px',
-                    zIndex: 100,
+                    zIndex: 1000,
                     minWidth: isTestSectionVisible ? '400px' : '200px'
                   }}>
                     {!isTestSectionVisible ? (
@@ -3059,8 +3060,9 @@ export default function EditKnowledgeSourceConfig() {
             </Stack>
           )}
         </ColorfulVerticalStepper>
+        </div>
 
-        <Group justify="space-between" mt="xl">
+        <Group justify="space-between" mt="xl" style={{ position: 'relative', zIndex: 0 }}>
           <div />
 
           <Group>

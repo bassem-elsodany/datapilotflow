@@ -141,7 +141,7 @@ async def process_notification_event(event_payload: Dict[str, Any]) -> bool:
             # Broadcast notification via WebSocket through API server
             try:
                 import aiohttp
-                from config import settings
+                from datapilotflow.domain.config import settings
                 
                 # Prepare broadcast data
                 broadcast_data = {

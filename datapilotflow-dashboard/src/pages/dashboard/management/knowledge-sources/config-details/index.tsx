@@ -1,29 +1,29 @@
 import { useGetKnowledgeSourceConfigExpanded } from '@/api/resources/knowledge-sources';
-import { InfoItem, InfoSectionCard } from '@/components/info-section-card';
 import { Page } from '@/components/page';
 import { PageHeader } from '@/components/page-header';
-import { StatCard } from '@/components/stat-card';
 import { paths } from '@/routes/paths';
 import {
   ActionIcon,
   Alert,
   Anchor,
   Badge,
-  Box,
   Button,
   Center,
   Code,
   CopyButton,
+  Divider,
+  Grid,
   Group,
   List,
   Loader,
   Modal,
+  Paper,
   ScrollArea,
-  SimpleGrid,
   Stack,
   Text,
   TextInput,
-  Tooltip
+  ThemeIcon,
+  Tooltip,
 } from '@mantine/core';
 import {
   IconArrowLeft,
@@ -43,10 +43,34 @@ import {
   IconSettings,
   IconUpload,
   IconWorld,
-  IconX
+  IconX,
 } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+
+// Reusable section block inside a Paper card
+function Section({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <Paper withBorder radius="md" p="md">
+      <Group gap="xs" mb="sm">
+        <ThemeIcon size="sm" variant="light" color="gray" radius="sm">{icon}</ThemeIcon>
+        <Text size="xs" fw={700} tt="uppercase" c="dimmed" lts={0.5}>{title}</Text>
+      </Group>
+      <Divider mb="sm" />
+      {children}
+    </Paper>
+  );
+}
+
+// Label + value row
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <Group justify="space-between" gap="xs" wrap="nowrap" py={4}>
+      <Text size="xs" c="dimmed" fw={500} style={{ flexShrink: 0 }}>{label}</Text>
+      <div style={{ textAlign: 'right' }}>{children}</div>
+    </Group>
+  );
+}
 
 const breadcrumbs = [
   { label: 'Dashboard', href: paths.dashboard.root },
@@ -103,597 +127,304 @@ export default function ConfigDetailsPage() {
   }
 
   return (
-    <Page title="Configuration Details">
-      <PageHeader
-        title="Configuration Details"
-        breadcrumbs={breadcrumbs}
-      >
+    <Page title={config.name}>
+      <PageHeader title={config.name} breadcrumbs={breadcrumbs}>
         <Group gap="sm">
-          <Button
-            component={Link}
-            to={paths.dashboard.management.knowledgeSources.configs}
-            leftSection={<IconArrowLeft size={16} />}
-            variant="light"
-          >
-            Back to Source List
+          <Button component={Link} to={paths.dashboard.management.knowledgeSources.configs} leftSection={<IconArrowLeft size={14} />} variant="subtle" size="sm">
+            Back
           </Button>
-          <Button
-            component={Link}
-            to={paths.dashboard.management.knowledgeSources.configEdit(configId || '')}
-            leftSection={<IconEdit size={16} />}
-            variant="light"
-          >
-            Edit Configuration
+          <Button component={Link} to={paths.dashboard.management.knowledgeSources.configEdit(configId || '')} leftSection={<IconEdit size={14} />} variant="light" size="sm">
+            Edit
           </Button>
         </Group>
       </PageHeader>
 
-      <Stack gap="xl">
-        {/* Hero Header */}
-        <Box
-          style={{
-            background: `linear-gradient(135deg, #45c9bb15 0%, #87cbbc20 100%)`,
-            border: '1px solid #45c9bb30',
-            borderRadius: '16px',
-            padding: '20px',
-            position: 'relative',
-            overflow: 'hidden'
-          }}
-        >
-          <Box
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              height: '4px',
-              background: 'linear-gradient(90deg, #45c9bb 0%, #87cbbc 100%)'
-            }}
-          />
-          <Group justify="space-between" align="flex-start">
-            <Stack gap="xs">
-              <Text size="24px" fw={700} style={{ color: '#45c9bb' }}>
-                {config.name}
-              </Text>
-              {config.description && (
-                <Text size="sm" c="dimmed" style={{ maxWidth: '600px' }}>
-                  {config.description}
-                </Text>
-              )}
-              <Group gap="sm" mt={4}>
-                <Badge color="green" size="sm" variant="light">
-                  Active
-                </Badge>
-                {config.url && (
-                  <Group gap="xs">
-                    <Anchor
-                      href={config.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      size="xs"
-                      style={{ color: '#45c9bb' }}
-                    >
-                      {config.url}
-                    </Anchor>
-                    <CopyButton value={config.url}>
-                      {({ copied, copy }) => (
-                        <Tooltip label={copied ? 'Copied!' : 'Copy URL'}>
-                          <ActionIcon variant="subtle" onClick={copy} size="xs">
-                            {copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
-                          </ActionIcon>
-                        </Tooltip>
-                      )}
-                    </CopyButton>
-                    <ActionIcon
-                      component="a"
-                      href={config.url}
-                      target="_blank"
-                      variant="subtle"
-                      size="xs"
-                    >
-                      <IconExternalLink size={14} />
-                    </ActionIcon>
-                  </Group>
-                )}
+      <Stack gap="md">
+        {/* Summary header */}
+        <Paper withBorder radius="md" p="md">
+          <Group justify="space-between" align="flex-start" wrap="nowrap">
+            <Stack gap={4} style={{ minWidth: 0 }}>
+              {config.description && <Text size="sm" c="dimmed" lineClamp={2}>{config.description}</Text>}
+              <Group gap="xs" mt={2}>
+                <Badge size="sm" variant="dot" color="green">Active</Badge>
+                <Badge size="sm" variant="light" color="blue">{config.content_source_type === 'web_scraping' ? 'Web Scraping' : config.content_source_type === 'confluence' ? 'Confluence' : 'Local Files'}</Badge>
+                <Badge size="sm" variant="outline" color="gray">{config.scraping_mode?.replace(/_/g, ' ')}</Badge>
               </Group>
             </Stack>
+            {config.url && (
+              <Group gap={4} wrap="nowrap" style={{ flexShrink: 0 }}>
+                <Text size="xs" c="dimmed" truncate style={{ maxWidth: 260 }}>{config.url}</Text>
+                <CopyButton value={config.url}>
+                  {({ copied, copy }) => (
+                    <Tooltip label={copied ? 'Copied!' : 'Copy'} withArrow>
+                      <ActionIcon variant="subtle" size="xs" onClick={copy}>
+                        {copied ? <IconCheck size={12} /> : <IconCopy size={12} />}
+                      </ActionIcon>
+                    </Tooltip>
+                  )}
+                </CopyButton>
+                <ActionIcon component="a" href={config.url} target="_blank" variant="subtle" size="xs">
+                  <IconExternalLink size={12} />
+                </ActionIcon>
+              </Group>
+            )}
           </Group>
-        </Box>
+        </Paper>
 
-        {/* Stats Cards - Adapt based on content source type */}
-        <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="lg">
-          <StatCard
-            title="Content Source"
-            value={config.content_source_type === 'web_scraping' ? 'Web Scraping' : config.content_source_type === 'confluence' ? 'Confluence' : 'Local Files'}
-            icon={config.content_source_type === 'web_scraping' ? <IconWorld size={24} /> : config.content_source_type === 'confluence' ? <IconWorld size={24} /> : <IconFileText size={24} />}
-            color="#45c9bb"
-            gradientFrom="#45c9bb"
-            gradientTo="#87cbbc"
-          />
-          <StatCard
-            title="File Type"
-            value={config.scraping_mode ? config.scraping_mode.replace('_', ' ') : 'N/A'}
-            icon={<IconFile size={24} />}
-            color="#bbe773"
-            gradientFrom="#bbe773"
-            gradientTo="#9dd245"
-            description={config.content_source_type === 'local_files' ? 'Uploaded file type' : 'Scraping mode'}
-          />
-          {config.content_source_type === 'web_scraping' ? (
+        {/* Stat pills */}
+        <Grid gutter="md">
+          <Grid.Col span={{ base: 6, sm: 3 }}>
+            <Paper withBorder p="md" radius="md">
+              <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb={4}>Source Type</Text>
+              <Text size="sm" fw={700}>{config.content_source_type === 'web_scraping' ? 'Web Scraping' : config.content_source_type === 'confluence' ? 'Confluence' : 'Local Files'}</Text>
+            </Paper>
+          </Grid.Col>
+          <Grid.Col span={{ base: 6, sm: 3 }}>
+            <Paper withBorder p="md" radius="md">
+              <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb={4}>Mode</Text>
+              <Text size="sm" fw={700}>{config.scraping_mode?.replace(/_/g, ' ') || '—'}</Text>
+            </Paper>
+          </Grid.Col>
+          {config.content_source_type === 'web_scraping' && (
             <>
-              <StatCard
-                title="Crawl Depth"
-                value={config.crawl_depth || 0}
-                icon={<IconExternalLink size={24} />}
-                color="#ddde65"
-                gradientFrom="#ddde65"
-                gradientTo="#bbe773"
-                description="Maximum depth"
-              />
-              <StatCard
-                title="URL Patterns"
-                value={config.url_patterns?.length || 0}
-                icon={<IconForms size={24} />}
-                color="#3bc57d"
-                gradientFrom="#3bc57d"
-                gradientTo="#45c9bb"
-                description="Include/Exclude rules"
-              />
-            </>
-          ) : config.content_source_type === 'confluence' ? (
-            <>
-              <StatCard
-                title="Extraction Mode"
-                value={config.scraping_mode ? config.scraping_mode.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'N/A'}
-                icon={<IconExternalLink size={24} />}
-                color="#ddde65"
-                gradientFrom="#ddde65"
-                gradientTo="#bbe773"
-                description="Confluence mode"
-              />
-              <StatCard
-                title="Cloud URL"
-                value={config.confluence_config?.cloud_url ? 'Configured' : 'Not Set'}
-                icon={<IconWorld size={24} />}
-                color="#3bc57d"
-                gradientFrom="#3bc57d"
-                gradientTo="#45c9bb"
-                description="Confluence instance"
-              />
-            </>
-          ) : (
-            <>
-              <StatCard
-                title="Files Uploaded"
-                value={config.local_files?.length || 0}
-                icon={<IconUpload size={24} />}
-                color="#ddde65"
-                gradientFrom="#ddde65"
-                gradientTo="#bbe773"
-                description="Total files"
-              />
-              <StatCard
-                title="Total Size"
-                value={`${((config.local_files?.reduce((sum: number, f: any) => sum + f.file_size, 0) || 0) / 1024).toFixed(1)} KB`}
-                icon={<IconDatabase size={24} />}
-                color="#3bc57d"
-                gradientFrom="#3bc57d"
-                gradientTo="#45c9bb"
-                description="Combined size"
-              />
+              <Grid.Col span={{ base: 6, sm: 3 }}>
+                <Paper withBorder p="md" radius="md">
+                  <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb={4}>Crawl Depth</Text>
+                  <Text size="xl" fw={700}>{config.crawl_depth ?? '—'}</Text>
+                </Paper>
+              </Grid.Col>
+              <Grid.Col span={{ base: 6, sm: 3 }}>
+                <Paper withBorder p="md" radius="md">
+                  <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb={4}>URL Patterns</Text>
+                  <Text size="xl" fw={700}>{config.url_patterns?.length ?? 0}</Text>
+                </Paper>
+              </Grid.Col>
             </>
           )}
-        </SimpleGrid>
+          {config.content_source_type === 'local_files' && (
+            <>
+              <Grid.Col span={{ base: 6, sm: 3 }}>
+                <Paper withBorder p="md" radius="md">
+                  <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb={4}>Files</Text>
+                  <Text size="xl" fw={700}>{config.local_files?.length ?? 0}</Text>
+                </Paper>
+              </Grid.Col>
+              <Grid.Col span={{ base: 6, sm: 3 }}>
+                <Paper withBorder p="md" radius="md">
+                  <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb={4}>Total Size</Text>
+                  <Text size="sm" fw={700}>{((config.local_files?.reduce((s: number, f: any) => s + f.file_size, 0) || 0) / 1024).toFixed(1)} KB</Text>
+                </Paper>
+              </Grid.Col>
+            </>
+          )}
+          {config.content_source_type === 'confluence' && (
+            <>
+              <Grid.Col span={{ base: 6, sm: 3 }}>
+                <Paper withBorder p="md" radius="md">
+                  <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb={4}>Instance</Text>
+                  <Text size="sm" fw={700}>{config.confluence_config?.is_cloud_instance ? 'Cloud' : 'Self-Hosted'}</Text>
+                </Paper>
+              </Grid.Col>
+              <Grid.Col span={{ base: 6, sm: 3 }}>
+                <Paper withBorder p="md" radius="md">
+                  <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb={4}>Cloud URL</Text>
+                  <Text size="xs" fw={600} c={config.confluence_config?.cloud_url ? 'dark' : 'dimmed'} truncate>{config.confluence_config?.cloud_url || 'Not set'}</Text>
+                </Paper>
+              </Grid.Col>
+            </>
+          )}
+        </Grid>
 
-        {/* Configuration Cards - Adapt based on content source type */}
-        {config.content_source_type === 'web_scraping' ? (
-          <>
-            <SimpleGrid cols={{ base: 1, md: 2, lg: 3 }} spacing="lg">
-              {/* Scraping Configuration */}
-              <InfoSectionCard
-                title="Scraping Configuration"
-                icon={<IconSettings size={20} />}
-                color="#45c9bb"
-                gradientFrom="#45c9bb"
-                gradientTo="#87cbbc"
-              >
-                <Group gap="md" style={{ flexWrap: 'wrap' }}>
-                  <InfoItem label="Mode" value={<Badge color="blue" variant="light">{config.scraping_mode}</Badge>} />
-                  <InfoItem label="Crawl Depth" value={config.crawl_depth || 0} />
-                </Group>
-              </InfoSectionCard>
+        {/* Detail sections — two column layout */}
+        <Grid gutter="md">
+          {/* Left column: source-specific config */}
+          <Grid.Col span={{ base: 12, md: 6 }}>
+            {config.content_source_type === 'web_scraping' && (
+              <Stack gap="md">
+                <Section title="Scraping Configuration" icon={<IconSettings size={12} />}>
+                  <Field label="Mode"><Badge size="sm" variant="light" color="blue">{config.scraping_mode}</Badge></Field>
+                  <Field label="Crawl Depth"><Text size="sm" fw={500}>{config.crawl_depth ?? '—'}</Text></Field>
+                </Section>
 
-              {/* Domain Filtering */}
-              <InfoSectionCard
-                title="Domain Filtering"
-                icon={<IconFilter size={20} />}
-                color="#bbe773"
-                gradientFrom="#bbe773"
-                gradientTo="#9dd245"
-              >
-                <Stack gap="md">
+                <Section title="Domain Filtering" icon={<IconFilter size={12} />}>
                   <Stack gap="xs">
-                    <Text size="xs" c="dimmed" fw={600} tt="uppercase">Allowed Subdomains</Text>
-                    {config.allowed_subdomains && config.allowed_subdomains.length > 0 ? (
-                      <Group gap="xs">
-                        {config.allowed_subdomains.map((subdomain, index) => (
-                          <Badge key={index} size="sm" color="green" variant="light">
-                            {subdomain}
-                          </Badge>
-                        ))}
+                    <Text size="xs" c="dimmed" fw={600} tt="uppercase">Allowed</Text>
+                    {config.allowed_subdomains?.length ? (
+                      <Group gap={4} wrap="wrap">
+                        {config.allowed_subdomains.map((s: string, i: number) => <Badge key={i} size="xs" color="green" variant="light">{s}</Badge>)}
                       </Group>
-                    ) : (
-                      <Text size="sm" c="dimmed">None</Text>
-                    )}
-                  </Stack>
-                  <Stack gap="xs">
-                    <Text size="xs" c="dimmed" fw={600} tt="uppercase">Blocked Subdomains</Text>
-                    {config.blocked_subdomains && config.blocked_subdomains.length > 0 ? (
-                      <Group gap="xs">
-                        {config.blocked_subdomains.map((subdomain, index) => (
-                          <Badge key={index} size="sm" color="red" variant="light">
-                            {subdomain}
-                          </Badge>
-                        ))}
+                    ) : <Text size="xs" c="dimmed">None</Text>}
+                    <Divider my={4} />
+                    <Text size="xs" c="dimmed" fw={600} tt="uppercase">Blocked</Text>
+                    {config.blocked_subdomains?.length ? (
+                      <Group gap={4} wrap="wrap">
+                        {config.blocked_subdomains.map((s: string, i: number) => <Badge key={i} size="xs" color="red" variant="light">{s}</Badge>)}
                       </Group>
-                    ) : (
-                      <Text size="sm" c="dimmed">None</Text>
-                    )}
+                    ) : <Text size="xs" c="dimmed">None</Text>}
                   </Stack>
-                </Stack>
-              </InfoSectionCard>
+                </Section>
 
-              {/* Content Extraction */}
-              <InfoSectionCard
-                title="Content Extraction"
-                icon={<IconCode size={20} />}
-                color="#ddde65"
-                gradientFrom="#ddde65"
-                gradientTo="#bbe773"
-              >
-                <Stack gap="xs">
-                  <Text size="xs" c="dimmed" fw={600} tt="uppercase">Target Elements</Text>
-                  {config.target_elements && config.target_elements.length > 0 ? (
-                    <Group gap="xs">
-                      {config.target_elements.map((element, index) => (
-                        <Badge key={index} color="blue" variant="light">
-                          {element}
-                        </Badge>
+                <Section title="Content Extraction" icon={<IconCode size={12} />}>
+                  <Text size="xs" c="dimmed" fw={600} tt="uppercase" mb={6}>Target Elements</Text>
+                  {config.target_elements?.length ? (
+                    <Group gap={4} wrap="wrap">
+                      {config.target_elements.map((el: string, i: number) => <Badge key={i} size="xs" variant="light">{el}</Badge>)}
+                    </Group>
+                  ) : <Text size="xs" c="dimmed">None configured</Text>}
+                </Section>
+
+                {config.url_patterns?.length > 0 && (
+                  <Section title="URL Patterns" icon={<IconForms size={12} />}>
+                    <Stack gap={6}>
+                      {config.url_patterns.map((p: any, i: number) => (
+                        <Group key={i} justify="space-between" px="xs" py={6} style={{ background: 'var(--mantine-color-gray-0)', borderRadius: 6 }}>
+                          <Code style={{ fontSize: 11 }}>{p.pattern}</Code>
+                          <Badge size="xs" color={p.reverse ? 'red' : 'green'} variant="light">{p.reverse ? 'Exclude' : 'Include'}</Badge>
+                        </Group>
                       ))}
-                    </Group>
-                  ) : (
-                    <Text size="sm" c="dimmed">No target elements configured</Text>
-                  )}
-                </Stack>
-              </InfoSectionCard>
-            </SimpleGrid>
-
-            {/* URL Patterns */}
-            {config.url_patterns && config.url_patterns.length > 0 && (
-              <InfoSectionCard
-                title="URL Patterns"
-                icon={<IconForms size={20} />}
-                color="#3bc57d"
-                gradientFrom="#3bc57d"
-                gradientTo="#45c9bb"
-              >
-                <Stack gap="sm">
-                  {config.url_patterns.map((pattern, index) => (
-                    <Group key={index} justify="space-between" p="sm" style={{ background: 'var(--mantine-color-gray-0)', borderRadius: '8px' }}>
-                      <Code>{pattern.pattern}</Code>
-                      <Badge color={pattern.reverse ? "red" : "green"} variant="light" size="sm">
-                        {pattern.reverse ? "Exclude" : "Include"}
-                      </Badge>
-                    </Group>
-                  ))}
-                </Stack>
-              </InfoSectionCard>
+                    </Stack>
+                  </Section>
+                )}
+              </Stack>
             )}
-          </>
-        ) : config.content_source_type === 'confluence' ? (
-          /* Confluence Configuration */
-          <SimpleGrid cols={{ base: 1, md: 2, lg: 3 }} spacing="lg">
-            {/* Confluence Credentials */}
-            <InfoSectionCard
-              title="Confluence Credentials"
-              icon={<IconSettings size={20} />}
-              color="#45c9bb"
-              gradientFrom="#45c9bb"
-              gradientTo="#87cbbc"
-            >
-              <Stack gap="md">
-                <Stack gap="xs">
-                  <Text size="xs" c="dimmed" fw={600} tt="uppercase">Cloud URL</Text>
-                  <Text size="sm" ff="monospace" c="dimmed">{config.confluence_config?.cloud_url || 'Not configured'}</Text>
-                </Stack>
-                <Stack gap="xs">
-                  <Text size="xs" c="dimmed" fw={600} tt="uppercase">Username/Email</Text>
-                  <Text size="sm">{config.confluence_config?.username_or_email || 'Not configured'}</Text>
-                </Stack>
-                <Stack gap="xs">
-                  <Text size="xs" c="dimmed" fw={600} tt="uppercase">Instance Type</Text>
-                  <Badge color="indigo" variant="light" size="sm">
-                    {config.confluence_config?.is_cloud_instance ? 'Cloud' : 'Self-Hosted'}
-                  </Badge>
-                </Stack>
-              </Stack>
-            </InfoSectionCard>
 
-            {/* Extraction Configuration */}
-            <InfoSectionCard
-              title="Extraction Configuration"
-              icon={<IconFilter size={20} />}
-              color="#bbe773"
-              gradientFrom="#bbe773"
-              gradientTo="#9dd245"
-            >
+            {config.content_source_type === 'confluence' && (
               <Stack gap="md">
-                <Stack gap="xs">
-                  <Text size="xs" c="dimmed" fw={600} tt="uppercase">Mode</Text>
-                  <Badge color="indigo" variant="light">
-                    {config.scraping_mode === 'space_pages' ? 'Space Pages' :
-                      config.scraping_mode === 'specific_pages' ? 'Specific Pages' :
-                      config.scraping_mode === 'pages_with_label' ? 'Pages with Label' :
-                      config.scraping_mode === 'recently_modified' ? 'Recently Modified' : config.scraping_mode}
-                  </Badge>
-                </Stack>
-                {config.scraping_mode === 'space_pages' && config.confluence_config?.space_keys && (
-                  <Stack gap="xs">
-                    <Text size="xs" c="dimmed" fw={600} tt="uppercase">Spaces ({config.confluence_config.space_keys.length})</Text>
-                    <Group gap="xs" wrap="wrap">
-                      {config.confluence_config.space_keys.map((space, index) => (
-                        <Badge key={index} size="sm" color="blue" variant="light">{space}</Badge>
-                      ))}
-                    </Group>
-                  </Stack>
-                )}
-                {config.scraping_mode === 'specific_pages' && config.confluence_config?.page_ids && (
-                  <Stack gap="xs">
-                    <Text size="xs" c="dimmed" fw={600} tt="uppercase">Page IDs ({config.confluence_config.page_ids.length})</Text>
-                    <Text size="sm">{config.confluence_config.page_ids.slice(0, 3).join(', ')}{config.confluence_config.page_ids.length > 3 ? '...' : ''}</Text>
-                  </Stack>
-                )}
-                {config.scraping_mode === 'pages_with_label' && config.confluence_config?.labels && (
-                  <Stack gap="xs">
-                    <Text size="xs" c="dimmed" fw={600} tt="uppercase">Labels ({config.confluence_config.labels.length})</Text>
-                    <Group gap="xs" wrap="wrap">
-                      {config.confluence_config.labels.map((label, index) => (
-                        <Badge key={index} size="sm" color="blue" variant="light">{label}</Badge>
-                      ))}
-                    </Group>
-                  </Stack>
-                )}
-              </Stack>
-            </InfoSectionCard>
+                <Section title="Credentials" icon={<IconSettings size={12} />}>
+                  <Field label="Cloud URL"><Text size="xs" ff="monospace" truncate style={{ maxWidth: 200 }}>{config.confluence_config?.cloud_url || '—'}</Text></Field>
+                  <Field label="Username"><Text size="sm">{config.confluence_config?.username_or_email || '—'}</Text></Field>
+                  <Field label="Instance"><Badge size="sm" variant="light" color="indigo">{config.confluence_config?.is_cloud_instance ? 'Cloud' : 'Self-Hosted'}</Badge></Field>
+                </Section>
 
-            {/* Processing Options */}
-            <InfoSectionCard
-              title="Processing Options"
-              icon={<IconCode size={20} />}
-              color="#ddde65"
-              gradientFrom="#ddde65"
-              gradientTo="#bbe773"
-            >
-              <Stack gap="md">
-                <Group gap="md" style={{ flexWrap: 'wrap' }}>
-                  <InfoItem
-                    label="Include Attachments"
-                    value={<Badge color={config.confluence_config?.include_attachments ? "green" : "gray"} variant="light">{config.confluence_config?.include_attachments ? 'Yes' : 'No'}</Badge>}
-                  />
-                </Group>
-                <Group gap="md" style={{ flexWrap: 'wrap' }}>
-                  <InfoItem
-                    label="Include Comments"
-                    value={<Badge color={config.confluence_config?.include_comments ? "green" : "gray"} variant="light">{config.confluence_config?.include_comments ? 'Yes' : 'No'}</Badge>}
-                  />
-                </Group>
-                <Group gap="md" style={{ flexWrap: 'wrap' }}>
-                  <InfoItem
-                    label="Expand Child Pages"
-                    value={<Badge color={config.confluence_config?.expand_child_pages ? "green" : "gray"} variant="light">{config.confluence_config?.expand_child_pages ? 'Yes' : 'No'}</Badge>}
-                  />
-                </Group>
-              </Stack>
-            </InfoSectionCard>
-          </SimpleGrid>
-        ) : (
-          /* Local Files Configuration */
-          <InfoSectionCard
-            title="Uploaded Files"
-            icon={<IconFileText size={20} />}
-            color="#45c9bb"
-            gradientFrom="#45c9bb"
-            gradientTo="#87cbbc"
-          >
-            <Stack gap="sm">
-              {config.local_files && config.local_files.length > 0 ? (
-                <>
-                  {/* Show total file count */}
-                  <Text size="xs" c="dimmed">
-                    Total files: {config.local_files.length}
-                  </Text>
+                <Section title="Extraction" icon={<IconFilter size={12} />}>
+                  <Field label="Mode">
+                    <Badge size="sm" variant="light" color="indigo">
+                      {config.scraping_mode === 'space_pages' ? 'Space Pages' :
+                        config.scraping_mode === 'specific_pages' ? 'Specific Pages' :
+                        config.scraping_mode === 'pages_with_label' ? 'Pages with Label' :
+                        config.scraping_mode === 'recently_modified' ? 'Recently Modified' : config.scraping_mode}
+                    </Badge>
+                  </Field>
+                  {config.confluence_config?.space_keys?.length > 0 && (
+                    <>
+                      <Divider my={6} />
+                      <Text size="xs" c="dimmed" fw={600} tt="uppercase" mb={4}>Spaces</Text>
+                      <Group gap={4} wrap="wrap">
+                        {config.confluence_config.space_keys.map((s: string, i: number) => <Badge key={i} size="xs" variant="light">{s}</Badge>)}
+                      </Group>
+                    </>
+                  )}
+                  {config.confluence_config?.labels?.length > 0 && (
+                    <>
+                      <Divider my={6} />
+                      <Text size="xs" c="dimmed" fw={600} tt="uppercase" mb={4}>Labels</Text>
+                      <Group gap={4} wrap="wrap">
+                        {config.confluence_config.labels.map((l: string, i: number) => <Badge key={i} size="xs" variant="light">{l}</Badge>)}
+                      </Group>
+                    </>
+                  )}
+                </Section>
 
-                  {/* Scrollable area - max height shows ~10 items, rest are scrollable */}
-                  <ScrollArea h={500} type="auto" scrollbarSize={8}>
-                    <Stack gap="sm" pr="sm">
-                      {config.local_files.map((file: any, index: number) => (
-                        <Group key={index} justify="space-between" p="md" style={{
-                          background: 'var(--mantine-color-gray-0)',
-                          borderRadius: '8px',
-                          border: '1px solid var(--mantine-color-gray-3)'
-                        }}>
+                <Section title="Processing Options" icon={<IconCode size={12} />}>
+                  <Field label="Include Attachments"><Badge size="sm" variant="dot" color={config.confluence_config?.include_attachments ? 'green' : 'gray'}>{config.confluence_config?.include_attachments ? 'Yes' : 'No'}</Badge></Field>
+                  <Field label="Include Comments"><Badge size="sm" variant="dot" color={config.confluence_config?.include_comments ? 'green' : 'gray'}>{config.confluence_config?.include_comments ? 'Yes' : 'No'}</Badge></Field>
+                  <Field label="Expand Child Pages"><Badge size="sm" variant="dot" color={config.confluence_config?.expand_child_pages ? 'green' : 'gray'}>{config.confluence_config?.expand_child_pages ? 'Yes' : 'No'}</Badge></Field>
+                </Section>
+              </Stack>
+            )}
+
+            {config.content_source_type === 'local_files' && (
+              <Section title={`Uploaded Files (${config.local_files?.length ?? 0})`} icon={<IconFileText size={12} />}>
+                {config.local_files?.length ? (
+                  <ScrollArea h={360} scrollbarSize={6}>
+                    <Stack gap={6} pr={4}>
+                      {config.local_files.map((file: any, i: number) => (
+                        <Group key={i} justify="space-between" px="sm" py={8} style={{ background: 'var(--mantine-color-gray-0)', borderRadius: 6, border: '1px solid var(--mantine-color-gray-2)' }}>
                           <Group gap="sm">
-                            <IconFile size={20} color="var(--mantine-color-blue-6)" />
-                            <Stack gap={2}>
-                              <Text size="sm" fw={500}>{file.original_filename}</Text>
-                              <Text size="xs" c="dimmed">{file.file_path}</Text>
+                            <ThemeIcon size="sm" variant="light" color="blue" radius="sm"><IconFile size={11} /></ThemeIcon>
+                            <Stack gap={1}>
+                              <Text size="xs" fw={500} lineClamp={1}>{file.original_filename}</Text>
+                              <Text size="xs" c="dimmed">{(file.file_size / 1024).toFixed(1)} KB</Text>
                             </Stack>
                           </Group>
-                          <Group gap="md">
-                            <Badge color="blue" variant="light" size="sm">
-                              {file.file_type.toUpperCase()}
-                            </Badge>
-                            <Text size="xs" c="dimmed">
-                              {(file.file_size / 1024).toFixed(1)} KB
-                            </Text>
-                          </Group>
+                          <Badge size="xs" variant="light" color="blue">{file.file_type?.toUpperCase()}</Badge>
                         </Group>
                       ))}
                     </Stack>
                   </ScrollArea>
-                </>
-              ) : (
-                <Text size="sm" c="dimmed">No files uploaded</Text>
-              )}
-            </Stack>
-          </InfoSectionCard>
-        )}
+                ) : <Text size="sm" c="dimmed">No files uploaded</Text>}
+              </Section>
+            )}
+          </Grid.Col>
 
-        {/* LLM Content Filter & Generation */}
-        <InfoSectionCard
-          title="LLM Content Filter & Generation"
-          icon={<IconRobot size={20} />}
-          color="#ae89ae"
-          gradientFrom="#ae89ae"
-          gradientTo="#87cbbc"
-        >
-          <Stack gap="lg">
-            <Group gap="md" style={{ flexWrap: 'wrap' }}>
-              <InfoItem
-                label="Output Format"
-                value={
-                  <Badge color="purple" variant="light">
-                    {config.output_format === 'html' ? 'Raw HTML' :
-                      config.output_format === 'llm_markdown' ? 'LLM Markdown' : 'Markdown'}
+          {/* Right column: LLM filter + URL list + metadata */}
+          <Grid.Col span={{ base: 12, md: 6 }}>
+            <Stack gap="md">
+              <Section title="LLM Content Filter" icon={<IconRobot size={12} />}>
+                <Field label="Output Format">
+                  <Badge size="sm" variant="light" color="violet">
+                    {config.output_format === 'html' ? 'Raw HTML' : config.output_format === 'llm_markdown' ? 'LLM Markdown' : 'Markdown'}
                   </Badge>
-                }
-              />
-              {(config.output_format === 'markdown' || config.output_format === 'llm_markdown') && (
-                <InfoItem
-                  label="Generation Method"
-                  value={
-                    <Badge color={config.output_format === 'llm_markdown' ? 'orange' : 'blue'} variant="light">
+                </Field>
+                {config.output_format !== 'html' && (
+                  <Field label="Generation">
+                    <Badge size="sm" variant="light" color={config.output_format === 'llm_markdown' ? 'orange' : 'blue'}>
                       {config.output_format === 'llm_markdown' ? 'LLM-Powered' : 'Standard'}
                     </Badge>
-                  }
-                />
-              )}
-              {config.output_format === 'markdown' && (
-                <InfoItem
-                  label="Filter Threshold"
-                  value={config.content_filter_threshold}
-                />
-              )}
-            </Group>
+                  </Field>
+                )}
+                {config.output_format === 'markdown' && config.content_filter_threshold != null && (
+                  <Field label="Filter Threshold"><Text size="sm" fw={500}>{config.content_filter_threshold}</Text></Field>
+                )}
+                {config.output_format === 'llm_markdown' && contentFilter && (
+                  <>
+                    <Divider my={8} />
+                    <Field label="Filter"><Text size="sm" fw={500}>{contentFilter.name}</Text></Field>
+                    <Field label="Model"><Text size="sm">{contentFilter.llm_model_name}</Text></Field>
+                    <Field label="Provider"><Text size="sm">{provider?.name || `ID: ${contentFilter.llm_provider_id}`}</Text></Field>
+                    {contentFilter.instruction && (
+                      <>
+                        <Divider my={8} />
+                        <Text size="xs" c="dimmed" fw={600} tt="uppercase" mb={4}>Instructions</Text>
+                        <ScrollArea h={90} scrollbarSize={6}>
+                          <Text size="xs" c="dimmed" style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', lineHeight: 1.5 }}>
+                            {contentFilter.instruction}
+                          </Text>
+                        </ScrollArea>
+                      </>
+                    )}
+                  </>
+                )}
+                {config.output_format === 'llm_markdown' && !contentFilter && !config.llm_content_filter_id && (
+                  <Text size="xs" c="dimmed" mt={4}>No LLM filter configured</Text>
+                )}
+              </Section>
 
-            {config.output_format === 'llm_markdown' ? (
-              !config.llm_content_filter_id ? (
-                <Text size="sm" c="dimmed">No LLM filtering configured</Text>
-              ) : configLoading ? (
-                <Center py="md"><Loader size="sm" /></Center>
-              ) : contentFilter ? (
-                <Stack gap="md">
-                  {contentFilter.description && (
-                    <InfoItem label="Description" value={contentFilter.description} fullWidth />
-                  )}
-                  <Group gap="md" style={{ flexWrap: 'wrap' }}>
-                    <InfoItem label="Filter Name" value={contentFilter.name} />
-                    <InfoItem label="Model" value={contentFilter.llm_model_name} />
-                    <InfoItem
-                      label="Provider"
-                      value={configLoading ? <Loader size="xs" /> : provider ? provider.name : `Provider ID: ${contentFilter.llm_provider_id}`}
-                    />
-                  </Group>
-                  <Stack gap="xs">
-                    <Text size="xs" c="dimmed" fw={600} tt="uppercase">Instructions</Text>
-                    <Text
-                      size="sm"
-                      c="dimmed"
-                      style={{
-                        maxHeight: '100px',
-                        overflow: 'auto',
-                        whiteSpace: 'pre-wrap',
-                        fontFamily: 'monospace',
-                        fontSize: '12px',
-                        backgroundColor: 'var(--mantine-color-gray-0)',
-                        padding: '12px',
-                        borderRadius: '8px',
-                        border: '1px solid var(--mantine-color-gray-2)'
-                      }}
-                    >
-                      {contentFilter.instruction}
-                    </Text>
-                  </Stack>
+              {config.url_source_id && (
+                <Section title="URL List" icon={<IconLink size={12} />}>
+                  {urlSourceData ? (
+                    <Stack gap="sm">
+                      <Field label="Source File"><Text size="sm">{urlSourceData.file_name || '—'}</Text></Field>
+                      <Field label="Total URLs"><Text size="sm" fw={600}>{urlSourceData.urls?.length ?? 0}</Text></Field>
+                      <Button size="xs" variant="light" leftSection={<IconLink size={12} />} onClick={() => setUrlsModalOpen(true)}>
+                        View All URLs ({urlSourceData.urls?.length ?? 0})
+                      </Button>
+                    </Stack>
+                  ) : <Text size="xs" c="dimmed">No URL source configured</Text>}
+                </Section>
+              )}
+
+              <Section title="Metadata" icon={<IconDatabase size={12} />}>
+                <Stack gap={2} mb={8}>
+                  <Text size="xs" c="dimmed" fw={600} tt="uppercase">Config ID</Text>
+                  <Code style={{ fontSize: 11, wordBreak: 'break-all' }}>{config.id}</Code>
                 </Stack>
-              ) : (
-                <Text size="sm" c="dimmed">Failed to load filter details</Text>
-              )
-            ) : (
-              <Text size="sm" c="dimmed">Standard markdown generation - no LLM filtering required</Text>
-            )}
-          </Stack>
-        </InfoSectionCard>
-
-        {/* URL List */}
-        {config.url_source_id && (
-          <InfoSectionCard
-            title="URL List"
-            icon={<IconLink size={20} />}
-            color="#45c9bb"
-            gradientFrom="#45c9bb"
-            gradientTo="#3bc57d"
-          >
-            <Stack gap="md">
-              {configLoading ? (
-                <Center py="md"><Loader size="sm" /></Center>
-              ) : urlSourceData ? (
-                <>
-                  <Group gap="md" style={{ flexWrap: 'wrap' }}>
-                    <InfoItem label="Source File" value={urlSourceData.file_name || 'N/A'} />
-                    <InfoItem label="Total URLs" value={urlSourceData.urls?.length || 0} />
-                  </Group>
-                  <Button
-                    variant="light"
-                    leftSection={<IconLink size={16} />}
-                    onClick={() => setUrlsModalOpen(true)}
-                    fullWidth
-                  >
-                    View All URLs ({urlSourceData?.urls?.length || 0})
-                  </Button>
-                </>
-              ) : (
-                <Text size="sm" c="dimmed">No URL source configured</Text>
-              )}
+                <Field label="Created"><Text size="xs">{new Date(config.created_at).toLocaleString()}</Text></Field>
+                <Field label="Updated"><Text size="xs">{new Date(config.updated_at).toLocaleString()}</Text></Field>
+              </Section>
             </Stack>
-          </InfoSectionCard>
-        )}
-
-        {/* Metadata */}
-        <InfoSectionCard
-          title="Metadata"
-          icon={<IconDatabase size={20} />}
-          color="#3bc57d"
-          gradientFrom="#3bc57d"
-          gradientTo="#45c9bb"
-        >
-          <Group gap="md" style={{ flexWrap: 'wrap' }}>
-            <InfoItem label="Configuration ID" value={<Code>{config.id}</Code>} fullWidth />
-            <InfoItem
-              label="Created"
-              value={(() => {
-                const date = new Date(config.created_at);
-                return isNaN(date.getTime()) ? 'Invalid Date' : date.toLocaleString();
-              })()}
-            />
-            <InfoItem
-              label="Last Updated"
-              value={(() => {
-                const date = new Date(config.updated_at);
-                return isNaN(date.getTime()) ? 'Invalid Date' : date.toLocaleString();
-              })()}
-            />
-          </Group>
-        </InfoSectionCard>
+          </Grid.Col>
+        </Grid>
       </Stack>
 
       {/* URL List Modal */}

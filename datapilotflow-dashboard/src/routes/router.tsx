@@ -1,6 +1,7 @@
 import { SidebarProvider } from '@/contexts/sidebar-context';
 import { AuthGuard } from '@/guards/auth-guard';
 import { GuestGuard } from '@/guards/guest-guard';
+import { PermissionGuard } from '@/guards/permission-guard';
 import { AuthLayout } from '@/layouts/auth';
 import { DashboardLayout } from '@/layouts/dashboard';
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
@@ -74,31 +75,59 @@ const router = createBrowserRouter([
       },
       {
         path: paths.dashboard.apps.agents,
-        element: LazyPage(() => import('@/pages/dashboard/apps/knowledge/knowledge-search')),
+        element: (
+          <PermissionGuard permission="conversation:read">
+            {LazyPage(() => import('@/pages/dashboard/apps/knowledge/knowledge-search'))}
+          </PermissionGuard>
+        ),
       },
       {
         path: '/dashboard/apps/agents/create',
-        element: LazyPage(() => import('@/pages/dashboard/apps/knowledge/conversation-create')),
+        element: (
+          <PermissionGuard permission="conversation:manage">
+            {LazyPage(() => import('@/pages/dashboard/apps/knowledge/conversation-create'))}
+          </PermissionGuard>
+        ),
       },
       {
         path: '/dashboard/apps/agents/:agentId/edit',
-        element: LazyPage(() => import('@/pages/dashboard/apps/knowledge/conversation-create')),
+        element: (
+          <PermissionGuard permission="conversation:manage">
+            {LazyPage(() => import('@/pages/dashboard/apps/knowledge/conversation-create'))}
+          </PermissionGuard>
+        ),
       },
       {
         path: '/dashboard/apps/agents/:agentId/conversations',
-        element: LazyPage(() => import('@/pages/dashboard/apps/knowledge/agent-conversations')),
+        element: (
+          <PermissionGuard permission="conversation:read">
+            {LazyPage(() => import('@/pages/dashboard/apps/knowledge/agent-conversations'))}
+          </PermissionGuard>
+        ),
       },
       {
         path: paths.dashboard.apps.conversations,
-        element: LazyPage(() => import('@/pages/dashboard/apps/knowledge/all-conversations')),
+        element: (
+          <PermissionGuard permission="conversation:read">
+            {LazyPage(() => import('@/pages/dashboard/apps/knowledge/all-conversations'))}
+          </PermissionGuard>
+        ),
       },
       {
         path: paths.dashboard.apps.conversationCreate,
-        element: LazyPage(() => import('@/pages/dashboard/apps/knowledge/conversation-create')),
+        element: (
+          <PermissionGuard permission="conversation:manage">
+            {LazyPage(() => import('@/pages/dashboard/apps/knowledge/conversation-create'))}
+          </PermissionGuard>
+        ),
       },
       {
         path: '/dashboard/apps/conversations/:sessionId',
-        element: LazyPage(() => import('@/pages/dashboard/apps/knowledge/conversation-window')),
+        element: (
+          <PermissionGuard permission="conversation:read">
+            {LazyPage(() => import('@/pages/dashboard/apps/knowledge/conversation-window'))}
+          </PermissionGuard>
+        ),
       },
       /* ------------------------------- MANAGEMENT ------------------------------- */
       {
@@ -119,11 +148,19 @@ const router = createBrowserRouter([
               },
               {
                 path: paths.dashboard.management.knowledge.status,
-                element: LazyPage(() => import('@/pages/dashboard/management/knowledge/status')),
+                element: (
+                  <PermissionGuard permission="knowledge:read">
+                    {LazyPage(() => import('@/pages/dashboard/management/knowledge/status'))}
+                  </PermissionGuard>
+                ),
               },
               {
                 path: paths.dashboard.management.knowledge.vectorStatus,
-                element: LazyPage(() => import('@/pages/dashboard/management/knowledge/vector-status')),
+                element: (
+                  <PermissionGuard permission="knowledge:read">
+                    {LazyPage(() => import('@/pages/dashboard/management/knowledge/vector-status'))}
+                  </PermissionGuard>
+                ),
               },
             ],
           },
@@ -138,35 +175,67 @@ const router = createBrowserRouter([
               },
               {
                 path: paths.dashboard.management.knowledgeSources.configs,
-                element: LazyPage(() => import('@/pages/dashboard/management/knowledge-sources/configs')),
+                element: (
+                  <PermissionGuard permission="knowledge:read">
+                    {LazyPage(() => import('@/pages/dashboard/management/knowledge-sources/configs'))}
+                  </PermissionGuard>
+                ),
               },
               {
                 path: paths.dashboard.management.knowledgeSources.config(':configId'),
-                element: LazyPage(() => import('@/pages/dashboard/management/knowledge-sources/config-details')),
+                element: (
+                  <PermissionGuard permission="knowledge:read">
+                    {LazyPage(() => import('@/pages/dashboard/management/knowledge-sources/config-details'))}
+                  </PermissionGuard>
+                ),
               },
               {
                 path: paths.dashboard.management.knowledgeSources.configCreate,
-                element: LazyPage(() => import('@/pages/dashboard/management/knowledge-sources/config-create')),
+                element: (
+                  <PermissionGuard permission="knowledge:manage">
+                    {LazyPage(() => import('@/pages/dashboard/management/knowledge-sources/config-create'))}
+                  </PermissionGuard>
+                ),
               },
               {
                 path: paths.dashboard.management.knowledgeSources.configEdit(':configId'),
-                element: LazyPage(() => import('@/pages/dashboard/management/knowledge-sources/config-edit')),
+                element: (
+                  <PermissionGuard permission="knowledge:manage">
+                    {LazyPage(() => import('@/pages/dashboard/management/knowledge-sources/config-edit'))}
+                  </PermissionGuard>
+                ),
               },
               {
                 path: paths.dashboard.management.knowledgeSources.jobs,
-                element: LazyPage(() => import('@/pages/dashboard/management/knowledge-sources/jobs')),
+                element: (
+                  <PermissionGuard permission="knowledge:read">
+                    {LazyPage(() => import('@/pages/dashboard/management/knowledge-sources/jobs'))}
+                  </PermissionGuard>
+                ),
               },
               {
                 path: paths.dashboard.management.knowledgeSources.jobCreate,
-                element: LazyPage(() => import('@/pages/dashboard/management/knowledge-sources/job-create')),
+                element: (
+                  <PermissionGuard permission="knowledge:manage">
+                    {LazyPage(() => import('@/pages/dashboard/management/knowledge-sources/job-create'))}
+                  </PermissionGuard>
+                ),
               },
               {
                 path: '/dashboard/management/knowledge-sources/job-details/:jobId',
-                element: LazyPage(() => import('@/pages/dashboard/management/knowledge-sources/job-details')),
+                element: (
+                  <PermissionGuard permission="knowledge:read">
+                    {LazyPage(() => import('@/pages/dashboard/management/knowledge-sources/job-details'))}
+                  </PermissionGuard>
+                ),
               },
               {
                 path: '/dashboard/management/knowledge-sources/job-edit/:jobId',
-                element: LazyPage(() => import('@/pages/dashboard/management/knowledge-sources/job-edit')),
+                element: (
+                  <PermissionGuard permission="knowledge:manage">
+                    {LazyPage(() => import('@/pages/dashboard/management/knowledge-sources/job-edit'))}
+                  </PermissionGuard>
+                ),
               },
             ],
           },
@@ -176,15 +245,27 @@ const router = createBrowserRouter([
             children: [
               {
                 index: true,
-                element: LazyPage(() => import('@/pages/dashboard/management/model-providers')),
+                element: (
+                  <PermissionGuard permission="models:read">
+                    {LazyPage(() => import('@/pages/dashboard/management/model-providers'))}
+                  </PermissionGuard>
+                ),
               },
               {
                 path: 'create',
-                element: LazyPage(() => import('@/pages/dashboard/management/model-providers/create')),
+                element: (
+                  <PermissionGuard permission="models:manage">
+                    {LazyPage(() => import('@/pages/dashboard/management/model-providers/create'))}
+                  </PermissionGuard>
+                ),
               },
               {
                 path: ':providerId/edit',
-                element: LazyPage(() => import('@/pages/dashboard/management/model-providers/edit')),
+                element: (
+                  <PermissionGuard permission="models:manage">
+                    {LazyPage(() => import('@/pages/dashboard/management/model-providers/edit'))}
+                  </PermissionGuard>
+                ),
               },
             ],
           },
@@ -198,11 +279,19 @@ const router = createBrowserRouter([
               },
               {
                 path: 'list',
-                element: LazyPage(() => import('@/pages/dashboard/management/users/list')),
+                element: (
+                  <PermissionGuard permission="user:manage">
+                    {LazyPage(() => import('@/pages/dashboard/management/users/list'))}
+                  </PermissionGuard>
+                ),
               },
               {
                 path: ':userId/edit',
-                element: LazyPage(() => import('@/pages/dashboard/management/users/edit')),
+                element: (
+                  <PermissionGuard permission="user:manage">
+                    {LazyPage(() => import('@/pages/dashboard/management/users/edit'))}
+                  </PermissionGuard>
+                ),
               },
               {
                 path: 'profile',
@@ -210,11 +299,19 @@ const router = createBrowserRouter([
               },
               {
                 path: 'roles',
-                element: LazyPage(() => import('@/pages/dashboard/management/users/roles')),
+                element: (
+                  <PermissionGuard permission="user:manage">
+                    {LazyPage(() => import('@/pages/dashboard/management/users/roles'))}
+                  </PermissionGuard>
+                ),
               },
               {
                 path: 'roles/:roleId/edit',
-                element: LazyPage(() => import('@/pages/dashboard/management/users/role-edit')),
+                element: (
+                  <PermissionGuard permission="user:manage">
+                    {LazyPage(() => import('@/pages/dashboard/management/users/role-edit'))}
+                  </PermissionGuard>
+                ),
               },
             ],
           },
@@ -224,15 +321,27 @@ const router = createBrowserRouter([
             children: [
               {
                 index: true,
-                element: LazyPage(() => import('@/pages/dashboard/management/tools')),
+                element: (
+                  <PermissionGuard permission="tools:read">
+                    {LazyPage(() => import('@/pages/dashboard/management/tools'))}
+                  </PermissionGuard>
+                ),
               },
               {
                 path: 'create',
-                element: LazyPage(() => import('@/pages/dashboard/management/tools/form')),
+                element: (
+                  <PermissionGuard permission="tools:manage">
+                    {LazyPage(() => import('@/pages/dashboard/management/tools/form'))}
+                  </PermissionGuard>
+                ),
               },
               {
                 path: ':toolId/edit',
-                element: LazyPage(() => import('@/pages/dashboard/management/tools/form')),
+                element: (
+                  <PermissionGuard permission="tools:manage">
+                    {LazyPage(() => import('@/pages/dashboard/management/tools/form'))}
+                  </PermissionGuard>
+                ),
               },
             ],
           },

@@ -36,7 +36,8 @@ services:
       rabbitmq:
         condition: service_healthy
     volumes:
-      - ../datapilotflow-api/logs:/app/logs
+      - ../logs/api:/app/logs
+      - ../data/upload:/app/upload
     networks:
       - datapilotflow-network
     restart: unless-stopped
@@ -65,14 +66,19 @@ services:
       - MONGO_DB_NAME=datapilotflow
       - MONGO_USER=datapilotflow
       - MONGO_PASS=datapilotflow123
+      - VECTOR_DB_HOST=milvus
+      - VECTOR_DB_HTTP_PORT=19530
       - LOG_LEVEL=INFO
     depends_on:
       rabbitmq:
         condition: service_healthy
       mongodb:
         condition: service_healthy
+      milvus:
+        condition: service_healthy
     volumes:
-      - ../datapilotflow-events/logs:/app/logs
+      - ../logs/event-listeners:/app/datapilotflow-events/logs
+      - ../data/upload:/app/datapilotflow-events/upload
     networks:
       - datapilotflow-network
     restart: on-failure
@@ -107,12 +113,12 @@ services:
       mongodb:
         condition: service_healthy
     volumes:
-      - ../datapilotflow-rag-agent/logs:/app/logs
+      - ../logs/mcp-rag-agent:/app/logs
     networks:
       - datapilotflow-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:65510/"]
+      test: ["CMD", "curl", "-f", "http://localhost:65510/health"]
       interval: 30s
       timeout: 10s
       retries: 3

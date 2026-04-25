@@ -14,6 +14,8 @@ from typing import Any, Dict, List, Optional
 
 from fastmcp import FastMCP
 from loguru import logger
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from datapilotflow.domain.config import settings
 
@@ -21,10 +23,13 @@ from .adapters.rag_adapter import RAGAdapter
 from .tools.rag_tools import RAGQueryInput, RAGQueryOutput
 
 # Create FastMCP server with HTTP Transport (Streamable)
-# Transport is configured in run() method with transport="http"
-mcp = FastMCP(
-    settings.MCP_SERVER_NAME,
-)
+# Transport is configured in run() method with transport="streamable-http"
+mcp = FastMCP(settings.MCP_SERVER_NAME)
+
+
+@mcp.custom_route("/health", methods=["GET"])
+async def health(request: Request) -> JSONResponse:
+    return JSONResponse({"status": "ok", "service": settings.MCP_SERVER_NAME})
 
 # Initialize adapters
 rag_adapter = RAGAdapter()
