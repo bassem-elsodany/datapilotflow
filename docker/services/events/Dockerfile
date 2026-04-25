@@ -23,20 +23,13 @@ RUN pip install uv
 RUN python -m venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Copy monorepo structure - event processing dependencies
-COPY datapilotflow-domain ./datapilotflow-domain
-COPY datapilotflow-infrastructure ./datapilotflow-infrastructure
-COPY datapilotflow-services ./datapilotflow-services
-COPY datapilotflow-processors ./datapilotflow-processors
-COPY datapilotflow-events ./datapilotflow-events
+# ── Layer 1: copy only pyproject.toml files and install deps (cached unless deps change) ──
+COPY datapilotflow-domain/pyproject.toml          ./datapilotflow-domain/pyproject.toml
+COPY datapilotflow-infrastructure/pyproject.toml  ./datapilotflow-infrastructure/pyproject.toml
+COPY datapilotflow-services/pyproject.toml        ./datapilotflow-services/pyproject.toml
+COPY datapilotflow-processors/pyproject.toml      ./datapilotflow-processors/pyproject.toml
+COPY datapilotflow-events/pyproject.toml          ./datapilotflow-events/pyproject.toml
 
-# Copy event listener entry point
-COPY datapilotflow-events/run_all_event_listeners.py ./
-
-# Copy event service configuration
-COPY docker/services/events/.env .env
-
-# Install dependencies using uv
 WORKDIR /app/datapilotflow-events
 RUN uv pip install -e . && \
     uv pip install -e ../datapilotflow-processors && \
@@ -44,17 +37,31 @@ RUN uv pip install -e . && \
     uv pip install -e ../datapilotflow-infrastructure && \
     uv pip install -e ../datapilotflow-domain
 
+# ── Layer 2: copy full source (only invalidates above if pyproject.toml changed) ──
 WORKDIR /app
+COPY datapilotflow-domain ./datapilotflow-domain
+COPY datapilotflow-infrastructure ./datapilotflow-infrastructure
+COPY datapilotflow-services ./datapilotflow-services
+COPY datapilotflow-processors ./datapilotflow-processors
+COPY datapilotflow-events ./datapilotflow-events
+
+# Copy event listener entry point and service config
+COPY datapilotflow-events/run_all_event_listeners.py ./
+COPY docker/services/events/.env .env
 
 # Create necessary directories
-RUN mkdir -p logs
+RUN mkdir -p logs datapilotflow-events/logs
 
 # Note: No port exposed - event listeners only communicate via RabbitMQ
 # This is an internal service
 
-# Health check - verify event listener is running
+# Health check - verify the main listener process is running
+# (ps aux is not available in slim images, use /proc instead)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD ps aux | grep -q "run_all_event_listeners.py" || exit 1
+    CMD grep -ql "run_all_event_listeners" /proc/1/cmdline || exit 1
 
-# Run event listeners
-CMD ["uv", "run", "python", "run_all_event_listeners.py"]
+# Run event listeners from the datapilotflow-events directory so that
+# child runner scripts (run_job_event_listener.py etc.) are resolvable as siblings.
+# Use the pre-built venv directly (not uv run) so all editable installs are available.
+WORKDIR /app/datapilotflow-events
+CMD ["/app/.venv/bin/python", "run_all_event_listeners.py"]

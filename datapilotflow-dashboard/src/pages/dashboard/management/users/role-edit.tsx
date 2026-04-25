@@ -98,18 +98,28 @@ export default function RoleEditPage() {
     );
   }
 
-  // Define available permissions
   const availablePermissions = [
-    { value: 'user:manage', label: 'Manage Users' },
-    { value: 'user:read', label: 'Read Users' },
-    { value: 'interview:manage', label: 'Manage Interviews' },
-    { value: 'interview:read', label: 'Read Interviews' },
-    { value: 'knowledge:manage', label: 'Manage Knowledge' },
-    { value: 'knowledge:read', label: 'Read Knowledge' },
-    { value: 'analytics:manage', label: 'Manage Analytics' },
-    { value: 'analytics:read', label: 'Read Analytics' },
-    { value: 'system:manage', label: 'Manage System' },
-    { value: 'system:read', label: 'Read System' },
+    // User management
+    { value: 'user:manage', label: '👥 Users — Manage (create, update, delete users & roles)', group: 'User Management' },
+    { value: 'user:read',   label: '👥 Users — Read (view users & role assignments)', group: 'User Management' },
+    // Knowledge pipeline
+    { value: 'knowledge:manage', label: '🗂️ Knowledge — Manage (sources, jobs, collections)', group: 'Knowledge Pipeline' },
+    { value: 'knowledge:read',   label: '🗂️ Knowledge — Read (view sources, jobs, collections)', group: 'Knowledge Pipeline' },
+    // Conversations
+    { value: 'conversation:manage', label: '💬 Conversations — Manage (create & manage AI conversations)', group: 'Conversations' },
+    { value: 'conversation:read',   label: '💬 Conversations — Read (view conversations)', group: 'Conversations' },
+    // Tools & MCP
+    { value: 'tools:manage', label: '🔧 Tools — Manage (add, edit, delete tools & MCP servers)', group: 'Tools & MCP' },
+    { value: 'tools:read',   label: '🔧 Tools — Read (view tools & MCP servers)', group: 'Tools & MCP' },
+    // Model providers
+    { value: 'models:manage', label: '🤖 Models — Manage (add, edit, delete model providers)', group: 'Model Providers' },
+    { value: 'models:read',   label: '🤖 Models — Read (view model providers)', group: 'Model Providers' },
+    // Analytics
+    { value: 'analytics:manage', label: '📊 Analytics — Manage', group: 'Analytics' },
+    { value: 'analytics:read',   label: '📊 Analytics — Read (view stats & reports)', group: 'Analytics' },
+    // System
+    { value: 'system:manage', label: '⚙️ System — Manage (system-level configuration)', group: 'System' },
+    { value: 'system:read',   label: '⚙️ System — Read (view system config & health)', group: 'System' },
   ];
 
   return (
@@ -151,6 +161,7 @@ export default function RoleEditPage() {
 
           <MultiSelect
             label="Permissions"
+            description="Select the permissions this role grants. Grouped by platform area."
             placeholder="Select permissions"
             data={availablePermissions}
             value={formData.permissions}
@@ -158,16 +169,24 @@ export default function RoleEditPage() {
             searchable
             clearable
             required
+            maxDropdownHeight={320}
           />
 
           <Group gap="xs">
             <Text size="sm" fw={500}>Current Permissions:</Text>
             {formData.permissions.length > 0 ? (
-              formData.permissions.map((permission) => (
-                <Badge key={permission} variant="light" color="blue">
-                  {permission}
-                </Badge>
-              ))
+              formData.permissions.map((permission) => {
+                const colorMap: Record<string, string> = {
+                  'user': 'grape', 'knowledge': 'blue', 'conversation': 'cyan',
+                  'tools': 'orange', 'models': 'violet', 'analytics': 'teal', 'system': 'gray',
+                };
+                const category = permission.split(':')[0];
+                return (
+                  <Badge key={permission} variant="light" color={colorMap[category] ?? 'blue'}>
+                    {permission}
+                  </Badge>
+                );
+              })
             ) : (
               <Text size="sm" c="dimmed">No permissions selected</Text>
             )}

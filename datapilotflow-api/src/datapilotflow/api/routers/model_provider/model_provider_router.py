@@ -24,6 +24,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 from datapilotflow.api.routers.auth.auth_router import get_current_user
+from datapilotflow.api.dependencies.permissions import require_permission
 
 router = APIRouter(prefix="/providers", tags=["Model Providers"])
 
@@ -37,7 +38,7 @@ router = APIRouter(prefix="/providers", tags=["Model Providers"])
 )
 def create_model_provider(
     provider_data: ModelProviderCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("models:manage")),
     service: ModelProviderService = Depends(get_model_provider_service),
 ):
     """
@@ -89,7 +90,7 @@ def list_model_providers(
     limit: int = Query(
         100, ge=1, le=1000, description="Maximum number of records to return"
     ),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("models:read")),
     service: ModelProviderService = Depends(get_model_provider_service),
 ):
     """List model provider configurations for the current user."""
@@ -141,7 +142,7 @@ class ModelProviderTestBeforeCreateRequest(BaseModel):
 )
 async def test_model_provider_before_create(
     request: ModelProviderTestBeforeCreateRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("models:manage")),
     service: ModelProviderService = Depends(get_model_provider_service),
 ):
     """Run a quick live check against a provider configuration before saving."""
@@ -181,7 +182,7 @@ async def test_model_provider_before_create(
 async def test_model_provider(
     provider_id: str,
     request: ModelProviderTestRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("models:manage")),
     service: ModelProviderService = Depends(get_model_provider_service),
 ):
     """Run a quick live check against an existing provider configuration."""
@@ -258,7 +259,7 @@ def get_provider_models(
     model_type: Optional[ModelType] = Query(
         None, description="Filter by model type (embedding, generative, reranker)"
     ),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("models:read")),
     service: ModelProviderService = Depends(get_model_provider_service),
 ):
     """
@@ -321,7 +322,7 @@ def get_provider_models(
 )
 def get_model_provider(
     provider_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("models:read")),
     service: ModelProviderService = Depends(get_model_provider_service),
 ):
     """Get a model provider configuration by ID."""
@@ -370,7 +371,7 @@ def get_model_provider(
 def update_model_provider(
     provider_id: str,
     update_data: ModelProviderUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("models:manage")),
     service: ModelProviderService = Depends(get_model_provider_service),
 ):
     """Update a model provider configuration."""
@@ -423,7 +424,7 @@ def update_model_provider(
 )
 def delete_model_provider(
     provider_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("models:manage")),
     service: ModelProviderService = Depends(get_model_provider_service),
 ):
     """Delete a model provider configuration."""

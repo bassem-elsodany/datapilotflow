@@ -167,7 +167,7 @@ export function JobActions({
       </Modal>
 
       {/* Action Buttons */}
-      <Group gap="xs">
+      <Group gap={4} wrap="nowrap" justify="flex-end">
         {/* Always visible - View Details */}
         <Tooltip label="View Details">
           <ActionIcon

@@ -11,6 +11,7 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 from datapilotflow.api.routers.auth.auth_router import get_current_user
+from datapilotflow.api.dependencies.permissions import require_permission
 from datapilotflow.domain.agent.models import Agent, AgentType, EnhancementStrategy
 from datapilotflow.domain.conversation.models import (
     AssistantConfig,
@@ -465,7 +466,7 @@ def serialize_agent(
 @router.post("", response_model=CreateAgentResponse)
 async def create_agent(
     request: CreateAgentRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("conversation:manage")),
 ):
     """
     Create a new agent.
@@ -560,7 +561,7 @@ async def list_agents(
     ),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("conversation:read")),
 ):
     """
     List all agents for the current user.
@@ -619,7 +620,7 @@ async def get_agent(
         None,
         description="Comma-separated list of fields to expand: tools, enhancement, reranker, answer_generation, llm_provider, conversations, conversations.messages",
     ),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("conversation:read")),
 ):
     """
     Get a specific agent by ID.
@@ -658,7 +659,7 @@ async def get_agent(
 async def update_agent(
     agent_id: str,
     request: UpdateAgentRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("conversation:manage")),
 ):
     """Update an agent's configuration."""
     try:
@@ -745,7 +746,7 @@ async def update_agent(
 @router.delete("/{agent_id}", response_model=DeleteAgentResponse)
 async def delete_agent(
     agent_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("conversation:manage")),
 ):
     """
     Delete an agent.
@@ -791,7 +792,7 @@ async def delete_agent(
 @router.get("/{agent_id}/conversations")
 async def get_agent_conversations(
     agent_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("conversation:read")),
 ):
     """Get all conversations using this agent."""
     try:

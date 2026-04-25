@@ -907,6 +907,7 @@ export function ConversationCreateWizard() {
       const payload: any = {
         name: form.values.conversationName.trim(),
         description: form.values.conversationDescription.trim() || null,
+        agent_type: form.values.agentType,
         // Primary Agent LLM Provider (for both RAG and Assistant modes)
         llm_provider: form.values.agentLlmProviderId && form.values.agentLlmModel ? {
           id: form.values.agentLlmProviderId,
@@ -1032,9 +1033,15 @@ export function ConversationCreateWizard() {
         }
       } else {
         const errorData = await response.json().catch(() => ({}));
+        const detail = errorData.detail;
+        const message = typeof detail === 'string'
+          ? detail
+          : Array.isArray(detail)
+            ? detail.map((e: any) => `${e.loc?.slice(-1)[0] ?? 'field'}: ${e.msg}`).join(', ')
+            : 'Failed to create conversation Agent';
         notifications.show({
           title: 'Error',
-          message: errorData.detail || 'Failed to create conversation Agent',
+          message,
           color: 'red',
         });
       }

@@ -14,14 +14,14 @@ dependencies = [
     "langchain-litellm>=0.1.0",
     "litellm>=1.79.0",
     "loguru>=0.7.3",
-    "fastmcp>=0.4.0",
+    "fastmcp>=2.14.0,<3.0.0",
     "pydantic>=2.10.6",
     "pydantic-settings>=2.0.0",
 ]
 
 [project.optional-dependencies]
 mcp = [
-    "fastmcp>=0.4.0",
+    "fastmcp>=2.14.0,<3.0.0",
     "pydantic>=2.10.6",
     "pydantic-settings>=2.0.0",
 ]

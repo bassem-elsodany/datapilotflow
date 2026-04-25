@@ -2,12 +2,19 @@ import { NavLink as RouterLink, useLocation } from 'react-router-dom';
 import { NavLink, Stack, Title, Divider } from '@mantine/core';
 import { ApiStatus } from '@/components/api-status';
 import { useApiHealth } from '@/hooks/use-api-health';
+import { usePermissions } from '@/hooks/use-permissions';
 import { menu } from './menu-sections';
 import classes from './sidebar.module.css';
 
 export function Sidebar() {
   const { pathname } = useLocation();
   const { features } = useApiHealth();
+  const { hasPermission, isAdmin } = usePermissions();
+
+  const canAccess = (permission?: string) => {
+    if (!permission) return true;
+    return isAdmin() || hasPermission(permission);
+  };
 
   const isFeatureEnabledForPath = (href: string): boolean => {
     if (!href || typeof href !== 'string') return true;
@@ -46,8 +53,9 @@ export function Sidebar() {
               {item.header}
             </Title>
 
-            {item.section.map((subItem) => (
-              !isFeatureEnabledForPath(subItem.href) ? null : (
+            {item.section
+              .filter((subItem) => isFeatureEnabledForPath(subItem.href) && canAccess(subItem.permission))
+              .map((subItem) => (
               subItem.dropdownItems ? (
                 <NavLink
                   variant="subtle"
@@ -59,7 +67,7 @@ export function Sidebar() {
                   leftSection={subItem.icon && <subItem.icon />}
                 >
                   {subItem.dropdownItems
-                    ?.filter((dropdownItem) => isFeatureEnabledForPath(dropdownItem.href))
+                    .filter((dropdownItem) => isFeatureEnabledForPath(dropdownItem.href) && canAccess(dropdownItem.permission))
                     .map((dropdownItem) => (
                       dropdownItem.dropdownItems ? (
                         <NavLink
@@ -72,7 +80,7 @@ export function Sidebar() {
                           leftSection={<span className="dot" />}
                         >
                           {dropdownItem.dropdownItems
-                            ?.filter((nestedItem) => isFeatureEnabledForPath(nestedItem.href))
+                            .filter((nestedItem) => isFeatureEnabledForPath(nestedItem.href) && canAccess(nestedItem.permission))
                             .map((nestedItem) => (
                               <NavLink
                                 variant="subtle"
@@ -110,7 +118,6 @@ export function Sidebar() {
                   className={classes.sectionLink}
                   leftSection={subItem.icon && <subItem.icon />}
                 />
-              )
               )
             ))}
           </div>

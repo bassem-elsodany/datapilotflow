@@ -7,7 +7,6 @@ import {
   ActionIcon,
   Alert,
   Badge,
-  Box,
   Button,
   Card,
   Center,
@@ -16,6 +15,8 @@ import {
   Loader,
   Menu,
   Modal,
+  Paper,
+  SegmentedControl,
   Stack,
   Text,
   ThemeIcon,
@@ -25,62 +26,58 @@ import {
 import { notifications } from '@mantine/notifications';
 import {
   IconAlertTriangle,
+  IconBook,
+  IconBookmarks,
+  IconBrandHtml5,
   IconBriefcase,
-  IconChevronDown,
+  IconClock,
   IconEdit,
   IconExternalLink,
+  IconFile,
+  IconFileSearch,
+  IconFiles,
   IconFileText,
+  IconFileTypePdf,
   IconLink,
-  IconList,
+  IconMarkdown,
   IconPlus,
   IconRefresh,
   IconSettings,
+  IconSitemap,
+  IconTag,
   IconTrash,
   IconUpload,
   IconWand,
   IconWorld,
-  IconBookmarks
 } from '@tabler/icons-react';
 import sortBy from 'lodash/sortBy';
-import { DataTable, DataTableColumn, DataTableSortStatus } from 'mantine-datatable';
+import { DataTable as AppDataTable } from '@/components/data-table';
+import { DataTableTable as DataTable } from '@/components/data-table/data-table-table';
+import { DataTableColumn, DataTableSortStatus } from 'mantine-datatable';
+import { useDisclosure } from '@mantine/hooks';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { usePermissions } from '@/hooks/use-permissions';
 
 // CSS animations for the pipeline
 const pipelineStyles = `
   @keyframes dataFlow {
-    0% {
-      left: -10px;
-      opacity: 0;
-    }
-    10% {
-      opacity: 1;
-    }
-    90% {
-      opacity: 1;
-    }
-    100% {
-      left: 50px;
-      opacity: 0;
-    }
+    0% { left: -10px; opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { left: 50px; opacity: 0; }
   }
-  
   @keyframes pulse {
-    0%, 100% {
-      transform: scale(1);
-    }
-    50% {
-      transform: scale(1.1);
-    }
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
   }
-  
   @keyframes arrowPulse {
-    0%, 100% {
-      transform: translateY(-50%) scale(1);
-    }
-    50% {
-      transform: translateY(-50%) scale(1.2);
-    }
+    0%, 100% { transform: translateY(-50%) scale(1); }
+    50% { transform: translateY(-50%) scale(1.2); }
+  }
+  @keyframes slideInFromRight {
+    0% { transform: translateX(60px); opacity: 0; }
+    100% { transform: translateX(0); opacity: 1; }
   }
 `;
 
@@ -124,6 +121,22 @@ const contentSourceTypeIcons: Record<string, typeof IconFileText> = {
   confluence: IconBookmarks,
 };
 
+// Distinct icon per scraping mode
+const scrapingModeIconMap: Record<string, typeof IconFileText> = {
+  single_page:      IconFile,
+  multiple_pages:   IconFiles,
+  website:          IconSitemap,
+  html_files:       IconBrandHtml5,
+  markdown_files:   IconMarkdown,
+  pdf_files:        IconFileTypePdf,
+  docx_files:       IconFileText,
+  txt_files:        IconFileText,
+  space_pages:      IconBook,
+  specific_pages:   IconFileSearch,
+  pages_with_label: IconTag,
+  recently_modified: IconClock,
+};
+
 const getSourceTypeDisplay = (sourceType: string): string => {
   switch (sourceType) {
     case 'web_scraping':
@@ -137,13 +150,53 @@ const getSourceTypeDisplay = (sourceType: string): string => {
   }
 };
 
-// Interactive Crawling Pipeline Component
+// Trigger button that opens the pipeline demo in a slide-in modal
+function PipelineDemoTrigger() {
+  const [opened, { open, close }] = useDisclosure(false);
+  return (
+    <>
+      <Button
+        variant="light"
+        color="violet"
+        size="sm"
+        leftSection={<IconWand size={14} />}
+        onClick={open}
+      >
+        Pipeline Demo
+      </Button>
+
+      <Modal
+        opened={opened}
+        onClose={close}
+        title={
+          <Group gap="xs">
+            <ThemeIcon size="sm" variant="light" color="violet" radius="sm">
+              <IconWand size={12} />
+            </ThemeIcon>
+            <Text size="sm" fw={600}>Data Processing Pipeline</Text>
+            <Badge size="xs" variant="dot" color="green">Live</Badge>
+          </Group>
+        }
+        size="xl"
+        radius="md"
+        centered
+        transitionProps={{ transition: 'slide-left', duration: 400 }}
+      >
+        <div style={{ animation: 'slideInFromRight 0.45s cubic-bezier(0.4, 0, 0.2, 1)' }}>
+          <InteractiveCrawlingPipeline />
+        </div>
+      </Modal>
+    </>
+  );
+}
+
+// Interactive Crawling Pipeline Component (always fully expanded — shown inside modal)
 function InteractiveCrawlingPipeline() {
   const [currentStep, setCurrentStep] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(true); // Always playing by default
-  const [showDetails, setShowDetails] = useState(true); // Always show details
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [showDetails, setShowDetails] = useState(true);
   const [activeDataSource, setActiveDataSource] = useState<'web_scraping' | 'local_files' | 'confluence'>('web_scraping');
-  const [isExpanded, setIsExpanded] = useState(false); // Hidden by default
+  const isExpanded = true; // always open inside the modal
 
   // Define pipelines for each datasource type
   const pipelinesByDataSource = {
@@ -294,199 +347,126 @@ function InteractiveCrawlingPipeline() {
     return () => clearTimeout(timer);
   }, [currentStep, isPlaying, steps]);
 
-  return (
-    <Card withBorder p="md" radius="md" bg="gray.0" w="100%">
-      <Stack gap="sm">
-        {/* Header with Collapse Toggle */}
-        <Group justify="space-between" align="center">
-          <Group justify="flex-start" gap="xs" style={{ flex: 1 }}>
-            <Text size="sm" fw={500} c="dimmed">Data Processing Pipeline</Text>
-          </Group>
-          <ActionIcon
-            variant="subtle"
-            color="gray"
-            onClick={() => setIsExpanded(!isExpanded)}
-            size="sm"
-          >
-            <IconChevronDown
-              size={18}
-              style={{
-                transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                transition: 'transform 0.3s ease'
-              }}
-            />
-          </ActionIcon>
-        </Group>
+  const sourceOptions = [
+    { value: 'web_scraping', label: 'Web Scraping' },
+    { value: 'local_files', label: 'Local Files' },
+    { value: 'confluence', label: 'Confluence' },
+  ];
 
-        {/* Expandable Content */}
+  return (
+    <Stack gap="md">
         {isExpanded && (
           <>
-            {/* Datasource Selector */}
-            <Group justify="flex-start" gap="xs">
-              <Text size="sm" fw={500} c="dimmed">Data Source:</Text>
-              <Group gap={8}>
-                <Button
-                  variant={activeDataSource === 'web_scraping' ? 'filled' : 'light'}
-                  color="blue"
-                  size="xs"
-                  onClick={() => setActiveDataSource('web_scraping')}
-                  leftSection={<IconWorld size={14} />}
-                >
-                  Web Scraping
-                </Button>
-                <Button
-                  variant={activeDataSource === 'local_files' ? 'filled' : 'light'}
-                  color="violet"
-                  size="xs"
-                  onClick={() => setActiveDataSource('local_files')}
-                  leftSection={<IconFileText size={14} />}
-                >
-                  Local Files
-                </Button>
-                <Button
-                  variant={activeDataSource === 'confluence' ? 'filled' : 'light'}
-                  color="indigo"
-                  size="xs"
-                  onClick={() => setActiveDataSource('confluence')}
-                  leftSection={<IconBookmarks size={14} />}
-                >
-                  Confluence
-                </Button>
-              </Group>
+            {/* Source selector */}
+            <Group gap="sm" align="center">
+              <Text size="xs" c="dimmed" fw={500}>Select source type to preview its pipeline:</Text>
+              <SegmentedControl
+                size="xs"
+                value={activeDataSource}
+                onChange={(v) => setActiveDataSource(v as typeof activeDataSource)}
+                data={sourceOptions}
+              />
             </Group>
 
             <Divider />
 
-        <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-          {/* Left side - Step details */}
-          <div style={{ flex: '0 0 350px', minHeight: '90px' }}>
-            {isPlaying && steps[currentStep] && (
-              <Alert
-                icon={<IconWand size={14} />}
-                title={`Processing: ${steps[currentStep].title}`}
-                color={steps[currentStep].color}
-                variant="light"
-              >
-                <Text size="xs">{steps[currentStep].details}</Text>
-              </Alert>
-            )}
-          </div>
-
-          {/* Right side - Pipeline */}
-          <div style={{ flex: 1, minWidth: 0 }}>
+            {/* Pipeline steps */}
             <div style={{
               display: 'flex',
-              alignItems: 'center',
+              alignItems: 'flex-start',
               gap: '6px',
               overflowX: 'auto',
-              paddingTop: '20px',
-              paddingBottom: '6px',
-              minHeight: '80px'
+              paddingBottom: '4px',
             }}>
               {steps.map((step, index) => {
                 const isActive = currentStep >= index;
                 const isCurrent = currentStep === index;
-                const isVisible = currentStep >= index; // Show step only when it's reached
                 const StepIcon = step.icon;
 
                 return (
                   <div key={step.id} style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                    {/* Step */}
                     <div style={{
                       display: 'flex',
                       flexDirection: 'column',
                       alignItems: 'center',
-                      gap: '4px',
-                      opacity: isVisible ? 1 : 0,
-                      transform: isVisible ? (isCurrent ? 'scale(1.05)' : 'scale(1)') : 'scale(0.8)',
-                      transition: 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
-                      animationDelay: `${index * 0.2}s`
+                      gap: '6px',
+                      opacity: isActive ? 1 : 0.35,
+                      transition: 'opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
+                      padding: isCurrent ? '0 4px' : '0 4px',
                     }}>
                       <ThemeIcon
-                        size={isCurrent ? 36 : 28}
+                        size={isCurrent ? 40 : 32}
                         radius="xl"
                         color={step.color}
-                        variant={isCurrent ? "filled" : "light"}
+                        variant={isCurrent ? 'filled' : isActive ? 'light' : 'outline'}
                         style={{
-                          transition: 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
-                          boxShadow: isCurrent ? `0 4px 20px var(--mantine-color-${step.color}-4)` : 'none',
-                          animation: isCurrent ? 'pulse 2s infinite' : 'none'
+                          flexShrink: 0,
+                          overflow: 'visible',
+                          transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
+                          boxShadow: isCurrent ? `0 0 18px var(--mantine-color-${step.color}-4)` : 'none',
+                          animation: isCurrent ? 'pulse 2s infinite' : 'none',
                         }}
                       >
-                        <StepIcon size={isCurrent ? 18 : 14} />
+                        <StepIcon size={isCurrent ? 20 : 16} style={{ flexShrink: 0 }} />
                       </ThemeIcon>
-
-                      <Stack gap={1} style={{ textAlign: 'center', maxWidth: '90px' }}>
-                        <Text
-                          size="xs"
-                          fw={isCurrent ? 600 : 500}
-                          c={isCurrent ? `${step.color}.7` : "gray.8"}
-                          style={{
-                            transition: 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)'
-                          }}
-                        >
+                      <Stack gap={1} style={{ textAlign: 'center', width: 88 }}>
+                        <Text size="xs" fw={isCurrent ? 700 : 500} c={isCurrent ? `${step.color}.7` : 'dimmed'} style={{ transition: 'color 0.4s' }}>
                           {step.title}
                         </Text>
-                        <Text size="xs" c="gray.6">
-                          {step.description}
-                        </Text>
+                        <Text size="xs" c="dimmed" lh={1.3}>{step.description}</Text>
                       </Stack>
-
                     </div>
 
-                    {/* Connector with animated data flow */}
+                    {/* Connector */}
                     {index < steps.length - 1 && (
                       <div style={{
+                        width: 52,
+                        height: 20,
+                        flexShrink: 0,
+                        position: 'relative',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        width: '60px',
-                        height: '20px',
-                        flexShrink: 0,
-                        position: 'relative',
-                        opacity: isActive ? 1 : 0,
-                        transform: isActive ? 'scale(1)' : 'scale(0.8)',
-                        transition: 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
-                        animationDelay: `${index * 0.2}s`
+                        opacity: isActive ? 1 : 0.2,
+                        transition: 'opacity 0.5s',
+                        marginBottom: 28,
                       }}>
-                        {/* Arrow line */}
                         <div style={{
-                          width: '40px',
-                          height: '2px',
-                          background: isActive ? `repeating-linear-gradient(to right, var(--mantine-color-${step.color}-4) 0px, var(--mantine-color-${step.color}-4) 4px, transparent 4px, transparent 8px)` : 'repeating-linear-gradient(to right, var(--mantine-color-gray-3) 0px, var(--mantine-color-gray-3) 4px, transparent 4px, transparent 8px)',
-                          transition: 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
+                          width: 34,
+                          height: 2,
+                          background: isActive
+                            ? `repeating-linear-gradient(to right, var(--mantine-color-${step.color}-4) 0px, var(--mantine-color-${step.color}-4) 4px, transparent 4px, transparent 8px)`
+                            : 'var(--mantine-color-gray-3)',
                           position: 'relative',
-                          overflow: 'hidden'
+                          overflow: 'hidden',
+                          transition: 'background 0.5s',
                         }}>
-                          {/* Animated data flow */}
                           {isCurrent && (
                             <div style={{
                               position: 'absolute',
                               top: 0,
                               left: '-10px',
-                              width: '6px',
-                              height: '2px',
+                              width: 6,
+                              height: 2,
                               backgroundColor: `var(--mantine-color-${step.color}-6)`,
-                              borderRadius: '1px',
-                              animation: 'dataFlow 1.5s infinite linear',
-                              boxShadow: `0 0 8px var(--mantine-color-${step.color}-4)`
+                              borderRadius: 1,
+                              animation: 'dataFlow 1.2s infinite linear',
+                              boxShadow: `0 0 6px var(--mantine-color-${step.color}-4)`,
                             }} />
                           )}
                         </div>
-
-                        {/* Arrow head */}
                         <div style={{
                           position: 'absolute',
-                          right: '8px',
+                          right: 6,
                           top: '50%',
                           transform: 'translateY(-50%)',
-                          width: '0',
-                          height: '0',
+                          width: 0,
+                          height: 0,
                           borderLeft: `6px solid ${isActive ? `var(--mantine-color-${step.color}-4)` : 'var(--mantine-color-gray-3)'}`,
                           borderTop: '4px solid transparent',
                           borderBottom: '4px solid transparent',
-                          transition: 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
-                          animation: isCurrent ? 'arrowPulse 1.5s infinite' : 'none'
+                          transition: 'border-color 0.5s',
+                          animation: isCurrent ? 'arrowPulse 1.5s infinite' : 'none',
                         }} />
                       </div>
                     )}
@@ -494,13 +474,24 @@ function InteractiveCrawlingPipeline() {
                 );
               })}
             </div>
-          </div>
-        </div>
+
+            {/* Active step detail */}
+            {steps[currentStep] && (
+              <Paper withBorder p="sm" radius="sm" style={{ borderColor: `var(--mantine-color-${steps[currentStep].color}-3)`, backgroundColor: `var(--mantine-color-${steps[currentStep].color}-0)` }}>
+                <Group gap="xs" mb={4}>
+                  <ThemeIcon size="xs" color={steps[currentStep].color} variant="light" radius="xl">
+                    <IconWand size={10} />
+                  </ThemeIcon>
+                  <Text size="xs" fw={600} c={`${steps[currentStep].color}.7`}>
+                    Step {currentStep + 1} of {steps.length}: {steps[currentStep].title}
+                  </Text>
+                </Group>
+                <Text size="xs" c="dimmed" lh={1.5}>{steps[currentStep].details}</Text>
+              </Paper>
+            )}
           </>
         )}
-
-      </Stack>
-    </Card>
+    </Stack>
   );
 }
 
@@ -538,6 +529,8 @@ export default function KnowledgeSourceConfigs() {
   }, []);
 
   const navigate = useNavigate();
+  const { hasPermission, isAdmin } = usePermissions();
+  const canManage = isAdmin() || hasPermission('knowledge:manage');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [configToDelete, setConfigToDelete] = useState<{ id: string; name: string } | null>(null);
@@ -546,8 +539,10 @@ export default function KnowledgeSourceConfigs() {
     direction: 'desc',
   });
   const [page, setPage] = useState(1);
+  const [tabValue, setTabValue] = useState<string>('*');
 
   const { data: configsData, isLoading, error, refetch } = useGetKnowledgeSourceConfigs();
+  const { data: jobsData } = useGetKnowledgeJobs();
   const { data: jobs } = useGetKnowledgeJobs();
   const deleteConfigMutation = useDeleteKnowledgeSourceConfig();
 
@@ -571,247 +566,238 @@ export default function KnowledgeSourceConfigs() {
     }
   }, [configsData, sortStatus]);
 
+  const getModeDisplay = (mode: string | undefined) => {
+    if (!mode) return 'Unknown';
+    switch (mode) {
+      case 'website': return 'Website Crawler';
+      case 'multiple_pages': return 'Multiple Pages';
+      case 'single_page': return 'Single Page';
+      case 'html_files': return 'HTML Files';
+      case 'markdown_files': return 'Markdown Files';
+      case 'pdf_files': return 'PDF Files';
+      case 'docx_files': return 'DOCX Files';
+      case 'txt_files': return 'TXT Files';
+      case 'space_pages': return 'Space Pages';
+      case 'specific_pages': return 'Specific Pages';
+      case 'pages_with_label': return 'Pages w/ Label';
+      case 'recently_modified': return 'Recent';
+      default: return mode;
+    }
+  };
+
+  const formatRelativeDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return '—';
+    const diff = Date.now() - date.getTime();
+    const days = Math.floor(diff / 86400000);
+    if (days === 0) return 'Today';
+    if (days === 1) return 'Yesterday';
+    if (days < 30) return `${days}d ago`;
+    if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+    return date.toLocaleDateString();
+  };
+
   const columns: DataTableColumn<KnowledgeSourceConfig>[] = [
-      {
-        accessor: 'name',
-        title: 'Name',
-        width: 320,
-        sortable: true,
-        textAlign: 'left',
-        render: (record: Record<string, unknown>) => {
-          const config = record as KnowledgeSourceConfig;
-          const SourceIcon = (config.content_source_type && contentSourceTypeIcons[config.content_source_type]) || IconSettings;
-          return (
-            <Group gap="md" style={{ alignItems: 'flex-start' }}>
-              <SourceIcon size={32} color="var(--mantine-color-blue-5)" style={{ flexShrink: 0, marginTop: 4 }} />
-              <Stack gap={2} style={{ flex: 1 }}>
-                <Text
-                  fw={600}
-                  size="sm"
-                  component={Link}
-                  to={paths.dashboard.management.knowledgeSources.config(config.id)}
-                  c="dark"
-                  style={{
-                    textDecoration: 'none',
-                    wordWrap: 'break-word',
-                    overflowWrap: 'break-word',
-                  }}
-                  className="hover:underline"
-                >
-                  {config.name}
-                </Text>
-                <Stack gap={2}>
-                  <Text size="xs" c="dimmed" fw={400}>
-                    {config.content_source_type === 'confluence' ? 'Confluence' :
-                     config.content_source_type === 'local_files' ? 'Local Files' :
-                     'Web Scraping'}
-                  </Text>
-                  {config.description && (
-                    <Text size="xs" c="dimmed" fw={400} lineClamp={2}>
-                      {config.description}
-                    </Text>
-                  )}
-                </Stack>
-              </Stack>
-            </Group>
-          );
-        },
-      },
-      {
-        accessor: 'url',
-        title: 'URL',
-        width: 180,
-        sortable: true,
-        textAlign: 'left',
-        render: (record: Record<string, unknown>) => {
-          const config = record as KnowledgeSourceConfig;
-
-          let displayUrl = '';
-          let additionalCount = 0;
-
-          if (config.content_source_type === 'confluence' && config.confluence_config) {
-            displayUrl = config.confluence_config.cloud_url;
-          } else if (config.content_source_type === 'local_files') {
-            displayUrl = 'Local Storage';
-          } else if (config.scraping_mode === 'multiple_pages' && config.url_source_id) {
-            // For multiple_pages mode, we can show "Multiple URLs"
-            displayUrl = 'Multiple URLs';
-          } else {
-            displayUrl = config.url || '-';
-          }
-
-          return (
-            <Tooltip label={displayUrl} multiline maw={300}>
-              <Text size="xs" c="dimmed" lineClamp={1} fw={400}>
-                {displayUrl || '-'}
+    {
+      accessor: 'name',
+      title: 'Configuration',
+      sortable: true,
+      textAlign: 'left',
+      render: (record: Record<string, unknown>) => {
+        const config = record as KnowledgeSourceConfig;
+        const modeColor = (config.scraping_mode && scrapingModeColors[config.scraping_mode]) || 'gray';
+        const ModeIcon = (config.scraping_mode && scrapingModeIconMap[config.scraping_mode]) || IconSettings;
+        return (
+          <Group gap="sm" wrap="nowrap">
+            <ThemeIcon size="md" variant="light" color={modeColor} radius="sm" style={{ flexShrink: 0 }}>
+              <ModeIcon size={14} />
+            </ThemeIcon>
+            <div style={{ minWidth: 0 }}>
+              <Text
+                fw={600}
+                size="sm"
+                component={Link}
+                to={paths.dashboard.management.knowledgeSources.config(config.id)}
+                c="dark"
+                style={{ textDecoration: 'none' }}
+              >
+                {config.name}
               </Text>
-            </Tooltip>
-          );
-        },
+              {config.description && (
+                <Tooltip label={config.description} multiline maw={320} withArrow disabled={config.description.length < 60}>
+                  <Text size="xs" c="dimmed" lineClamp={1}>{config.description}</Text>
+                </Tooltip>
+              )}
+            </div>
+          </Group>
+        );
       },
-      {
-        accessor: 'scraping_mode',
-        title: 'Mode',
-        width: 160,
-        sortable: true,
-        textAlign: 'left',
-        render: (record: Record<string, unknown>) => {
-          const config = record as KnowledgeSourceConfig;
-          const getModeDisplay = (mode: string | undefined) => {
-            if (!mode) return 'Unknown';
-            switch (mode) {
-              case 'website':
-                return 'Website Crawler';
-              case 'multiple_pages':
-                return 'Multiple Pages';
-              case 'single_page':
-                return 'Single Page';
-              case 'html_files':
-                return 'HTML Files';
-              case 'markdown_files':
-                return 'Markdown Files';
-              case 'pdf_files':
-                return 'PDF Files';
-              case 'docx_files':
-                return 'DOCX Files';
-              case 'txt_files':
-                return 'TXT Files';
-              case 'space_pages':
-                return 'Space Pages';
-              case 'specific_pages':
-                return 'Specific Pages';
-              case 'pages_with_label':
-                return 'Pages with Label';
-              case 'recently_modified':
-                return 'Recently Modified';
-              default:
-                return mode;
-            }
-          };
-          return (
-            <Badge
-              color={(config.scraping_mode && scrapingModeColors[config.scraping_mode]) || 'gray'}
-              variant="light"
-              size="sm"
-            >
-              {getModeDisplay(config.scraping_mode)}
-            </Badge>
-          );
-        },
+    },
+    {
+      accessor: 'content_source_type',
+      title: 'Source',
+      width: 130,
+      sortable: true,
+      textAlign: 'left',
+      render: (record: Record<string, unknown>) => {
+        const config = record as KnowledgeSourceConfig;
+        const color = config.content_source_type === 'confluence' ? 'indigo' : config.content_source_type === 'local_files' ? 'violet' : 'blue';
+        return (
+          <Badge size="sm" variant="light" color={color} radius="sm">
+            {getSourceTypeDisplay(config.content_source_type || '')}
+          </Badge>
+        );
       },
-      {
-        accessor: 'updated_at',
-        title: 'Updated',
-        width: 220,
-        sortable: false,
-        textAlign: 'left',
-        render: (record: Record<string, unknown>) => {
-          const config = record as KnowledgeSourceConfig;
-          const date = new Date(config.updated_at);
-          const dateStr = isNaN(date.getTime()) ? 'Unknown' : date.toLocaleDateString();
-          return (
-            <Text size="xs" c="dimmed" fw={400}>
-              {dateStr}
-            </Text>
-          );
-        },
+    },
+    {
+      accessor: 'scraping_mode',
+      title: 'Mode',
+      width: 170,
+      sortable: true,
+      textAlign: 'left',
+      render: (record: Record<string, unknown>) => {
+        const config = record as KnowledgeSourceConfig;
+        const color = (config.scraping_mode && scrapingModeColors[config.scraping_mode]) || 'gray';
+        return (
+          <Badge color={color} variant="outline" size="sm" radius="sm">
+            {getModeDisplay(config.scraping_mode)}
+          </Badge>
+        );
       },
-      {
-        accessor: 'actions',
-        title: 'Actions',
-        width: 180,
-        textAlign: 'right',
-        toggleable: false,
-        render: (record: Record<string, unknown>) => {
-          const config = record as KnowledgeSourceConfig;
-          return (
-            <Group gap="xs" justify="flex-end" style={{ alignItems: 'flex-start' }}>
-              <Tooltip label="Edit Configuration">
-                <ActionIcon
-                  variant="subtle"
-                  color="green"
-                  component={Link}
-                  to={paths.dashboard.management.knowledgeSources.configEdit(config.id)}
+    },
+    {
+      accessor: 'url',
+      title: 'Target',
+      textAlign: 'left',
+      render: (record: Record<string, unknown>) => {
+        const config = record as KnowledgeSourceConfig;
+        let displayUrl = '';
+        if (config.content_source_type === 'confluence' && config.confluence_config) {
+          displayUrl = config.confluence_config.cloud_url;
+        } else if (config.content_source_type === 'local_files') {
+          displayUrl = 'Local Storage';
+        } else if (config.scraping_mode === 'multiple_pages' && config.url_source_id) {
+          displayUrl = 'Multiple URLs';
+        } else {
+          displayUrl = config.url || '—';
+        }
+        return (
+          <Tooltip label={displayUrl} multiline maw={300} withArrow disabled={displayUrl.length < 30}>
+            <Text size="xs" c="dimmed" lineClamp={1}>{displayUrl || '—'}</Text>
+          </Tooltip>
+        );
+      },
+    },
+    {
+      accessor: 'jobs',
+      title: 'Jobs',
+      width: 80,
+      textAlign: 'left',
+      render: (record: Record<string, unknown>) => {
+        const config = record as KnowledgeSourceConfig;
+        const configJobs = getJobsForConfig(config.id);
+        const jobCount = configJobs.length;
+        if (jobCount === 0) return <Text size="xs" c="dimmed">—</Text>;
+        return (
+          <Menu shadow="md" width={260} position="bottom-end">
+            <Menu.Target>
+              <Badge
+                variant="light"
+                color="violet"
+                size="sm"
+                radius="sm"
+                style={{ cursor: 'pointer' }}
+              >
+                {jobCount} job{jobCount !== 1 ? 's' : ''}
+              </Badge>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Label>Related Jobs ({jobCount})</Menu.Label>
+              {configJobs.map((job) => (
+                <Menu.Item
+                  key={job.id}
+                  leftSection={<IconBriefcase size={14} />}
+                  onClick={() => navigate(paths.dashboard.management.knowledgeSources.job(job.id))}
                 >
-                  <IconEdit size={16} />
+                  <Text size="sm" fw={500} lineClamp={1}>{job.name}</Text>
+                </Menu.Item>
+              ))}
+              <Divider />
+              <Menu.Item
+                leftSection={<IconExternalLink size={14} />}
+                onClick={() => navigate(paths.dashboard.management.knowledgeSources.jobs, {
+                  state: { filterConfigId: config.id, filterConfigName: config.name }
+                })}
+              >
+                View All Jobs
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
+        );
+      },
+    },
+    {
+      accessor: 'updated_at',
+      title: 'Updated',
+      width: 160,
+      sortable: true,
+      textAlign: 'left',
+      render: (record: Record<string, unknown>) => {
+        const config = record as KnowledgeSourceConfig;
+        const d = new Date(config.updated_at);
+        const date = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' });
+        const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        return (
+          <Stack gap={0}>
+            <Text size="xs" fw={500}>{date}</Text>
+            <Text size="xs" c="dimmed">{time}</Text>
+          </Stack>
+        );
+      },
+    },
+    {
+      accessor: 'actions',
+      title: '',
+      width: 90,
+      textAlign: 'right',
+      toggleable: false,
+      render: (record: Record<string, unknown>) => {
+        const config = record as KnowledgeSourceConfig;
+        return (
+          <Group gap={4} justify="flex-end" wrap="nowrap">
+            {canManage && (
+              <Tooltip label="Edit" withArrow>
+                <ActionIcon variant="subtle" color="blue" size="sm" component={Link} to={paths.dashboard.management.knowledgeSources.configEdit(config.id)}>
+                  <IconEdit size={14} />
                 </ActionIcon>
               </Tooltip>
-              <Tooltip label="Create Job">
+            )}
+            {canManage && (
+              <Tooltip label="Create Job" withArrow>
                 <ActionIcon
                   variant="subtle"
-                  color="indigo"
+                  color="violet"
+                  size="sm"
                   onClick={() => navigate(paths.dashboard.management.knowledgeSources.jobCreate, {
                     state: { configId: config.id, configName: config.name }
                   })}
                 >
-                  <IconBriefcase size={16} />
+                  <IconBriefcase size={14} />
                 </ActionIcon>
               </Tooltip>
-              <Tooltip label="Delete Configuration">
-                <ActionIcon
-                  variant="subtle"
-                  color="red"
-                  onClick={() => handleDeleteClick(config.id, config.name)}
-                >
-                  <IconTrash size={16} />
+            )}
+            {canManage && (
+              <Tooltip label="Delete" withArrow>
+                <ActionIcon variant="subtle" color="red" size="sm" onClick={() => handleDeleteClick(config.id, config.name)}>
+                  <IconTrash size={14} />
                 </ActionIcon>
               </Tooltip>
-              {(() => {
-                const configJobs = getJobsForConfig(config.id);
-                const jobCount = configJobs.length;
-                return jobCount > 0 ? (
-                  <Menu shadow="md" width={250} position="bottom-end">
-                    <Menu.Target>
-                      <Badge
-                        variant="light"
-                        color="violet"
-                        style={{ cursor: 'pointer', paddingLeft: 8, paddingRight: 8 }}
-                      >
-                        <Group gap={4}>
-                          <IconList size={14} />
-                          <Text size="xs">{jobCount}</Text>
-                          <IconChevronDown size={12} />
-                        </Group>
-                      </Badge>
-                    </Menu.Target>
-                    <Menu.Dropdown>
-                      <Menu.Label>Related Jobs ({jobCount})</Menu.Label>
-                      {configJobs.map((job) => (
-                        <Menu.Item
-                          key={job.id}
-                          leftSection={<IconBriefcase size={16} />}
-                          onClick={() => navigate(paths.dashboard.management.knowledgeSources.job(job.id))}
-                        >
-                          <Stack gap={2}>
-                            <Text size="sm" fw={500} lineClamp={1}>
-                              {job.name}
-                            </Text>
-                            {job.description && (
-                              <Text size="xs" c="dimmed" lineClamp={1}>
-                                {job.description}
-                              </Text>
-                            )}
-                          </Stack>
-                        </Menu.Item>
-                      ))}
-                      <Divider />
-                      <Menu.Item
-                        leftSection={<IconExternalLink size={16} />}
-                        onClick={() => navigate(paths.dashboard.management.knowledgeSources.jobs, {
-                          state: { filterConfigId: config.id, filterConfigName: config.name }
-                        })}
-                      >
-                        View All Jobs
-                      </Menu.Item>
-                    </Menu.Dropdown>
-                  </Menu>
-                ) : null;
-              })()}
-            </Group>
-          );
-        },
+            )}
+          </Group>
+        );
       },
-    ];
+    },
+  ];
 
   const handleDeleteClick = (configId: string, configName: string) => {
     // Check if the configuration still exists in the current data
@@ -844,11 +830,6 @@ export default function KnowledgeSourceConfigs() {
 
   const handleDeleteConfirm = async () => {
     if (!configToDelete) return;
-
-    // Debug: Log current configurations and the one being deleted
-    console.log('Current configurations:', configs?.map(c => ({ id: c.id, name: c.name })));
-    console.log('Attempting to delete:', { id: configToDelete.id, name: configToDelete.name });
-    console.log('Configuration exists in current data:', configs?.some(c => c.id === configToDelete.id));
 
     setDeletingId(configToDelete.id);
     try {
@@ -932,96 +913,71 @@ export default function KnowledgeSourceConfigs() {
     );
   }
 
+  const activeTab = tabValue ?? '*';
+  const visibleConfigs = configs?.filter(c => {
+    if (activeTab === '*') return true;
+    return c.content_source_type === activeTab;
+  }) ?? [];
+
   return (
     <Page title="Crawling Sources Config">
-      <PageHeader
-        title="Crawling Sources Config"
-        breadcrumbs={breadcrumbs}
-      />
+      <PageHeader title="Crawling Sources Config" breadcrumbs={breadcrumbs} />
 
-      <Group justify="space-between" mb="md">
-        <div />
-        <Group gap="sm">
-          <Button
-            variant="outline"
-            onClick={() => refetch()}
-            leftSection={<IconRefresh size={16} />}
-            loading={isLoading}
-          >
-            Refresh
-          </Button>
-          <Button
-            component={Link}
-            to={paths.dashboard.management.knowledgeSources.configCreate}
-            leftSection={<IconPlus size={16} />}
-          >
-            Create Configuration
-          </Button>
-        </Group>
-      </Group>
-
-      <Card mb="md">
-        <Stack gap="md">
-          <Stack gap="sm">
-            <Text size="sm" c="dimmed">
-              Configure crawling sources to automatically extract and index content from websites, documents, and other data sources.
-              These configurations define how the system should crawl, scrape, and process content for your knowledge base.
-            </Text>
-          </Stack>
-
-          {/* Interactive Crawling Pipeline */}
-          <InteractiveCrawlingPipeline />
-
-          {!configs || configs.length === 0 ? (
-            <Card>
-              <Stack align="center" gap="md" py="xl">
-                <IconSettings size={48} color="var(--mantine-color-dimmed)" />
-                <Text size="lg" fw={500} c="dimmed">
-                  No configurations found
-                </Text>
-                <Text size="sm" c="dimmed" ta="center">
-                  Create your first knowledge source configuration to start processing documents
-                </Text>
+      <AppDataTable.Container>
+        <AppDataTable.Title
+          title="Crawling Sources"
+          description="Configure data sources to extract and index content into your knowledge base"
+          actions={
+            <Group gap="xs">
+              <ActionIcon variant="subtle" size="sm" onClick={() => refetch()} loading={isLoading}>
+                <IconRefresh size={14} />
+              </ActionIcon>
+              <PipelineDemoTrigger />
+              {canManage && (
                 <Button
                   component={Link}
                   to={paths.dashboard.management.knowledgeSources.configCreate}
-                  leftSection={<IconPlus size={16} />}
+                  leftSection={<IconPlus size={14} />}
+                  size="xs"
+                  variant="default"
                 >
-                  Create Configuration
+                  New Config
                 </Button>
-              </Stack>
-            </Card>
-          ) : (
-            <DataTable
-              records={configs}
-              columns={columns}
-              striped
-              highlightOnHover
-              minHeight={200}
-              sortStatus={sortStatus}
-              onSortStatusChange={setSortStatus}
-              page={page}
-              onPageChange={setPage}
-              recordsPerPage={10}
-              totalRecords={configs.length}
-              paginationSize="sm"
-              borderRadius="sm"
-              shadow="sm"
-              withTableBorder
-              styles={{
-                td: {
-                  verticalAlign: 'top',
-                  textAlign: 'left',
-                },
-                th: {
-                  verticalAlign: 'top',
-                  textAlign: 'left',
-                },
-              }}
-            />
-          )}
-        </Stack>
-      </Card>
+              )}
+            </Group>
+          }
+        />
+        <AppDataTable.Tabs
+          tabs={[
+            { value: '*', label: 'All', counter: configs?.length ?? 0 },
+            { value: 'web_scraping', label: 'Web Scraping', color: 'blue', counter: configs?.filter(c => c.content_source_type === 'web_scraping').length ?? 0 },
+            { value: 'local_files', label: 'Local Files', color: 'violet', counter: configs?.filter(c => c.content_source_type === 'local_files').length ?? 0 },
+            { value: 'confluence', label: 'Confluence', color: 'indigo', counter: configs?.filter(c => c.content_source_type === 'confluence').length ?? 0 },
+          ]}
+          onChange={setTabValue}
+        />
+        <AppDataTable.Content>
+          <AppDataTable.Table
+            records={visibleConfigs}
+            columns={columns}
+            fetching={isLoading}
+            striped
+            highlightOnHover
+            minHeight={200}
+            sortStatus={sortStatus}
+            onSortStatusChange={setSortStatus}
+            page={page}
+            onPageChange={setPage}
+            recordsPerPage={10}
+            totalRecords={visibleConfigs.length}
+            noRecordsText={AppDataTable.noRecordsText('configurations')}
+            recordsPerPageLabel={AppDataTable.recordsPerPageLabel('configurations')}
+            paginationText={AppDataTable.paginationText('configurations')}
+            onRecordsPerPageChange={() => {}}
+            recordsPerPageOptions={[10, 20, 50]}
+          />
+        </AppDataTable.Content>
+      </AppDataTable.Container>
 
       {/* Delete Modal */}
       <Modal

@@ -10,19 +10,58 @@ import json
 import time
 from typing import Any, Dict, Optional
 
+from datapilotflow.assistant_agent import create_assistant_agent_for_conversation
+from datapilotflow.domain.config import settings
+from datapilotflow.services.conversation.conversation_history_service import (
+    conversation_history_service,
+)
 from fastapi import APIRouter, Query, WebSocket
 from fastapi.websockets import WebSocketDisconnect
 from langchain_core.runnables import RunnableConfig
 from loguru import logger
 
-from datapilotflow.assistant_agent import create_assistant_agent_for_conversation
 from datapilotflow.api.routers.auth.auth_router import decode_access_token
-from datapilotflow.domain.config import settings
-from datapilotflow.services.conversation.conversation_history_service import (
-    conversation_history_service,
-)
 
 router = APIRouter(tags=["Assistant Agent WebSocket"])
+
+
+def _clean_for_json_serialization(obj: Any) -> Any:
+    """
+    Recursively clean object to make it JSON serializable.
+
+    Removes non-serializable objects like ToolRuntime, replacing them
+    with string representations or None.
+
+    Args:
+        obj: Object to clean
+
+    Returns:
+        JSON-serializable version of the object
+    """
+    if obj is None:
+        return None
+    elif isinstance(obj, (str, int, float, bool)):
+        return obj
+    elif isinstance(obj, dict):
+        return {k: _clean_for_json_serialization(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [_clean_for_json_serialization(item) for item in obj]
+    elif hasattr(obj, "__dict__"):
+        # For objects with __dict__, try to serialize their attributes
+        try:
+            # Check if it's a known non-serializable type
+            obj_type_name = type(obj).__name__
+            if "Runtime" in obj_type_name or "ToolRuntime" in obj_type_name:
+                return f"<{obj_type_name} object>"
+            # Try to get a string representation
+            return str(obj)
+        except Exception:
+            return f"<{type(obj).__name__} object>"
+    else:
+        try:
+            return str(obj)
+        except Exception:
+            return None
 
 
 async def _retrieve_persistent_files(agent_id: str) -> dict:
@@ -78,7 +117,9 @@ async def _retrieve_persistent_files(agent_id: str) -> dict:
         return files_dict
 
     except Exception as e:
-        logger.error(f"Error retrieving persistent files from store: {e}", exc_info=True)
+        logger.error(
+            f"Error retrieving persistent files from store: {e}", exc_info=True
+        )
         return {}
 
 
@@ -187,7 +228,9 @@ async def agent_query_assistant_websocket(
                     logger.info(
                         f"🔗 Conversation linked to agent {conversation.agent_id}"
                     )
-                    from datapilotflow.services.agent.agent_service import get_agent_service
+                    from datapilotflow.services.agent.agent_service import (
+                        get_agent_service,
+                    )
 
                     agent_service = get_agent_service()
                     agent = agent_service.get_agent(conversation.agent_id, user_id)
@@ -341,7 +384,9 @@ async def agent_query_assistant_websocket(
                 full_assistant_response = ""
 
                 # DEBUG: Log what we're sending to the agent
-                logger.debug(f"Sending query to agent (thread_id={config['configurable']['thread_id']})")
+                logger.debug(
+                    f"Sending query to agent (thread_id={config['configurable']['thread_id']})"
+                )
 
                 # Stream events from agent
                 stream_events_logged = False
@@ -380,13 +425,18 @@ async def agent_query_assistant_websocket(
 
                     # Stream tool calls
                     elif event_type == "on_tool_start":
+                        # Clean tool inputs for JSON serialization
+                        tool_inputs = _clean_for_json_serialization(
+                            event_data.get("input")
+                        )
+
                         await websocket.send_text(
                             json.dumps(
                                 {
                                     "type": "tool_call",
                                     "data": {
                                         "name": event_name,
-                                        "inputs": event_data.get("input"),
+                                        "inputs": tool_inputs,
                                         "status": "started",
                                     },
                                     "timestamp": time.time(),
@@ -395,7 +445,7 @@ async def agent_query_assistant_websocket(
                         )
 
                     elif event_type == "on_tool_end":
-                        # Serialize tool output (may contain LangChain message objects)
+                        # Serialize tool output (may contain LangChain message objects or ToolRuntime)
                         tool_output = event_data.get("output")
                         if tool_output:
                             # Convert to string if it's a complex object
@@ -405,6 +455,9 @@ async def agent_query_assistant_websocket(
                                 tool_output, (str, int, float, bool, dict, list)
                             ):
                                 tool_output = str(tool_output)
+
+                        # Clean for JSON serialization (remove ToolRuntime and similar objects)
+                        tool_output = _clean_for_json_serialization(tool_output)
 
                         await websocket.send_text(
                             json.dumps(
@@ -426,11 +479,13 @@ async def agent_query_assistant_websocket(
 
                         # Send todos if present
                         if "todos" in output:
+                            # Clean todos data for JSON serialization
+                            todos_data = _clean_for_json_serialization(output["todos"])
                             await websocket.send_text(
                                 json.dumps(
                                     {
                                         "type": "todos",
-                                        "data": output["todos"],
+                                        "data": todos_data,
                                         "timestamp": time.time(),
                                     }
                                 )
@@ -450,6 +505,9 @@ async def agent_query_assistant_websocket(
                                         and "content" in file_obj
                                     ):
                                         content = file_obj["content"]
+
+                            # Clean files data for JSON serialization
+                            files_data = _clean_for_json_serialization(files_data)
 
                             await websocket.send_text(
                                 json.dumps(
@@ -502,6 +560,10 @@ async def agent_query_assistant_websocket(
                             logger.debug(
                                 f"Sending {len(persistent_files)} persistent file(s)"
                             )
+                            # Clean persistent files for JSON serialization
+                            persistent_files = _clean_for_json_serialization(
+                                persistent_files
+                            )
                             await websocket.send_text(
                                 json.dumps(
                                     {
@@ -547,20 +609,78 @@ async def agent_query_assistant_websocket(
                     )
                 )
 
-            except Exception as e:
-                logger.error(f"Error processing query: {e}", exc_info=True)
+            except (TypeError, ValueError) as e:
+                # JSON serialization errors (like ToolRuntime not serializable)
+                error_msg = str(e)
+                if "not JSON serializable" in error_msg or "ToolRuntime" in error_msg:
+                    user_message = (
+                        "An internal error occurred while processing your request. "
+                        "This usually happens when a tool returns data that cannot be displayed. "
+                        "Please try again or contact support if the issue persists."
+                    )
+                else:
+                    user_message = f"An error occurred: {error_msg}"
+
+                logger.error(
+                    f"Serialization error processing query: {e}", exc_info=True
+                )
                 try:
                     await websocket.send_text(
                         json.dumps(
                             {
                                 "type": "error",
-                                "data": {"message": str(e)},
+                                "data": {"message": user_message},
                                 "timestamp": time.time(),
                             }
                         )
                     )
-                except:
-                    pass
+                except Exception as send_error:
+                    logger.error(
+                        f"Failed to send error message: {send_error}", exc_info=True
+                    )
+
+            except Exception as e:
+                # General errors
+                error_msg = str(e)
+                logger.error(f"Error processing query: {e}", exc_info=True)
+
+                # Provide user-friendly error message
+                if "ToolRuntime" in error_msg or "not JSON serializable" in error_msg:
+                    user_message = (
+                        "An internal error occurred while processing your request. "
+                        "This usually happens when a tool returns data that cannot be displayed. "
+                        "Please try again or contact support if the issue persists."
+                    )
+                elif "timeout" in error_msg.lower():
+                    user_message = (
+                        "The request took too long to process. "
+                        "Please try again with a simpler query or contact support."
+                    )
+                elif (
+                    "connection" in error_msg.lower() or "network" in error_msg.lower()
+                ):
+                    user_message = "A network error occurred. Please check your connection and try again."
+                else:
+                    # Generic user-friendly message for other errors
+                    user_message = (
+                        "An unexpected error occurred while processing your request. "
+                        "Please try again or contact support if the issue persists."
+                    )
+
+                try:
+                    await websocket.send_text(
+                        json.dumps(
+                            {
+                                "type": "error",
+                                "data": {"message": user_message},
+                                "timestamp": time.time(),
+                            }
+                        )
+                    )
+                except Exception as send_error:
+                    logger.error(
+                        f"Failed to send error message: {send_error}", exc_info=True
+                    )
 
     except Exception as e:
         logger.error(f"Fatal WebSocket error: {e}", exc_info=True)

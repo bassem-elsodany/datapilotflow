@@ -86,31 +86,22 @@ export function JobStatisticsCharts() {
 
   if (isLoading) {
     return (
-      <Card withBorder p="xl">
-        <Group justify="center">
-          <Loader size="lg" />
-          <Text>Loading statistics...</Text>
-        </Group>
-      </Card>
+      <Group gap="xs">
+        <Loader size="xs" />
+        <Text size="xs" c="dimmed">Loading statistics…</Text>
+      </Group>
     );
   }
 
-  if (!jobs || jobs.length === 0) {
-    return (
-      <Card withBorder p="xl">
-        <Text c="dimmed" ta="center">No job data available for charts</Text>
-      </Card>
-    );
-  }
+  if (!jobs || jobs.length === 0) return null;
 
   return (
-    <Grid>
-      {/* Status Distribution Pie Chart */}
+    <Grid gutter="sm">
       <Grid.Col span={{ base: 12, md: 6 }}>
-        <Card withBorder p="md">
-          <Stack gap="md">
-            <Title order={5}>Status Distribution</Title>
-            <ResponsiveContainer width="100%" height={240}>
+        <Card withBorder p="sm" radius="sm">
+          <Stack gap={4}>
+            <Text size="xs" fw={600} tt="uppercase" c="dimmed">Status Distribution</Text>
+            <ResponsiveContainer width="100%" height={160}>
               <PieChart>
                 <Pie
                   data={statusDistributionData}
@@ -118,28 +109,26 @@ export function JobStatisticsCharts() {
                   cy="50%"
                   labelLine={false}
                   label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
+                  outerRadius={60}
                   dataKey="value"
                 >
                   {statusDistributionData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip />
-                <Legend />
+                <Tooltip contentStyle={{ fontSize: 11 }} />
+                <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
               </PieChart>
             </ResponsiveContainer>
           </Stack>
         </Card>
       </Grid.Col>
 
-      {/* Processing Activity Over Time */}
       <Grid.Col span={{ base: 12, md: 6 }}>
-        <Card withBorder p="md">
-          <Stack gap="md">
-            <Group justify="space-between">
-              <Title order={5}>Processing Activity</Title>
+        <Card withBorder p="sm" radius="sm">
+          <Stack gap={4}>
+            <Group justify="space-between" align="center">
+              <Text size="xs" fw={600} tt="uppercase" c="dimmed">Processing Activity</Text>
               <Select
                 value={timeRange}
                 onChange={(value) => setTimeRange(value || '7')}
@@ -148,49 +137,34 @@ export function JobStatisticsCharts() {
                   { value: '14', label: 'Last 14 days' },
                   { value: '30', label: 'Last 30 days' },
                 ]}
-                w={140}
+                w={120}
                 size="xs"
               />
             </Group>
-            <ResponsiveContainer width="100%" height={240}>
-              <AreaChart data={documentsProcessedData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" style={{ fontSize: '12px' }} />
-                <YAxis yAxisId="left" style={{ fontSize: '12px' }} />
-                <YAxis yAxisId="right" orientation="right" style={{ fontSize: '12px' }} />
+            <ResponsiveContainer width="100%" height={160}>
+              <AreaChart data={documentsProcessedData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="date" style={{ fontSize: 10 }} tick={{ fontSize: 10 }} />
+                <YAxis yAxisId="left" style={{ fontSize: 10 }} tick={{ fontSize: 10 }} />
+                <YAxis yAxisId="right" orientation="right" style={{ fontSize: 10 }} tick={{ fontSize: 10 }} />
                 <Tooltip
+                  contentStyle={{ fontSize: 11 }}
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
                       return (
                         <Card withBorder p="xs" shadow="sm">
-                          <Text size="sm" fw={500}>{payload[0].payload.date}</Text>
-                          <Text size="sm" c="blue">Documents: {payload[0].value}</Text>
-                          <Text size="sm" c="green">Chunks: {payload[1]?.value}</Text>
+                          <Text size="xs" fw={500}>{payload[0].payload.date}</Text>
+                          <Text size="xs" c="blue">Docs: {payload[0].value}</Text>
+                          <Text size="xs" c="green">Chunks: {payload[1]?.value}</Text>
                         </Card>
                       );
                     }
                     return null;
                   }}
                 />
-                <Legend wrapperStyle={{ fontSize: '12px' }} />
-                <Area
-                  yAxisId="left"
-                  type="monotone"
-                  dataKey="documents"
-                  stroke="#228be6"
-                  fill="#228be6"
-                  fillOpacity={0.3}
-                  name="Documents"
-                />
-                <Area
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="chunks"
-                  stroke="#40c057"
-                  fill="#40c057"
-                  fillOpacity={0.3}
-                  name="Chunks"
-                />
+                <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                <Area yAxisId="left" type="monotone" dataKey="documents" stroke="#228be6" fill="#228be6" fillOpacity={0.2} name="Docs" />
+                <Area yAxisId="right" type="monotone" dataKey="chunks" stroke="#40c057" fill="#40c057" fillOpacity={0.2} name="Chunks" />
               </AreaChart>
             </ResponsiveContainer>
           </Stack>

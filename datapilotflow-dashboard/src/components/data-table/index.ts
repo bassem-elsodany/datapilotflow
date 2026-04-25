@@ -1,10 +1,10 @@
-import { DataTable as MantineDataTable } from 'mantine-datatable';
 import { capitalize } from '@/utilities/text';
 import { CardTitle } from '../card-title';
 import { DataTableActions } from './data-table-actions';
 import { DataTableContainer } from './data-table-container';
 import { DataTableContent } from './data-table-content';
 import { DataTableFilters } from './data-table-filters';
+import { DataTableTable } from './data-table-table';
 import { DataTableTabs } from './data-table-tabs';
 import { DataTableTextInputFilter } from './data-table-text-input-filter';
 import { useDataTable } from './use-data-table';
@@ -17,7 +17,7 @@ export const DataTable = {
   Tabs: DataTableTabs,
   Filters: DataTableFilters,
   Actions: DataTableActions,
-  Table: MantineDataTable,
+  Table: DataTableTable,
   TextInputFilter: DataTableTextInputFilter,
   recordsPerPageLabel: (resource: string) => `${capitalize(resource)} per page`,
   noRecordsText: (resource: string) => `No ${resource} found`,

@@ -22,7 +22,9 @@ import {
   Text,
   TextInput,
   Textarea,
-  Title
+  ThemeIcon,
+  Title,
+  Tooltip,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
@@ -33,7 +35,6 @@ import {
   IconDatabase,
   IconEdit,
   IconFilter,
-  IconKey,
   IconPlayerPlay,
   IconPlus,
   IconRefresh,
@@ -45,9 +46,11 @@ import {
   IconTrash
 } from '@tabler/icons-react';
 import sortBy from 'lodash/sortBy';
-import { DataTable, DataTableColumn, DataTableSortStatus } from 'mantine-datatable';
+import { DataTableTable as DataTable } from '@/components/data-table/data-table-table';
+import { DataTableColumn, DataTableSortStatus } from 'mantine-datatable';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { usePermissions } from '@/hooks/use-permissions';
 
 const breadcrumbs = [
   { label: 'Dashboard', href: paths.dashboard.root },
@@ -100,20 +103,12 @@ export default function ModelProviders() {
   const [isEditingApiKey, setIsEditingApiKey] = useState(false);
   const [originalApiKey, setOriginalApiKey] = useState<string>('');
   const navigate = useNavigate();
+  const { hasPermission, isAdmin } = usePermissions();
+  const canManage = isAdmin() || hasPermission('models:manage');
 
   // API hooks
   const { data: providers, isLoading, error, refetch, isFetching, isError } = useGetModelProviders();
 
-  // Debug logging
-  console.log('Model Providers Query State:', {
-    providers,
-    isLoading,
-    isFetching,
-    isError,
-    error,
-    dataLength: providers?.length || 0
-  });
-  console.log('JWT Token:', localStorage.getItem('jwt_token'));
   const updateProviderMutation = useUpdateModelProvider(selectedProvider?.id || '');
   const createProviderMutation = useCreateModelProvider();
   const testProviderMutation = useTestModelProvider();
@@ -433,122 +428,111 @@ export default function ModelProviders() {
       title: 'Provider',
       sortable: true,
       render: (provider) => (
-        <Group gap="sm">
-          {getProviderIcon(provider.provider_type)}
+        <Group gap="sm" wrap="nowrap">
+          <ThemeIcon
+            size="md"
+            variant="light"
+            color={provider.is_active ? 'blue' : 'gray'}
+            radius="sm"
+          >
+            {getProviderIcon(provider.provider_type)}
+          </ThemeIcon>
           <div>
-            <Text fw={500}>{provider.name}</Text>
-            <Text size="xs" c="dimmed">{provider.provider_type}</Text>
+            <Group gap={6} wrap="nowrap">
+              <Text fw={600} size="sm">{provider.name}</Text>
+              {!provider.is_active && (
+                <Badge size="xs" color="red" variant="dot">Inactive</Badge>
+              )}
+            </Group>
+            <Badge size="xs" variant="outline" color="gray" radius="sm">
+              {provider.provider_type}
+            </Badge>
           </div>
         </Group>
       ),
     },
     {
-      accessor: 'generative_models',
-      title: 'Generative Models',
-      render: (provider) => (
-        <Stack gap="xs">
-          <Text size="sm" fw={500}>{provider.generative?.models.length || 0} models</Text>
-          {provider.generative && (
-            <Stack gap={4}>
-              <Text size="xs" c="dimmed">
-                Max tokens: {provider.generative.config?.max_tokens || 'N/A'}
-              </Text>
-              <Text size="xs" c="dimmed">
-                Temperature: {provider.generative.config?.temperature || 'N/A'}
-              </Text>
-              <Text size="xs" c="dimmed">
-                Top P: {provider.generative.config?.top_p || 'N/A'}
-              </Text>
-            </Stack>
-          )}
-        </Stack>
-      ),
+      accessor: 'capabilities',
+      title: 'Capabilities',
+      render: (provider) => {
+        const caps: { label: string; color: string; models: string[] }[] = [];
+        if (provider.generative?.models.length)
+          caps.push({ label: `${provider.generative.models.length} Gen`, color: 'violet', models: provider.generative.models });
+        if (provider.embedding?.models.length)
+          caps.push({ label: `${provider.embedding.models.length} Embed`, color: 'blue', models: provider.embedding.models });
+        if (provider.reranker?.models.length)
+          caps.push({ label: `${provider.reranker.models.length} Rerank`, color: 'orange', models: provider.reranker.models });
+
+        if (caps.length === 0)
+          return <Text size="xs" c="dimmed">None configured</Text>;
+
+        return (
+          <Group gap="xs">
+            {caps.map((cap) => (
+              <Tooltip
+                key={cap.label}
+                label={cap.models.join(', ')}
+                multiline
+                maw={280}
+                withArrow
+              >
+                <Badge variant="light" color={cap.color} size="sm" style={{ cursor: 'default' }}>
+                  {cap.label}
+                </Badge>
+              </Tooltip>
+            ))}
+          </Group>
+        );
+      },
     },
     {
-      accessor: 'embedding_models',
-      title: 'Embedding Models',
+      accessor: 'endpoint',
+      title: 'Endpoint',
       render: (provider) => (
-        <Stack gap="xs">
-          <Text size="sm" fw={500}>{provider.embedding?.models.length || 0} models</Text>
-          {provider.embedding && (
-            <Stack gap={4}>
-              <Text size="xs" c="dimmed">
-                Max tokens: {provider.embedding.config?.max_input_tokens || 'N/A'}
-              </Text>
-              <Text size="xs" c="dimmed">
-                Batch size: {provider.embedding.config?.batch_size || 'N/A'}
-              </Text>
-            </Stack>
-          )}
-        </Stack>
-      ),
-    },
-    {
-      accessor: 'reranker_models',
-      title: 'Reranker Models',
-      render: (provider) => (
-        <Stack gap="xs">
-          <Text size="sm" fw={500}>{provider.reranker?.models.length || 0} models</Text>
-          {provider.reranker && (
-            <Stack gap={4}>
-              <Text size="xs" c="dimmed">
-                Max docs: {provider.reranker.config?.max_documents || 'N/A'}
-              </Text>
-              <Text size="xs" c="dimmed">
-                Top N: {provider.reranker.config?.top_n || 'N/A'}
-              </Text>
-            </Stack>
-          )}
-        </Stack>
-      ),
-    },
-    {
-      accessor: 'is_active',
-      title: 'Status',
-      render: (provider) => (
-        <Badge color={provider.is_active ? 'green' : 'red'} size="sm">
-          {provider.is_active ? 'Active' : 'Inactive'}
-        </Badge>
+        <Tooltip label={provider.endpoint} disabled={!provider.endpoint} withArrow>
+          <Text size="xs" c="dimmed" style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {provider.endpoint || '—'}
+          </Text>
+        </Tooltip>
       ),
     },
     {
       accessor: 'actions',
-      title: 'Actions',
+      title: '',
       textAlign: 'right',
       render: (provider) => (
-        <Group gap="xs" justify="flex-end">
-          <ActionIcon
-            variant="subtle"
-            color="gray"
-            onClick={() => handleViewDetails(provider)}
-            title="View Details"
-          >
-            <IconSettings size={16} />
-          </ActionIcon>
-          <ActionIcon
-            variant="subtle"
-            color={provider.is_active ? "green" : "gray"}
-            onClick={() => handleToggleActive(provider)}
-            title={provider.is_active ? "Deactivate" : "Activate"}
-          >
-            {provider.is_active ? <IconToggleRight size={16} /> : <IconToggleLeft size={16} />}
-          </ActionIcon>
-          <ActionIcon
-            variant="subtle"
-            color="blue"
-            onClick={() => navigate(paths.dashboard.management.modelProviders.providerEdit(provider.id))}
-            title="Edit"
-          >
-            <IconEdit size={16} />
-          </ActionIcon>
-          <ActionIcon
-            variant="subtle"
-            color="red"
-            onClick={() => handleDelete(provider)}
-            title="Delete"
-          >
-            <IconTrash size={16} />
-          </ActionIcon>
+        <Group gap={4} justify="flex-end" wrap="nowrap">
+          <Tooltip label={provider.is_active ? 'Deactivate' : 'Activate'} withArrow>
+            <ActionIcon
+              variant="subtle"
+              color={provider.is_active ? 'green' : 'gray'}
+              onClick={() => handleToggleActive(provider)}
+            >
+              {provider.is_active ? <IconToggleRight size={16} /> : <IconToggleLeft size={16} />}
+            </ActionIcon>
+          </Tooltip>
+          {canManage && (
+            <Tooltip label="Edit" withArrow>
+              <ActionIcon
+                variant="subtle"
+                color="blue"
+                onClick={() => navigate(paths.dashboard.management.modelProviders.providerEdit(provider.id))}
+              >
+                <IconEdit size={16} />
+              </ActionIcon>
+            </Tooltip>
+          )}
+          {canManage && (
+            <Tooltip label="Delete" withArrow>
+              <ActionIcon
+                variant="subtle"
+                color="red"
+                onClick={() => handleDelete(provider)}
+              >
+                <IconTrash size={16} />
+              </ActionIcon>
+            </Tooltip>
+          )}
         </Group>
       ),
     },
@@ -627,57 +611,54 @@ export default function ModelProviders() {
         breadcrumbs={breadcrumbs}
       >
         <Group>
-          <Button
-            variant="light"
-            leftSection={<IconRefresh size={16} />}
-            onClick={() => refetch()}
-          >
-            Refresh
-          </Button>
-          <Button
-            leftSection={<IconPlus size={16} />}
-            onClick={() => navigate(paths.dashboard.management.modelProviders.providerCreate)}
-          >
-            Add Provider
-          </Button>
+          <ActionIcon variant="subtle" size="sm" onClick={() => refetch()} loading={isFetching}>
+            <IconRefresh size={14} />
+          </ActionIcon>
+          {canManage && (
+            <Button
+              size="xs"
+              variant="default"
+              leftSection={<IconPlus size={14} />}
+              onClick={() => navigate(paths.dashboard.management.modelProviders.providerCreate)}
+            >
+              Add Provider
+            </Button>
+          )}
         </Group>
       </PageHeader>
 
-      <Card mb="md">
-        <Stack gap="sm">
-          <Text size="sm" c="dimmed">
-            Configure AI model providers to power embeddings, rerankers, and generative models. Set up API keys and endpoints to enable vector search, reranking, and AI responses across your apps.
-          </Text>
-          <Group gap="xs">
-            <IconBrain size={16} color="var(--mantine-color-blue-6)" />
-            <Text size="sm" fw={500}>Model Types:</Text>
-            <Text size="sm" c="dimmed">Embedding models for vector search, Reranker models for relevance ordering, Generative models for AI responses.</Text>
-          </Group>
-          <Group gap="xs">
-            <IconKey size={16} color="var(--mantine-color-green-6)" />
-            <Text size="sm" fw={500}>Supported Providers:</Text>
-            <Text size="sm" c="dimmed">OpenAI-compatible providers (e.g., OpenAI, Azure, OpenRouter, Groq, Fireworks, Together, Perplexity, DeepInfra, Cohere, AI21, Anthropic-compatible, Google-compatible, and other OpenAI-format providers).</Text>
-          </Group>
-          <Group gap="xs">
-            <IconSettings size={16} color="var(--mantine-color-orange-6)" />
-            <Text size="sm" fw={500}>Configuration:</Text>
-            <Text size="sm" c="dimmed">API keys, endpoints, and model lists for embedding / reranker / generative types. Test models before saving to verify connectivity.</Text>
-          </Group>
-        </Stack>
-      </Card>
-
-      <Card>
-        <DataTable
-          columns={columns as any}
-          records={Array.isArray(sortedRecords) ? sortedRecords : []}
-          selectedRecords={Array.isArray(selectedRecords) ? selectedRecords : []}
-          onSelectedRecordsChange={setSelectedRecords as any}
-          sortStatus={sortStatus}
-          onSortStatusChange={setSortStatus}
-          minHeight={200}
-          striped
-          highlightOnHover
-        />
+      <Card p={0}>
+        {sortedRecords.length === 0 ? (
+          <Center py={60}>
+            <Stack align="center" gap="sm">
+              <ThemeIcon size={48} variant="light" color="gray" radius="xl">
+                <IconDatabase size={24} />
+              </ThemeIcon>
+              <Text fw={500} size="sm">No providers configured</Text>
+              <Text size="xs" c="dimmed">Add your first model provider to get started</Text>
+              <Button
+                size="xs"
+                leftSection={<IconPlus size={14} />}
+                mt="xs"
+                onClick={() => navigate(paths.dashboard.management.modelProviders.providerCreate)}
+              >
+                Add Provider
+              </Button>
+            </Stack>
+          </Center>
+        ) : (
+          <DataTable
+            columns={columns as any}
+            records={Array.isArray(sortedRecords) ? sortedRecords : []}
+            selectedRecords={Array.isArray(selectedRecords) ? selectedRecords : []}
+            onSelectedRecordsChange={setSelectedRecords as any}
+            sortStatus={sortStatus}
+            onSortStatusChange={setSortStatus}
+            minHeight={200}
+            striped
+            highlightOnHover
+          />
+        )}
       </Card>
 
       {/* Edit Modal */}

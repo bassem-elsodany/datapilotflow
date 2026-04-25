@@ -23,6 +23,7 @@ from fastapi.responses import JSONResponse, Response
 from loguru import logger
 
 from datapilotflow.api.routers.auth.auth_router import get_current_user
+from datapilotflow.api.dependencies.permissions import require_permission
 from datapilotflow.domain.knowledge.knowledge_job import (
     JobStatus,
     KnowledgeJob,
@@ -57,7 +58,7 @@ router = APIRouter()
 )
 async def create_knowledge_source_config(
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:manage")),
     service: KnowledgeSourceService = Depends(get_knowledge_source_service),
 ):
     """
@@ -198,7 +199,7 @@ def list_knowledge_source_configs(
     content_source_type: Optional[str] = Query(
         None, description="Filter by content source type"
     ),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:read")),
     service: KnowledgeSourceService = Depends(get_knowledge_source_service),
 ):
     """List knowledge source configurations for the current user."""
@@ -220,7 +221,7 @@ def get_knowledge_source_config(
         None,
         description="Comma-separated list of related data to expand (content_filter,model_provider,url_source)",
     ),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:read")),
     service: KnowledgeSourceService = Depends(get_knowledge_source_service),
 ):
     """Get a specific knowledge source configuration with optional expanded related data."""
@@ -251,7 +252,7 @@ def get_knowledge_source_config(
 async def update_knowledge_source_config(
     config_id: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:manage")),
     service: KnowledgeSourceService = Depends(get_knowledge_source_service),
 ):
     """Update a knowledge source configuration."""
@@ -401,7 +402,7 @@ async def update_knowledge_source_config(
 @router.delete("/{config_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_knowledge_source_config(
     config_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:manage")),
     service: KnowledgeSourceService = Depends(get_knowledge_source_service),
 ):
     """Delete a knowledge source configuration."""
@@ -435,7 +436,7 @@ def delete_knowledge_source_config(
 def create_knowledge_job(
     config_id: str,
     job_data: KnowledgeJobCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:manage")),
     service: KnowledgeJobService = Depends(get_knowledge_job_service),
 ):
     """Create a new knowledge processing job from a configuration."""
@@ -465,7 +466,7 @@ def list_knowledge_jobs_for_config(
     limit: int = Query(
         100, ge=1, le=1000, description="Maximum number of records to return"
     ),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:read")),
     config_service: KnowledgeSourceService = Depends(get_knowledge_source_service),
     job_service: KnowledgeJobService = Depends(get_knowledge_job_service),
 ):
@@ -495,7 +496,7 @@ def list_knowledge_jobs_for_config(
 def get_url_source_config(
     config_id: str,
     url_source_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:read")),
     service: KnowledgeSourceService = Depends(get_knowledge_source_service),
 ):
     """Get a specific URL source configuration for a knowledge source config."""
@@ -535,7 +536,7 @@ def get_url_source_config(
 )
 def get_source_content_filter(
     config_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:read")),
     source_service: KnowledgeSourceService = Depends(get_knowledge_source_service),
     filter_service=Depends(get_llm_content_filter_service),
 ):
@@ -605,7 +606,7 @@ def get_source_content_filter(
 @router.post("/confluence/credentials/test")
 async def test_confluence_credentials(
     credentials: dict,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:read")),
 ):
     """
     Test Confluence credentials without storing them.

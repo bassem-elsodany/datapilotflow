@@ -18,25 +18,31 @@ Each talk focuses on a specific feature/capability with:
 **Hook:** "Your AI is giving you scattered answers? Here's why..."
 **Target:** Engineering teams, AI enthusiasts, CTOs
 
+### ✅ Talk 02: RAG as a Tool (MCP) — Build Capabilities, Not Monolith Assistants
+**Status:** Ready to publish
+**Focus:** Exposing RAG as an MCP tool (`knowledge_expert`) so any agent/app can reuse the same retrieval capability
+**Hook:** "Stop building one assistant. Build reusable capabilities."
+**Target:** Engineering teams, AI platform builders, CTOs
+
 ### 🔜 Upcoming Talks
 
-**Talk 02: Real-Time Knowledge Updates**
+**Talk 03: Real-Time Knowledge Updates**
 - Problem: Stale AI answers from outdated docs
 - Solution: Live sync, version control, instant updates
 
-**Talk 03: Multi-Agent Orchestration**
+**Talk 04: Multi-Agent Orchestration**
 - Problem: One AI can't handle complex workflows
 - Solution: RAG + Assistant agents working together
 
-**Talk 04: Enterprise Security & Privacy**
+**Talk 05: Enterprise Security & Privacy**
 - Problem: Can't use ChatGPT with sensitive data
 - Solution: Self-hosted, encrypted, audit trails
 
-**Talk 05: Integration Ecosystem**
+**Talk 06: Integration Ecosystem**
 - Problem: AI tools don't connect to your stack
 - Solution: MCP servers, APIs, webhooks
 
-**Talk 06: The Future of Knowledge Work**
+**Talk 07: The Future of Knowledge Work**
 - Vision: How AI assistants will transform work
 - DataPilotFlow's role in this future
 

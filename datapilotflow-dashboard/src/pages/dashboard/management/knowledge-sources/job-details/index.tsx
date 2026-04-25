@@ -3,24 +3,26 @@ import { useGetKnowledgeJob } from '@/api/resources/knowledge-jobs';
 import { useGetKnowledgeSourceConfigs } from '@/api/resources/knowledge-sources';
 import { useGetModelProviders } from '@/api/resources/model-providers';
 import { useGetKnowledgeVectorDBCollection } from '@/api/resources/vectordb-collections';
-import { InfoItem, InfoSectionCard } from '@/components/info-section-card';
 import { Page } from '@/components/page';
 import { PageHeader } from '@/components/page-header';
-import { StatCard } from '@/components/stat-card';
 import { paths } from '@/routes/paths';
 import {
   Alert,
   Badge,
-  Box,
   Button,
   Center,
   Code,
+  Divider,
+  Grid,
   Group,
   Loader,
-  SimpleGrid,
+  Paper,
+  ScrollArea,
   Stack,
   Text,
-  Timeline
+  ThemeIcon,
+  Timeline,
+  Tooltip,
 } from '@mantine/core';
 import {
   IconAlertCircle,
@@ -31,13 +33,12 @@ import {
   IconDatabase,
   IconEdit,
   IconFileText,
-  IconInfoCircle,
+  IconNetwork,
   IconPlayerPlay,
   IconRefresh,
   IconScissors,
   IconSettings,
-  IconNetwork,
-  IconX
+  IconX,
 } from '@tabler/icons-react';
 import { Link, useParams } from 'react-router-dom';
 
@@ -45,10 +46,11 @@ const breadcrumbs = [
   { label: 'Dashboard', href: paths.dashboard.root },
   { label: 'Management', href: paths.dashboard.management.root },
   { label: 'RAG Configuration', href: paths.dashboard.management.knowledgeSources.root },
+  { label: 'Processing Jobs', href: paths.dashboard.management.knowledgeSources.jobs },
   { label: 'Job Details' },
 ];
 
-const statusColors = {
+const statusColors: Record<string, string> = {
   created: 'cyan',
   pending: 'yellow',
   running: 'blue',
@@ -57,7 +59,7 @@ const statusColors = {
   cancelled: 'gray',
 };
 
-const statusIcons = {
+const statusIcons: Record<string, typeof IconCheck> = {
   created: IconCheck,
   pending: IconClock,
   running: IconPlayerPlay,
@@ -65,6 +67,36 @@ const statusIcons = {
   failed: IconX,
   cancelled: IconAlertCircle,
 };
+
+function Section({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <Paper withBorder radius="md" p="md">
+      <Group gap="xs" mb="sm">
+        <ThemeIcon size="sm" variant="light" color="gray" radius="sm">{icon}</ThemeIcon>
+        <Text size="xs" fw={700} tt="uppercase" c="dimmed" lts={0.5}>{title}</Text>
+      </Group>
+      <Divider mb="sm" />
+      {children}
+    </Paper>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <Group justify="space-between" gap="xs" wrap="nowrap" py={4}>
+      <Text size="xs" c="dimmed" fw={500} style={{ flexShrink: 0 }}>{label}</Text>
+      <div style={{ textAlign: 'right' }}>{children}</div>
+    </Group>
+  );
+}
+
+function BoolField({ label, value }: { label: string; value: boolean }) {
+  return (
+    <Field label={label}>
+      <Badge size="sm" variant="dot" color={value ? 'green' : 'gray'}>{value ? 'Yes' : 'No'}</Badge>
+    </Field>
+  );
+}
 
 export default function KnowledgeSourceJobDetails() {
   const { jobId } = useParams<{ jobId: string }>();
@@ -74,36 +106,29 @@ export default function KnowledgeSourceJobDetails() {
   });
   const { data: configs } = useGetKnowledgeSourceConfigs();
   const { data: modelProviders } = useGetModelProviders();
-
-  // Fetch VectorDB collection data - only when we have a valid collection ID
-  const { data: vectordbCollection, isLoading: isLoadingCollection } = useGetKnowledgeVectorDBCollection(
+  const { data: vectordbCollection } = useGetKnowledgeVectorDBCollection(
     job?.vectordb_collection_id || '',
     { enabled: !!job?.vectordb_collection_id }
   );
+  const { data: timelineEntries, error: timelineError } = useJobTimelineEntries(jobId || '', { limit: 10 });
+  const { data: timelineStats, error: statsError } = useJobTimelineStatistics(jobId || '');
 
-  // Fetch job timeline entries and statistics
-  const { data: timelineEntries, isLoading: isLoadingTimeline, error: timelineError } = useJobTimelineEntries(jobId || '', { limit: 10 });
-  const { data: timelineStats, isLoading: isLoadingStats, error: statsError } = useJobTimelineStatistics(jobId || '');
+  const getConfigName = (configId: string) =>
+    configs?.find(c => c.id === configId)?.name || 'Unknown';
 
-  // Helper function to get configuration name
-  const getConfigName = (configId: string) => {
-    const config = configs?.find(c => c.id === configId);
-    return config ? config.name : 'Unknown Configuration';
+  const getProviderName = (providerId: string) =>
+    modelProviders?.find(p => p.id === providerId)?.name || 'Unknown';
+
+  const formatDate = (d: string) => {
+    const date = new Date(d);
+    return isNaN(date.getTime()) ? '—' : date.toLocaleString();
   };
 
-  // Helper function to get model provider name
-  const getProviderName = (providerId: string) => {
-    const provider = modelProviders?.find(p => p.id === providerId);
-    return provider ? provider.name : 'Unknown Provider';
-  };
-
-  if (isLoading || isLoadingCollection || isLoadingTimeline || isLoadingStats) {
+  if (isLoading) {
     return (
       <Page title="Job Details">
         <PageHeader title="Job Details" breadcrumbs={breadcrumbs} />
-        <Center h={200}>
-          <Loader size="lg" />
-        </Center>
+        <Center h={200}><Loader size="lg" /></Center>
       </Page>
     );
   }
@@ -112,368 +137,216 @@ export default function KnowledgeSourceJobDetails() {
     return (
       <Page title="Job Details">
         <PageHeader title="Job Details" breadcrumbs={breadcrumbs} />
-        <Alert color="red" title="Error loading job">
-          {error?.message || 'Job not found'}
-        </Alert>
+        <Alert color="red" title="Error">{error?.message || 'Job not found'}</Alert>
       </Page>
     );
   }
 
-  const getStatusDescription = (status: string) => {
-    switch (status) {
-      case 'created':
-        return 'Job has been created and is ready to be processed';
-      case 'pending':
-        return 'Job is waiting to be processed';
-      case 'running':
-        return 'Job is currently being processed';
-      case 'completed':
-        return 'Job has completed successfully';
-      case 'failed':
-        return 'Job failed during processing';
-      case 'cancelled':
-        return 'Job was cancelled';
-      default:
-        return 'Unknown status';
-    }
-  };
+  const latestStatus = timelineEntries?.length ? timelineEntries[0].status : 'created';
+  const StatusIcon = statusIcons[latestStatus] || IconCheck;
+  const hasTimeline = !!timelineEntries && !timelineError;
+  const hasStats = !!timelineStats && !statsError;
 
-  // Get the latest status from timeline entries, default to 'created' if no entries exist
-  const latestStatus = timelineEntries && timelineEntries.length > 0 ? timelineEntries[0].status : 'created';
-  const StatusIcon = statusIcons[latestStatus];
-
-  // Check if timeline data is available (not 404 error)
-  const hasTimelineData = timelineEntries !== undefined && !timelineError;
-  const hasStatsData = timelineStats !== undefined && !statsError;
-
-  // Create timeline items from job timeline entries
-  const timelineItems = timelineEntries?.map((entry, index) => ({
-    title: `Execution #${timelineEntries.length - index}`,
-    description: `${entry.status} - ${entry.documents_processed} docs, ${entry.chunks_created} chunks`,
-    icon: statusIcons[entry.status],
-    color: statusColors[entry.status],
-    entry: entry,
-  })) || [];
+  const latest = timelineEntries?.[0];
+  const docsProcessed = latest?.documents_processed ?? 0;
+  const chunksCreated = latest?.chunks_created ?? 0;
+  const totalExec = timelineStats?.statistics?.total_executions ?? 0;
+  const successExec = timelineStats?.statistics?.successful_executions ?? 0;
+  const failedExec = timelineStats?.statistics?.failed_executions ?? 0;
 
   return (
-    <Page title="Job Details">
-      <PageHeader
-        title="Job Details"
-        breadcrumbs={breadcrumbs}
-      />
-
-      <Group justify="space-between" mb="md">
-        <Button
-          variant="subtle"
-          leftSection={<IconArrowLeft size={16} />}
-          component={Link}
-          to={paths.dashboard.management.knowledgeSources.jobs}
-        >
-          Back to Jobs
-        </Button>
-        <Group>
-          <Button
-            variant="filled"
-            leftSection={<IconEdit size={16} />}
-            component={Link}
-            to={`/dashboard/management/knowledge-sources/job-edit/${jobId}`}
-          >
-            Edit Job
+    <Page title={job.name}>
+      <PageHeader title={job.name} breadcrumbs={breadcrumbs}>
+        <Group gap="sm">
+          <Button component={Link} to={paths.dashboard.management.knowledgeSources.jobs} leftSection={<IconArrowLeft size={14} />} variant="subtle" size="sm">
+            Back
           </Button>
-          <Button
-            variant="subtle"
-            leftSection={<IconRefresh size={16} />}
-            onClick={() => refetch()}
-          >
+          <Button variant="subtle" size="sm" leftSection={<IconRefresh size={14} />} onClick={() => refetch()}>
             Refresh
           </Button>
+          <Button component={Link} to={`/dashboard/management/knowledge-sources/job-edit/${jobId}`} leftSection={<IconEdit size={14} />} variant="light" size="sm">
+            Edit
+          </Button>
         </Group>
-      </Group>
+      </PageHeader>
 
-      <Stack gap="xl">
-        {/* Job Header with Status */}
-        <Box
-          style={{
-            background: `linear-gradient(135deg, #45c9bb15 0%, #87cbbc20 100%)`,
-            border: '1px solid #45c9bb30',
-            borderRadius: '16px',
-            padding: '20px',
-            position: 'relative',
-            overflow: 'hidden'
-          }}
-        >
-          <Box
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              height: '4px',
-              background: 'linear-gradient(90deg, #45c9bb 0%, #87cbbc 100%)'
-            }}
-          />
-          <Group justify="space-between" align="flex-start">
-            <Stack gap="xs">
-              <Text size="24px" fw={700} style={{ color: '#45c9bb' }}>
-                {job.name}
-              </Text>
-              {job.description && (
-                <Text size="sm" c="dimmed" style={{ maxWidth: '600px' }}>
-                  {job.description}
-                </Text>
-              )}
-              <Group gap="sm" mt={4}>
-                <Badge leftSection={<StatusIcon size={12} />} color={statusColors[latestStatus]} size="sm" variant="light">
+      <Stack gap="md">
+        {/* Summary bar */}
+        <Paper withBorder radius="md" p="md">
+          <Group justify="space-between" align="flex-start" wrap="nowrap">
+            <Stack gap={4} style={{ minWidth: 0 }}>
+              {job.description && <Text size="sm" c="dimmed" lineClamp={2}>{job.description}</Text>}
+              <Group gap="xs" mt={2}>
+                <Badge size="sm" leftSection={<StatusIcon size={10} />} color={statusColors[latestStatus]} variant="light">
                   {latestStatus}
                 </Badge>
-                <Text size="xs" c="dimmed">
-                  {getStatusDescription(latestStatus)}
-                </Text>
+                <Badge size="sm" variant="light" color="gray">
+                  {getConfigName(job.knowledge_source_config_id)}
+                </Badge>
               </Group>
             </Stack>
+            <Link to={`/dashboard/management/knowledge-sources/configs/${job.knowledge_source_config_id}`} style={{ textDecoration: 'none', flexShrink: 0 }}>
+              <Button variant="subtle" size="xs" rightSection={<IconSettings size={12} />}>View Config</Button>
+            </Link>
           </Group>
-        </Box>
+        </Paper>
 
-        {/* Stats Cards */}
-        <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="lg">
-          <Link
-            to={`/dashboard/management/knowledge-sources/configs/${job.knowledge_source_config_id}`}
-            style={{ textDecoration: 'none', display: 'block' }}
-          >
-            <Box style={{ cursor: 'pointer', transition: 'transform 0.2s' }}
-              sx={{ '&:hover': { transform: 'translateY(-2px)' } }}>
-              <StatCard
-                title="Configuration"
-                value={getConfigName(job.knowledge_source_config_id)}
-                icon={<IconSettings size={24} />}
-                color="#45c9bb"
-                gradientFrom="#45c9bb"
-                gradientTo="#87cbbc"
-                description="Click to view details"
-              />
-            </Box>
-          </Link>
-          <StatCard
-            title="Documents Processed"
-            value={timelineEntries && timelineEntries.length > 0 ? timelineEntries[0].documents_processed : 0}
-            icon={<IconFileText size={24} />}
-            color="#bbe773"
-            gradientFrom="#bbe773"
-            gradientTo="#9dd245"
-            description="Latest execution"
-          />
-          <StatCard
-            title="Chunks Created"
-            value={timelineEntries && timelineEntries.length > 0 ? timelineEntries[0].chunks_created : 0}
-            icon={<IconScissors size={24} />}
-            color="#ddde65"
-            gradientFrom="#ddde65"
-            gradientTo="#bbe773"
-            description="Latest execution"
-          />
-          <StatCard
-            title="Total Executions"
-            value={hasStatsData && timelineStats ? timelineStats.statistics.total_executions : 0}
-            icon={<IconPlayerPlay size={24} />}
-            color="#3bc57d"
-            gradientFrom="#3bc57d"
-            gradientTo="#45c9bb"
-            description={hasStatsData && timelineStats && timelineStats.statistics.successful_executions > 0
-              ? `${timelineStats.statistics.successful_executions} successful`
-              : 'No executions yet'}
-          />
-        </SimpleGrid>
+        {/* Stat pills */}
+        <Group gap="md" grow>
+          <Paper withBorder p="md" radius="md">
+            <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb={4}>Documents</Text>
+            <Text size="xl" fw={700}>{docsProcessed}</Text>
+          </Paper>
+          <Paper withBorder p="md" radius="md">
+            <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb={4}>Chunks Created</Text>
+            <Text size="xl" fw={700}>{chunksCreated}</Text>
+          </Paper>
+          <Paper withBorder p="md" radius="md">
+            <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb={4}>Total Executions</Text>
+            <Text size="xl" fw={700}>{totalExec}</Text>
+          </Paper>
+          <Paper withBorder p="md" radius="md">
+            <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb={4}>Successful</Text>
+            <Text size="xl" fw={700} c="green">{successExec}</Text>
+          </Paper>
+          {failedExec > 0 && (
+            <Paper withBorder p="md" radius="md">
+              <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb={4}>Failed</Text>
+              <Text size="xl" fw={700} c="red">{failedExec}</Text>
+            </Paper>
+          )}
+        </Group>
 
+        {/* Two-column detail grid */}
+        <Grid gutter="md">
+          {/* Left */}
+          <Grid.Col span={{ base: 12, md: 6 }}>
+            <Stack gap="md">
+              {vectordbCollection && (
+                <Section title="Vector Database" icon={<IconDatabase size={12} />}>
+                  <Field label="Collection"><Text size="sm" fw={500} truncate>{vectordbCollection.collection_name}</Text></Field>
+                  <Field label="Dimension"><Text size="sm">{vectordbCollection.vector_dimension}</Text></Field>
+                  <Field label="Provider"><Text size="sm">{getProviderName(vectordbCollection.embedding_model_provider_id)}</Text></Field>
+                  <Field label="Model"><Text size="sm">{vectordbCollection.embedding_model_name}</Text></Field>
+                  {vectordbCollection.description && (
+                    <Field label="Description"><Text size="xs" c="dimmed">{vectordbCollection.description}</Text></Field>
+                  )}
+                </Section>
+              )}
 
-        {/* Configuration Cards */}
-        <SimpleGrid cols={{ base: 1, md: 2, lg: 3 }} spacing="lg">
-          {/* Vector Database Collection */}
-          {vectordbCollection && (
-            <InfoSectionCard
-              title="Vector Database"
-              icon={<IconDatabase size={20} />}
-              color="#bbe773"
-              gradientFrom="#bbe773"
-              gradientTo="#9dd245"
-            >
-              <Group gap="md" style={{ flexWrap: 'wrap' }}>
-                <InfoItem label="Collection Name" value={vectordbCollection.collection_name} />
-                <InfoItem label="Vector Dimension" value={vectordbCollection.vector_dimension} />
-                <InfoItem label="Embedding Provider" value={getProviderName(vectordbCollection.embedding_model_provider_id)} fullWidth />
-                <InfoItem label="Embedding Model" value={vectordbCollection.embedding_model_name} fullWidth />
-                {vectordbCollection.description && (
-                  <InfoItem label="Description" value={vectordbCollection.description} fullWidth />
+              <Section title="Document Splitting" icon={<IconScissors size={12} />}>
+                <Field label="Type">
+                  <Badge size="sm" variant="light" color="orange">{job.document_splitter?.splitter_type || 'text'}</Badge>
+                </Field>
+                {(job.document_splitter?.splitter_type === 'text' || job.document_splitter?.splitter_type === 'document' || !job.document_splitter?.splitter_type) && (
+                  <>
+                    <Field label="Chunk Size"><Text size="sm">{job.document_splitter?.chunk_size ?? 256} tokens</Text></Field>
+                    <Field label="Overlap"><Text size="sm">{job.document_splitter?.chunk_overlap ?? 32} tokens</Text></Field>
+                  </>
                 )}
-              </Group>
-            </InfoSectionCard>
+                {job.document_splitter?.headers_to_split_on?.length > 0 && (
+                  <>
+                    <Divider my={6} />
+                    <Text size="xs" c="dimmed" fw={600} tt="uppercase" mb={4}>Headers</Text>
+                    <Text size="xs" c="dimmed">{job.document_splitter.headers_to_split_on.map(([p, n]: [string, string]) => `${p} (${n})`).join(', ')}</Text>
+                  </>
+                )}
+              </Section>
+            </Stack>
+          </Grid.Col>
+
+          {/* Right */}
+          <Grid.Col span={{ base: 12, md: 6 }}>
+            <Stack gap="md">
+              <Section title="Processing Settings" icon={<IconCpu size={12} />}>
+                <Field label="Batch Size"><Text size="sm">{job.batch_size} documents</Text></Field>
+                <BoolField label="Save to File" value={!!job.save_to_file} />
+                <BoolField label="Consolidated File" value={!!job.write_consolidated_file} />
+                <BoolField label="Clear Collection" value={!!job.clear_collection_before_start} />
+                <BoolField label="Check Duplicates" value={!!job.check_duplicates_before_insert} />
+              </Section>
+
+              <Section title="Metadata" icon={<IconSettings size={12} />}>
+                <Stack gap={2} mb={6}>
+                  <Text size="xs" c="dimmed" fw={600} tt="uppercase">Job ID</Text>
+                  <Code style={{ fontSize: 11, wordBreak: 'break-all' }}>{job.id}</Code>
+                </Stack>
+                {job.vectordb_collection_id && (
+                  <Stack gap={2} mb={6}>
+                    <Text size="xs" c="dimmed" fw={600} tt="uppercase">Collection ID</Text>
+                    <Code style={{ fontSize: 11, wordBreak: 'break-all' }}>{job.vectordb_collection_id}</Code>
+                  </Stack>
+                )}
+                <Field label="Created"><Text size="xs">{formatDate(job.created_at)}</Text></Field>
+                {job.created_by && <Field label="Created By"><Text size="xs">{job.created_by}</Text></Field>}
+                {latest?.started_at && <Field label="Last Started"><Text size="xs">{formatDate(latest.started_at)}</Text></Field>}
+                {latest?.completed_at && <Field label="Last Completed"><Text size="xs">{formatDate(latest.completed_at)}</Text></Field>}
+              </Section>
+            </Stack>
+          </Grid.Col>
+        </Grid>
+
+        {/* Execution Timeline — full width */}
+        <Section title="Execution Timeline" icon={<IconClock size={12} />}>
+          {hasStats && timelineStats && (
+            <Group gap="xs" mb="md">
+              <Badge variant="light" color="blue" size="sm">{totalExec} total</Badge>
+              <Badge variant="light" color="green" size="sm">{successExec} successful</Badge>
+              {failedExec > 0 && <Badge variant="light" color="red" size="sm">{failedExec} failed</Badge>}
+            </Group>
           )}
 
-          {/* Document Splitting */}
-          <InfoSectionCard
-            title="Document Splitting"
-            icon={<IconScissors size={20} />}
-            color="#ddde65"
-            gradientFrom="#ddde65"
-            gradientTo="#bbe773"
-          >
-            <Group gap="md" style={{ flexWrap: 'wrap' }}>
-              <InfoItem label="Splitter Type" value={job.document_splitter?.splitter_type || 'text'} />
-              {(job.document_splitter?.splitter_type === 'text' || job.document_splitter?.splitter_type === 'document') && (
-                <>
-                  <InfoItem label="Chunk Size" value={`${job.document_splitter?.chunk_size || 256} tokens`} />
-                  <InfoItem label="Chunk Overlap" value={`${job.document_splitter?.chunk_overlap || 32} tokens`} />
-                </>
-              )}
-              {job.document_splitter?.splitter_type === 'document' && job.document_splitter?.headers_to_split_on && (
-                <InfoItem
-                  label="Headers to Split On"
-                  value={job.document_splitter.headers_to_split_on.map(([pattern, name]) => `${pattern} (${name})`).join(', ')}
-                  fullWidth
-                />
-              )}
-            </Group>
-          </InfoSectionCard>
-
-          {/* Processing Settings */}
-          <InfoSectionCard
-            title="Processing Settings"
-            icon={<IconCpu size={20} />}
-            color="#3bc57d"
-            gradientFrom="#3bc57d"
-            gradientTo="#45c9bb"
-          >
-            <Group gap="md" style={{ flexWrap: 'wrap' }}>
-              <InfoItem label="Batch Size" value={`${job.batch_size} documents`} />
-              <InfoItem label="Save to File" value={job.save_to_file ? '✓ Yes' : '✗ No'} />
-              <InfoItem label="Consolidated File" value={job.write_consolidated_file ? '✓ Yes' : '✗ No'} />
-              <InfoItem label="Clear Collection" value={job.clear_collection_before_start ? '✓ Yes' : '✗ No'} />
-              <InfoItem label="Check Duplicates" value={job.check_duplicates_before_insert ? '✓ Yes' : '✗ No'} />
-            </Group>
-          </InfoSectionCard>
-        </SimpleGrid>
-
-        {/* Job Information */}
-        <InfoSectionCard
-          title="Job Information"
-          icon={<IconInfoCircle size={20} />}
-          color="#ae89ae"
-          gradientFrom="#ae89ae"
-          gradientTo="#87cbbc"
-        >
-          <Group gap="md" style={{ flexWrap: 'wrap' }}>
-            <InfoItem label="Job ID" value={<Code>{job.id}</Code>} />
-            <InfoItem label="Collection ID" value={<Code>{job.vectordb_collection_id}</Code>} />
-            <InfoItem
-              label="Created"
-              value={(() => {
-                const date = new Date(job.created_at);
-                return isNaN(date.getTime()) ? 'Invalid Date' : date.toLocaleString();
-              })()}
-            />
-            <InfoItem label="Created By" value={job.created_by} />
-            {timelineEntries && timelineEntries.length > 0 && timelineEntries[0] && (
-              <>
-                {timelineEntries[0].started_at && (
-                  <InfoItem
-                    label="Latest Started"
-                    value={(() => {
-                      const date = new Date(timelineEntries[0].started_at);
-                      return isNaN(date.getTime()) ? 'Invalid Date' : date.toLocaleString();
-                    })()}
-                  />
-                )}
-                {timelineEntries[0].completed_at && (
-                  <InfoItem
-                    label="Latest Completed"
-                    value={(() => {
-                      const date = new Date(timelineEntries[0].completed_at);
-                      return isNaN(date.getTime()) ? 'Invalid Date' : date.toLocaleString();
-                    })()}
-                  />
-                )}
-              </>
-            )}
-          </Group>
-        </InfoSectionCard>
-
-        {/* Timeline */}
-        <InfoSectionCard
-          title="Job Execution Timeline"
-          icon={<IconClock size={20} />}
-          color="#45c9bb"
-          gradientFrom="#45c9bb"
-          gradientTo="#87cbbc"
-        >
-          <Stack gap="md">
-            {hasStatsData && timelineStats && (
-              <Group gap="md">
-                <Badge color="blue" variant="light" size="lg">
-                  {timelineStats.statistics.total_executions} executions
-                </Badge>
-                <Badge color="green" variant="light" size="lg">
-                  {timelineStats.statistics.successful_executions} successful
-                </Badge>
-                {timelineStats.statistics.failed_executions > 0 && (
-                  <Badge color="red" variant="light" size="lg">
-                    {timelineStats.statistics.failed_executions} failed
-                  </Badge>
-                )}
-              </Group>
-            )}
-
-            {hasTimelineData && timelineItems.length > 0 ? (
-              <Box style={{ maxHeight: '500px', overflowY: 'auto', paddingRight: '8px' }}>
-                <Timeline active={timelineItems.length - 1}>
-                  {timelineItems.map((item, index) => (
+          {hasTimeline && timelineEntries && timelineEntries.length > 0 ? (
+            <ScrollArea h={400} scrollbarSize={6}>
+              <Timeline active={timelineEntries.length - 1} pr={8}>
+                {timelineEntries.map((entry, index) => {
+                  const EntryIcon = statusIcons[entry.status] || IconCheck;
+                  return (
                     <Timeline.Item
-                      key={item.entry.id}
-                      bullet={<item.icon size={12} />}
-                      title={item.title}
-                      color={item.color}
+                      key={entry.id}
+                      bullet={<EntryIcon size={12} />}
+                      color={statusColors[entry.status]}
+                      title={
+                        <Group gap="xs">
+                          <Text size="sm" fw={600}>Execution #{timelineEntries.length - index}</Text>
+                          <Badge size="xs" color={statusColors[entry.status]} variant="light">{entry.status}</Badge>
+                        </Group>
+                      }
                     >
-                      <Stack gap="xs">
-                        <Text size="sm" c="dimmed">
-                          {item.description}
-                        </Text>
-                        <Group gap="md" style={{ flexWrap: 'wrap' }}>
-                          <Text size="xs" c="dimmed">
-                            Started: {item.entry.started_at ? (() => {
-                              const date = new Date(item.entry.started_at);
-                              return isNaN(date.getTime()) ? 'Invalid Date' : date.toLocaleString();
-                            })() : 'Not started'}
-                          </Text>
-                          {item.entry.completed_at && (
-                            <Text size="xs" c="dimmed">
-                              Completed: {(() => {
-                                const date = new Date(item.entry.completed_at);
-                                return isNaN(date.getTime()) ? 'Invalid Date' : date.toLocaleString();
-                              })()}
-                            </Text>
-                          )}
-                          {item.entry.processing_time_seconds > 0 && (
-                            <Text size="xs" c="dimmed">
-                              Duration: {item.entry.processing_time_seconds}s
-                            </Text>
+                      <Stack gap={4} mt={4}>
+                        <Group gap="md">
+                          <Text size="xs" c="dimmed">{entry.documents_processed} docs · {entry.chunks_created} chunks</Text>
+                          {entry.processing_time_seconds > 0 && (
+                            <Text size="xs" c="dimmed">{entry.processing_time_seconds}s</Text>
                           )}
                         </Group>
-                        {item.entry.error_message && (
-                          <Alert color="red" variant="light">
-                            <Text size="xs">{item.entry.error_message}</Text>
+                        <Group gap="md">
+                          {entry.started_at && (
+                            <Tooltip label="Started" withArrow>
+                              <Text size="xs" c="dimmed">{formatDate(entry.started_at)}</Text>
+                            </Tooltip>
+                          )}
+                          {entry.completed_at && (
+                            <Tooltip label="Completed" withArrow>
+                              <Text size="xs" c="dimmed">→ {formatDate(entry.completed_at)}</Text>
+                            </Tooltip>
+                          )}
+                        </Group>
+                        {entry.error_message && (
+                          <Alert color="red" variant="light" p="xs" mt={4}>
+                            <Text size="xs">{entry.error_message}</Text>
                           </Alert>
                         )}
                       </Stack>
                     </Timeline.Item>
-                  ))}
-                </Timeline>
-              </Box>
-            ) : (
-              <Alert color="blue" title="No Executions Yet" variant="light">
-                <Text size="sm">This job hasn't been executed yet. Timeline entries will appear here after the job is run.</Text>
-              </Alert>
-            )}
-          </Stack>
-        </InfoSectionCard>
-
+                  );
+                })}
+              </Timeline>
+            </ScrollArea>
+          ) : (
+            <Text size="sm" c="dimmed">No executions yet — run this job to see timeline entries.</Text>
+          )}
+        </Section>
       </Stack>
     </Page>
   );

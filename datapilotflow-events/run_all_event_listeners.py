@@ -119,12 +119,18 @@ class EventListenerManager:
         try:
             logger.debug(f"Starting {config['name']} in separate process...")
 
-            # Start the process
+            # Resolve the directory containing this script — child runner scripts
+            # (run_job_event_listener.py, etc.) are siblings of this file.
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            script_path = os.path.join(script_dir, config["script"])
+
+            # Start the process — each listener configures its own loguru file via
+            # setup_service_logging(), so stdout/stderr can be suppressed here.
             proc = subprocess.Popen(
-                [sys.executable, config["script"]],
+                [sys.executable, script_path],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
-                cwd=os.path.dirname(os.path.abspath(__file__)),
+                cwd=script_dir,
             )
 
             # Store the process

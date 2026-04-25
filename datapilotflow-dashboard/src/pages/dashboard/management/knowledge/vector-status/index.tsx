@@ -46,7 +46,8 @@ import {
   IconRefresh,
   IconSearch
 } from '@tabler/icons-react';
-import { DataTable, DataTableColumn, DataTableSortStatus } from 'mantine-datatable';
+import { DataTableTable as DataTable } from '@/components/data-table/data-table-table';
+import { DataTableColumn, DataTableSortStatus } from 'mantine-datatable';
 import React, { useMemo, useState } from 'react';
 import {
   Bar,

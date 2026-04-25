@@ -15,6 +15,7 @@ from loguru import logger
 from pydantic import BaseModel, Field
 
 from datapilotflow.api.routers.auth.auth_router import get_current_user
+from datapilotflow.api.dependencies.permissions import require_permission
 from datapilotflow.domain.tool import PromptBasedToolConfig, Tool, ToolType
 from datapilotflow.domain.user import User
 from datapilotflow.services.model_provider.model_provider_service import (
@@ -200,7 +201,7 @@ def tool_to_response(_id: str, tool: Tool) -> ToolResponse:
 @router.post("", response_model=ToolResponse, status_code=status.HTTP_201_CREATED)
 async def create_tool(
     request: CreateToolRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("tools:manage")),
 ):
     """
     Create a new tool.
@@ -289,7 +290,7 @@ async def create_tool(
 @router.get("", response_model=List[ToolResponse])
 async def list_tools(
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("tools:read")),
 ):
     """
     List all tools for the authenticated user.
@@ -327,7 +328,7 @@ async def list_tools(
 @router.get("/{tool_id}", response_model=ToolResponse)
 async def get_tool(
     tool_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("tools:read")),
 ):
     """
     Get a specific tool by ID.
@@ -375,7 +376,7 @@ async def get_tool(
 async def update_tool(
     tool_id: str,
     request: UpdateToolRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("tools:manage")),
 ):
     """
     Update an existing tool.
@@ -479,7 +480,7 @@ async def update_tool(
 @router.delete("/{tool_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_tool(
     tool_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("tools:manage")),
 ):
     """
     Delete a tool.
@@ -583,7 +584,7 @@ async def delete_tool(
 )
 async def generate_tool_instructions(
     request: GenerateInstructionsRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("tools:manage")),
 ) -> GenerateInstructionsResponse:
     """
     Generate tool orchestration instructions using LLM.
@@ -791,7 +792,7 @@ Remember: Be practical, concise, and actionable. The supervisor agent will follo
 )
 async def generate_assistant_instructions(
     request: GenerateAssistantInstructionsRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("tools:manage")),
 ) -> GenerateAssistantInstructionsResponse:
     """
     Generate complete assistant instructions using LLM.

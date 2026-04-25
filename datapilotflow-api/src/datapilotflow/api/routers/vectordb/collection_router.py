@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from loguru import logger
 
 from datapilotflow.api.routers.auth.auth_router import get_current_user
+from datapilotflow.api.dependencies.permissions import require_permission
 from datapilotflow.domain.user import User
 from datapilotflow.domain.vectordb import (
     CollectionInfo,
@@ -25,7 +26,7 @@ router = APIRouter()
 
 @router.get("/collections", response_model=List[CollectionInfo])
 def list_collections(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:read")),
     service=Depends(get_vectordb_collection_service),
 ):
     """
@@ -48,7 +49,7 @@ def list_collections(
 @router.get("/collections/{collection_id}", response_model=CollectionInfo)
 def get_collection(
     collection_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:read")),
     service=Depends(get_vectordb_collection_service),
 ):
     """
@@ -84,7 +85,7 @@ def get_collection(
 @router.get("/collections/{collection_id}/schema", response_model=CollectionSchema)
 def get_collection_schema(
     collection_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:read")),
     service=Depends(get_vectordb_collection_service),
 ):
     """
@@ -120,7 +121,7 @@ def get_collection_schema(
 @router.get("/collections/{collection_id}/stats", response_model=CollectionStats)
 def get_collection_stats(
     collection_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:read")),
     service=Depends(get_vectordb_collection_service),
 ):
     """
@@ -165,7 +166,7 @@ def get_collection_records(
     sort_order: Optional[str] = Query(
         "desc", regex="^(asc|desc)$", description="Sort order"
     ),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:read")),
     service=Depends(get_vectordb_collection_service),
 ):
     """

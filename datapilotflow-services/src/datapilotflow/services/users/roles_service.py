@@ -220,18 +220,28 @@ class RolesService:
             List of permission dictionaries
         """
         try:
-            # Define available permissions
             permissions = [
-                {"name": "user:manage", "description": "Manage users", "category": "user_management"},
-                {"name": "user:read", "description": "Read user information", "category": "user_management"},
-                {"name": "interview:manage", "description": "Manage interviews", "category": "interview_management"},
-                {"name": "interview:read", "description": "Read interview information", "category": "interview_management"},
-                {"name": "knowledge:manage", "description": "Manage knowledge base", "category": "knowledge_management"},
-                {"name": "knowledge:read", "description": "Read knowledge base", "category": "knowledge_management"},
-                {"name": "analytics:manage", "description": "Manage analytics", "category": "analytics"},
-                {"name": "analytics:read", "description": "Read analytics", "category": "analytics"},
-                {"name": "system:manage", "description": "Manage system settings", "category": "system"},
-                {"name": "system:read", "description": "Read system information", "category": "system"}
+                # User management
+                {"name": "user:manage", "description": "Create, update and delete users and roles", "category": "user_management"},
+                {"name": "user:read", "description": "View users and role assignments", "category": "user_management"},
+                # Knowledge pipeline
+                {"name": "knowledge:manage", "description": "Create/edit knowledge sources, run ingestion jobs, manage vector collections", "category": "knowledge"},
+                {"name": "knowledge:read", "description": "View knowledge sources, jobs and vector collections", "category": "knowledge"},
+                # Conversations
+                {"name": "conversation:manage", "description": "Create and manage AI conversations", "category": "conversations"},
+                {"name": "conversation:read", "description": "View conversations and history", "category": "conversations"},
+                # Tools & MCP
+                {"name": "tools:manage", "description": "Add, edit and delete tools and MCP servers", "category": "tools"},
+                {"name": "tools:read", "description": "View tools and MCP server configurations", "category": "tools"},
+                # Model providers
+                {"name": "models:manage", "description": "Add, edit and delete model providers", "category": "models"},
+                {"name": "models:read", "description": "View model provider configurations", "category": "models"},
+                # Analytics
+                {"name": "analytics:manage", "description": "Manage analytics dashboards and reports", "category": "analytics"},
+                {"name": "analytics:read", "description": "View analytics and platform statistics", "category": "analytics"},
+                # System
+                {"name": "system:manage", "description": "Manage system-level configuration", "category": "system"},
+                {"name": "system:read", "description": "View system configuration and health", "category": "system"},
             ]
             return permissions
         except Exception as e:

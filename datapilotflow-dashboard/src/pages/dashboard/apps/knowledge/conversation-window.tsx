@@ -450,11 +450,14 @@ export default function ConversationWindow() {
 
         setSessionName(data.session?.name || 'Conversation');
 
-        // Capture agent ID for navigation
+        // Capture agent ID for navigation — prefer explicit agent.id, then session.agent_id,
+        // then fall back to the session's own ID (legacy conversations pre-agent architecture).
         if (data.agent?.id) {
           setAgentId(data.agent.id);
         } else if (data.session?.agent_id) {
           setAgentId(data.session.agent_id);
+        } else if (sessionId) {
+          setAgentId(sessionId);
         }
 
         // NEW ARCHITECTURE: Load configuration from agent (config is now stored in agent, not conversation)

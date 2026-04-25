@@ -1,0 +1,12 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy only package files and install deps during build (baked into image layer).
+# This avoids running npm ci on every container start, which OOMs in constrained envs.
+COPY datapilotflow-dashboard/package.json datapilotflow-dashboard/package-lock.json ./
+RUN npm ci --legacy-peer-deps
+
+# Default command: Vite dev server with HMR on all interfaces.
+# Source is mounted at runtime via docker-compose volume, so changes are live.
+CMD ["npx", "vite", "--port", "3000", "--host", "0.0.0.0"]

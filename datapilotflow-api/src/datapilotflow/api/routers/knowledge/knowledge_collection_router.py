@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from loguru import logger
 
 from datapilotflow.api.routers.auth.auth_router import get_current_user
+from datapilotflow.api.dependencies.permissions import require_permission
 from datapilotflow.domain.knowledge.vectordb_collection import (
     VectorDBCollection,
     VectorDBCollectionCreate,
@@ -28,7 +29,7 @@ knowledge_collection_router = APIRouter()
 def list_vectordb_collections(
     name: Optional[str] = None,
     expand: Optional[str] = Query(None, description="Comma-separated list of fields to expand. Use 'embedding_provider' to get full provider details."),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:read")),
     service: VectorDBCollectionService = Depends(get_vectordb_collection_service),
 ):
     """List all vector DB collection configurations or get a specific collection by name.
@@ -147,7 +148,7 @@ def _expand_embedding_provider(provider_id: str, model_name: str, user_id: Optio
 @knowledge_collection_router.get("/{collection_id}", response_model=VectorDBCollection)
 def get_vectordb_collection(
     collection_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:read")),
     service: VectorDBCollectionService = Depends(get_vectordb_collection_service),
 ):
     """Get a specific vector DB collection configuration."""
@@ -171,7 +172,7 @@ def get_vectordb_collection(
 @knowledge_collection_router.post("/", response_model=VectorDBCollection)
 def create_vectordb_collection(
     collection_data: VectorDBCollectionCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:manage")),
     service: VectorDBCollectionService = Depends(get_vectordb_collection_service),
 ):
     """Create a new vector DB collection configuration."""
@@ -196,7 +197,7 @@ def create_vectordb_collection(
 def update_vectordb_collection(
     collection_id: str,
     update_data: VectorDBCollectionUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:manage")),
     service: VectorDBCollectionService = Depends(get_vectordb_collection_service),
 ):
     """Update a vector DB collection configuration."""
@@ -226,7 +227,7 @@ def update_vectordb_collection(
 )
 def delete_vectordb_collection(
     collection_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("knowledge:manage")),
     service: VectorDBCollectionService = Depends(get_vectordb_collection_service),
 ):
     """Delete a vector DB collection configuration."""

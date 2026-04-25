@@ -153,6 +153,7 @@ class MCPServerService:
             logger.info(
                 f"Discovering tools from MCP server '{server.name}' ({server.server_url})"
             )
+            logger.info(f"[MCP-DISCOVERY] server_type={server.server_type!r} auth_type={server.auth_type!r}")
 
             # Build auth headers
             headers = {}
@@ -183,8 +184,24 @@ class MCPServerService:
             if headers:
                 server_config[temp_server_id]["headers"] = headers
 
+            logger.info(f"[MCP-DISCOVERY] Connecting with config: {server_config}")
+
+            # Verify TCP reachability before attempting MCP handshake
+            import socket
+            from urllib.parse import urlparse
+            parsed = urlparse(server.server_url)
+            host = parsed.hostname
+            port = parsed.port or (443 if parsed.scheme == "https" else 80)
+            try:
+                with socket.create_connection((host, port), timeout=5):
+                    logger.info(f"[MCP-DISCOVERY] TCP reachable: {host}:{port}")
+            except Exception as tcp_err:
+                logger.error(f"[MCP-DISCOVERY] TCP UNREACHABLE {host}:{port} - {tcp_err}")
+                logger.error(f"[MCP-DISCOVERY] Hint: URL uses '{host}' but inside Docker, use the container name instead of 'localhost'")
+
             # Discover tools
             client = MultiServerMCPClient(server_config)  # type: ignore
+            logger.info(f"[MCP-DISCOVERY] Calling client.get_tools() ...")
             all_tools = await client.get_tools()
 
             # Convert to tool metadata

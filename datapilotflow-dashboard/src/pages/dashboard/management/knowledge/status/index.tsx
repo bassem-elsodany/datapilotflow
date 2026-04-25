@@ -16,12 +16,8 @@ export default function KnowledgeStatusPage() {
   return (
     <Page title="Job Status">
       <PageHeader title="Job Status" breadcrumbs={breadcrumbs} />
-
       <Stack gap="lg">
-        {/* Job statistics charts */}
         <JobStatisticsCharts />
-
-        {/* Real-time job table - NEW: Improved with modern UI and fixed cancel button */}
         <RealTimeJobTableImproved />
       </Stack>
     </Page>
