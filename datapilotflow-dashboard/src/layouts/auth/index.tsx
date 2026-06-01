@@ -1,7 +1,7 @@
 import { PiArrowLeft as GoBackIcon } from 'react-icons/pi';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { Box, Button, Center, Flex, Image, SimpleGrid, Text, Title } from '@mantine/core';
-import demoImg from '@/assets/app-demo.png';
+import demoImg from '@/assets/social-preview.png';
 import { Logo } from '@/components/logo';
 
 export function AuthLayout() {
