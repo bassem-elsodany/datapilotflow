@@ -1,6 +1,10 @@
 {
     "folders": [
         {
+            "name": "datapilotflow (root)",
+            "path": "."
+        },
+        {
             "name": "datapilotflow-api",
             "path": "datapilotflow-api",
             "settings": {
@@ -242,6 +246,8 @@
             "**/upload/**": true,
             "**/ingestion_jobs_output_data/**": true
         },
+        // Explorer & Startup
+        "explorer.sortOrder": "filesFirst",
         // Terminal Rules
         "terminal.integrated.defaultProfile.osx": "zsh",
         "terminal.integrated.cwd": "${workspaceFolder}",

@@ -1,712 +1,331 @@
 # DataPilotFlow
 
-> **Intelligent Enterprise Knowledge Platform with Retrieval-Augmented Generation**
+**Intelligent Enterprise Knowledge Platform — RAG Sources and Retrieval Management**
 
-Transform your enterprise documents into intelligent conversations. DataPilotFlow is an AI-powered knowledge management platform that automatically processes your documents, files, and web content—then lets you ask questions in natural language and get context-aware answers powered by AI.
+DataPilotFlow is an open, event-driven platform for building and querying enterprise knowledge bases powered by Retrieval-Augmented Generation (RAG). It automates the full pipeline from document ingestion to intelligent, source-cited conversational answers — deployable in minutes with a single Docker Compose command.
 
-**In 30 seconds**: Upload documents → AI indexes them → Ask questions → Get intelligent answers with sources cited.
-
-## 🎯 Core Capabilities
-
-- **Multi-Agent Orchestration**: Supervisor agent coordinates RAG agent, tools, and services
-- **Retrieval-Augmented Generation (RAG)**: Advanced document retrieval with semantic search
-- **Event-Driven Architecture**: Asynchronous processing via RabbitMQ
-- **Real-time Document Processing**: Text extraction, chunking, and vector embeddings
-- **Vector Database Integration**: Milvus for semantic search and similarity matching
-- **WebSocket Support**: Real-time AI responses and job progress tracking
-- **MCP Server Exposure**: Model Context Protocol for external agent integration
-- **Docker Containerization**: Production-ready deployment with 9 microservices
+![DataPilotFlow Dashboard](./imgs/home.png)
 
 ---
 
-## 🚀 Quick Start (5 Minutes)
+## Table of Contents
 
-```bash
-# 1. Start everything
-cd docker && docker-compose up -d
-
-# 2. Open dashboard
-# http://localhost:3000
-
-# 3. Upload a document
-# Click "Knowledge" → "Add Source" → upload a PDF/file
-
-# 4. Ask a question
-# Click "Chat" → type your question → see AI answer with sources
-```
-
-**System Requirements**: Docker, 10GB disk space, modern browser
+- [Overview](#overview)
+- [Key Features](#key-features)
+- [Screenshots](#screenshots)
+- [Architecture](#architecture)
+- [Project Structure](#project-structure)
+- [Quick Start](#quick-start)
+- [Configuration](#configuration)
+- [Module Documentation](#module-documentation)
+- [License](#license)
 
 ---
 
-## 📚 Understanding the Project Layers
+## Overview
 
-DataPilotFlow has **5 layers** that work together to deliver AI-powered knowledge management:
+DataPilotFlow turns your documents, websites, and third-party knowledge sources into a queryable intelligence layer. Users upload files or configure crawling sources, the platform processes and indexes them asynchronously into a vector database, and a multi-agent AI system answers natural language questions with full source attribution — streamed in real time over WebSocket.
 
-### Layer 1: **Presentation** (What Users See)
-- **React Dashboard** at `http://localhost:3000`
-- Web UI for uploading documents, managing knowledge, and chatting
-- Real-time updates via WebSocket
-- **Folder**: `datapilotflow-dashboard/`
+The system is built as a set of loosely coupled Python microservices backed by a React dashboard, connected through an event-driven message bus. Every component is containerized and production-ready.
 
-### Layer 2: **API** (How Frontend Talks to Backend)
-- **FastAPI REST Server** at `http://localhost:8800`
-- 30+ API endpoints for knowledge, auth, conversations, agents
-- WebSocket support for real-time communication
-- JWT-based authentication
-- **Folder**: `datapilotflow-api/`
-
-### Layer 3: **AI Agents** (The Intelligence)
-- **Assistant Agent**: Supervisor that coordinates multiple tools and agents
-- **RAG Agent**: Retrieves relevant documents and generates answers (MCP server on port 65510)
-- Both use LangGraph for multi-step orchestration
-- **Folders**: `datapilotflow-assistant-agent/`, `datapilotflow-rag-agent/`
-
-### Layer 4: **Services** (Business Logic)
-- **KnowledgeService**: Manages document ingestion, processing, storage
-- **AuthService**: User authentication and authorization
-- **ConversationService**: Multi-turn chat conversations
-- **NotificationService**: User alerts and updates
-- **ToolService**: External tool management
-- **Folder**: `datapilotflow-services/`
-
-### Layer 5: **Infrastructure** (Data & Storage)
-- **MongoDB**: Document storage, conversation history, metadata (Port 27020)
-- **Milvus**: Vector database for semantic search (Port 19530)
-- **RabbitMQ**: Message queue for async jobs (Port 5675)
-- **MinIO**: S3-compatible file storage (Port 9002)
-- **Folder**: `datapilotflow-infrastructure/`
-
-### Additional Components
-- **Domain**: Core data models and validation (`datapilotflow-domain/`)
-- **Events**: Event publishing and listening (`datapilotflow-events/`)
-- **Processors**: Document processing pipeline (`datapilotflow-processors/`)
-
-**Visual Flow**:
-```
-User uploads document
-    ↓
-API receives and validates
-    ↓
-Event published to RabbitMQ
-    ↓
-Event listener triggers processor
-    ↓
-Document extracted, chunked, embedded
-    ↓
-Stored in MongoDB + Milvus
-    ↓
-User asks question in chat
-    ↓
-API routes to Assistant Agent
-    ↓
-Agent calls RAG Agent for document retrieval
-    ↓
-RAG searches Milvus for relevant chunks
-    ↓
-LLM generates answer with sources
-    ↓
-Response streams to user via WebSocket
-```
+**In practice**: configure a source, run an ingestion job, open a conversation, and ask questions. The platform handles extraction, chunking, embedding, retrieval, and generation.
 
 ---
 
-## 👤 For Different Users
+## Key Features
 
-### I Want to Use DataPilotFlow
-1. Deploy: `cd docker && docker-compose up -d`
-2. Open: `http://localhost:3000`
-3. Upload documents in Knowledge section
-4. Ask questions in Chat section
-5. Check **Troubleshooting** section below if issues
-
-### I Want to Understand the Architecture
-1. Read sections below: "System Architecture" through "Deployment Checklist"
-2. Diagrams show: component relationships, data flows, service dependencies
-3. Each module has detailed README explaining its responsibility
-
-### I Want to Contribute Code
-1. Read project structure below
-2. Pick a module and read its README (in that folder)
-3. Follow local development setup in "Local Development" section
-4. Each module is independent and can be developed separately
-
-### I Want to Deploy to Production
-1. Read "Docker Architecture" section
-2. Review environment variables in `.env` file
-3. Run: `cd docker && docker-compose up -d`
-4. Check services with: `docker-compose ps`
-5. See "Deployment Checklist" below
+- **Multi-Agent Orchestration** — A supervisor agent coordinates a RAG agent, tool calls, and external MCP servers using LangGraph
+- **Event-Driven Processing** — Document ingestion runs asynchronously via RabbitMQ; jobs are non-blocking and resumable
+- **Multiple Source Types** — Ingest from local files (PDF, Markdown, text), web crawling (single page, multi-page, website), and Confluence spaces
+- **Vector Search** — Milvus stores and queries high-dimensional embeddings for semantic similarity retrieval
+- **MCP Server Exposure** — The RAG agent exposes its retrieval capabilities as a Model Context Protocol server for external agent integration
+- **Real-Time Streaming** — Answers stream to the browser via WebSocket; job progress updates in real time
+- **Tool Registry** — Connect and manage remote MCP tool servers; agents discover and invoke tools dynamically
+- **Role-Based Access Control** — Admin, User, and Viewer roles with JWT authentication
+- **Production Docker Deployment** — Nine containerized services with health checks, dependency ordering, and persistent data volumes
 
 ---
 
-## 🆘 Quick Troubleshooting
+## Screenshots
 
-**Dashboard won't load**
-- Check Docker: `docker-compose ps`
-- Wait 30 seconds for startup
-- Check logs: `docker-compose logs dashboard`
+### Dashboard
 
-**Knowledge upload fails**
-- Check file size (<500MB)
-- Verify MongoDB is running: `docker-compose ps | grep mongodb`
-- Check logs: `docker-compose logs api`
+The home screen provides a live overview of knowledge sources, ingestion jobs, active conversations, registered tools, and MCP servers. Quick actions surface the most common workflows.
 
-**Can't ask questions in chat**
-- Verify documents were uploaded successfully (check Jobs tab)
-- Check API health: `curl http://localhost:8800/health`
-- Try smaller question with key terms
-
-**Need API docs**
-- Visit: `http://localhost:8800/docs` (Swagger UI)
+![Dashboard Home](./imgs/home.png)
 
 ---
 
-## 🏗️ System Architecture
+### Processing Jobs
 
-### High-Level Architecture Diagram
+Knowledge injection jobs process data sources into searchable vector embeddings. Each job tracks its configuration, execution status, and completion timestamp.
+
+![Processing Jobs](./imgs/processingJobs.png)
+
+---
+
+### Job Status and Monitoring
+
+The job status view shows status distribution across all jobs, a processing activity timeline, and per-job progress metrics including document and chunk counts.
+
+![Job Status](./imgs/JobStatus.png)
+
+---
+
+### Crawling Sources
+
+Configure data sources for extraction and indexing. Supports web scraping (single page, multiple pages, full website crawler), local file paths, and Confluence space imports.
+
+![Crawling Sources](./imgs/crawlingSources.png)
+
+---
+
+### AI Agents
+
+Create and manage reusable AI agents. RAG agents handle document retrieval; Assistant agents act as supervisors that orchestrate tools, RAG lookups, and multi-turn reasoning.
+
+![AI Agents](./imgs/agents.png)
+
+---
+
+### Tools and MCP Servers
+
+Register remote MCP servers and manage their exposed tools. Agents discover and invoke tools from any connected server at runtime.
+
+![Tools Management](./imgs/tools.png)
+
+---
+
+### Vector Status
+
+Inspect vector collections stored in Milvus — record counts, dimension sizes, job contributions, and individual chunk records with their source URLs.
+
+![Vector Status](./imgs/vectorStatus.png)
+
+---
+
+## Architecture
+
+### High-Level System Diagram
 
 ```mermaid
-graph TB
-    subgraph Frontend["🎨 Frontend Layer"]
-        Dashboard["📊 DataPilotFlow Dashboard<br/>React + Vite<br/>Port 3000"]
-        WebSocket["🔌 WebSocket Clients"]
-    end
-
-    subgraph API["🔌 API Layer"]
-        APIServer["REST API Server<br/>FastAPI<br/>Port 8800"]
-    end
-
-    subgraph Agents["🤖 Agent Layer"]
-        AssistantAgent["👤 Assistant Agent<br/>Supervisor/Orchestrator<br/>LangGraph"]
-        RAGAgent["🧠 RAG Agent<br/>MCP Server<br/>Port 65510"]
-    end
-
-    subgraph Services["⚙️ Services Layer"]
-        BizLogic["💼 Business Logic Services<br/>Knowledge | Auth | Users<br/>Notifications | Tools"]
-    end
-
-    subgraph Processing["📦 Processing Layer"]
-        EventListeners["🎧 Event Listeners<br/>Job | File | Notification"]
-        Processors["⚙️ Processors<br/>Extraction | Chunking<br/>Embedding | Storage"]
-    end
-
-    subgraph Infrastructure["🗄️ Infrastructure Layer"]
-        MongoDB["🗃️ MongoDB<br/>Document Storage<br/>Port 27020"]
-        RabbitMQ["📨 RabbitMQ<br/>Event Bus<br/>Port 5675"]
-        Milvus["🔍 Milvus Vector DB<br/>Semantic Search<br/>Port 19530"]
-        MinIO["📦 MinIO S3<br/>File Storage<br/>Port 9002"]
-    end
-
-    Dashboard -->|HTTP| APIServer
-    WebSocket -->|WebSocket| APIServer
-    APIServer -->|Calls| AssistantAgent
-    AssistantAgent -->|MCP Client| RAGAgent
-    RAGAgent -->|Query| Milvus
-    APIServer -->|Uses| BizLogic
-    BizLogic -->|Data Access| MongoDB
-    BizLogic -->|Publish| RabbitMQ
-    RabbitMQ -->|Consume| EventListeners
-    EventListeners -->|Process| Processors
-    Processors -->|Store| MongoDB
-    Processors -->|Embed| Milvus
-    Processors -->|Upload| MinIO
+graph LR
+    User["Browser"] --> Dashboard["Dashboard — :3000"]
+    Dashboard --> API["API Server — :8800"]
+    API --> Agent["Assistant Agent"]
+    Agent --> RAG["RAG Agent — :65510"]
+    RAG --> Milvus["Milvus"]
+    API --> RabbitMQ["RabbitMQ"]
+    RabbitMQ --> Processors["Processors"]
+    Processors --> Milvus
+    Processors --> MongoDB["MongoDB"]
+    API --> MongoDB
 ```
-
-### Service Dependency Tree
-
-```mermaid
-graph TD
-    subgraph Components["📦 Core Components"]
-        Domain["datapilotflow-domain<br/>Foundation Layer<br/>Models & Config"]
-    end
-
-    subgraph DataAccess["🗄️ Data Access Layer"]
-        Infrastructure["datapilotflow-infrastructure<br/>MongoDB | Milvus<br/>RabbitMQ Clients"]
-        Domain --> Infrastructure
-    end
-
-    subgraph Business["💼 Business Layer"]
-        Services["datapilotflow-services<br/>Business Logic<br/>Service Orchestration"]
-        Infrastructure --> Services
-    end
-
-    subgraph Application["🚀 Application Layer"]
-        API["datapilotflow-api<br/>REST API Server"]
-        AssistantAgent["datapilotflow-assistant-agent<br/>Supervisor Agent"]
-        RAGAgent["datapilotflow-rag-agent<br/>RAG Agent + MCP"]
-        Dashboard["datapilotflow-dashboard<br/>React Frontend"]
-
-        Domain --> API
-        Services --> API
-        Domain --> AssistantAgent
-        Services --> AssistantAgent
-        Domain --> RAGAgent
-        Services --> RAGAgent
-    end
-
-    subgraph EventProcessing["📨 Event Processing"]
-        EventsModule["datapilotflow-events<br/>Event Listeners"]
-        Processors["datapilotflow-processors<br/>Document Processing"]
-        Domain --> EventsModule
-        Infrastructure --> EventsModule
-        Domain --> Processors
-        Infrastructure --> Processors
-        Services --> Processors
-    end
-
-    subgraph Orchestration["🐳 Orchestration"]
-        Docker["docker/<br/>docker-compose.yml<br/>9 Services"]
-    end
-
-    API --> Docker
-    AssistantAgent --> Docker
-    RAGAgent --> Docker
-    EventsModule --> Docker
-    Processors --> Docker
-```
-
----
-
-## 📦 Project Structure
-
-### 8 Core Modules
-
-#### 1. **datapilotflow-domain**
-   - **Purpose**: Foundation layer with core domain models
-   - **Responsibility**: Pure domain entities, configuration, validation
-   - **Dependencies**: Minimal (Pydantic, loguru)
-   - **Key Entities**: User, Knowledge, Job, Conversation, Agent, Tool
-   - **Status**: Stable - Zero dependencies on other modules
-
-#### 2. **datapilotflow-infrastructure**
-   - **Purpose**: Data access and external system integration
-   - **Responsibility**: MongoDB client, Milvus vector DB, RabbitMQ connection
-   - **Dependencies**: `datapilotflow-domain`
-   - **Key Components**: DAOs, Database indexes, Connection pools
-   - **Databases**: MongoDB (documents), Milvus (vectors), RabbitMQ (events)
-
-#### 3. **datapilotflow-services**
-   - **Purpose**: Business logic and service orchestration
-   - **Responsibility**: Knowledge management, user management, notifications, tool orchestration
-   - **Dependencies**: `datapilotflow-domain`, `datapilotflow-infrastructure`
-   - **Key Services**: KnowledgeService, AuthService, NotificationService, ToolService
-   - **Pattern**: Service-Oriented Architecture (SOA)
-
-#### 4. **datapilotflow-api**
-   - **Purpose**: REST API and WebSocket exposure
-   - **Responsibility**: Request routing, response formatting, endpoint definition
-   - **Dependencies**: All modules
-   - **Framework**: FastAPI
-   - **Port**: 8800
-   - **Endpoints**: /auth, /knowledge, /conversations, /agents, /tools, /health
-
-#### 5. **datapilotflow-rag-agent**
-   - **Purpose**: Retrieval-Augmented Generation with MCP server
-   - **Responsibility**: Document retrieval, semantic search, response generation
-   - **Dependencies**: `datapilotflow-domain`, `datapilotflow-infrastructure`, `datapilotflow-services`
-   - **Framework**: LangGraph, FastMCP
-   - **Port**: 65510
-   - **Protocol**: MCP (Model Context Protocol)
-
-#### 6. **datapilotflow-assistant-agent**
-   - **Purpose**: Supervisor agent with multi-agent orchestration
-   - **Responsibility**: Multi-turn conversations, tool orchestration, agent coordination
-   - **Dependencies**: `datapilotflow-domain`, `datapilotflow-infrastructure`, `datapilotflow-services`
-   - **Framework**: LangGraph
-   - **Pattern**: Supervisor pattern for agent coordination
-
-#### 7. **datapilotflow-events**
-   - **Purpose**: Event-driven messaging and async processing
-   - **Responsibility**: Event publishing, event listening, queue management
-   - **Dependencies**: `datapilotflow-domain`
-   - **Message Broker**: RabbitMQ
-   - **Event Types**: JobEvents, FileUploadEvents, NotificationEvents
-
-#### 8. **datapilotflow-processors**
-   - **Purpose**: Document processing and knowledge ingestion pipeline
-   - **Responsibility**: Text extraction, chunking, embedding, web crawling
-   - **Dependencies**: `datapilotflow-domain`, `datapilotflow-infrastructure`, `datapilotflow-services`
-   - **Processors**: FileProcessor, WebCrawler, DocumentSplitter, EmbeddingProcessor
-
-#### 9. **datapilotflow-dashboard**
-   - **Purpose**: Web UI for the platform
-   - **Responsibility**: User interaction, job management, knowledge browsing
-   - **Framework**: React + Vite + Mantine UI
-   - **Port**: 3000
-   - **Features**: Real-time updates, file uploads, conversation interface
-
----
-
-## 🐳 Docker Architecture
-
-### 9-Service Production Deployment
-
-```mermaid
-graph TB
-    subgraph Applications["🚀 Application Services"]
-        API["datapilotflow-api-server<br/>Port: 8800<br/>Health: /health"]
-        Dashboard["datapilotflow-dashboard<br/>Port: 3000<br/>Health: GET /"]
-        Events["datapilotflow-event-listeners<br/>Background Service<br/>No external port"]
-        MCP["datapilotflow-mcp-rag<br/>Port: 65510<br/>Health: GET /"]
-    end
-
-    subgraph Infrastructure["🗄️ Infrastructure Services"]
-        MongoDB["MongoDB<br/>Port: 27020<br/>Volume: data/mongodb"]
-        RabbitMQ["RabbitMQ<br/>Port: 5675<br/>Management: 15675"]
-        Milvus["Milvus Vector DB<br/>Port: 19530"]
-        MinIO["MinIO S3<br/>Port: 9002<br/>Console: 9091"]
-        ETcd["ETcd<br/>Port: 2379<br/>Milvus metadata"]
-    end
-
-    Dashboard -->|depends_on| API
-    API -->|depends_on| MongoDB
-    API -->|depends_on| RabbitMQ
-    Events -->|depends_on| RabbitMQ
-    MCP -->|depends_on| Milvus
-    Milvus -->|depends_on| ETcd
-    Milvus -->|depends_on| MinIO
-```
-
-### Service Startup Order
-
-1. **Infrastructure Services** (no dependencies)
-   - MongoDB
-   - RabbitMQ
-   - ETcd
-   - MinIO
-
-2. **Vector Database** (depends on infrastructure)
-   - Milvus (depends on ETcd + MinIO)
-
-3. **Application Services** (depends on infrastructure)
-   - API Server (depends on MongoDB + RabbitMQ) ← Core service
-   - Event Listeners (depends on RabbitMQ)
-   - RAG MCP Agent (depends on Milvus)
-   - Dashboard (depends on API)
-
-### Health Check Configuration
-
-Each service has configured health checks:
-- **API Server**: HTTP GET `/health` every 10s
-- **Dashboard**: HTTP GET `/` (wget) every 10s
-- **RAG MCP**: HTTP GET `/` every 10s
-- **Event Listeners**: Process monitoring via `ps aux`
-
----
-
-## 🔄 Data Flow Diagrams
 
 ### Knowledge Ingestion Pipeline
 
 ```mermaid
-graph TD
-    User["👤 User Upload<br/>File/URL/Confluence"]
-    API["📤 API Endpoint<br/>/knowledge/sources"]
-    PublishEvent["📨 Publish Event<br/>file_upload_event"]
-    RabbitMQ["RabbitMQ<br/>Topic Exchange"]
-
-    EventListener["🎧 Event Listener<br/>FileUploadListener"]
-    Processor["⚙️ Document Processor<br/>Extract + Parse"]
-    Splitter["✂️ Text Splitter<br/>Chunk Documents"]
-
-    Embedder["🧠 Embedding Service<br/>Generate Vectors"]
-    VectorDB["🔍 Milvus<br/>Store Vectors"]
-
-    StorageService["💾 Storage Service<br/>MongoDB + MinIO"]
-
-    User --> API
-    API --> PublishEvent
-    PublishEvent --> RabbitMQ
-    RabbitMQ --> EventListener
-    EventListener --> Processor
-    Processor --> Splitter
-    Splitter --> Embedder
-    Embedder --> VectorDB
-    Processor --> StorageService
-    StorageService --> VectorDB
+graph LR
+    A["User submits a source"] --> B["API validates and stores metadata"]
+    B --> C["Event published to RabbitMQ"]
+    C --> D["Event Listener triggers Processor"]
+    D --> E["Text extraction and parsing"]
+    E --> F["Chunking and embedding generation"]
+    F --> G["Vectors stored in Milvus"]
+    F --> H["Raw documents stored in MinIO"]
+    G --> I["Job status updated and user notified"]
+    H --> I
 ```
 
 ### Query and Response Pipeline
 
 ```mermaid
-graph TD
-    User["👤 User Query<br/>Chat Interface"]
-    Dashboard["📊 Dashboard<br/>WebSocket"]
-    API["REST API<br/>POST /conversations/message"]
-
-    AssistantAgent["👤 Assistant Agent<br/>LangGraph Orchestrator"]
-    ToolCalls["🛠️ Tool Calls<br/>RAG | Knowledge | etc"]
-
-    RAGAgent["🧠 RAG Agent<br/>MCP Client"]
-    SemanticSearch["🔍 Semantic Search<br/>Query Embedding"]
-    VectorDB["Milvus<br/>Retrieve Documents"]
-
-    ResponseGen["✍️ Response Generation<br/>LLM"]
-    WebSocket["🔌 WebSocket Response<br/>Real-time Streaming"]
-
-    User --> Dashboard
-    Dashboard --> API
-    API --> AssistantAgent
-    AssistantAgent --> ToolCalls
-    ToolCalls -->|knowledge_expert| RAGAgent
-    RAGAgent --> SemanticSearch
-    SemanticSearch --> VectorDB
-    VectorDB --> ResponseGen
-    ResponseGen --> WebSocket
-    WebSocket --> Dashboard
-    Dashboard --> User
-```
-
-### Job Processing Pipeline
-
-```mermaid
-graph TD
-    Job["📋 Knowledge Job<br/>Import + Process"]
-    CreateJob["API Endpoint<br/>/knowledge/jobs"]
-    PublishEvent["📨 Publish<br/>job_event"]
-
-    RabbitMQ["RabbitMQ"]
-    JobListener["🎧 Job Listener"]
-
-    Pipeline["⚙️ Job Pipeline<br/>5 Steps"]
-    Extraction["1️⃣ Extraction"]
-    Chunking["2️⃣ Chunking"]
-    Embedding["3️⃣ Embedding"]
-    Storage["4️⃣ Storage"]
-    Timeline["5️⃣ Timeline"]
-
-    Timeline -->|Completion| Notification["🔔 Notification<br/>User Alert"]
-
-    CreateJob --> PublishEvent
-    PublishEvent --> RabbitMQ
-    RabbitMQ --> JobListener
-    JobListener --> Pipeline
-    Pipeline --> Extraction
-    Extraction --> Chunking
-    Chunking --> Embedding
-    Embedding --> Storage
-    Storage --> Timeline
-    Timeline --> Notification
+graph LR
+    A["User submits a question"] --> B["API routes to Assistant Agent"]
+    B --> C["Agent calls RAG Agent via MCP"]
+    C --> D["RAG Agent embeds the query"]
+    D --> E["Semantic search in Milvus"]
+    E --> F["LLM generates answer with chunks"]
+    F --> G["Answer streamed via WebSocket"]
 ```
 
 ---
 
-## 🚀 Quick Start
+## Project Structure
 
-### Prerequisites
+```
+datapilotflow/
+├── datapilotflow-domain/          # Core domain models (Pydantic), configuration, validation
+├── datapilotflow-infrastructure/  # DAOs, MongoDB/Milvus/RabbitMQ/MinIO clients
+├── datapilotflow-services/        # Business logic: Knowledge, Auth, Notifications, Tools
+├── datapilotflow-api/             # FastAPI REST server + WebSocket — Port 8800
+├── datapilotflow-rag-agent/       # RAG agent with MCP server exposure — Port 65510
+├── datapilotflow-assistant-agent/ # Supervisor agent, multi-turn conversations
+├── datapilotflow-events/          # RabbitMQ event publishers and listeners
+├── datapilotflow-processors/      # Text extraction, chunking, embedding, web crawling
+├── datapilotflow-dashboard/       # React + Vite + Mantine UI frontend — Port 3000
+└── docker/                        # docker-compose.yml and Dockerfiles
+```
 
-- Docker & Docker Compose
-- Node.js 20+ (for local dashboard development)
-- Python 3.11+ (for local development)
-- UV package manager
+### Module Responsibilities
 
-### Production Deployment
+| Module | Role | Key Dependencies |
+|--------|------|-----------------|
+| `datapilotflow-domain` | Foundation — models and config | Pydantic only |
+| `datapilotflow-infrastructure` | Data access layer | domain |
+| `datapilotflow-services` | Business logic and orchestration | domain, infrastructure |
+| `datapilotflow-api` | HTTP/WebSocket interface | all modules |
+| `datapilotflow-rag-agent` | Semantic retrieval + MCP server | domain, infrastructure, services |
+| `datapilotflow-assistant-agent` | Supervisor agent + tool routing | domain, infrastructure, services |
+| `datapilotflow-events` | Async messaging via RabbitMQ | domain, infrastructure |
+| `datapilotflow-processors` | Document ingestion pipeline | domain, infrastructure, services |
+| `datapilotflow-dashboard` | Web UI | API over HTTP/WebSocket |
+
+---
+
+## Quick Start
+
+**Requirements**: Docker, Docker Compose, 10 GB free disk space, a modern browser.
 
 ```bash
-# Navigate to docker directory
-cd docker
+# Clone the repository
+git clone https://github.com/your-org/datapilotflow.git
+cd datapilotflow
 
-# Start all services (9 containers)
+# Start all services
+cd docker
 docker-compose up -d
 
-# Verify all services are healthy
+# Verify services are healthy
 docker-compose ps
-
-# View logs
-docker-compose logs -f api
 ```
 
-### Access Points
+Once healthy, open [http://localhost:3000](http://localhost:3000).
 
-| Service | URL | Purpose |
-|---------|-----|---------|
-| **Dashboard** | http://localhost:3000 | Web UI |
-| **API** | http://localhost:8800 | REST API |
-| **API Docs** | http://localhost:8800/docs | Swagger UI |
-| **RabbitMQ UI** | http://localhost:15675 | Message broker management |
-| **MinIO Console** | http://localhost:9002 | S3 storage management |
-| **Milvus** | http://localhost:19530 | Vector database |
+### Service Access Points
 
-### Local Development
+| Service | URL | Description |
+|---------|-----|-------------|
+| Dashboard | http://localhost:3000 | Web UI |
+| REST API | http://localhost:8800 | API server |
+| API Docs | http://localhost:8800/docs | Swagger / OpenAPI |
+| RabbitMQ Console | http://localhost:15675 | Message broker management |
+| Milvus | http://localhost:19530 | Vector database |
 
-```bash
-# Install dependencies for API
-cd datapilotflow-api
-uv pip install -e ../datapilotflow-domain -e ../datapilotflow-infrastructure -e ../datapilotflow-services -e .
+### First Steps After Deployment
 
-# Install dependencies for Dashboard
-cd ../datapilotflow-dashboard
-npm install
+A default admin account is created automatically on first startup:
 
-# Run API server
-cd ../datapilotflow-api
-python run_api_server.py
+| Field | Value |
+|-------|-------|
+| Username | `admin` |
+| Password | `admin123` |
+| Email | `admin@datapilotflow.com` |
+| Role | Platform Admin |
 
-# Run Dashboard (in another terminal)
-cd ../datapilotflow-dashboard
-npm run dev
-```
+Change the password immediately after first login via **User Management > My Profile**.
+
+1. Open [http://localhost:3000](http://localhost:3000) and log in with the credentials above
+2. Navigate to **Knowledge > Configuration > Crawling Sources** and add a source
+3. Go to **Knowledge > Configuration > Jobs** and create an ingestion job for the source
+4. Monitor progress in **Knowledge > Monitoring > Job Status**
+5. Once the job completes, open **Conversations** and ask a question
 
 ---
 
-## 📊 Component Interaction Matrix
-
-| Component | Depends On | Used By | Protocol |
-|-----------|-----------|---------|----------|
-| **Domain** | None | All | Python imports |
-| **Infrastructure** | Domain | Services, Events, Processors | Python imports |
-| **Services** | Domain, Infrastructure | API, Agents, Processors | Python method calls |
-| **API** | Domain, Infrastructure, Services | Dashboard, External clients | HTTP/REST + WebSocket |
-| **RAG Agent** | Domain, Infrastructure, Services | Assistant Agent | MCP protocol |
-| **Assistant Agent** | Domain, Infrastructure, Services | API | Python/LangGraph |
-| **Events** | Domain, Infrastructure | Processors, Event handlers | RabbitMQ messaging |
-| **Processors** | Domain, Infrastructure, Services | Background jobs | Event-driven |
-| **Dashboard** | None (frontend only) | User interaction | HTTP/WebSocket |
-
 ---
 
-## 🔐 Security Architecture
 
-### Service Isolation
+## Configuration
 
-- **Network**: Docker bridge network `datapilotflow-network`
-- **Authentication**: JWT token-based API access
-- **Authorization**: Role-based access control (Admin, User, Viewer)
-- **Data Persistence**: Encrypted volumes at `../data/`
-
-### Environment Configuration
+All environment variables are defined directly in `docker/docker-compose.yml`. The defaults work out of the box for a local deployment. Key variables per service:
 
 ```bash
-# API Configuration
-API_HOST=0.0.0.0
-API_PORT=8800
-ENVIRONMENT=production
+# API Server
+API_SERVER_HOST=0.0.0.0
+API_SERVER_PORT=8800
 
-# Database
-MONGODB_URI=mongodb://mongodb:27017
-MILVUS_HOST=milvus
-MILVUS_PORT=19530
+# Security — change this before any public deployment
+JWT_SECRET_KEY=supersecret
 
-# Message Queue
+# MongoDB
+MONGO_HOST=mongodb
+MONGO_PORT=27017
+MONGO_DB_NAME=datapilotflow
+MONGO_USER=datapilotflow
+MONGO_PASS=datapilotflow123
+
+# Milvus Vector DB
+VECTOR_DB_HOST=milvus
+VECTOR_DB_HTTP_PORT=19530
+
+# RabbitMQ
 RABBITMQ_HOST=rabbitmq
-RABBITMQ_PORT=5675
+RABBITMQ_PORT=5672
+RABBITMQ_USER=datapilotflow
+RABBITMQ_PASS=datapilotflow123
 
-# LLM Providers
-OPENAI_API_KEY=<your-key>
-ANTHROPIC_API_KEY=<your-key>
+# MCP RAG Agent
+MCP_SERVER_HOST=0.0.0.0
+MCP_SERVER_PORT=65510
 ```
 
----
+To change any value, edit the `environment` block of the relevant service in `docker/docker-compose.yml` before starting the stack.
 
-## 📚 Module Documentation
-
-Each module has detailed documentation:
-
-- [datapilotflow-api/README.md](./datapilotflow-api/README.md) - REST API and endpoints
-- [datapilotflow-rag-agent/README.md](./datapilotflow-rag-agent/README.md) - RAG implementation
-- [datapilotflow-assistant-agent/README.md](./datapilotflow-assistant-agent/README.md) - Agent orchestration
-- [datapilotflow-services/README.md](./datapilotflow-services/README.md) - Business logic
-- [datapilotflow-domain/README.md](./datapilotflow-domain/README.md) - Domain models
-- [datapilotflow-infrastructure/README.md](./datapilotflow-infrastructure/README.md) - Data access
-- [datapilotflow-events/README.md](./datapilotflow-events/README.md) - Event system
-- [datapilotflow-processors/README.md](./datapilotflow-processors/README.md) - Document processing
-- [docker/README.md](./docker/README.md) - Docker deployment
+> **Security note**: `JWT_SECRET_KEY` defaults to `supersecret`. Set it to a long random string before any public or production deployment.
 
 ---
 
-## 🔧 Technology Stack
+## Troubleshooting
 
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| **Frontend** | React 18, Vite, Mantine UI | Web dashboard |
-| **API** | FastAPI, Python 3.11 | REST endpoints |
-| **Agents** | LangGraph, FastMCP | AI orchestration |
-| **Services** | Python, Pydantic | Business logic |
-| **Data Storage** | MongoDB 7.0 | Document persistence |
-| **Vector Search** | Milvus 2.4 | Semantic search |
-| **Message Queue** | RabbitMQ 3.12 | Event streaming |
-| **File Storage** | MinIO (S3-compatible) | Object storage |
-| **Orchestration** | Docker Compose | Container management |
-| **Package Manager** | UV | Python dependency management |
+**Dashboard does not load**
+- Run `docker-compose ps` and verify all services show `healthy`
+- Wait up to 60 seconds on first start for Milvus to initialize
+- Check logs: `docker-compose logs dashboard`
 
----
+**Ingestion job stays in Pending**
+- Check that the event listener service is running: `docker-compose logs datapilotflow-event-listeners`
+- Verify RabbitMQ is healthy: `docker-compose ps | grep rabbitmq`
 
-## 📈 Performance Characteristics
+**Questions return no results**
+- Confirm the ingestion job completed with a non-zero chunk count in the Job Status view
+- Check the Vector Status page to verify records exist in the collection
+- Check RAG agent logs: `docker-compose logs datapilotflow-mcp-rag`
 
-### Scalability
-
-- **Horizontal**: Event listeners can run in parallel
-- **Vertical**: Vector embeddings batched for efficiency
-- **Database**: MongoDB sharding, Milvus partitioning
-
-### Latency
-
-- **API Response**: <200ms for simple queries
-- **RAG Pipeline**: <2s for document retrieval + generation
-- **WebSocket**: Real-time (sub-100ms) for updates
-
-### Throughput
-
-- **Document Ingestion**: 1000+ documents/minute
-- **Concurrent Users**: 100+ WebSocket connections
-- **API Requests**: 1000+ requests/second
+**API errors**
+- Open the Swagger UI at http://localhost:8800/docs for request/response documentation
+- Check API logs: `docker-compose logs datapilotflow-api-server`
 
 ---
 
-## 🔄 Data Models
+## Module Documentation
 
-### Core Entities
+Each module contains its own detailed README:
 
-```mermaid
-graph TD
-    User["👤 User<br/>ID | Email | Roles<br/>created_at"]
-    Knowledge["📚 Knowledge<br/>ID | Name | Description<br/>source_type"]
-    Job["📋 Job<br/>ID | Status | Progress<br/>created_at"]
-    Conversation["💬 Conversation<br/>ID | User | Messages<br/>created_at"]
-    Document["📄 Document<br/>ID | Content | Metadata<br/>vectors"]
-
-    User -->|owns| Knowledge
-    User -->|owns| Conversation
-    Knowledge -->|ingested_via| Job
-    Job -->|creates| Document
-    Conversation -->|retrieves| Document
-```
-
-### Event Types
-
-- **JobEvent**: Job created/started/completed/failed
-- **FileUploadEvent**: File uploaded and ready for processing
-- **NotificationEvent**: System or user notifications
-- **TimelineEvent**: Job step transitions
+- [datapilotflow-api](./datapilotflow-api/README.md) — REST endpoints, authentication, WebSocket protocol
+- [datapilotflow-rag-agent](./datapilotflow-rag-agent/README.md) — RAG implementation and MCP server
+- [datapilotflow-assistant-agent](./datapilotflow-assistant-agent/README.md) — Agent orchestration and supervisor pattern
+- [datapilotflow-services](./datapilotflow-services/README.md) — Business logic services
+- [datapilotflow-domain](./datapilotflow-domain/README.md) — Domain models and core entities
+- [datapilotflow-infrastructure](./datapilotflow-infrastructure/README.md) — Database clients and data access
+- [datapilotflow-events](./datapilotflow-events/README.md) — Event publishing and consumption
+- [datapilotflow-processors](./datapilotflow-processors/README.md) — Document processing pipeline
+- [docker](./docker/README.md) — Deployment and container configuration
 
 ---
 
-## 🚦 Deployment Checklist
+## License
 
-- [ ] Docker daemon running
-- [ ] Port 3000, 5675, 8800, 19530, 27020 available
-- [ ] 10GB+ free disk space for data volumes
-- [ ] Environment variables configured
-- [ ] SSL certificates (for production)
-- [ ] Monitoring/logging setup
+DataPilotFlow is licensed under the **Apache License 2.0** with a **Commons Clause** restriction.
 
----
+**Free for individuals** — personal use, education, and non-commercial research are fully permitted under Apache 2.0 terms.
 
-## 📞 Support & Contributing
+**Enterprise and commercial use requires a separate license** — this includes using the platform within a company, offering it as a managed service, or integrating it into a commercial product.
 
-For detailed API documentation, see [http://localhost:8800/docs](http://localhost:8800/docs) after deployment.
+To inquire about a commercial license: flowdatapilot@gmail.com
 
-For contribution guidelines and development setup, see individual module READMEs.
+See the full [LICENSE](./LICENSE) file for details.
 
 ---
 
-## 📄 License
-
-DataPilotFlow © 2025. All rights reserved.
-
----
-
-**Last Updated**: December 29, 2025
-**Status**: Production Ready
-**Version**: 1.0.0
+DataPilotFlow — Copyright 2026. All rights reserved.

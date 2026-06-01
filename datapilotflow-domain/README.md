@@ -1,330 +1,161 @@
-# DataPilotFlow Domain
+# datapilotflow-domain
 
-**Foundation Layer - Core Domain Models and Configuration**
+**Foundation layer — core domain models, configuration, and shared utilities.**
 
-The `datapilotflow-domain` package is the foundational layer of the DataPilotFlow architecture. It contains pure domain models, configuration, and shared utilities with **zero dependencies** on other DataPilotFlow packages.
+This package is the base of the entire DataPilotFlow architecture. All other packages depend on it. It has zero dependencies on any other DataPilotFlow package.
 
-## 🏗️ Architecture Position
+---
 
-### System Architecture Diagram
+## Responsibility
 
-```mermaid
-graph TB
-    API["🔌 datapilotflow-api<br/>REST API Layer"]
-    Services["🔧 datapilotflow-services<br/>Business Logic"]
-    Infra["📊 datapilotflow-infrastructure<br/>Data Access"]
-    Domain["🏛️ datapilotflow-domain<br/>FOUNDATION"]
-    Processors["⚙️ datapilotflow-processors<br/>Document Processing"]
-    Events["📨 datapilotflow-events<br/>Event Listeners"]
-    RAG["🧠 datapilotflow-rag-agent<br/>RAG Agent"]
-    Assistant["👤 datapilotflow-assistant-agent<br/>Assistant Agent"]
+- Define all core Pydantic domain models shared across services
+- Provide centralized application configuration via Pydantic Settings
+- Define domain events used by the event-driven pipeline
+- Provide shared logging setup for all services
+- Define LLM prompt templates used by agent layers
 
-    API --> Services
-    API --> RAG
-    API --> Assistant
-    Services --> Infra
-    Processors --> Services
-    Events --> Processors
-    RAG --> Services
-    Assistant --> Services
-    Infra --> Domain
-    Services --> Domain
-    Events --> Domain
-    Processors --> Domain
-    RAG --> Domain
-    Assistant --> Domain
+---
 
-    style Domain fill:#FFE6E6,stroke:#C41E3A,stroke-width:3px
-    style API fill:#E6F3FF,stroke:#0051BA,stroke-width:2px
-    style Services fill:#F0E6FF,stroke:#7851A9,stroke-width:2px
-    style Infra fill:#E6FFE6,stroke:#2D5016,stroke-width:2px
+## Package Structure
+
+```
+src/datapilotflow/domain/
+├── config.py                      # Centralized application configuration
+├── logging.py                     # Shared logging setup utility
+├── core/
+│   └── exceptions.py              # Base exception classes
+├── agent/
+│   └── models.py                  # Agent configuration and state models
+├── conversation/
+│   └── models.py                  # Conversation and message models
+├── embedding/
+│   └── embedding_model.py         # Embedding model definitions
+├── generative/
+│   └── generative_model.py        # Generative model definitions
+├── knowledge/
+│   ├── knowledge.py               # Knowledge base entity
+│   ├── knowledge_job.py           # Ingestion job model
+│   ├── knowledge_source_config.py # Source configuration (web, file, Confluence)
+│   ├── job_timeline.py            # Job step timeline tracking
+│   ├── document_splitter.py       # Document splitting configuration
+│   ├── llm_content_filter_config.py # LLM content filter settings
+│   └── vectordb_collection.py     # Vector DB collection model
+├── model_provider/
+│   └── model_provider.py          # LLM model provider definitions
+├── notification/
+│   └── notification.py            # Notification models
+├── rag/
+│   ├── knowledge_chunk.py         # Chunk model for retrieval
+│   └── rag_file_upload.py         # File upload tracking model
+├── tool/
+│   └── models.py                  # Tool and MCP server models
+├── user/
+│   ├── user.py                    # User model
+│   ├── role_model.py              # Role model
+│   └── roles.py                   # System role definitions
+├── vectordb/
+│   └── collection_models.py       # Milvus collection schema models
+├── events/
+│   ├── base.py                    # Base event class
+│   ├── job_events.py              # Job lifecycle events
+│   ├── timeline_events.py         # Job timeline events
+│   ├── confluence_events.py       # Confluence ingestion events
+│   └── constants.py               # Event type constants and routing keys
+└── llm_prompts/
+    ├── base.py                    # Base prompt utilities
+    ├── ai_responses.py            # Response formatting prompts
+    ├── conversation.py            # Conversation prompts
+    └── knowledge_base.py          # Knowledge retrieval prompts
 ```
 
-**This package is the foundation** - all other DataPilotFlow packages depend on it, but it depends on **nothing** from the DataPilotFlow ecosystem.
+---
 
-## 🔑 Key Components
+## Key Modules
 
-### 1. Configuration (`config.py`)
+### Configuration (`config.py`)
 
-Centralized application configuration using Pydantic Settings:
+Centralized settings using `pydantic-settings`. Reads from environment variables or a `.env` file. All services import from here.
 
-- **API Configuration**: Server host, port, WebSocket timeouts
-- **MCP Server Configuration**: RAG agent and assistant agent settings
-- **MongoDB Configuration**: Connection strings, pool settings
-- **Vector Database Configuration**: Milvus connection settings
-- **RabbitMQ Configuration**: Message queue settings
-- **RAG Configuration**: Top-K, similarity thresholds
-- **Agent Tracing**: Observability settings
-- **File Paths**: Directory configurations
-
-**Usage**:
 ```python
 from datapilotflow.domain.config import settings
 
-# Access any configuration
-api_port = settings.API_SERVER_PORT
-mongo_host = settings.MONGO_HOST
-vector_db_port = settings.VECTOR_DB_HTTP_PORT
+settings.API_SERVER_PORT      # int
+settings.MONGO_HOST           # str
+settings.VECTOR_DB_HOST       # str
+settings.RABBITMQ_HOST        # str
+settings.MCP_SERVER_PORT      # int
+settings.JWT_SECRET_KEY       # str
+settings.RAG_TOP_K            # int
 ```
 
-### 2. Logging Utility (`logging.py`)
+### Logging (`logging.py`)
 
-Centralized logging configuration for all services:
+Call `setup_service_logging()` once at the top of each service entry point, before any other imports, to configure loguru for that service.
 
-**Function**: `setup_service_logging(service_name, ...)`
-
-- Removes existing handlers to prevent cross-contamination
-- Sets up console logging (stderr) with INFO level
-- Sets up file logging to `logs/{service_name}.log` with DEBUG level
-- Consistent formatting across all services
-- Automatic daily rotation, 30-day retention, zip compression
-
-**Usage**:
 ```python
 from datapilotflow.domain.logging import setup_service_logging
 
-# In your run script, before any other imports
-setup_service_logging("my-service")  # Creates logs/my-service.log
-
-from loguru import logger
-logger.info("This goes to logs/my-service.log and stderr")
+setup_service_logging("api")
+# Creates logs/api.log with daily rotation, 30-day retention, and zip compression
+# Also writes to stderr at INFO level
 ```
 
-### 3. Domain Models
+### Domain Models
 
-Pure Pydantic models organized by domain:
+All models are pure Pydantic (`BaseModel`) with no external side effects.
 
-- **Agent Models**: Agent configurations and state
-- **Conversation Models**: Messages, conversations, history
-- **Knowledge Models**: Jobs, sources, documents, chunks, timelines
-- **RAG Models**: File uploads, knowledge chunks
-- **User Models**: Users, roles, permissions
-- **Tool Models**: MCP server and tool definitions
-- **Notification Models**: Notification schemas
-- **VectorDB Models**: Collection configurations
-
-All models are **pure Pydantic** with no external dependencies.
-
-### 4. Events (`events/`)
-
-Event definitions and constants for the event-driven architecture:
-
-- **Base Events**: Abstract event classes
-- **Job Events**: Knowledge job lifecycle events
-- **Timeline Events**: Job timeline update events
-- **Constants**: Event type constants, routing keys
-
-### 5. LLM Prompts (`llm_prompts/`)
-
-Reusable prompt templates for:
-- AI responses
-- Conversations
-- Knowledge base queries
-- Base prompt utilities
-
-## 🔗 How Other Packages Use This Package
-
-### Infrastructure Layer
 ```python
-from datapilotflow.domain.config import settings
-from datapilotflow.domain.knowledge import KnowledgeJob
-from datapilotflow.domain.user import User
-
-# Uses domain models for database operations
-# Uses config for connection settings
+from datapilotflow.domain.knowledge.knowledge_job import KnowledgeJob
+from datapilotflow.domain.knowledge.knowledge import Knowledge
+from datapilotflow.domain.conversation.models import Conversation
+from datapilotflow.domain.user.user import User
+from datapilotflow.domain.rag.knowledge_chunk import KnowledgeChunk
+from datapilotflow.domain.tool.models import MCPServer, Tool
 ```
 
-### Services Layer
+### Events
+
 ```python
-from datapilotflow.domain.config import settings
-from datapilotflow.domain.knowledge import KnowledgeJob, KnowledgeSource
-from datapilotflow.domain.conversation import ConversationMessage
-
-# Uses domain models for business logic
-# Uses config for service configuration
+from datapilotflow.domain.events.job_events import JobCreatedEvent, JobCompletedEvent
+from datapilotflow.domain.events.timeline_events import TimelineUpdateEvent
+from datapilotflow.domain.events.constants import EventTypes, RoutingKeys
 ```
 
-### API Layer
-```python
-from datapilotflow.domain.config import settings
-from datapilotflow.domain.user import User
-from datapilotflow.domain.knowledge import KnowledgeJob
+---
 
-# Uses domain models for request/response validation
-# Uses config for API settings
-```
-
-### Agents
-```python
-from datapilotflow.domain.config import settings
-from datapilotflow.domain.rag import KnowledgeChunk
-from datapilotflow.domain.conversation import ConversationMessage
-
-# Uses domain models for agent state
-# Uses config for agent settings
-```
-
-### External Dependencies
-- `pydantic>=2.10.6` - Data validation and settings
-- `pydantic-settings>=2.0.0` - Settings management
-- `loguru>=0.7.3` - Logging
-- `opik>=1.9.11` - Observability/tracing
-- `python-dateutil>=2.8.2` - Date utilities
-- `email-validator>=2.3.0` - Email validation
-
-### No DataPilotFlow Dependencies
-This package has **zero dependencies** on other DataPilotFlow packages, making it the foundation of the entire architecture.
-
-## 📋 Module Capabilities
-
-### 1. **Configuration Management**
-- Centralized settings via Pydantic Settings
-- Environment variable support (.env files)
-- Multi-service configuration (API, MCP, Database, etc.)
-- Type-safe configuration access
-
-### 2. **Domain Models**
-- **Knowledge**: Jobs, sources, documents, chunks, timelines
-- **Conversation**: Messages, conversation history
-- **Users & Auth**: Users, roles, permissions, credentials
-- **Agents**: Agent states and configurations
-- **Notifications**: Notification schemas
-- **Tools & MCP**: Tool and MCP server definitions
-- **Vector DB**: Collection configurations
-
-### 3. **Event Definitions**
-- Job lifecycle events (Created, Started, Completed, Failed)
-- Timeline events (Progress tracking)
-- Event constants and routing keys
-- Base event classes for extensibility
-
-### 4. **Logging Infrastructure**
-- Service-specific log files
-- Console and file output
-- Automatic rotation and compression
-- Consistent formatting across all services
-
-### 5. **LLM Prompts**
-- Base prompt templates
-- Conversation prompts
-- Knowledge base query prompts
-- AI response formatting
-
-## 🔄 Initialization Sequence Diagram
+## Dependencies
 
 ```
-┌─────────────────┐
-│  Any Package    │
-└────────┬────────┘
-         │
-         │ import config
-         ├──────────────────────────┐
-         │                          ▼
-         │               ┌──────────────────────┐
-         │               │ Pydantic Settings    │
-         │               │ loads .env file      │
-         │               │ validates types      │
-         │               │ provides defaults    │
-         │               └──────────────────────┘
-         │
-         │ setup_service_logging()
-         ├──────────────────────────┐
-         │                          ▼
-         │               ┌──────────────────────┐
-         │               │ Remove existing      │
-         │               │ handlers             │
-         │               └──────────────────────┘
-         │                          │
-         │                          ▼
-         │               ┌──────────────────────┐
-         │               │ Configure loguru:    │
-         │               │ • Console (stderr)   │
-         │               │ • File (logs/*.log)  │
-         │               │ • Rotation/Compress  │
-         │               └──────────────────────┘
-         │
-         ▼
-   Ready to use domain models and logging
+pydantic >= 2.10.6
+pydantic-settings >= 2.0.0
+loguru >= 0.7.3
+python-dateutil >= 2.8.2
+email-validator >= 2.3.0
 ```
 
-## 🚀 Installation & Setup
+No dependencies on any other `datapilotflow-*` package.
 
-### Prerequisites
-- Python >=3.11
-- UV package manager (recommended)
-  ```bash
-  pip install uv
-  ```
+---
 
-### Install from Source
-
-```bash
-uv pip install -e .
-```
-
-Or with pip:
-```bash
-pip install -e .
-```
-
-### Verify Installation
-
-```bash
-python -c "from datapilotflow.domain.config import settings; print(f'✓ Config loaded: {settings.API_SERVER_HOST}:{settings.API_SERVER_PORT}')"
-```
-
-
-## 🧪 Testing
+## Installation
 
 ```bash
 cd datapilotflow-domain
-pytest tests/
+uv pip install -e .
 ```
 
-### Build Steps
+---
 
-1. **Navigate to module**
-   ```bash
-   cd datapilotflow-domain
-   ```
+## Dependency Position
 
-2. **Install dependencies**
-   ```bash
-   # Using pip
-   pip install -e .
+All other packages in the stack import from this package. Nothing in this package imports from the rest of the stack.
 
-   # Or using uv (faster)
-   uv pip install -e .
-   ```
-
-3. **Verify installation**
-   ```bash
-   python -m pytest tests/  # Run tests
-   ```
-
-4. **Configure environment** (optional)
-   ```bash
-   # Copy example env if provided
-   cp .env.example .env
-
-   # Edit with your settings
-   vim .env
-   ```
-
-### Standalone Usage
-
-```bash
-# Once installed, use directly in Python
-python -c "
-from datapilotflow.domain.config import settings
-from datapilotflow.domain.logging import setup_service_logging
-
-# Setup logging
-setup_service_logging('my-app')
-
-# Access configuration
-print(f'Database: {settings.MONGO_CONN_STR}')
-print(f'Vector DB: {settings.VECTOR_DB_HOST}:{settings.VECTOR_DB_HTTP_PORT}')
-"
 ```
-
+datapilotflow-infrastructure  --|
+datapilotflow-services        --|
+datapilotflow-api             --|-->  datapilotflow-domain
+datapilotflow-events          --|
+datapilotflow-processors      --|
+datapilotflow-rag-agent       --|
+datapilotflow-assistant-agent --|
+```

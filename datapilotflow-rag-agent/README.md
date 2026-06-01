@@ -1,316 +1,134 @@
-# DataPilotFlow RAG Agent
+# datapilotflow-rag-agent
 
-**RAG Agent Package - Retrieval-Augmented Generation Agent with MCP Server**
+**RAG agent — LangGraph-based retrieval pipeline exposed as an MCP server on port 65510.**
 
-The `datapilotflow-rag-agent` package provides a Retrieval-Augmented Generation (RAG) agent that can retrieve relevant documents from knowledge bases and generate responses. It exposes the RAG agent as an MCP (Model Context Protocol) server for use by any MCP client.
+This package implements the Retrieval-Augmented Generation agent. It handles semantic search over Milvus, applies configurable retrieval strategies, generates answers using an LLM, and exposes the entire pipeline as a Model Context Protocol (MCP) server so the Assistant Agent can call it as a tool.
 
-## 🏗️ Architecture Position
+---
 
-```mermaid
-graph TD
-    Clients["🔌 MCP Clients<br/>LangGraph | External"]
-    RAG["🧠 datapilotflow-rag-agent<br/>RAG AGENT<br/><br/>FastMCP Server<br/>knowledge_expert tool<br/>Document Retrieval"]
-    VectorDB["🔍 Milvus<br/>Vector Search<br/>Collections"]
-    Services["🔧 Services<br/>Conversation<br/>Model Provider"]
-    Domain["🏛️ Domain<br/>Config"]
+## Responsibility
 
-    Clients -->|HTTP| RAG
-    RAG -->|query| VectorDB
-    RAG -->|uses| Services
-    RAG -->|uses| Domain
-    Services -->|uses| Domain
+- Accept a natural language query
+- Apply a retrieval strategy (standard, HyDE, multi-query, decomposition, augmented)
+- Search Milvus for relevant chunks
+- Judge retrieved documents for relevance
+- Generate a final answer with source citations
+- Expose retrieval as an MCP tool via FastMCP
 
-    style RAG fill:#E6F9FF,stroke:#0066CC,stroke-width:3px
-    style VectorDB fill:#FFF9E6,stroke:#CC6600,stroke-width:2px
-    style Services fill:#F0E6FF,stroke:#7851A9,stroke-width:2px
+---
+
+## Package Structure
+
+```
+src/datapilotflow/rag_agent/
+├── agent.py                        # Agent entry point
+├── agent_interface.py              # Public interface for programmatic calls
+├── agent_state.py                  # LangGraph agent state definition
+├── state.py                        # Shared state types
+├── graph.py                        # LangGraph graph definition
+├── nodes/
+│   ├── document_retriever.py       # Milvus vector search
+│   ├── document_judger.py          # LLM-based relevance judgment
+│   ├── answer_generator.py         # Final answer generation
+│   ├── raw_response_formatter.py   # Response formatting
+│   ├── hyde_strategy_node.py       # HyDE query expansion
+│   ├── multi_query_strategy_node.py        # Multi-query generation
+│   ├── decomposition_strategy_node.py      # Query decomposition
+│   ├── augmented_strategy_node.py          # Augmented retrieval
+│   └── custom_variants_node.py             # Custom strategy variants
+├── chains/
+│   ├── answer_generation_chain.py  # Answer generation chain
+│   ├── hyde_chain.py               # HyDE chain
+│   ├── multi_query_chain.py        # Multi-query chain
+│   ├── decomposition_chain.py      # Decomposition chain
+│   ├── augmented_chain.py          # Augmented chain
+│   └── judger_chain.py             # Document judgment chain
+├── retrieval/
+│   └── reciprocal_rank_fusion.py   # RRF re-ranking for multi-query results
+├── tools/
+│   ├── retrieval_tools.py          # LangChain retrieval tool wrappers
+│   └── retriever_tool.py           # Core retriever tool
+├── prompts/
+│   ├── generation_prompts.py       # Answer generation prompts
+│   ├── hyde_prompts.py             # HyDE prompts
+│   ├── multi_query_prompts.py      # Multi-query prompts
+│   ├── decomposition_prompts.py    # Decomposition prompts
+│   ├── augmented_prompts.py        # Augmented retrieval prompts
+│   └── judge_prompts.py            # Document judgment prompts
+├── services/
+│   └── generate_response_rag.py    # High-level response generation service
+└── mcp/
+    ├── server.py                   # FastMCP server definition
+    ├── adapters/
+    │   └── rag_adapter.py          # Adapts RAG agent to MCP tool interface
+    ├── tools/
+    │   └── rag_tools.py            # MCP tool definitions (knowledge_expert)
+    └── cli/
+        └── run_server.py           # Entry point: datapilotflow-rag-mcp
 ```
 
-**This package provides**:
-- RAG agent implementation with LangGraph
-- MCP server exposure (FastMCP)
-- Knowledge retrieval from vector databases
-- Document reranking and filtering
-- Multi-query search strategies
+---
 
-## 🔑 Key Components
+## Retrieval Strategies
 
-### 1. RAG Agent (`agent.py`)
+| Strategy | Description |
+|----------|-------------|
+| Standard | Direct embedding search in Milvus |
+| HyDE | Generates a hypothetical document before searching |
+| Multi-Query | Generates multiple query variants, merges results with RRF |
+| Decomposition | Breaks complex questions into sub-questions |
+| Augmented | Combines retrieval with additional context augmentation |
 
-**RAGAgentService**: Main RAG agent service
+The strategy is selected per-agent configuration in the dashboard.
 
-**Responsibilities**:
-- Document retrieval from knowledge base
-- Document relevance judgment
-- Document ranking by relevance
-- Document filtering based on threshold
+---
 
-**Usage**:
-```python
-from datapilotflow.rag_agent.agent import RAGAgentService
+## MCP Server
 
-agent = RAGAgentService(llm_client, rag_graph)
+The RAG agent exposes a `knowledge_expert` MCP tool that the Assistant Agent calls via the Model Context Protocol.
 
-# Execute RAG pipeline
-state = await agent.execute(agent_state)
+```
+MCP endpoint: http://localhost:65510
+Tool: knowledge_expert(query: str, knowledge_id: str) -> RAGResponse
 ```
 
-### 2. RAG Graph (`graph.py`)
-
-**LangGraph Workflow**: Orchestrates the RAG pipeline
-
-**Pipeline Steps**:
-1. **Document Retrieval**: Retrieve documents from vector DB
-2. **Document Judging**: Judge document relevance
-3. **Document Ranking**: Rank documents by relevance
-4. **Document Filtering**: Filter by threshold
-5. **Answer Generation** (optional): Generate answer from documents
-
-**Usage**:
-```python
-from datapilotflow.rag_agent.graph import get_graph
-
-# Get compiled graph
-graph = get_graph()
-
-# Invoke graph
-result = await graph.ainvoke(rag_state)
-```
-
-### 3. MCP Server (`mcp/server.py`)
-
-**FastMCP Server**: Exposes RAG agent as MCP server
-
-**Tool**: `knowledge_expert`
-
-**Features**:
-- HTTP transport (streamable)
-- Multi-query search
-- Document reranking
-- Structured document output
-
-**Usage**:
-```python
-from datapilotflow.rag_agent.mcp.server import mcp
-
-# Run MCP server
-mcp.run(
-    transport="http",
-    host="0.0.0.0",
-    port=65510
-)
-```
-
-### 4. Retrieval Tools
-
-**RetrieverTool**: Custom retriever using Milvus
-
-**Features**:
-- Collection-specific embedding configuration
-- Multi-query search
-- Reranking support
-- Relevance filtering
-
-### Uses Services
-```python
-from datapilotflow.services.conversation import ConversationHistoryService
-from datapilotflow.services.model_provider import ModelProviderService
-
-# RAG agent uses services
-conversation_service = ConversationHistoryService()
-model_service = ModelProviderService()
-```
-
-### Uses Infrastructure
-```python
-from datapilotflow.infrastructure.vectordb.milvus.client import MilvusClientWrapper
-
-# RAG agent uses vector DB
-vector_client = MilvusClientWrapper()
-results = await vector_client.search(collection_name, query_vectors, top_k)
-```
-
-### Uses Domain
-```python
-from datapilotflow.domain.config import settings
-from datapilotflow.domain.rag import KnowledgeChunk
-from datapilotflow.domain.conversation import ConversationMessage
-
-# RAG agent uses domain models
-rag_top_k = settings.RAG_TOP_K
-chunk = KnowledgeChunk(...)
-```
-
-## 🔗 How Other Packages Use This Package
-
-### MCP Clients
-```python
-# External MCP clients connect to the MCP server
-# HTTP endpoint: http://localhost:65510/mcp
-
-# Tool call example:
-{
-    "tool": "knowledge_expert",
-    "arguments": {
-        "search_query": ["query1", "query2", ...],
-        "collection_name": "my_collection",
-        "top_k": 5,
-        "enable_reranking": true
-    }
-}
-```
-
-### API Layer (Optional)
-```python
-from datapilotflow.rag_agent.services import get_response_stream_rag
-
-# API can use RAG agent directly
-async for chunk in get_response_stream_rag(
-    query="What is RAG?",
-    collection_name="knowledge_base",
-    ...
-):
-    yield chunk
-```
-
-### DataPilotFlow Dependencies
-- `datapilotflow-domain>=1.0.0` - Domain models and configuration
-- `datapilotflow-infrastructure>=1.0.0` - Vector DB client
-- `datapilotflow-services>=1.0.0` - Conversation and model services
-
-### External Dependencies
-- `langgraph>=1.0.2` - Agent workflow orchestration
-- `langchain-core>=1.0.0` - LangChain core
-- `langchain-community>=0.0.1` - LangChain community
-- `litellm>=1.79.0` - LLM provider abstraction
-- `fastmcp>=0.4.0` - MCP server framework
-- `opik>=1.9.11` - Observability
-- `loguru>=0.7.3` - Logging
-- `pydantic>=2.10.6` - Data validation
-- `pydantic-settings>=2.0.0` - Settings management
-
-## 🚀 Installation
+Start the MCP server:
 
 ```bash
-uv pip install -e ../datapilotflow-domain \
+cd datapilotflow-rag-agent
+python run_mcp_rag_server.py
+
+# Or using the installed entry point
+datapilotflow-rag-mcp
+```
+
+---
+
+## Dependencies
+
+```
+datapilotflow-domain >= 1.0.0
+datapilotflow-infrastructure >= 1.0.0
+datapilotflow-services >= 1.0.0
+langgraph >= 1.0.2
+langchain-core >= 1.0.0
+langchain-community >= 0.0.1
+langchain-litellm >= 0.1.0
+litellm >= 1.79.0
+fastmcp >= 2.14.0, < 3.0.0
+pydantic >= 2.10.6
+loguru >= 0.7.3
+```
+
+---
+
+## Installation
+
+```bash
+cd datapilotflow-rag-agent
+uv pip install \
+  -e ../datapilotflow-domain \
   -e ../datapilotflow-infrastructure \
   -e ../datapilotflow-services \
   -e .
 ```
-
-Or with pip:
-```bash
-cd datapilotflow-domain && pip install -e .
-cd ../datapilotflow-infrastructure && pip install -e .
-cd ../datapilotflow-services && pip install -e .
-cd ../datapilotflow-rag-agent && pip install -e .
-```
-
-
-## 🧪 Testing
-
-```bash
-cd datapilotflow-rag-agent
-pytest tests/
-```
-
-## 🔧 Configuration
-
-RAG agent uses configuration from `datapilotflow-domain`:
-
-```python
-from datapilotflow.domain.config import settings
-
-# MCP Server Configuration
-MCP_SERVER_HOST = settings.MCP_SERVER_HOST
-MCP_SERVER_PORT = settings.MCP_SERVER_PORT
-MCP_SERVER_NAME = settings.MCP_SERVER_NAME
-
-# Vector Database (Required)
-VECTOR_DB_HOST = settings.VECTOR_DB_HOST
-VECTOR_DB_HTTP_PORT = settings.VECTOR_DB_HTTP_PORT
-
-# MongoDB (Optional - for conversation history)
-MONGO_HOST = settings.MONGO_HOST
-MONGO_PORT = settings.MONGO_PORT
-```
-
-## 📋 Module Capabilities
-
-### 1. **RAG Agent**
-- Document retrieval from vector database
-- Multi-query search strategies
-- Document relevance judging
-- Document reranking
-- Context-aware response generation
-
-### 2. **MCP Server**
-- HTTP-based MCP server (FastMCP)
-- `knowledge_expert` tool for document retrieval
-- Streaming support
-- Structured output formatting
-
-### 3. **Retrieval Strategies**
-- Multi-query expansion
-- Decomposition-based search
-- HyDE (Hypothetical Document Embeddings)
-- Augmented retrieval strategies
-
-## 🔄 RAG Pipeline Sequence
-
-```
-Client Query
-    │
-    ▼
-RAG Agent (LangGraph)
-    │
-    ├→ Document Retriever (Milvus search)
-    │       │
-    │       ▼
-    │  Retrieved Documents (top-k)
-    │       │
-    ├→ Document Judger (relevance eval)
-    │       │
-    │       ▼
-    │  Ranked Documents
-    │       │
-    ├→ Filter by Threshold
-    │       │
-    └→ Answer Generator (optional)
-            │
-            ▼
-    Structured Response
-```
-
-### Build Steps
-
-```bash
-uv pip install -e ../datapilotflow-domain \
-  -e ../datapilotflow-infrastructure \
-  -e ../datapilotflow-services -e .
-```
-
-### Start MCP Server
-
-```bash
-python run_rag_mcp_server.py
-
-# Server running at:
-# HTTP: http://localhost:65510/mcp
-```
-
-### Monitor
-
-```bash
-tail -f logs/rag-agent.log
-```
-
-### Using RAG Agent
-
-```python
-from datapilotflow.rag_agent.graph import get_graph
-
-graph = get_graph()
-result = await graph.ainvoke(rag_state)
-documents = result.get("retrieved_documents", [])
-```
-
