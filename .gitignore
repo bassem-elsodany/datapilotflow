@@ -46,7 +46,6 @@ wheels/
 MANIFEST
 
 # Virtual environments
-.env
 .venv
 env/
 venv/
@@ -96,6 +95,10 @@ jspm_packages/
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Environment files with local secrets — keep untracked
+.env.secret
+.env.production
 
 # Build outputs
 dist/
