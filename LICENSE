@@ -1,0 +1,46 @@
+DataPilotFlow Individual Use License
+Version 1.0, June 2026
+
+Copyright (c) 2026 DataPilotFlow. All rights reserved.
+
+This software is licensed under the Apache License, Version 2.0 (the "License"),
+with the following additional condition (the "Commons Clause"):
+
+Commons Clause Restriction
+--------------------------
+The rights granted under the License do not include, and the License does not
+grant, the right to Sell the Software. For purposes of this restriction, "Sell"
+means practicing any or all of the rights granted to you under the License to
+provide the Software or its functionality to third parties as a hosted or managed
+service, or to sell, license, sublicense, or otherwise commercialize the Software
+or any substantial portion thereof, whether as a product, service, or component of
+a commercial offering.
+
+Individual Use
+--------------
+Individuals using this software solely for personal, educational, or non-commercial
+research purposes are granted full rights under the Apache License 2.0 without
+restriction.
+
+Enterprise and Commercial Use
+------------------------------
+Use of this software by a company, organization, or entity with the purpose of
+generating commercial value — including but not limited to internal business
+operations at scale, offering it as a service, integrating it into a commercial
+product, or using it to support a revenue-generating workflow — requires a
+separate commercial license.
+
+To obtain a commercial license, contact: datapilotflow@gmail.com
+
+Apache License, Version 2.0
+----------------------------
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at:
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied. See the License for the
+specific language governing permissions and limitations under the License.

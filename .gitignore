@@ -18,6 +18,10 @@ Thumbs.db
 *.swp
 *.swo
 
+# Python version managers
+.python-version
+.tool-versions
+
 # Python
 __pycache__/
 *.py[cod]
@@ -100,3 +104,6 @@ build/
 # Temporary files
 *.tmp
 *.temp
+
+# Local-only directories
+talks/

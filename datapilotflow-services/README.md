@@ -1,334 +1,148 @@
-# DataPilotFlow Services
+# datapilotflow-services
 
-**Business Logic Layer - Service Orchestration and Business Rules**
+**Business logic layer — service orchestration, authentication, event publishing, and WebSocket management.**
 
-The `datapilotflow-services` package provides business logic services that orchestrate data access and domain operations. It sits between the infrastructure layer (data access) and the application layers (API, agents, processors).
+This package sits between the infrastructure layer (data access) and the application layers (API, agents, processors). It owns all business rules and coordinates operations across DAOs, event publishers, and external integrations.
 
-## 🏗️ Architecture Position
+---
 
-### System Architecture Diagram
+## Responsibility
 
-```mermaid
-graph TB
-    API["🔌 API Layer"]
-    Agents["🧠 Agents"]
-    Processors["⚙️ Processors"]
-    Events["📨 Events"]
+- Orchestrate knowledge ingestion workflows
+- Manage authentication, JWT issuance, and role-based access control
+- Publish domain events to RabbitMQ
+- Manage conversation history
+- Handle file uploads and Confluence integration
+- Provide WebSocket notification delivery
+- Manage LLM model provider configuration
+- Register and manage tools and MCP servers
 
-    Services["🔧 datapilotflow-services<br/>BUSINESS LOGIC LAYER<br/><br/>Knowledge | Auth | Conversation<br/>Events | Notifications | Models<br/>Users | VectorDB | Tools"]
+---
 
-    Infra["📊 Infrastructure<br/>DAOs & Clients"]
-    Domain["🏛️ Domain<br/>Models & Config"]
+## Package Structure
 
-    API --> Services
-    Agents --> Services
-    Processors --> Services
-    Events --> Services
-
-    Services --> Infra
-    Services --> Domain
-    Infra --> Domain
-
-    style Services fill:#F0E6FF,stroke:#7851A9,stroke-width:3px
-    style Infra fill:#E6FFE6,stroke:#2D5016,stroke-width:2px
-    style Domain fill:#FFE6E6,stroke:#C41E3A,stroke-width:2px
+```
+src/datapilotflow/services/
+├── auth/
+│   ├── auth_service.py                    # Login, JWT issuance, token validation
+│   └── admin_initialization_service.py    # Default admin user seeding on startup
+├── users/
+│   ├── user_service.py                    # User CRUD and role assignment
+│   └── roles_service.py                   # Role management and system role init
+├── knowledge/
+│   ├── knowledge_job_service.py           # Job lifecycle management
+│   ├── knowledge_source_service.py        # Source configuration management
+│   ├── knowledge_ingestion_service.py     # Ingestion orchestration
+│   ├── job_timeline_service.py            # Job step timeline tracking
+│   ├── document_splitter_service.py       # Splitter configuration service
+│   ├── vectordb_collection_service.py     # Vector collection management
+│   └── llm_content_filter_service.py      # LLM content filter management
+├── conversation/
+│   └── conversation_history_service.py    # Multi-turn conversation storage
+├── confluence/
+│   ├── confluence_credential_service.py   # Confluence credential management
+│   └── confluence_metadata_service.py     # Space and page metadata
+├── events_publisher/
+│   ├── base_event_publisher.py            # Base publisher with RabbitMQ connection
+│   ├── job_event_publisher.py             # Job lifecycle event publishing
+│   ├── file_upload_event_publisher.py     # File upload event publishing
+│   └── notification_event_publisher.py    # Notification event publishing
+├── notification/
+│   ├── notification_event_service.py      # Notification creation and persistence
+│   ├── notification_listener_service.py   # Listens for notification events
+│   ├── notification_websocket_service.py  # Delivers notifications over WebSocket
+│   └── job_notification_helper.py         # Job-specific notification helpers
+├── file_management/
+│   └── file_upload_service.py             # File upload handling and tracking
+├── model_provider/
+│   ├── model_provider_service.py          # LLM provider CRUD
+│   └── model_provider_initialization_service.py  # Default provider seeding
+├── agent/
+│   └── agent_service.py                   # Agent configuration management
+├── tool/
+│   ├── tool_service.py                    # Tool registration and management
+│   └── mcp_server_service.py              # MCP server registry
+├── vectordb/
+│   └── collection_service.py              # Vector collection service
+└── websocket/                             # WebSocket connection management
 ```
 
-**This package provides**:
-- Business logic services for all domains
-- Service orchestration and coordination
-- Event publishing
-- WebSocket services
-- Authentication and authorization services
+---
 
-## 🔑 Key Components
+## Key Services
 
-### 1. Knowledge Services
+### Authentication
 
-**KnowledgeJobService**: Manages knowledge ingestion jobs
 ```python
-from datapilotflow.services.knowledge import KnowledgeJobService
+from datapilotflow.services.auth.auth_service import AuthService
+
+auth = AuthService()
+token = auth.login(username="admin", password="admin123")
+user = auth.validate_token(token)
+```
+
+### Knowledge Jobs
+
+```python
+from datapilotflow.services.knowledge.knowledge_job_service import KnowledgeJobService
 
 service = KnowledgeJobService()
-
-# Create and start a knowledge job
-job = await service.create_job(
-    name="My Knowledge Job",
-    source_id="source_123",
-    config={...}
-)
-
-# Get job status
-job = await service.get_job_by_id(job_id)
-
-# Update job
-await service.update_job(job_id, {"status": "completed"})
+job = service.create_job(source_id=source_id)
+service.update_job_status(job_id, "COMPLETED")
 ```
 
-**KnowledgeSourceService**: Manages knowledge sources
+### Event Publishing
+
 ```python
-from datapilotflow.services.knowledge import KnowledgeSourceService
-
-service = KnowledgeSourceService()
-
-# Create source
-source = await service.create_source(
-    name="My Source",
-    url="https://example.com",
-    scraping_mode="full"
-)
-
-# Get all sources
-sources = await service.get_all_sources()
-```
-
-**KnowledgeIngestionService**: Orchestrates the ingestion pipeline
-```python
-from datapilotflow.services.knowledge import KnowledgeIngestionService
-
-service = KnowledgeIngestionService()
-
-# Process knowledge ingestion
-await service.ingest_knowledge(
-    job_id=job_id,
-    source_id=source_id,
-    config={...}
-)
-```
-
-### 2. Authentication Services
-
-**AuthService**: User authentication and JWT management
-```python
-from datapilotflow.services.auth import AuthService
-
-service = AuthService()
-
-# Authenticate user
-user, token = await service.authenticate(email, password)
-
-# Verify token
-user = await service.verify_token(token)
-
-# Create user
-user = await service.create_user(email, password, username)
-```
-
-**AdminInitializationService**: Initializes admin user
-```python
-from datapilotflow.services.auth import AdminInitializationService
-
-service = AdminInitializationService()
-
-# Initialize admin (if not exists)
-await service.initialize_admin()
-```
-
-### 3. Conversation Services
-
-**ConversationHistoryService**: Manages conversation history
-```python
-from datapilotflow.services.conversation import ConversationHistoryService
-
-service = ConversationHistoryService()
-
-# Add message to conversation
-await service.add_message(
-    conversation_id=conv_id,
-    user_id=user_id,
-    message="Hello",
-    role="user"
-)
-
-# Get conversation history
-messages = await service.get_conversation_history(conv_id)
-```
-
-### 4. Event Publishers
-
-**JobEventPublisher**: Publishes knowledge job events
-```python
-from datapilotflow.services.events_publisher import JobEventPublisher
+from datapilotflow.services.events_publisher.job_event_publisher import JobEventPublisher
 
 publisher = JobEventPublisher()
-
-# Publish job created event
-await publisher.publish_job_created(job_id, job_data)
-
-# Publish job status update
-await publisher.publish_job_status_updated(job_id, "completed")
+await publisher.publish_job_created(job_id=job_id)
+await publisher.publish_job_completed(job_id=job_id)
 ```
 
-**FileUploadEventPublisher**: Publishes file upload events
+### Notifications via WebSocket
+
 ```python
-from datapilotflow.services.events_publisher import FileUploadEventPublisher
+from datapilotflow.services.notification.notification_websocket_service import NotificationWebSocketService
 
-publisher = FileUploadEventPublisher()
-
-# Publish file uploaded event
-await publisher.publish_file_uploaded(file_id, file_data)
+ws_service = NotificationWebSocketService()
+await ws_service.send_to_user(user_id=user_id, message=notification)
 ```
 
-### 5. Notification Services
+---
 
-**NotificationWebSocketService**: WebSocket notifications
-```python
-from datapilotflow.services.notification import NotificationWebSocketService
-
-service = NotificationWebSocketService()
-
-# Send notification via WebSocket
-await service.send_notification(
-    user_id=user_id,
-    notification={
-        "type": "job_completed",
-        "message": "Your job is complete"
-    }
-)
-```
-
-### 6. Model Provider Services
-
-**ModelProviderService**: Manages LLM and embedding providers
-```python
-from datapilotflow.services.model_provider import ModelProviderService
-
-service = ModelProviderService()
-
-# Get provider
-provider = await service.get_provider(provider_id)
-
-# List all providers
-providers = await service.get_all_providers()
-
-# Create provider
-provider = await service.create_provider(
-    name="OpenAI",
-    provider_type="llm",
-    config={...}
-)
-```
-
-## 📋 Module Capabilities
-
-### 1. **Knowledge Services**
-- Knowledge job orchestration (create, update, retrieve, delete)
-- Knowledge source management
-- Knowledge ingestion pipeline coordination
-- Document splitter configuration
-- Job timeline tracking
-- LLM content filtering
-
-### 2. **Authentication & Authorization**
-- User authentication (login, signup, verification)
-- JWT token generation and validation
-- Admin user initialization
-- Role-based access control
-- Password hashing and security
-
-### 3. **Conversation Management**
-- Conversation history storage
-- Message persistence
-- Conversation retrieval by ID
-- Multi-user conversation support
-
-### 4. **Event Publishing**
-- Job lifecycle event publishing (Created, Started, Updated, Completed, Failed)
-- File upload event publishing
-- Notification event publishing
-- RabbitMQ message routing
-
-### 5. **Notification Services**
-- Notification creation and persistence
-- WebSocket-based real-time notifications
-- Notification event listeners
-- Job notification helpers
-
-### 6. **Model Provider Services**
-- LLM provider management (OpenAI, Anthropic, etc.)
-- Embedding model provider management
-- Provider configuration and validation
-
-## 🔄 Service Interaction Sequence Diagram
+## Dependencies
 
 ```
-┌──────────────────┐
-│   API Request    │
-└────────┬─────────┘
-         │
-         ▼
-┌────────────────────────────────────────┐
-│  API Router (e.g., knowledge_router)   │
-└────────┬───────────────────────────────┘
-         │ calls
-         ▼
-┌────────────────────────────────────────┐
-│  Service Layer                         │
-│  (e.g., KnowledgeJobService)           │
-│  ┌──────────────────────────────────┐  │
-│  │ • Validate input                 │  │
-│  │ • Orchestrate DAOs               │  │
-│  │ • Apply business rules           │  │
-│  │ • Publish events                 │  │
-│  └──────────────────────────────────┘  │
-└────────┬───────────────────────────────┘
-         │ uses
-         ├─────────────────────┬──────────────────┐
-         ▼                     ▼                  ▼
-    ┌─────────────┐    ┌──────────────┐    ┌────────────┐
-    │ Knowledge   │    │  Event       │    │  Mongo     │
-    │ Job DAO     │    │  Publisher   │    │  Client    │
-    └─────────────┘    └──────────────┘    └────────────┘
-         │                  │                    │
-         │                  ▼                    ▼
-         │            ┌──────────────┐    ┌────────────────┐
-         │            │  RabbitMQ    │    │   MongoDB      │
-         │            │  Message Bus │    │   Database     │
-         │            └──────────────┘    └────────────────┘
-         │                                      │
-         └──────────────────────────────────────┘
-
-         Returns to API Router → HTTP Response
+datapilotflow-domain >= 1.0.0
+datapilotflow-infrastructure >= 1.0.0
+langchain-core >= 1.0.0
+litellm >= 1.79.0
+PyJWT >= 2.10.0
+passlib >= 1.7.4
+bcrypt >= 4.0.1
+python-multipart >= 0.0.20
+pydantic >= 2.10.6
+loguru >= 0.7.3
 ```
 
-## 🚀 Installation
+---
 
-### Prerequisites
-- Python >=3.11
-- datapilotflow-domain installed
-- datapilotflow-infrastructure installed
-- MongoDB, Milvus, RabbitMQ running (for full functionality)
-
-### Install from Source
-
-```bash
-uv pip install -e ../datapilotflow-domain \
-  -e ../datapilotflow-infrastructure \
-  -e .
-```
-
-Or with pip:
-```bash
-cd datapilotflow-domain && pip install -e .
-cd ../datapilotflow-infrastructure && pip install -e .
-cd ../datapilotflow-services && pip install -e .
-```
-
-### Verify Installation
-
-```bash
-python -c "
-from datapilotflow.services.knowledge import KnowledgeJobService
-from datapilotflow.services.auth import AuthService
-print('✓ Knowledge service imported')
-print('✓ Auth service imported')
-"
-```
-
-
-## 🧪 Testing
+## Installation
 
 ```bash
 cd datapilotflow-services
-pytest tests/
+uv pip install -e ../datapilotflow-domain -e ../datapilotflow-infrastructure -e .
+```
+
+---
+
+## Dependency Position
+
+```
+datapilotflow-api             --|
+datapilotflow-processors      --|-->  datapilotflow-services  -->  datapilotflow-infrastructure  -->  datapilotflow-domain
+datapilotflow-rag-agent       --|
+datapilotflow-assistant-agent --|
 ```
