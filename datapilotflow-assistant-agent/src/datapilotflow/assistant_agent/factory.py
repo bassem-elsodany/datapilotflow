@@ -11,7 +11,7 @@ from typing import Any, List, Optional
 
 from deepagents import create_deep_agent
 from deepagents.backends import CompositeBackend, StateBackend, StoreBackend
-from langchain_community.chat_models import ChatLiteLLM
+from langchain_litellm import ChatLiteLLM
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.store.memory import InMemoryStore
 # from langgraph.store.mongodb import MongoDBStore  # Not available in langgraph 1.0.5

@@ -37,16 +37,13 @@ COPY datapilotflow-api/run_api_server.py ./
 # Copy API service configuration
 COPY docker/services/api/.env .env
 
-# Install dependencies using uv
+# Install dependencies using uv. A single editable install resolves the full
+# local dependency graph in one pass via each package's [tool.uv.sources]
+# path entries — installing each sibling editable as a separate command
+# clobbers the shared datapilotflow/ namespace between steps (the last
+# package installed wins, and the others become unimportable at runtime).
 WORKDIR /app/datapilotflow-api
-RUN rm -rf .venv && uv venv && uv pip install -e . && \
-    uv pip install -e ../datapilotflow-services && \
-    uv pip install -e ../datapilotflow-infrastructure && \
-    uv pip install -e ../datapilotflow-domain && \
-    uv pip install -e ../datapilotflow-rag-agent && \
-    uv pip install -e ../datapilotflow-assistant-agent && \
-    uv pip install -e ../datapilotflow-processors && \
-    uv pip install -e ../datapilotflow-events
+RUN rm -rf .venv && uv venv && uv pip install -e .
 
 WORKDIR /app
 

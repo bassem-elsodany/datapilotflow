@@ -17,7 +17,7 @@ This directory contains the `docker-compose.yml` and all Dockerfiles for the Dat
 | `datapilotflow-mongodb` | `mongo:7.0` | 27020 | Document store |
 | `datapilotflow-rabbitmq` | `rabbitmq:3.12-management` | 5675 / 15675 | Message broker |
 | `datapilotflow-milvus` | `milvusdb/milvus:v2.6.2` | 19530 / 9091 | Vector database |
-| `datapilotflow-milvus-minio` | `minio/minio` | 9000 / 9002 | Object storage for Milvus |
+| `datapilotflow-milvus-minio` | `quay.io/minio/minio` | 9000 / 9002 | Object storage for Milvus |
 | `datapilotflow-milvus-etcd` | `quay.io/coreos/etcd:v3.5.18` | 2379 | Metadata store for Milvus |
 
 ---

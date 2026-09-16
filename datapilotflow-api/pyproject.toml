@@ -19,6 +19,7 @@ dependencies = [
     "loguru>=0.7.3",
     "langgraph>=1.0.2",
     "langgraph-checkpoint-mongodb>=0.1.0",
+    "langchain-litellm>=0.1.0",
     "PyJWT>=2.10.0",
 ]
 

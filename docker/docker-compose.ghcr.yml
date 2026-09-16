@@ -1,15 +1,24 @@
+# DataPilotFlow — run from pre-built images, no clone or build required.
+#
+# Usage:
+#   curl -O https://raw.githubusercontent.com/bassem-elsodany/datapilotflow/main/docker/docker-compose.ghcr.yml
+#   docker compose -f docker-compose.ghcr.yml up -d
+#
+# `pull_policy: always` on the app services means a plain `up -d` always
+# re-checks for a newer `:latest` — you don't need a separate `pull` step.
+# Deploying to a remote server? Set API_BASE_URL to that server's address
+# before starting: API_BASE_URL=http://your-server:8800 docker compose ...
+
 name: datapilotflow
 
 services:
   # ============================================================================
-  # APPLICATION SERVICES
+  # APPLICATION SERVICES (pre-built, from ghcr.io/bassem-elsodany)
   # ============================================================================
 
-  # DataPilotFlow API Server
   api:
-    build:
-      context: ..
-      dockerfile: docker/services/api/Dockerfile
+    image: ghcr.io/bassem-elsodany/datapilotflow-api:latest
+    pull_policy: always
     container_name: datapilotflow-api-server
     ports:
       - "8800:8800"
@@ -35,8 +44,8 @@ services:
       rabbitmq:
         condition: service_healthy
     volumes:
-      - ../logs/api:/app/logs
-      - ../data/upload:/app/upload
+      - api-logs:/app/logs
+      - api-upload:/app/upload
     networks:
       - datapilotflow-network
     restart: unless-stopped
@@ -47,14 +56,10 @@ services:
       retries: 3
       start_period: 40s
 
-  # DataPilotFlow Event Listeners
-  # Runs Job, FileUpload, and Notification event listeners
   event-listeners:
-    build:
-      context: ..
-      dockerfile: docker/services/events/Dockerfile
+    image: ghcr.io/bassem-elsodany/datapilotflow-events:latest
+    pull_policy: always
     container_name: datapilotflow-event-listeners
-    # No ports exposed - internal RabbitMQ communication only
     environment:
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_PORT=5672
@@ -76,8 +81,8 @@ services:
       milvus:
         condition: service_healthy
     volumes:
-      - ../logs/event-listeners:/app/datapilotflow-events/logs
-      - ../data/upload:/app/datapilotflow-events/upload
+      - events-logs:/app/datapilotflow-events/logs
+      - api-upload:/app/datapilotflow-events/upload
     networks:
       - datapilotflow-network
     restart: on-failure
@@ -87,12 +92,9 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # DataPilotFlow RAG MCP Server
-  # Provides knowledge retrieval via Model Context Protocol
   mcp-rag-agent:
-    build:
-      context: ..
-      dockerfile: docker/services/mcp-agent/Dockerfile
+    image: ghcr.io/bassem-elsodany/datapilotflow-mcp-agent:latest
+    pull_policy: always
     container_name: datapilotflow-mcp-rag
     ports:
       - "65510:65510"
@@ -112,7 +114,7 @@ services:
       mongodb:
         condition: service_healthy
     volumes:
-      - ../logs/mcp-rag-agent:/app/logs
+      - mcp-agent-logs:/app/logs
     networks:
       - datapilotflow-network
     restart: unless-stopped
@@ -123,19 +125,15 @@ services:
       retries: 3
       start_period: 40s
 
-  # DataPilotFlow Dashboard
-  # Frontend web application for DataPilotFlow
   dashboard:
-    build:
-      context: ..
-      dockerfile: docker/services/dashboard/Dockerfile
+    image: ghcr.io/bassem-elsodany/datapilotflow-dashboard:latest
+    pull_policy: always
     container_name: datapilotflow-dashboard
     ports:
       - "3000:3000"
     environment:
-      # Read by the browser, not the container — override this if the API
-      # is reachable at a different host/port than the machine running
-      # docker-compose (e.g. deploying to a remote server).
+      # Read by the browser, not the container — set this to your server's
+      # address if the dashboard is reached anywhere other than localhost.
       - API_BASE_URL=${API_BASE_URL:-http://localhost:8800}
     depends_on:
       api:
@@ -151,11 +149,9 @@ services:
       start_period: 20s
 
   # ============================================================================
-  # INFRASTRUCTURE SERVICES
+  # INFRASTRUCTURE SERVICES (third-party images)
   # ============================================================================
 
-  # DataPilotFlow MongoDB Database
-  # Using port 27020 externally to avoid conflicts with other MongoDB instances
   mongodb:
     image: mongo:7.0
     container_name: datapilotflow-mongodb
@@ -166,8 +162,7 @@ services:
       - MONGO_INITDB_ROOT_PASSWORD=datapilotflow123
       - MONGO_INITDB_DATABASE=datapilotflow
     volumes:
-      - ../data/datapilotflow-mongodb:/data/db
-      - ./mongo-init:/docker-entrypoint-initdb.d
+      - mongodb-data:/data/db
     networks:
       - datapilotflow-network
     restart: always
@@ -178,7 +173,6 @@ services:
       retries: 5
       start_period: 30s
 
-  # Milvus etcd (Metadata Store)
   milvus-etcd:
     image: quay.io/coreos/etcd:v3.5.18
     container_name: datapilotflow-milvus-etcd
@@ -188,7 +182,7 @@ services:
       - ETCD_QUOTA_BACKEND_BYTES=4294967296
       - ETCD_SNAPSHOT_COUNT=50000
     volumes:
-      - ../data/datapilotflow-milvus-etcd:/etcd
+      - milvus-etcd-data:/etcd
     command: etcd -advertise-client-urls=http://milvus-etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
     networks:
       - datapilotflow-network
@@ -199,7 +193,6 @@ services:
       timeout: 20s
       retries: 3
 
-  # Milvus MinIO (Object Storage)
   milvus-minio:
     image: quay.io/minio/minio:RELEASE.2024-12-18T13-15-44Z
     container_name: datapilotflow-milvus-minio
@@ -207,10 +200,10 @@ services:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
     ports:
-      - "9002:9001"  # MinIO Console
-      - "9000:9000"  # MinIO API
+      - "9002:9001"
+      - "9000:9000"
     volumes:
-      - ../data/datapilotflow-milvus-minio:/minio_data
+      - milvus-minio-data:/minio_data
     command: minio server /minio_data --console-address ":9001"
     networks:
       - datapilotflow-network
@@ -221,19 +214,18 @@ services:
       timeout: 20s
       retries: 3
 
-  # Milvus Vector Database
   milvus:
     image: milvusdb/milvus:v2.6.2
     container_name: datapilotflow-milvus
     ports:
-      - "19530:19530"  # Milvus gRPC port
-      - "9091:9091"    # Milvus WebUI port
+      - "19530:19530"
+      - "9091:9091"
     environment:
       ETCD_ENDPOINTS: milvus-etcd:2379
       MINIO_ADDRESS: milvus-minio:9000
       MQ_TYPE: woodpecker
     volumes:
-      - ../data/datapilotflow-milvus:/var/lib/milvus
+      - milvus-data:/var/lib/milvus
     networks:
       - datapilotflow-network
     restart: unless-stopped
@@ -248,8 +240,6 @@ services:
       - "milvus-etcd"
       - "milvus-minio"
 
-  # DataPilotFlow RabbitMQ Message Broker
-  # Using ports 5675/15675 externally to avoid conflicts with other RabbitMQ instances
   rabbitmq:
     image: rabbitmq:3.12-management
     container_name: datapilotflow-rabbitmq
@@ -261,7 +251,7 @@ services:
       - RABBITMQ_DEFAULT_PASS=datapilotflow123
       - RABBITMQ_DEFAULT_VHOST=/
     volumes:
-      - ../data/datapilotflow-rabbitmq:/var/lib/rabbitmq
+      - rabbitmq-data:/var/lib/rabbitmq
     networks:
       - datapilotflow-network
     restart: always
@@ -275,3 +265,14 @@ services:
 networks:
   datapilotflow-network:
     driver: bridge
+
+volumes:
+  api-logs:
+  api-upload:
+  events-logs:
+  mcp-agent-logs:
+  mongodb-data:
+  milvus-etcd-data:
+  milvus-minio-data:
+  milvus-data:
+  rabbitmq-data:
