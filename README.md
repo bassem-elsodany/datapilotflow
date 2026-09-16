@@ -41,7 +41,7 @@ The system is built as a set of loosely coupled Python microservices backed by a
 - **MCP Server Exposure** — The RAG agent exposes its retrieval capabilities as a Model Context Protocol server for external agent integration
 - **Real-Time Streaming** — Answers stream to the browser via WebSocket; job progress updates in real time
 - **Tool Registry** — Connect and manage remote MCP tool servers; agents discover and invoke tools dynamically
-- **Role-Based Access Control** — Admin, User, and Viewer roles with JWT authentication
+- **Role-Based Access Control** — Five system roles (Platform Admin, RAG Engineer, Knowledge Manager, AI User, Viewer) with granular permissions and JWT authentication
 - **Production Docker Deployment** — Nine containerized services with health checks, dependency ordering, and persistent data volumes
 
 ---
@@ -189,7 +189,7 @@ datapilotflow/
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/datapilotflow.git
+git clone https://github.com/bassem-elsodany/datapilotflow.git
 cd datapilotflow
 
 # Start all services
@@ -322,7 +322,7 @@ DataPilotFlow is licensed under the **Apache License 2.0** with a **Commons Clau
 
 **Enterprise and commercial use requires a separate license** — this includes using the platform within a company, offering it as a managed service, or integrating it into a commercial product.
 
-To inquire about a commercial license: flowdatapilot@gmail.com
+To inquire about a commercial license: datapilotflow@gmail.com
 
 See the full [LICENSE](./LICENSE) file for details.
 

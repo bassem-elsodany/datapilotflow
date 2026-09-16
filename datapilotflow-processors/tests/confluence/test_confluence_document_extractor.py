@@ -8,7 +8,7 @@ import pytest
 import asyncio
 from datetime import datetime
 from unittest.mock import Mock, AsyncMock, patch, MagicMock
-from langchain.schema import Document
+from langchain_core.documents import Document
 
 from datapilotflow.domain.knowledge import (
     ScrapingMode,
