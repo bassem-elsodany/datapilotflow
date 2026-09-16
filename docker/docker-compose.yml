@@ -1,4 +1,3 @@
-version: '3.8'
 name: datapilotflow
 
 services:
@@ -133,6 +132,11 @@ services:
     container_name: datapilotflow-dashboard
     ports:
       - "3000:3000"
+    environment:
+      # Read by the browser, not the container — override this if the API
+      # is reachable at a different host/port than the machine running
+      # docker-compose (e.g. deploying to a remote server).
+      - API_BASE_URL=${API_BASE_URL:-http://localhost:8800}
     depends_on:
       api:
         condition: service_healthy

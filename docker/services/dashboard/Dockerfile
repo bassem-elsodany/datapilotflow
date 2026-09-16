@@ -18,8 +18,7 @@ COPY datapilotflow-dashboard ./
 COPY docker/services/dashboard/.env .env
 
 # Build the application
-# Skip TypeScript checking to allow Vite bundling despite type errors
-RUN (npx tsc --noEmit 2>/dev/null || true) && npx vite build
+RUN npx tsc && npx vite build
 
 # Production stage - serve with lightweight server
 FROM node:20-alpine
@@ -32,6 +31,12 @@ RUN npm install -g serve
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
 
+# Regenerates runtime-config.js from API_BASE_URL at container startup, so
+# one image works against any API host without a rebuild — see the script
+# for details.
+COPY docker/services/dashboard/docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
 # Expose dashboard port
 EXPOSE 3000
 
@@ -39,5 +44,5 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD wget -q -O- http://localhost:3000/ || exit 1
 
-# Start the application
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["serve", "-s", "dist", "-l", "3000"]
