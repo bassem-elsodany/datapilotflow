@@ -10,10 +10,9 @@ export default function DocsLayout() {
   return (
     <div className={classes.root}>
       <div className={classes.sidebar}>
-        <Logo 
-          m="md" 
-          variant="header"
-          height="2rem" 
+        <Logo
+          m="md"
+          height="2rem"
           style={{
             filter: 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1))',
           }}

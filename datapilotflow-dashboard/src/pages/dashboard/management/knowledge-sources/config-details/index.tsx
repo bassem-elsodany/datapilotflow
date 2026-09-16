@@ -273,7 +273,7 @@ export default function ConfigDetailsPage() {
                   ) : <Text size="xs" c="dimmed">None configured</Text>}
                 </Section>
 
-                {config.url_patterns?.length > 0 && (
+                {config.url_patterns && config.url_patterns.length > 0 && (
                   <Section title="URL Patterns" icon={<IconForms size={12} />}>
                     <Stack gap={6}>
                       {config.url_patterns.map((p: any, i: number) => (
@@ -305,7 +305,7 @@ export default function ConfigDetailsPage() {
                         config.scraping_mode === 'recently_modified' ? 'Recently Modified' : config.scraping_mode}
                     </Badge>
                   </Field>
-                  {config.confluence_config?.space_keys?.length > 0 && (
+                  {config.confluence_config?.space_keys && config.confluence_config.space_keys.length > 0 && (
                     <>
                       <Divider my={6} />
                       <Text size="xs" c="dimmed" fw={600} tt="uppercase" mb={4}>Spaces</Text>
@@ -314,7 +314,7 @@ export default function ConfigDetailsPage() {
                       </Group>
                     </>
                   )}
-                  {config.confluence_config?.labels?.length > 0 && (
+                  {config.confluence_config?.labels && config.confluence_config.labels.length > 0 && (
                     <>
                       <Divider my={6} />
                       <Text size="xs" c="dimmed" fw={600} tt="uppercase" mb={4}>Labels</Text>

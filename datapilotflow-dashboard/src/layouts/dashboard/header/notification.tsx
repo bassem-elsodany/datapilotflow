@@ -156,12 +156,14 @@ export function Notification({
               </Text>
 
               {hasProgress && (
-                <Progress 
-                  value={notification.progress} 
-                  size="xs" 
-                  color={notification.progress === 100 ? 'green' : 'blue'}
-                  label={`${Math.round(notification.progress)}%`}
-                />
+                <Progress.Root size="xs">
+                  <Progress.Section
+                    value={notification.progress ?? 0}
+                    color={notification.progress === 100 ? 'green' : 'blue'}
+                  >
+                    <Progress.Label>{`${Math.round(notification.progress ?? 0)}%`}</Progress.Label>
+                  </Progress.Section>
+                </Progress.Root>
               )}
 
               <Group gap="xs" c="dimmed" fz="xs" justify="space-between">
@@ -274,12 +276,14 @@ export function Notification({
           {hasProgress && (
             <Paper withBorder p="md">
               <Title order={4} mb="md">Progress</Title>
-              <Progress 
-                value={notification.progress} 
-                size="md" 
-                color={notification.progress === 100 ? 'green' : 'blue'}
-                label={`${Math.round(notification.progress)}%`}
-              />
+              <Progress.Root size="xl">
+                <Progress.Section
+                  value={notification.progress ?? 0}
+                  color={notification.progress === 100 ? 'green' : 'blue'}
+                >
+                  <Progress.Label>{`${Math.round(notification.progress ?? 0)}%`}</Progress.Label>
+                </Progress.Section>
+              </Progress.Root>
             </Paper>
           )}
 
@@ -300,14 +304,14 @@ export function Notification({
               <Group>
                 <Text fw={500}>Created:</Text>
                 <Text>{(() => {
-                  const date = new Date(notification.created_at);
+                  const date = notification.created_at.toDate();
                   return isNaN(date.getTime()) ? 'Invalid Date' : date.toLocaleString();
                 })()}</Text>
               </Group>
               <Group>
                 <Text fw={500}>Updated:</Text>
                 <Text>{(() => {
-                  const date = new Date(notification.updated_at);
+                  const date = notification.updated_at.toDate();
                   return isNaN(date.getTime()) ? 'Invalid Date' : date.toLocaleString();
                 })()}</Text>
               </Group>
@@ -315,7 +319,7 @@ export function Notification({
                 <Group>
                   <Text fw={500}>Read:</Text>
                   <Text>{(() => {
-                    const date = new Date(notification.read_at);
+                    const date = notification.read_at.toDate();
                     return isNaN(date.getTime()) ? 'Invalid Date' : date.toLocaleString();
                   })()}</Text>
                 </Group>
@@ -324,7 +328,7 @@ export function Notification({
                 <Group>
                   <Text fw={500}>Dismissed:</Text>
                   <Text>{(() => {
-                    const date = new Date(notification.dismissed_at);
+                    const date = notification.dismissed_at.toDate();
                     return isNaN(date.getTime()) ? 'Invalid Date' : date.toLocaleString();
                   })()}</Text>
                 </Group>
@@ -333,7 +337,7 @@ export function Notification({
                 <Group>
                   <Text fw={500}>Expires:</Text>
                   <Text>{(() => {
-                    const date = new Date(notification.expires_at);
+                    const date = notification.expires_at.toDate();
                     return isNaN(date.getTime()) ? 'Invalid Date' : date.toLocaleString();
                   })()}</Text>
                 </Group>

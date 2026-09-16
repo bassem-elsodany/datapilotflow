@@ -417,6 +417,7 @@ export const useTestConfluenceCredentials = () => {
       cloud_url: string;
       username_or_email: string;
       api_token: string;
+      is_cloud_instance?: boolean | null;
     }) => {
       const token = localStorage.getItem('jwt_token');
       if (!token || !token.trim()) {

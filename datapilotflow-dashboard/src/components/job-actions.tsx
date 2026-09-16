@@ -23,8 +23,8 @@ import { useNavigate } from 'react-router-dom';
 
 interface JobActionsProps {
   job: KnowledgeJob;
-  onExecute: (jobId: string) => void;
-  onDelete: (jobId: string, jobName: string) => void;
+  onExecute?: (jobId: string) => void;
+  onDelete?: (jobId: string, jobName: string) => void;
   onCancel?: (jobId: string) => void;
   onViewDetails?: (job: KnowledgeJob) => void;
   isExecuting?: boolean;
@@ -92,14 +92,14 @@ export function JobActions({
       setClearCollectionModalOpen(true);
     } else {
       // Execute directly
-      onExecute(job.id);
+      onExecute?.(job.id);
     }
   };
 
   // Handler for confirming execution with collection clearing
   const handleConfirmExecution = () => {
     setClearCollectionModalOpen(false);
-    onExecute(job.id);
+    onExecute?.(job.id);
   };
 
   return (
@@ -217,6 +217,7 @@ export function JobActions({
               color="blue"
               onClick={handleExecuteClick}
               loading={isExecuting}
+              disabled={!onExecute}
             >
               <IconPlayerPlay size={16} />
             </ActionIcon>
@@ -258,6 +259,7 @@ export function JobActions({
               color="green"
               onClick={handleExecuteClick}
               loading={isExecuting}
+              disabled={!onExecute}
             >
               <IconRefresh size={16} />
             </ActionIcon>
@@ -269,8 +271,8 @@ export function JobActions({
           <ActionIcon
             variant="subtle"
             color="red"
-            onClick={() => onDelete(job.id, job.name)}
-            disabled={isDeleting}
+            onClick={() => onDelete?.(job.id, job.name)}
+            disabled={isDeleting || !onDelete}
           >
             <IconTrash size={16} />
           </ActionIcon>

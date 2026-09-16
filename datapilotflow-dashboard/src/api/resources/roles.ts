@@ -125,7 +125,7 @@ export const useUpdateRole = createPutMutationHook({
 });
 
 // Delete role by ID (admin only)
-export const useDeleteRole = createDeleteMutationHook({
+export const useDeleteRole = createDeleteMutationHook<z.ZodUndefined, { roleId: string }>({
   endpoint: apiEndpoints.roles.role(':roleId'),
   rMutationParams: {
     onSuccess: (data, variables, context, queryClient) => {

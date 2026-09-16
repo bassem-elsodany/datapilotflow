@@ -78,16 +78,26 @@ function createUrl(
   return `${url}?${query.toString()}`;
 }
 
-type QueryKey = [string] | [string, Record<string, string | number | undefined>];
+type QueryKey =
+  | [string]
+  | [string, string | number]
+  | [string, Record<string, string | number | undefined>];
 
 function getQueryKey(
   queryKey: QueryKey,
   route: Record<string, string | number | undefined> = {},
   query: Record<string, string | number | undefined> = {}
 ) {
-  const [mainKey, otherKeys = {}] = queryKey;
+  const [mainKey, otherKeys] = queryKey;
 
-  return [mainKey, { ...otherKeys, ...route, ...query }];
+  // A plain string/number second element (e.g. ['users', userId]) identifies the
+  // resource itself and must not be spread as an object into the key.
+  if (typeof otherKeys === 'string' || typeof otherKeys === 'number') {
+    const hasExtra = Object.keys(route).length > 0 || Object.keys(query).length > 0;
+    return hasExtra ? [mainKey, otherKeys, { ...route, ...query }] : [mainKey, otherKeys];
+  }
+
+  return [mainKey, { ...(otherKeys ?? {}), ...route, ...query }];
 }
 
 /** Handle request errors */
@@ -223,8 +233,8 @@ interface CreatePostMutationHookArgs<
  * });
  */
 export function createPostMutationHook<
-  ResponseSchema extends z.ZodType,
   BodySchema extends z.ZodType,
+  ResponseSchema extends z.ZodType,
   RouteParams extends Record<string, string | number | undefined> = {},
   QueryParams extends Record<string, string | number | undefined> = {},
 >({
@@ -233,7 +243,7 @@ export function createPostMutationHook<
   responseSchema,
   rMutationParams,
   options,
-}: CreatePostMutationHookArgs<ResponseSchema, BodySchema>) {
+}: CreatePostMutationHookArgs<BodySchema, ResponseSchema>) {
   return (params?: { query?: QueryParams; route?: RouteParams }) => {
     const queryClient = useQueryClient();
 

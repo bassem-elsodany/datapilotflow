@@ -587,13 +587,13 @@ const VectorStatusPage: React.FC = () => {
           <Group justify="space-between">
             <Text fw={500}>Select Collection</Text>
             <Badge variant="light" color="blue">
-              {collections.length} {collections.length === 1 ? 'Collection' : 'Collections'}
+              {(collections?.length ?? 0)} {(collections?.length ?? 0) === 1 ? 'Collection' : 'Collections'}
             </Badge>
           </Group>
 
           <Select
             placeholder="Select a vector collection"
-            data={collections.map((c: CollectionInfo) => ({
+            data={(collections ?? []).map((c: CollectionInfo) => ({
               value: c.id,
               label: `${c.name} (${c.record_count.toLocaleString()} records)`,
             }))}

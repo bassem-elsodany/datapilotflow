@@ -25,6 +25,7 @@ import { useGetTools } from '@/api/resources/tools';
 import { useGetCollections } from '@/api/resources/vectordb';
 import { ColorfulVerticalStepper } from '@/components/colorful-vertical-stepper';
 import { Page } from '@/components/page';
+import { SystemPromptManager } from '@/components/system-prompt-manager';
 import { PageHeader } from '@/components/page-header';
 import { apiUtils } from '@/config';
 import { paths } from '@/routes/paths';
@@ -116,6 +117,10 @@ interface ConversationFormData {
   // Step 5 - Tools Binding (Assistant mode only)
   selectedTools: string[]; // Array of tool IDs
   instructions: string; // User's custom instructions for assistant behavior
+
+  // System Prompt Configuration (task engine / supervisor agent behavior)
+  selectedSystemPromptId: string | null;
+  systemPromptTasks: any[];
 }
 
 const ENHANCEMENT_STRATEGIES = [
@@ -325,6 +330,8 @@ export function ConversationCreateWizard() {
       enableKnowledgeAssistant: false, // RAG mode (default) - false, switched to true when Assistant selected
       selectedTools: [], // Initialize as empty array - will be populated when user selects tools
       instructions: '', // Initialize as empty string - optional user-provided assistant behavior instructions
+      selectedSystemPromptId: null,
+      systemPromptTasks: [],
     },
     validate: {
       conversationName: (value) =>
@@ -2628,16 +2635,16 @@ function StepSystemPromptConfiguration({
 
       <SystemPromptManager
         conversationId=""
-        selectedPromptId={form.values.selectedSystemPromptId}
+        selectedPromptId={form.values.selectedSystemPromptId ?? undefined}
         selectedPromptData={selectedSystemPrompt}
         existingPrompts={form.values.systemPromptTasks || []}
-        onPromptSelected={(prompt) => {
+        onPromptSelected={(prompt: any) => {
           console.log('[DEBUG SystemPromptConfiguration] onPromptSelected called with:', prompt);
           form.setFieldValue('selectedSystemPromptId', prompt?.id || null);
           console.log('[DEBUG SystemPromptConfiguration] Calling parent onPromptSelected callback...');
           onPromptSelected?.(prompt);
         }}
-        onPromptsChanged={(prompts) => {
+        onPromptsChanged={(prompts: any[]) => {
           console.log('[DEBUG SystemPromptConfiguration] Prompts changed:', prompts);
           form.setFieldValue('systemPromptTasks', prompts);
         }}

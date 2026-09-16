@@ -332,7 +332,7 @@ export function Welcome() {
                         transition: 'background 0.1s',
                       }}
                       bg="var(--mantine-color-default-hover)"
-                      onClick={() => navigate(paths.dashboard.management.knowledgeJobs)}
+                      onClick={() => navigate(paths.dashboard.management.knowledgeSources.jobs)}
                     >
                       <Group justify="space-between" wrap="nowrap">
                         <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
@@ -421,7 +421,7 @@ export function Welcome() {
                   description="Process and embed content"
                   icon={<IconPlayerPlay size={18} />}
                   color="violet"
-                  onClick={() => navigate(paths.dashboard.management.knowledgeJobs)}
+                  onClick={() => navigate(paths.dashboard.management.knowledgeSources.jobs)}
                 />
                 <QuickAction
                   label="Start Conversation"

@@ -22,9 +22,8 @@ export function SidebarButton() {
         <Drawer.Overlay />
         <Drawer.Content>
           <Drawer.Header px="1.725rem" mb="md">
-            <Logo 
-              variant="header"
-              height="3.5rem" 
+            <Logo
+              height="3.5rem"
               style={{
                 filter: 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1))',
               }}
