@@ -187,16 +187,27 @@ datapilotflow/
 
 **Requirements**: Docker, Docker Compose, 10 GB free disk space, a modern browser.
 
+### Option 1 — Pre-built images (no clone, no build)
+
+Multi-arch (amd64/arm64) images are published to GHCR on every release.
+
 ```bash
-# Clone the repository
+curl -O https://raw.githubusercontent.com/bassem-elsodany/datapilotflow/main/docker/docker-compose.ghcr.yml
+docker-compose -f docker-compose.ghcr.yml up -d
+docker-compose -f docker-compose.ghcr.yml ps
+```
+
+Deploying to a remote server rather than running locally? Point the dashboard at your server's address:
+`API_BASE_URL=http://your-server:8800 docker-compose -f docker-compose.ghcr.yml up -d`
+
+### Option 2 — Build from source
+
+```bash
 git clone https://github.com/bassem-elsodany/datapilotflow.git
 cd datapilotflow
 
-# Start all services
 cd docker
 docker-compose up -d
-
-# Verify services are healthy
 docker-compose ps
 ```
 
