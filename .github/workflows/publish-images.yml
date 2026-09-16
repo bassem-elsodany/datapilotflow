@@ -16,6 +16,7 @@ jobs:
       contents: read
       packages: write
     strategy:
+      fail-fast: false
       matrix:
         include:
           - service: api
@@ -45,7 +46,8 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/datapilotflow-${{ matrix.service }}
           tags: |
             type=ref,event=tag
-            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
+            type=raw,value=latest,enable=${{ github.event_name == 'release' || github.event_name == 'workflow_dispatch' }}
+            type=sha,format=short
 
       - uses: docker/build-push-action@v6
         with:
