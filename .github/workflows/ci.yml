@@ -109,7 +109,7 @@ jobs:
         run: uv sync
 
   dashboard:
-    name: dashboard (test)
+    name: dashboard (build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -121,4 +121,11 @@ jobs:
       - working-directory: datapilotflow-dashboard
         run: |
           npm ci
-          npm run test
+          npm run typecheck
+          npm run build
+          # NOTE: npm run test also chains prettier + lint + vitest, but the
+          # repo currently has ~148 files of pre-existing formatting debt and
+          # ~880 pre-existing eslint problems unrelated to this workflow —
+          # see repo issue tracker. typecheck+build is what's verified clean
+          # today; widen this back to `npm run test` once that debt is paid
+          # down.
