@@ -18,7 +18,8 @@ export function CurrentUser(props: CurrentUserProps) {
   const [settingsModalOpened, setSettingsModalOpened] = useState(false);
 
   const handleLogout = () => {
-    logout();
+    const token = localStorage.getItem('jwt_token') ?? '';
+    logout({ variables: { token } });
     setIsAuthenticated(false);
   };
 

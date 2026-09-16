@@ -94,8 +94,10 @@ export default function UserProfilePage() {
 
     try {
       await changePasswordMutation.mutateAsync({
-        current_password: passwordData.current_password,
-        new_password: passwordData.new_password,
+        variables: {
+          current_password: passwordData.current_password,
+          new_password: passwordData.new_password,
+        },
       });
       notifications.show({
         title: 'Success',

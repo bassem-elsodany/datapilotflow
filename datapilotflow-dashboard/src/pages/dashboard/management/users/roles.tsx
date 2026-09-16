@@ -32,10 +32,10 @@ export default function RolesPage() {
   const deleteRoleMutation = useDeleteRole();
 
   const handleDeleteRole = async () => {
-    if (!roleToDelete?.name) return;
+    if (!roleToDelete?.id) return;
 
     try {
-      await deleteRoleMutation.mutateAsync({ roleName: roleToDelete.name });
+      await deleteRoleMutation.mutateAsync({ model: undefined, route: { roleId: roleToDelete.id } });
       notifications.show({
         title: 'Success',
         message: 'Role deleted successfully',

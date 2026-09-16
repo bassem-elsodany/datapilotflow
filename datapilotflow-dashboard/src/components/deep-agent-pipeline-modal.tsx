@@ -38,6 +38,21 @@ import { useState } from 'react';
 import type { TodoItem, ToolCall, FileContent } from '@/types/deep-agent';
 
 /**
+ * Get the character count of a file's content, regardless of whether it is
+ * stored as a plain string, an array of lines, or Deep Agents' metadata
+ * object (`{ content: string[] }`).
+ */
+function getFileContentLength(content: FileContent): number {
+  if (typeof content === 'string') {
+    return content.length;
+  }
+  if (Array.isArray(content)) {
+    return content.join('\n').length;
+  }
+  return content.content.join('\n').length;
+}
+
+/**
  * Pretty format JSON or string data with syntax highlighting
  */
 function PrettyData({ data, title }: { data: any; title: string }) {
@@ -451,7 +466,7 @@ export function DeepAgentPipelineModal({
                             {filename}
                           </Text>
                           <Text size="xs" c="dimmed">
-                            {content.length} characters
+                            {getFileContentLength(content)} characters
                           </Text>
                         </div>
                       </Group>

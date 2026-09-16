@@ -13,6 +13,8 @@ dependencies = [
     "aio-pika>=9.3.0",
     "langchain-mongodb>=0.1.0",
     "loguru>=0.7.3",
+    "passlib>=1.7.4",
+    "bcrypt>=4.0.1,<4.1.0",
 ]
 
 [build-system]
@@ -23,9 +25,11 @@ build-backend = "hatchling.build"
 packages = ["src/datapilotflow"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
 testpaths = ["tests"]
 
 [tool.uv.sources]
 # Define local package sources relative to this package
 datapilotflow-domain = { path = "../datapilotflow-domain" }
+
+[dependency-groups]
+dev = ["pytest>=8.0.0"]

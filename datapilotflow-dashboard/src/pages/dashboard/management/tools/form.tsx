@@ -300,7 +300,7 @@ export default function ToolFormPage() {
         tags: existingTool.tags || [],
         system_prompt: existingTool.prompt_config?.system_prompt || '',
         server_url: '', // No longer used
-        tool_name: '', // No longer used
+        tool_name: existingTool.mcp_tool_name || '',
         timeout: 30,
         auth_type: 'none',
         api_key: '',
@@ -336,7 +336,7 @@ export default function ToolFormPage() {
       } else {
         // For MCP tools, just send the server ID and tool name
         toolData.mcp_server_id = selectedMcpServerId;
-        toolData.mcp_tool_name = selectedMcpToolName;
+        toolData.mcp_tool_name = values.tool_name;
       }
 
       if (isEditMode && toolId) {
@@ -441,70 +441,6 @@ export default function ToolFormPage() {
       setSelectedMcpTools(new Set(availableTools));
     } else {
       setSelectedMcpTools(new Set());
-    }
-  };
-
-  // Placeholder for old discovery logic (to be removed completely later)
-  const __oldHandleDiscoverMCPTools = async () => {
-    if (!selectedMcpServerId) {
-      notifications.show({
-        title: 'Error',
-        message: 'Please select an MCP server',
-        color: 'red',
-      });
-      return;
-    }
-
-    setIsDiscovering(true);
-    try {
-      // This is now replaced by the new logic above
-      let authCredentials = null;
-      if (mcpAuthType === 'bearer') {
-        authCredentials = {
-          token: mcpBearerToken,
-        };
-      } else if (mcpAuthType === 'basic') {
-        authCredentials = {
-          username: mcpBasicUsername,
-          password: mcpBasicPassword,
-        };
-      } else if (mcpAuthType === 'api_key') {
-        authCredentials = {
-          api_key: mcpApiKey,
-          header_name: mcpApiKeyHeader || 'X-API-Key',
-        };
-      }
-
-      const result = await discoverMCPMutation.mutateAsync({
-        server_url: mcpServerUrl,
-        server_type: 'http',  // Only HTTP Transport (Streamable) is supported
-        auth_type: mcpAuthType,
-        auth_credentials: authCredentials,
-        timeout: 30,
-      });
-
-      if (result && Array.isArray(result)) {
-        setDiscoveredTools(result);
-        notifications.show({
-          title: 'Success',
-          message: `Discovered ${result.length} tools from MCP server`,
-          color: 'green',
-        });
-      } else {
-        notifications.show({
-          title: 'Info',
-          message: 'No tools found on MCP server',
-          color: 'blue',
-        });
-      }
-    } catch (error: any) {
-      notifications.show({
-        title: 'Error',
-        message: error.response?.data?.detail || 'Failed to discover MCP tools',
-        color: 'red',
-      });
-    } finally {
-      setIsDiscovering(false);
     }
   };
 

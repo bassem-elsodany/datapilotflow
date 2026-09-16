@@ -1,5 +1,5 @@
 import { useCreateContentFilter, useGetContentFilters } from '@/api/resources/content-filters';
-import { useGetKnowledgeSourceConfig, useGetUrlSourceConfig, useUpdateKnowledgeSourceConfig, useTestConfluenceCredentials } from '@/api/resources/knowledge-sources';
+import { useGetKnowledgeSourceConfig, useGetUrlSourceConfig, useUpdateKnowledgeSourceConfig, useTestConfluenceCredentials, ScrapingMode } from '@/api/resources/knowledge-sources';
 import { useGetActiveModelProviders } from '@/api/resources/model-providers';
 import { ColorfulVerticalStepper, StepConfig } from '@/components/colorful-vertical-stepper';
 import { Page } from '@/components/page';
@@ -153,7 +153,7 @@ export default function EditKnowledgeSourceConfig() {
       description: '',
       content_source_type: 'web_scraping' as 'web_scraping' | 'local_files' | 'confluence',
       url: '',
-      scraping_mode: 'website' as 'single_page' | 'multiple_pages' | 'website' | 'html_files' | 'markdown_files' | 'pdf_files' | 'docx_files' | 'txt_files',
+      scraping_mode: 'website' as ScrapingMode,
       url_source: {
         file_name: '',
         urls: [] as string[]
@@ -162,7 +162,7 @@ export default function EditKnowledgeSourceConfig() {
       blocked_subdomains: [] as string[],
       url_patterns: [] as Array<{ pattern: string; reverse: boolean }>,
       crawl_depth: 4,
-      target_elements: [],
+      target_elements: [] as string[],
       content_filter_threshold: 0.6,
       llm_content_filter_id: null as string | null,
       output_format: 'html' as 'html' | 'markdown',

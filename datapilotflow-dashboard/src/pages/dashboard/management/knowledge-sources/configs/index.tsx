@@ -534,7 +534,7 @@ export default function KnowledgeSourceConfigs() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [configToDelete, setConfigToDelete] = useState<{ id: string; name: string } | null>(null);
-  const [sortStatus, setSortStatus] = useState<DataTableSortStatus>({
+  const [sortStatus, setSortStatus] = useState<DataTableSortStatus<KnowledgeSourceConfig>>({
     columnAccessor: 'created_at',
     direction: 'desc',
   });
@@ -660,7 +660,7 @@ export default function KnowledgeSourceConfigs() {
         const color = (config.scraping_mode && scrapingModeColors[config.scraping_mode]) || 'gray';
         return (
           <Badge color={color} variant="outline" size="sm" radius="sm">
-            {getModeDisplay(config.scraping_mode)}
+            {getModeDisplay(config.scraping_mode ?? undefined)}
           </Badge>
         );
       },
@@ -673,7 +673,7 @@ export default function KnowledgeSourceConfigs() {
         const config = record as KnowledgeSourceConfig;
         let displayUrl = '';
         if (config.content_source_type === 'confluence' && config.confluence_config) {
-          displayUrl = config.confluence_config.cloud_url;
+          displayUrl = config.confluence_config.cloud_url || '—';
         } else if (config.content_source_type === 'local_files') {
           displayUrl = 'Local Storage';
         } else if (config.scraping_mode === 'multiple_pages' && config.url_source_id) {

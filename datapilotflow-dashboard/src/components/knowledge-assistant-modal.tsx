@@ -77,7 +77,7 @@ export function KnowledgeAssistantModal({
   const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set());
 
   React.useEffect(() => {
-    if (currentStage === 'rag_agent_executing' || metadata.ragSubstages?.length > 0) {
+    if (currentStage === 'rag_agent_executing' || (metadata.ragSubstages?.length ?? 0) > 0) {
       setExpandedStages((prev) => {
         if (!prev.has('rag_agent_executing')) {
           const next = new Set(prev);

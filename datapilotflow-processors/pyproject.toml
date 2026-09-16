@@ -28,3 +28,9 @@ packages = ["src/datapilotflow"]
 # Define local package sources relative to this package
 datapilotflow-domain = { path = "../datapilotflow-domain" }
 datapilotflow-infrastructure = { path = "../datapilotflow-infrastructure" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = ["pytest>=8.0.0"]
