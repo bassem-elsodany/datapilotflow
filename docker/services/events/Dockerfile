@@ -23,22 +23,10 @@ RUN pip install uv
 RUN python -m venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 
-# ── Layer 1: copy only pyproject.toml files and install deps (cached unless deps change) ──
-COPY datapilotflow-domain/pyproject.toml          ./datapilotflow-domain/pyproject.toml
-COPY datapilotflow-infrastructure/pyproject.toml  ./datapilotflow-infrastructure/pyproject.toml
-COPY datapilotflow-services/pyproject.toml        ./datapilotflow-services/pyproject.toml
-COPY datapilotflow-processors/pyproject.toml      ./datapilotflow-processors/pyproject.toml
-COPY datapilotflow-events/pyproject.toml          ./datapilotflow-events/pyproject.toml
-
-WORKDIR /app/datapilotflow-events
-RUN uv pip install -e . && \
-    uv pip install -e ../datapilotflow-processors && \
-    uv pip install -e ../datapilotflow-services && \
-    uv pip install -e ../datapilotflow-infrastructure && \
-    uv pip install -e ../datapilotflow-domain
-
-# ── Layer 2: copy full source (only invalidates above if pyproject.toml changed) ──
-WORKDIR /app
+# Copy full source. An editable install needs the real source tree present
+# at install time — a pyproject.toml-only copy followed by `uv pip install
+# -e .` (as this used to do, to get a cacheable dependency layer) silently
+# builds a broken/empty editable link, since there's nothing to link to yet.
 COPY datapilotflow-domain ./datapilotflow-domain
 COPY datapilotflow-infrastructure ./datapilotflow-infrastructure
 COPY datapilotflow-services ./datapilotflow-services
@@ -48,6 +36,14 @@ COPY datapilotflow-events ./datapilotflow-events
 # Copy event listener entry point and service config
 COPY datapilotflow-events/run_all_event_listeners.py ./
 COPY docker/services/events/.env .env
+
+# A single editable install resolves the full local dependency graph (via
+# each package's [tool.uv.sources] path entries) in one pass. Installing
+# each sibling editable as a separate `uv pip install -e` command clobbers
+# the shared datapilotflow/ namespace between steps — the last package wins
+# and the others become unimportable.
+WORKDIR /app/datapilotflow-events
+RUN uv pip install -e .
 
 # Create necessary directories
 RUN mkdir -p logs datapilotflow-events/logs

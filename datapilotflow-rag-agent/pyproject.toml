@@ -10,9 +10,12 @@ dependencies = [
     "datapilotflow-services>=1.0.0",
     "langgraph>=1.0.2",
     "langchain-core>=1.0.0",
-    "langchain-community>=0.0.1",
     "langchain-litellm>=0.1.0",
-    "litellm>=1.79.0",
+    # litellm>=1.101 removed the `List` import that its own
+    # llms/base_llm/responses/transformation.py needs at class-definition
+    # time (NameError: name 'List' is not defined) — pinned to the last
+    # version verified working until upstream fixes it.
+    "litellm==1.79.0",
     "loguru>=0.7.3",
     "fastmcp>=2.14.0,<3.0.0",
     "pydantic>=2.10.6",

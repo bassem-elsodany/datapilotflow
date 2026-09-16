@@ -6,6 +6,9 @@ license = { text = "MIT" }
 requires-python = ">=3.11"
 dependencies = [
     "datapilotflow-domain>=1.0.0",
+    "datapilotflow-infrastructure>=1.0.0",
+    "datapilotflow-processors>=1.0.0",
+    "datapilotflow-services>=1.0.0",
     "aio-pika>=9.5.5",
     "pydantic>=2.10.6",
     "pydantic-settings>=2.7.1",
@@ -22,3 +25,6 @@ packages = ["src/datapilotflow"]
 [tool.uv.sources]
 # Define local package sources relative to this package
 datapilotflow-domain = { path = "../datapilotflow-domain" }
+datapilotflow-infrastructure = { path = "../datapilotflow-infrastructure" }
+datapilotflow-processors = { path = "../datapilotflow-processors" }
+datapilotflow-services = { path = "../datapilotflow-services" }
